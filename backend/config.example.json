@@ -1,0 +1,6 @@
+{
+  "spreadsheet_id": "TU_SPREADSHEET_ID_DE_GOOGLE_SHEETS",
+  "sheet_name": "1_asistencia_informada",
+  "credentials_file": "credentials.json",
+  "github_repo": "usuario/CheckDiarioIngeap"
+}

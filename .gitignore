@@ -1,0 +1,57 @@
+# ===============================================
+# Ingeap - Check Diario .gitignore
+# ===============================================
+
+# --- SEGURIDAD Y CREDENCIALES (CRÍTICO) ---
+# Clave privada de Google Cloud Service Account
+backend/app-*.json
+backend/*service_account*.json
+backend/*credentials*.json
+!backend/credentials.example.json
+*.pem
+*.key
+
+# --- BASES DE DATOS LOCALES ---
+# Contiene DNIs, correos y reportes privados de empleados
+backend/*.db
+backend/*.sqlite
+backend/*.sqlite3
+*.db
+
+# --- CONFIGURACIONES LOCALES ---
+# Descomentar si el config contiene IDs confidenciales que no deban compartirse
+# backend/config.json
+
+# --- BINARIOS Y EJECUTABLES PESADOS ---
+# Superan límites de GitHub (50MB - 100MB) y deben subirse a GitHub Releases
+*.exe
+instalador/*.exe
+backend/dist/*.exe
+*.msi
+
+# --- ENTORNO PYTHON Y COMPILACIÓN ---
+backend/venv/
+backend/env/
+backend/build/
+backend/dist/
+backend/*.spec.bak
+__pycache__/
+*.py[cod]
+*$py.class
+
+# --- FRONTEND (NODE / VITE) ---
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+frontend/npm-debug.log*
+frontend/yarn-debug.log*
+frontend/yarn-error.log*
+
+# --- EDITORES Y SISTEMA OPERATIVO ---
+.vscode/
+.idea/
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+.DS_Store
