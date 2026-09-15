@@ -1,11 +1,18 @@
 import React, { useState, useEffect } from 'react';
 import { api } from '../services/apiBridge';
 
+const LUGARES_OPCIONES = ['Oficina', 'Campaña / Campo', 'Home Office', 'Franco'];
+
 export default function HistoryView({ onVolver }) {
   const [registros, setRegistros] = useState([]);
   const [cargando, setCargando] = useState(true);
   const [sincronizando, setSincronizando] = useState(false);
   const [mensajeSync, setMensajeSync] = useState(null);
+
+  // Estado para la edición de registros
+  const [registroEditando, setRegistroEditando] = useState(null);
+  const [guardandoEdicion, setGuardandoEdicion] = useState(false);
+  const [serviciosDisponibles, setServiciosDisponibles] = useState([]);
 
   const cargarHistorial = async () => {
     setCargando(true);
@@ -33,6 +40,7 @@ export default function HistoryView({ onVolver }) {
         setMensajeSync({ tipo: 'error', texto: res?.error || 'No se pudo sincronizar con Google Sheets.' });
       }
     } catch (err) {
+      console.error(err);
       setMensajeSync({ tipo: 'error', texto: 'Error de red o comunicación con Google Sheets.' });
     } finally {
       setSincronizando(false);
@@ -41,7 +49,45 @@ export default function HistoryView({ onVolver }) {
 
   useEffect(() => {
     cargarHistorial();
+    async function cargarServicios() {
+      try {
+        const s = await api.obtenerServicios();
+        if (Array.isArray(s)) setServiciosDisponibles(s);
+      } catch (e) {
+        console.error('Error al obtener servicios para modal:', e);
+      }
+    }
+    cargarServicios();
   }, []);
+
+  const handleGuardarModificacion = async (e) => {
+    e.preventDefault();
+    if (!registroEditando) return;
+
+    setGuardandoEdicion(true);
+    try {
+      const res = await api.modificarRegistro({
+        id: registroEditando.id,
+        fecha: registroEditando.fecha,
+        lugar: registroEditando.tipo_ocf || registroEditando.lugar || 'Oficina',
+        servicio: registroEditando.servicio,
+        horas: Number(registroEditando.horas) || 0
+      });
+
+      if (res && res.exito) {
+        setMensajeSync({ tipo: 'exito', texto: 'Reporte modificado y programado para sincronización.' });
+        setRegistroEditando(null);
+        await cargarHistorial();
+      } else {
+        setMensajeSync({ tipo: 'error', texto: res?.error || 'No se pudo guardar la modificación.' });
+      }
+    } catch (err) {
+      console.error(err);
+      setMensajeSync({ tipo: 'error', texto: 'Error al conectar con la aplicación.' });
+    } finally {
+      setGuardandoEdicion(false);
+    }
+  };
 
   const pendientesCount = registros.filter((r) => r.sincronizado === 0).length;
 
@@ -180,10 +226,41 @@ export default function HistoryView({ onVolver }) {
                       <line x1="3" y1="10" x2="21" y2="10" />
                     </svg>
                     {item.fecha}
+                    {item.dia_semana ? ` (${item.dia_semana})` : ''}
+                    {item.feriado === 'SI' && (
+                      <span style={{ marginLeft: '4px', fontSize: '9px', background: '#fee2e2', color: '#991b1b', padding: '1px 4px', borderRadius: '4px' }}>
+                        Feriado
+                      </span>
+                    )}
                   </span>
-                  <span className="history-badge-jornada">
-                    {horasDisplay}
-                  </span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <span className="history-badge-jornada">
+                      {horasDisplay}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setRegistroEditando({ ...item })}
+                      style={{
+                        background: '#f8fafc',
+                        border: '1px solid #cbd5e1',
+                        borderRadius: '4px',
+                        padding: '2px 6px',
+                        fontSize: '10px',
+                        cursor: 'pointer',
+                        color: '#475569',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '3px'
+                      }}
+                      title="Modificar este registro"
+                    >
+                      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                        <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                      </svg>
+                      Editar
+                    </button>
+                  </div>
                 </div>
 
                 <div className="history-service">
@@ -231,6 +308,151 @@ export default function HistoryView({ onVolver }) {
               </div>
             );
           })}
+        </div>
+      )}
+
+      {/* MODAL PARA MODIFICAR REGISTRO ANTERIOR */}
+      {registroEditando && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(15, 23, 42, 0.65)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1000,
+          padding: '16px'
+        }}>
+          <div style={{
+            background: '#ffffff',
+            borderRadius: '12px',
+            width: '100%',
+            maxWidth: '380px',
+            padding: '18px',
+            boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.2)',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '12px'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid #f1f5f9', paddingBottom: '8px' }}>
+              <span style={{ fontSize: '13px', fontWeight: 700, color: '#1e293b' }}>
+                Modificar Registro
+              </span>
+              <button
+                type="button"
+                onClick={() => setRegistroEditando(null)}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '14px', color: '#94a3b8' }}
+              >
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleGuardarModificacion} style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              <div>
+                <label style={{ fontSize: '11px', fontWeight: 600, color: '#475569', display: 'block', marginBottom: '3px' }}>
+                  Fecha:
+                </label>
+                <input
+                  type="date"
+                  className="form-input"
+                  value={registroEditando.fecha || ''}
+                  onChange={(e) => setRegistroEditando({ ...registroEditando, fecha: e.target.value })}
+                  required
+                />
+              </div>
+
+              <div>
+                <label style={{ fontSize: '11px', fontWeight: 600, color: '#475569', display: 'block', marginBottom: '3px' }}>
+                  Ubicación / Modalidad:
+                </label>
+                <select
+                  className="form-select"
+                  value={registroEditando.tipo_ocf || registroEditando.lugar || 'Oficina'}
+                  onChange={(e) => {
+                    const nuevoLugar = e.target.value;
+                    setRegistroEditando({
+                      ...registroEditando,
+                      tipo_ocf: nuevoLugar,
+                      lugar: nuevoLugar,
+                      horas: nuevoLugar === 'Franco' ? 0 : (registroEditando.horas || 8)
+                    });
+                  }}
+                >
+                  {LUGARES_OPCIONES.map(l => (
+                    <option key={l} value={l}>{l}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label style={{ fontSize: '11px', fontWeight: 600, color: '#475569', display: 'block', marginBottom: '3px' }}>
+                  Proyecto o Tarea:
+                </label>
+                <input
+                  type="text"
+                  className="form-input"
+                  value={registroEditando.servicio || ''}
+                  onChange={(e) => setRegistroEditando({ ...registroEditando, servicio: e.target.value })}
+                  required
+                />
+              </div>
+
+              <div>
+                <label style={{ fontSize: '11px', fontWeight: 600, color: '#475569', display: 'block', marginBottom: '3px' }}>
+                  Horas:
+                </label>
+                <input
+                  type="number"
+                  step="0.5"
+                  min="0"
+                  className="form-input"
+                  value={registroEditando.horas ?? 8}
+                  onChange={(e) => setRegistroEditando({ ...registroEditando, horas: parseFloat(e.target.value) || 0 })}
+                  required
+                />
+              </div>
+
+              <div style={{ display: 'flex', gap: '8px', marginTop: '6px' }}>
+                <button
+                  type="button"
+                  onClick={() => setRegistroEditando(null)}
+                  style={{
+                    flex: 1,
+                    padding: '8px',
+                    borderRadius: '6px',
+                    border: '1px solid #cbd5e1',
+                    background: '#f8fafc',
+                    color: '#475569',
+                    fontSize: '12px',
+                    fontWeight: 600,
+                    cursor: 'pointer'
+                  }}
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={guardandoEdicion}
+                  style={{
+                    flex: 1,
+                    padding: '8px',
+                    borderRadius: '6px',
+                    border: 'none',
+                    background: 'var(--primary)',
+                    color: '#ffffff',
+                    fontSize: '12px',
+                    fontWeight: 600,
+                    cursor: 'pointer'
+                  }}
+                >
+                  {guardandoEdicion ? 'Guardando...' : 'Guardar Cambios'}
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
       )}
     </div>

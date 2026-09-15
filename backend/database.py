@@ -106,6 +106,15 @@ def inicializar_bd():
             )
         """)
 
+        # Tabla de caché para días no laborales (0_no_laborales)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS no_laborales_cache (
+                fecha TEXT PRIMARY KEY,
+                motivo TEXT DEFAULT '',
+                actualizado_en TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+
         # Tabla de historial con las columnas exactas de Google Sheets
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS historial (
@@ -121,6 +130,9 @@ def inicializar_bd():
                 fecha_hora TEXT DEFAULT '',
                 lugar TEXT,
                 jornada TEXT,
+                dia_semana TEXT DEFAULT '',
+                feriado TEXT DEFAULT '',
+                modificado INTEGER DEFAULT 0,
                 sincronizado INTEGER DEFAULT 1,
                 creado_en TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
@@ -143,6 +155,12 @@ def inicializar_bd():
             cursor.execute("ALTER TABLE historial ADD COLUMN usuario_mail TEXT DEFAULT ''")
         if "fecha_hora" not in columnas_hist:
             cursor.execute("ALTER TABLE historial ADD COLUMN fecha_hora TEXT DEFAULT ''")
+        if "dia_semana" not in columnas_hist:
+            cursor.execute("ALTER TABLE historial ADD COLUMN dia_semana TEXT DEFAULT ''")
+        if "feriado" not in columnas_hist:
+            cursor.execute("ALTER TABLE historial ADD COLUMN feriado TEXT DEFAULT ''")
+        if "modificado" not in columnas_hist:
+            cursor.execute("ALTER TABLE historial ADD COLUMN modificado INTEGER DEFAULT 0")
 
         conn.commit()
 
@@ -243,6 +261,85 @@ def obtener_proyectos_cache() -> list:
         cursor = conn.cursor()
         cursor.execute("SELECT id_proyecto, denominacion, area FROM proyectos_cache ORDER BY denominacion ASC")
         return [dict(f) for f in cursor.fetchall()]
+
+DIAS_SEMANA = {
+    0: "lunes",
+    1: "martes",
+    2: "miércoles",
+    3: "jueves",
+    4: "viernes",
+    5: "sábado",
+    6: "domingo"
+}
+
+def normalizar_fecha_iso(fecha_str: str) -> str:
+    """Normaliza cualquier formato de fecha (YYYY-MM-DD o DD/MM/YYYY) a YYYY-MM-DD."""
+    if not fecha_str:
+        return ""
+    texto = str(fecha_str).strip()
+    if "/" in texto:
+        partes = texto.split("/")
+        if len(partes) == 3:
+            d, m, y = partes[0].strip(), partes[1].strip(), partes[2].strip()
+            if len(y) == 4:
+                return f"{y}-{m.zfill(2)}-{d.zfill(2)}"
+    if "-" in texto:
+        partes = texto.split("-")
+        if len(partes) == 3:
+            if len(partes[0]) == 4:
+                return f"{partes[0]}-{partes[1].zfill(2)}-{partes[2].zfill(2)}"
+            elif len(partes[2]) == 4:
+                return f"{partes[2]}-{partes[1].zfill(2)}-{partes[0].zfill(2)}"
+    return texto
+
+def calcular_dia_semana(fecha_str: str) -> str:
+    """Calcula el día de la semana en español en minúsculas (ej: martes) para una fecha dada."""
+    try:
+        f_iso = normalizar_fecha_iso(fecha_str)
+        if f_iso:
+            dt = datetime.strptime(f_iso, "%Y-%m-%d")
+            return DIAS_SEMANA.get(dt.weekday(), "")
+    except Exception:
+        pass
+    return ""
+
+def guardar_no_laborales_cache(dias: list):
+    """Guarda en caché local los días no laborales de 0_no_laborales."""
+    if not dias:
+        return
+    with obtener_conexion() as conn:
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM no_laborales_cache")
+        for d in dias:
+            f = str(d.get("fecha", "")).strip()
+            m = str(d.get("motivo", "")).strip()
+            if f:
+                cursor.execute("""
+                    INSERT OR REPLACE INTO no_laborales_cache (fecha, motivo, actualizado_en)
+                    VALUES (?, ?, CURRENT_TIMESTAMP)
+                """, (f, m))
+        conn.commit()
+
+def obtener_no_laborales_cache() -> list:
+    """Retorna los días no laborales almacenados en la base local."""
+    with obtener_conexion() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT fecha, motivo FROM no_laborales_cache ORDER BY fecha ASC")
+        return [dict(f) for f in cursor.fetchall()]
+
+def es_fecha_feriado(fecha_str: str, fechas_feriados: set = None) -> str:
+    """Determina si la fecha corresponde a un día no laboral ('SI' o 'NO')."""
+    try:
+        f_iso = normalizar_fecha_iso(fecha_str)
+        if not f_iso:
+            return "NO"
+        if fechas_feriados is None:
+            cache = obtener_no_laborales_cache()
+            fechas_feriados = {normalizar_fecha_iso(c["fecha"]) for c in cache if c.get("fecha")}
+        return "SI" if f_iso in fechas_feriados else "NO"
+    except Exception:
+        return "NO"
+
 
 def depurar_registros_eliminados(ids_remotos: set) -> int:
     """
@@ -361,15 +458,19 @@ def guardar_registro_asistencia(
     instrumental: str = "",
     fecha_hora: str = "",
     id_asistencia: str = "",
+    dia_semana: str = "",
+    feriado: str = "",
     sincronizado: bool = False
 ):
     """
     Inserta una fila de asistencia con las columnas exactas de Google Sheets:
-    id_asistencia, empleado, fecha, tipo_ocf, servicio, horas, instrumental, usuario_mail, fecha_hora
+    id_asistencia, empleado, fecha, tipo_ocf, servicio, horas, instrumental, usuario_mail, fecha_hora, dia_semana, feriado
     """
     uid = id_asistencia or str(uuid.uuid4())
     ts = fecha_hora or datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     jornada_txt = f"{horas} hs" if horas > 0 else "Franco"
+    dia_sem = dia_semana or calcular_dia_semana(fecha)
+    fer = feriado or es_fecha_feriado(fecha)
 
     with obtener_conexion() as conn:
         cursor = conn.cursor()
@@ -377,9 +478,9 @@ def guardar_registro_asistencia(
             INSERT INTO historial (
                 id_asistencia, empleado, fecha, tipo_ocf, servicio, 
                 horas, instrumental, usuario_mail, fecha_hora, 
-                lugar, jornada, sincronizado
+                lugar, jornada, dia_semana, feriado, modificado, sincronizado
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             uid,
             empleado,
@@ -392,9 +493,49 @@ def guardar_registro_asistencia(
             ts,
             tipo_ocf,      # compatibilidad con columna lugar
             jornada_txt,   # compatibilidad con columna jornada
+            dia_sem,
+            fer,
+            0,
             1 if sincronizado else 0
         ))
         conn.commit()
+    return uid
+
+def actualizar_registro_asistencia(
+    id_registro: int,
+    fecha: str,
+    tipo_ocf: str,
+    servicio: str,
+    horas: float
+) -> bool:
+    """
+    Actualiza un reporte de asistencia existente en historial
+    y lo marca como pendiente de sincronizar (sincronizado=0, modificado=1).
+    """
+    dia_sem = calcular_dia_semana(fecha)
+    fer = es_fecha_feriado(fecha)
+    jornada_txt = f"{horas} hs" if horas > 0 else "Franco"
+
+    with obtener_conexion() as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            UPDATE historial
+            SET fecha = ?,
+                tipo_ocf = ?,
+                lugar = ?,
+                servicio = ?,
+                horas = ?,
+                jornada = ?,
+                dia_semana = ?,
+                feriado = ?,
+                modificado = 1,
+                sincronizado = 0
+            WHERE id = ?
+        """, (
+            fecha, tipo_ocf, tipo_ocf, servicio, horas, jornada_txt, dia_sem, fer, id_registro
+        ))
+        conn.commit()
+        return cursor.rowcount > 0
 
 def obtener_pendientes_sincronizacion():
     """Retorna todas las filas de historial que aún no han sido sincronizadas con Google Sheets."""
@@ -411,7 +552,10 @@ def obtener_pendientes_sincronizacion():
                 COALESCE(horas, 0) as horas,
                 COALESCE(instrumental, '') as instrumental,
                 COALESCE(usuario_mail, '') as usuario_mail,
-                COALESCE(fecha_hora, creado_en) as fecha_hora
+                COALESCE(fecha_hora, creado_en) as fecha_hora,
+                COALESCE(dia_semana, '') as dia_semana,
+                COALESCE(feriado, '') as feriado,
+                COALESCE(modificado, 0) as modificado
             FROM historial
             WHERE sincronizado = 0
             ORDER BY id ASC
@@ -428,7 +572,7 @@ def marcar_como_sincronizados(ids_asistencia: list):
         placeholders = ",".join(["?"] * len(ids_asistencia))
         cursor.execute(f"""
             UPDATE historial 
-            SET sincronizado = 1 
+            SET sincronizado = 1, modificado = 0
             WHERE id_asistencia IN ({placeholders})
         """, ids_asistencia)
         conn.commit()
@@ -478,6 +622,8 @@ def obtener_ultimos_registros(empleado: str = "", usuario_mail: str = "", limite
                     COALESCE(fecha_hora, creado_en) as fecha_hora,
                     COALESCE(lugar, tipo_ocf) as lugar,
                     COALESCE(jornada, '') as jornada,
+                    COALESCE(dia_semana, '') as dia_semana,
+                    COALESCE(feriado, '') as feriado,
                     sincronizado,
                     creado_en
                 FROM historial 
@@ -501,6 +647,8 @@ def obtener_ultimos_registros(empleado: str = "", usuario_mail: str = "", limite
                     COALESCE(fecha_hora, creado_en) as fecha_hora,
                     COALESCE(lugar, tipo_ocf) as lugar,
                     COALESCE(jornada, '') as jornada,
+                    COALESCE(dia_semana, '') as dia_semana,
+                    COALESCE(feriado, '') as feriado,
                     sincronizado,
                     creado_en
                 FROM historial 

@@ -25,7 +25,8 @@ from database import (
     obtener_usuarios_cache,
     guardar_proyectos_cache,
     obtener_proyectos_cache,
-    depurar_registros_eliminados
+    depurar_registros_eliminados,
+    actualizar_registro_asistencia
 )
 from sheets_service import (
     sincronizar_pendientes,
@@ -214,7 +215,8 @@ class ApiPuente:
         """
         Recibe el reporte diario desde React y lo almacena localmente
         con el esquema exacto de Google Sheets:
-        id_asistencia, empleado, fecha, tipo_ocf, servicio, horas, instrumental, usuario_mail, fecha_hora
+        id_asistencia, empleado, fecha, tipo_ocf, servicio, horas, instrumental, usuario_mail, fecha_hora, dia_semana, feriado
+        Soporta carga para otro usuario (RRHH) y rango de fechas para Campaña / Campo.
         """
         if not isinstance(datos, dict):
             return {"exito": False, "error": "Formato de datos inválido."}
@@ -226,78 +228,141 @@ class ApiPuente:
             return {"exito": False, "error": "La fecha y la ubicación son obligatorias."}
 
         sesion = obtener_sesion_activa()
-        empleado = sesion["nombre"] if sesion else str(datos.get("empleado", "Empleado"))
-        usuario_mail = sesion["mail"] if sesion and sesion.get("mail") else str(datos.get("usuario_mail", ""))
+        es_rrhh = sesion and sesion.get("area", "").strip().upper() == "RRHH"
+        if es_rrhh and datos.get("empleado"):
+            empleado = str(datos["empleado"]).strip()
+            usuario_mail = str(datos.get("usuario_mail", "")).strip()
+        else:
+            empleado = sesion["nombre"] if sesion else str(datos.get("empleado", "Empleado"))
+            usuario_mail = sesion["mail"] if sesion and sesion.get("mail") else str(datos.get("usuario_mail", ""))
+
         fecha_hora = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-        # Caso 1: Franco (Día de descanso)
-        if lugar.strip().lower() == "franco":
-            guardar_registro_asistencia(
-                id_asistencia=str(uuid.uuid4()),
-                empleado=empleado,
-                fecha=fecha,
-                tipo_ocf="Franco",
-                servicio="Franco",
-                horas=0.0,
-                instrumental="",
-                usuario_mail=usuario_mail,
-                fecha_hora=fecha_hora,
-                sincronizado=False
-            )
-            threading.Thread(target=sincronizar_pendientes, daemon=True).start()
-            return {"exito": True, "mensaje": "Franco registrado correctamente."}
-
-        # Caso 2: Múltiples proyectos provistos en datos['proyectos']
-        proyectos = datos.get("proyectos")
-        if isinstance(proyectos, list) and len(proyectos) > 0:
-            for item in proyectos:
-                if isinstance(item, dict):
-                    srv = str(item.get("servicio", "Tiempo dedicado al Área")).strip()
-                    if not srv:
-                        srv = "Tiempo dedicado al Área"
-                    try:
-                        hrs = float(item.get("horas", 8))
-                    except (ValueError, TypeError):
-                        hrs = 8.0
-
-                    guardar_registro_asistencia(
-                        id_asistencia=str(uuid.uuid4()),
-                        empleado=empleado,
-                        fecha=fecha,
-                        tipo_ocf=lugar,
-                        servicio=srv,
-                        horas=hrs,
-                        instrumental="",
-                        usuario_mail=usuario_mail,
-                        fecha_hora=fecha_hora,
-                        sincronizado=False
-                    )
-            threading.Thread(target=sincronizar_pendientes, daemon=True).start()
-            return {"exito": True, "mensaje": "Reporte diario registrado correctamente."}
-
-        # Caso 3: Sin proyectos seleccionados (se computa como tiempo dedicado al área)
-        if not proyectos or (isinstance(proyectos, list) and len(proyectos) == 0):
+        # Calcular lista de fechas si se envió un rango de fechas (Campaña / Campo)
+        fechas_a_cargar = []
+        fecha_inicio = fecha
+        fecha_fin = datos.get("fecha_fin")
+        if fecha_fin and fecha_inicio and fecha_fin != fecha_inicio:
+            from datetime import timedelta
             try:
-                hrs = float(datos.get("horas", 8))
-            except (ValueError, TypeError):
-                hrs = 8.0
+                d_ini = datetime.strptime(fecha_inicio, "%Y-%m-%d")
+                d_fin = datetime.strptime(fecha_fin, "%Y-%m-%d")
+                if d_ini > d_fin:
+                    d_ini, d_fin = d_fin, d_ini
+                curr = d_ini
+                while curr <= d_fin:
+                    fechas_a_cargar.append(curr.strftime("%Y-%m-%d"))
+                    curr += timedelta(days=1)
+            except Exception:
+                fechas_a_cargar = [fecha_inicio]
+        elif isinstance(datos.get("fechas"), list) and len(datos["fechas"]) > 0:
+            fechas_a_cargar = [str(f).strip() for f in datos["fechas"] if f]
+        else:
+            fechas_a_cargar = [fecha_inicio]
 
-            guardar_registro_asistencia(
-                id_asistencia=str(uuid.uuid4()),
-                empleado=empleado,
-                fecha=fecha,
-                tipo_ocf=lugar,
-                servicio="Tiempo dedicado al Área",
-                horas=hrs,
-                instrumental="",
-                usuario_mail=usuario_mail,
-                fecha_hora=fecha_hora,
-                sincronizado=False
-            )
+        proyectos = datos.get("proyectos")
+        es_franco = lugar.strip().lower() == "franco"
+
+        for dia_f in fechas_a_cargar:
+            # Caso 1: Franco (Día de descanso)
+            if es_franco:
+                guardar_registro_asistencia(
+                    id_asistencia=str(uuid.uuid4()),
+                    empleado=empleado,
+                    fecha=dia_f,
+                    tipo_ocf="Franco",
+                    servicio="Franco",
+                    horas=0.0,
+                    instrumental="",
+                    usuario_mail=usuario_mail,
+                    fecha_hora=fecha_hora,
+                    sincronizado=False
+                )
+            # Caso 2: Múltiples proyectos provistos en datos['proyectos']
+            elif isinstance(proyectos, list) and len(proyectos) > 0:
+                for item in proyectos:
+                    if isinstance(item, dict):
+                        srv = str(item.get("servicio", "Tiempo dedicado al Área")).strip()
+                        if not srv:
+                            srv = "Tiempo dedicado al Área"
+                        try:
+                            hrs = float(item.get("horas", 8))
+                        except (ValueError, TypeError):
+                            hrs = 8.0
+
+                        guardar_registro_asistencia(
+                            id_asistencia=str(uuid.uuid4()),
+                            empleado=empleado,
+                            fecha=dia_f,
+                            tipo_ocf=lugar,
+                            servicio=srv,
+                            horas=hrs,
+                            instrumental="",
+                            usuario_mail=usuario_mail,
+                            fecha_hora=fecha_hora,
+                            sincronizado=False
+                        )
+            # Caso 3: Sin proyectos seleccionados (Tiempo dedicado al Área)
+            else:
+                srv_area = str(datos.get("servicio", "Tiempo dedicado al Área")).strip() or "Tiempo dedicado al Área"
+                try:
+                    hrs = float(datos.get("horas", 8))
+                except (ValueError, TypeError):
+                    hrs = 8.0
+
+                guardar_registro_asistencia(
+                    id_asistencia=str(uuid.uuid4()),
+                    empleado=empleado,
+                    fecha=dia_f,
+                    tipo_ocf=lugar,
+                    servicio=srv_area,
+                    horas=hrs,
+                    instrumental="",
+                    usuario_mail=usuario_mail,
+                    fecha_hora=fecha_hora,
+                    sincronizado=False
+                )
+
+        threading.Thread(target=sincronizar_pendientes, daemon=True).start()
+        cant_dias = len(fechas_a_cargar)
+        msj = f"Reporte registrado correctamente ({cant_dias} día{'s' if cant_dias > 1 else ''})."
+        return {"exito": True, "mensaje": msj}
+
+    def modificar_registro(self, datos: dict):
+        """Actualiza un reporte ya existente en el historial local y sincroniza con Sheets."""
+        if not isinstance(datos, dict) or "id" not in datos:
+            return {"exito": False, "error": "Identificador de reporte no provisto."}
+        try:
+            id_reg = int(datos["id"])
+        except (ValueError, TypeError):
+            return {"exito": False, "error": "Identificador de registro no válido."}
+
+        fecha = str(datos.get("fecha", "")).strip()
+        lugar = str(datos.get("lugar") or datos.get("tipo_ocf", "")).strip()
+        servicio = str(datos.get("servicio", "")).strip()
+        try:
+            horas = float(datos.get("horas", 0.0))
+        except (ValueError, TypeError):
+            horas = 0.0
+
+        if not fecha or not lugar or not servicio:
+            return {"exito": False, "error": "Todos los campos son obligatorios para modificar el reporte."}
+
+        ok = actualizar_registro_asistencia(
+            id_registro=id_reg,
+            fecha=fecha,
+            tipo_ocf=lugar,
+            servicio=servicio,
+            horas=horas
+        )
+        if ok:
             threading.Thread(target=sincronizar_pendientes, daemon=True).start()
-            return {"exito": True, "mensaje": "Reporte registrado como tiempo al área."}
+            return {"exito": True, "mensaje": "Reporte modificado exitosamente."}
+        return {"exito": False, "error": "No se encontró el registro a modificar en la base local."}
 
-        return {"exito": False, "error": "Datos del reporte incompletos o inválidos."}
+    def obtener_todos_usuarios(self):
+        """Retorna la lista de empleados activos para la selección delegada de RRHH."""
+        return obtener_usuarios_cache()
 
     def obtener_historial(self):
         """
@@ -389,7 +454,7 @@ def obtener_icono_tray():
     return crear_icono_calendario(64)
 
 
-APP_VERSION = "1.0.0"
+APP_VERSION = "1.1.0"
 
 _mutex_instancia = None
 

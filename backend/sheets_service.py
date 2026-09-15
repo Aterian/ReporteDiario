@@ -5,7 +5,15 @@ import re
 import gspread
 from google.oauth2.service_account import Credentials
 from google.auth.exceptions import GoogleAuthError
-from database import obtener_pendientes_sincronizacion, marcar_como_sincronizados, obtener_directorio_datos
+from database import (
+    obtener_pendientes_sincronizacion,
+    marcar_como_sincronizados,
+    obtener_directorio_datos,
+    guardar_no_laborales_cache,
+    calcular_dia_semana,
+    es_fecha_feriado,
+    normalizar_fecha_iso
+)
 
 def recurso_path(ruta_relativa: str) -> str:
     """Obtiene la ruta absoluta para un recurso, compatible con PyInstaller y desarrollo."""
@@ -24,7 +32,9 @@ COLUMNAS_ESQUEMA = [
     "horas",
     "instrumental",
     "usuario_mail",
-    "fecha_hora"
+    "fecha_hora",
+    "dia_semana",
+    "feriado"
 ]
 
 def cargar_configuracion():
@@ -187,10 +197,60 @@ def probar_conexion(spreadsheet_id: str = "") -> dict:
             "error": str(e)
         }
 
+def obtener_no_laborales_remotos(spreadsheet_id: str = "") -> list:
+    """
+    Lee los días no laborales de la pestaña '0_no_laborales' (o '0_no_laborables').
+    Retorna lista de diccionarios: [{'id_no_laborable': ..., 'fecha': ..., 'motivo': ...}, ...]
+    y actualiza la caché local SQLite.
+    """
+    try:
+        config = cargar_configuracion()
+        sp_id = extraer_spreadsheet_id(spreadsheet_id or config.get("spreadsheet_id", ""))
+        if not sp_id:
+            return []
+
+        gc, _ = obtener_cliente()
+        sh = gc.open_by_key(sp_id)
+
+        ws_nl = None
+        for w in sh.worksheets():
+            tit = w.title.strip().lower()
+            if "no_labora" in tit:
+                ws_nl = w
+                break
+
+        if not ws_nl:
+            return []
+
+        filas = ws_nl.get_all_values()
+        if not filas or len(filas) < 2:
+            return []
+
+        headers = [h.strip().lower() for h in filas[0]]
+        idx_fecha = headers.index("fecha") if "fecha" in headers else 1
+        idx_motivo = headers.index("motivo") if "motivo" in headers else 2
+        idx_id = headers.index("id_no_laborable") if "id_no_laborable" in headers else 0
+
+        resultado = []
+        for f in filas[1:]:
+            if len(f) > idx_fecha and f[idx_fecha].strip():
+                resultado.append({
+                    "id_no_laborable": f[idx_id].strip() if len(f) > idx_id else "",
+                    "fecha": f[idx_fecha].strip(),
+                    "motivo": f[idx_motivo].strip() if len(f) > idx_motivo else ""
+                })
+        if resultado:
+            guardar_no_laborales_cache(resultado)
+        return resultado
+    except Exception as e:
+        print(f"Aviso al obtener días no laborales remotos: {e}")
+        return []
+
+
 def sincronizar_pendientes() -> dict:
     """
-    Lee los registros con sincronizado=0 de la base local y los sube en bloque
-    a la hoja '1_asistencia_informada'.
+    Lee los registros con sincronizado=0 de la base local y los sube/actualiza
+    en la hoja '1_asistencia_informada' con las 11 columnas completas.
     """
     config = cargar_configuracion()
     sp_id = config.get("spreadsheet_id", "").strip()
@@ -210,36 +270,74 @@ def sincronizar_pendientes() -> dict:
         }
 
     try:
+        # Refrescar caché de días no laborales
+        fechas_feriados = set()
+        try:
+            nl = obtener_no_laborales_remotos(sp_id)
+            fechas_feriados = {normalizar_fecha_iso(x["fecha"]) for x in nl if x.get("fecha")}
+        except Exception:
+            pass
+
         _, ws = obtener_hoja_trabajo()
 
         filas_a_insertar = []
         ids_sincronizados = []
 
+        # Si hay registros modificados, mapear columna A para actualización in-place
+        hay_modificados = any(p.get("modificado") == 1 for p in pendientes)
+        mapa_filas_remotas = {}
+        if hay_modificados:
+            try:
+                col_ids = ws.col_values(1)
+                for idx, val in enumerate(col_ids, start=1):
+                    if val and val != "id_asistencia":
+                        mapa_filas_remotas[val.strip()] = idx
+            except Exception as e:
+                print(f"Aviso al leer col_ids para actualización: {e}")
+
         for p in pendientes:
+            f_str = str(p.get("fecha", ""))
+            dia_sem = p.get("dia_semana") or calcular_dia_semana(f_str)
+            fer = p.get("feriado") or es_fecha_feriado(f_str, fechas_feriados)
+
             fila = [
                 str(p.get("id_asistencia", "")),
                 str(p.get("empleado", "")),
-                str(p.get("fecha", "")),
+                f_str,
                 str(p.get("tipo_ocf", "")),
                 str(p.get("servicio", "")),
                 float(p.get("horas", 0.0)),
                 str(p.get("instrumental", "")),
                 str(p.get("usuario_mail", "")),
-                str(p.get("fecha_hora", ""))
+                str(p.get("fecha_hora", "")),
+                dia_sem,
+                fer
             ]
-            filas_a_insertar.append(fila)
-            ids_sincronizados.append(p.get("id_asistencia"))
 
-        # Inserción en lote en Google Sheets
-        ws.append_rows(filas_a_insertar, value_input_option="USER_ENTERED")
+            uid = p.get("id_asistencia")
+            es_modificado = (p.get("modificado") == 1)
+
+            if es_modificado and uid in mapa_filas_remotas:
+                # Actualizar la fila existente en Google Sheets (columnas A a K)
+                row_num = mapa_filas_remotas[uid]
+                ws.update(range_name=f"A{row_num}:K{row_num}", values=[fila], value_input_option="USER_ENTERED")
+                ids_sincronizados.append(uid)
+            else:
+                filas_a_insertar.append(fila)
+                ids_sincronizados.append(uid)
+
+        # Inserción en lote en Google Sheets de filas nuevas
+        if filas_a_insertar:
+            ws.append_rows(filas_a_insertar, value_input_option="USER_ENTERED")
 
         # Marcar en la base local como sincronizados
         marcar_como_sincronizados(ids_sincronizados)
 
+        total = len(ids_sincronizados)
         return {
             "exito": True,
-            "cantidad": len(filas_a_insertar),
-            "mensaje": f"Se sincronizaron exitosamente {len(filas_a_insertar)} registro(s) con Google Sheets."
+            "cantidad": total,
+            "mensaje": f"Se sincronizaron exitosamente {total} registro(s) con Google Sheets."
         }
 
     except Exception as e:

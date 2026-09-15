@@ -218,6 +218,22 @@ export const api = {
       return await bridge.aplicar_actualizacion(urlDescarga);
     }
     return { exito: false, error: 'Función no disponible' };
+  },
+
+  async modificarRegistro(datos) {
+    const bridge = await getApi();
+    if (bridge.modificar_registro) {
+      return await bridge.modificar_registro(datos);
+    }
+    return { exito: false, error: 'Función no disponible' };
+  },
+
+  async obtenerTodosUsuarios() {
+    const bridge = await getApi();
+    if (bridge.obtener_todos_usuarios) {
+      return await bridge.obtener_todos_usuarios();
+    }
+    return [];
   }
 };
 
