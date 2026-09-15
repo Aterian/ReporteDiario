@@ -15,6 +15,21 @@ export default function HomeView({ usuario, onNuevoReporte, onVerHistorial, onAv
     return (partes[0][0] + partes[partes.length - 1][0]).toUpperCase();
   };
 
+  const getNombreArea = (areaCod) => {
+    if (!areaCod) return '';
+    const cod = areaCod.trim().toUpperCase();
+    const mapa = {
+      'N': 'Núcleo (Todos los proyectos)',
+      'I': 'Ingeniería',
+      'M': 'Mensura',
+      'A': 'Aplicaciones',
+      'RRHH': 'Recursos Humanos',
+      'VYM': 'Ventas y Marketing',
+      'S': 'Sistemas'
+    };
+    return mapa[cod] || `Área ${cod}`;
+  };
+
   return (
     <div className="view-content home-container">
       {/* Tarjeta de bienvenida del empleado */}
@@ -40,7 +55,14 @@ export default function HomeView({ usuario, onNuevoReporte, onVerHistorial, onAv
         </div>
 
         <div className="home-profile-details">
-          <span className="home-welcome-text">Bienvenido</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <span className="home-welcome-text">Bienvenido</span>
+            {usuario.area && (
+              <span className="home-area-chip">
+                {getNombreArea(usuario.area)}
+              </span>
+            )}
+          </div>
           <h2 className="home-employee-name">{usuario.nombre}</h2>
           {usuario.mail && (
             <span className="home-employee-mail">

@@ -45,7 +45,8 @@ def inicializar_bd():
                 nombre TEXT NOT NULL,
                 dni TEXT NOT NULL,
                 mail TEXT DEFAULT '',
-                avatar TEXT DEFAULT ''
+                avatar TEXT DEFAULT '',
+                area TEXT DEFAULT ''
             )
         """)
 
@@ -56,14 +57,51 @@ def inicializar_bd():
             cursor.execute("ALTER TABLE sesion ADD COLUMN mail TEXT DEFAULT ''")
         if "avatar" not in columnas_sesion:
             cursor.execute("ALTER TABLE sesion ADD COLUMN avatar TEXT DEFAULT ''")
+        if "area" not in columnas_sesion:
+            cursor.execute("ALTER TABLE sesion ADD COLUMN area TEXT DEFAULT ''")
 
-        # Tabla de perfiles persistentes de empleados (para recordar avatares por DNI independientemente del cierre de sesión)
+        # Tabla de perfiles persistentes de empleados (para recordar avatares y áreas por DNI)
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS perfiles_empleados (
                 dni TEXT PRIMARY KEY,
                 nombre TEXT NOT NULL,
                 mail TEXT DEFAULT '',
                 avatar TEXT DEFAULT '',
+                area TEXT DEFAULT '',
+                actualizado_en TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+
+        # Migración defensiva para perfiles_empleados
+        cursor.execute("PRAGMA table_info(perfiles_empleados)")
+        columnas_perfiles = [col["name"] for col in cursor.fetchall()]
+        if "area" not in columnas_perfiles:
+            cursor.execute("ALTER TABLE perfiles_empleados ADD COLUMN area TEXT DEFAULT ''")
+
+        # Tabla de proyectos activos en caché (sincronizada desde 0_proyectos)
+        cursor.execute("PRAGMA table_info(proyectos_cache)")
+        cols_proy = [c["name"] for c in cursor.fetchall()]
+        if cols_proy and "id" not in cols_proy:
+            cursor.execute("DROP TABLE proyectos_cache")
+
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS proyectos_cache (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                id_proyecto TEXT DEFAULT '',
+                denominacion TEXT NOT NULL,
+                area TEXT NOT NULL,
+                actualizado_en TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+
+        # Tabla de usuarios autorizados en caché (sincronizada desde 0_usuarios)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS usuarios_cache (
+                id_usuario TEXT PRIMARY KEY,
+                nombre TEXT NOT NULL,
+                email TEXT DEFAULT '',
+                area TEXT DEFAULT '',
+                dni TEXT NOT NULL,
                 actualizado_en TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """)
@@ -136,53 +174,158 @@ def guardar_avatar_empleado(dni: str, avatar_base64: str, nombre: str = "", mail
         cursor.execute("UPDATE sesion SET avatar = ? WHERE id = 1", (avatar_base64,))
         conn.commit()
 
-def obtener_sesion_activa():
-    """Devuelve los datos del empleado activo restaurando su avatar persistente si está disponible."""
+def obtener_area_por_dni(dni: str) -> str:
+    """Recupera el área guardada de un empleado por su DNI desde perfiles o usuarios_cache."""
+    if not dni:
+        return ""
+    dni_clean = dni.strip()
     with obtener_conexion() as conn:
         cursor = conn.cursor()
-        cursor.execute("SELECT nombre, dni, mail, avatar FROM sesion WHERE id = 1")
+        cursor.execute("SELECT area FROM perfiles_empleados WHERE dni = ?", (dni_clean,))
+        fila = cursor.fetchone()
+        if fila and fila["area"]:
+            return fila["area"]
+        cursor.execute("SELECT area FROM usuarios_cache WHERE dni = ?", (dni_clean,))
+        fila_u = cursor.fetchone()
+        if fila_u and fila_u["area"]:
+            return fila_u["area"]
+    return ""
+
+def guardar_usuarios_cache(usuarios: list):
+    """Actualiza la lista de usuarios autorizados en la base local."""
+    if not usuarios:
+        return
+    with obtener_conexion() as conn:
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM usuarios_cache")
+        for u in usuarios:
+            id_u = str(u.get("id_usuario", "")).strip() or str(uuid.uuid4())
+            cursor.execute("""
+                INSERT INTO usuarios_cache (id_usuario, nombre, email, area, dni, actualizado_en)
+                VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+            """, (
+                id_u,
+                str(u.get("nombre", "")).strip(),
+                str(u.get("email", "") or u.get("mail", "")).strip(),
+                str(u.get("area", "")).strip(),
+                str(u.get("dni", "")).strip()
+            ))
+        conn.commit()
+
+def obtener_usuarios_cache() -> list:
+    """Retorna los usuarios autorizados almacenados en caché local."""
+    with obtener_conexion() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT id_usuario, nombre, email, area, dni FROM usuarios_cache ORDER BY nombre ASC")
+        return [dict(f) for f in cursor.fetchall()]
+
+def guardar_proyectos_cache(proyectos: list):
+    """Actualiza la lista de proyectos activos en la base local."""
+    if not proyectos:
+        return
+    with obtener_conexion() as conn:
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM proyectos_cache")
+        for p in proyectos:
+            id_p = str(p.get("id_proyecto", "")).strip()
+            denom = str(p.get("denominacion", "")).strip()
+            area = str(p.get("area", "")).strip()
+            if denom:
+                cursor.execute("""
+                    INSERT INTO proyectos_cache (id_proyecto, denominacion, area, actualizado_en)
+                    VALUES (?, ?, ?, CURRENT_TIMESTAMP)
+                """, (id_p, denom, area))
+        conn.commit()
+
+def obtener_proyectos_cache() -> list:
+    """Retorna los proyectos almacenados en caché local."""
+    with obtener_conexion() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT id_proyecto, denominacion, area FROM proyectos_cache ORDER BY denominacion ASC")
+        return [dict(f) for f in cursor.fetchall()]
+
+def depurar_registros_eliminados(ids_remotos: set) -> int:
+    """
+    Elimina de la base local los reportes con sincronizado=1 cuyo id_asistencia ya no existe
+    en Google Sheets. Conserva los pendientes de sincronización (sincronizado=0).
+    """
+    if not ids_remotos:
+        return 0
+    with obtener_conexion() as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT id, id_asistencia 
+            FROM historial 
+            WHERE sincronizado = 1 
+              AND id_asistencia IS NOT NULL 
+              AND id_asistencia != ''
+        """)
+        filas = cursor.fetchall()
+        ids_borrar = [f["id"] for f in filas if f["id_asistencia"] not in ids_remotos]
+        if ids_borrar:
+            placeholders = ",".join(["?"] * len(ids_borrar))
+            cursor.execute(f"DELETE FROM historial WHERE id IN ({placeholders})", ids_borrar)
+            conn.commit()
+            return len(ids_borrar)
+    return 0
+
+def obtener_sesion_activa():
+    """Devuelve los datos del empleado activo restaurando su avatar y área persistentes si están disponibles."""
+    with obtener_conexion() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT nombre, dni, mail, avatar, area FROM sesion WHERE id = 1")
         fila = cursor.fetchone()
         if fila:
             dni_val = fila["dni"]
             avatar_val = fila["avatar"] or ""
+            area_val = fila["area"] or ""
             if not avatar_val and dni_val:
                 avatar_val = obtener_avatar_por_dni(dni_val)
+            if not area_val and dni_val:
+                area_val = obtener_area_por_dni(dni_val)
             return {
                 "nombre": fila["nombre"],
                 "dni": dni_val,
                 "mail": fila["mail"] or "",
-                "avatar": avatar_val
+                "avatar": avatar_val,
+                "area": area_val
             }
         return None
 
-def guardar_sesion_activa(nombre: str, dni: str, mail: str = "", avatar: str = ""):
-    """Registra la sesión del empleado restaurando su avatar persistente si ya tiene uno."""
+def guardar_sesion_activa(nombre: str, dni: str, mail: str = "", avatar: str = "", area: str = ""):
+    """Registra la sesión del empleado restaurando su avatar y área persistente si ya tiene uno."""
     dni_limpio = dni.strip()
     avatar_final = avatar
     if not avatar_final:
         avatar_final = obtener_avatar_por_dni(dni_limpio)
+    area_final = area
+    if not area_final:
+        area_final = obtener_area_por_dni(dni_limpio)
 
     with obtener_conexion() as conn:
         cursor = conn.cursor()
         # Asegurar que el empleado esté registrado en perfiles_empleados
         cursor.execute("""
-            INSERT INTO perfiles_empleados (dni, nombre, mail, avatar, actualizado_en)
-            VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
+            INSERT INTO perfiles_empleados (dni, nombre, mail, avatar, area, actualizado_en)
+            VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
             ON CONFLICT(dni) DO UPDATE SET 
                 nombre = excluded.nombre,
                 mail = excluded.mail,
-                avatar = CASE WHEN excluded.avatar != '' THEN excluded.avatar ELSE perfiles_empleados.avatar END
-        """, (dni_limpio, nombre.strip(), mail.strip(), avatar_final))
+                avatar = CASE WHEN excluded.avatar != '' THEN excluded.avatar ELSE perfiles_empleados.avatar END,
+                area = CASE WHEN excluded.area != '' THEN excluded.area ELSE perfiles_empleados.area END,
+                actualizado_en = CURRENT_TIMESTAMP
+        """, (dni_limpio, nombre.strip(), mail.strip(), avatar_final, area_final))
 
         cursor.execute("""
-            INSERT INTO sesion (id, nombre, dni, mail, avatar)
-            VALUES (1, ?, ?, ?, ?)
+            INSERT INTO sesion (id, nombre, dni, mail, avatar, area)
+            VALUES (1, ?, ?, ?, ?, ?)
             ON CONFLICT(id) DO UPDATE SET 
                 nombre = excluded.nombre, 
                 dni = excluded.dni,
                 mail = excluded.mail,
-                avatar = excluded.avatar
-        """, (nombre.strip(), dni_limpio, mail.strip(), avatar_final))
+                avatar = excluded.avatar,
+                area = excluded.area
+        """, (nombre.strip(), dni_limpio, mail.strip(), avatar_final, area_final))
         conn.commit()
 
 def actualizar_avatar_sesion(avatar_base64: str):

@@ -64,19 +64,23 @@ export default function CheckForm({ onRegistroGuardado, onVolver }) {
       const nuevaLista = [...proyectosSeleccionados, seleccionado];
       setProyectosSeleccionados(nuevaLista);
 
-      // Si estamos en personalizado, inicializamos con un valor por defecto equitativo
+      // Distribuir equitativamente las 8 horas entre los proyectos para no superar nunca el tope
       const horasDefault = Number((8 / nuevaLista.length).toFixed(1));
-      setHorasPorProyecto(prev => ({
-        ...prev,
-        [seleccionado]: prev[seleccionado] || horasDefault
-      }));
+      setHorasPorProyecto(() => {
+        const nuevo = {};
+        nuevaLista.forEach(p => {
+          nuevo[p] = horasDefault;
+        });
+        return nuevo;
+      });
     }
     e.target.value = ''; // Reset select
   };
 
   // Remover un proyecto
   const handleRemoverProyecto = (nombre) => {
-    setProyectosSeleccionados(prev => prev.filter(p => p !== nombre));
+    const nuevaLista = proyectosSeleccionados.filter(p => p !== nombre);
+    setProyectosSeleccionados(nuevaLista);
     setHorasPorProyecto(prev => {
       const copia = { ...prev };
       delete copia[nombre];
@@ -84,32 +88,71 @@ export default function CheckForm({ onRegistroGuardado, onVolver }) {
     });
   };
 
-  // Modificar horas en modo personalizado
+  // Total horas personalizadas (redondeado a 1 decimal)
+  const getTotalHorasPersonalizadas = () => {
+    if (proyectosSeleccionados.length === 0) return Math.min(8.0, Math.max(0, horasArea));
+    const total = proyectosSeleccionados.reduce((acc, p) => acc + (Number(horasPorProyecto[p]) || 0), 0);
+    return Math.round(total * 10) / 10;
+  };
+
+  // Modificar horas con botones +/- respetando el tope de 8 horas
   const handleCambiarHoras = (proyecto, delta) => {
     setHorasPorProyecto(prev => {
-      const actual = prev[proyecto] ?? 4;
-      const nuevo = Math.max(0.5, Math.min(24, Math.round((actual + delta) * 10) / 10));
+      const actual = Number(prev[proyecto]) || 0;
+      const totalOtros = proyectosSeleccionados
+        .filter(p => p !== proyecto)
+        .reduce((acc, p) => acc + (Number(prev[p]) || 0), 0);
+
+      // El total acumulado no debe superar 8.0 horas
+      const maxPermitido = Math.max(0.5, Math.round((8.0 - totalOtros) * 10) / 10);
+
+      let nuevo = Math.round((actual + delta) * 10) / 10;
+      if (delta > 0) {
+        nuevo = Math.min(maxPermitido, nuevo);
+      } else {
+        nuevo = Math.max(0.5, nuevo);
+      }
       return { ...prev, [proyecto]: nuevo };
     });
   };
 
+  // Modificar horas mediante teclado acotando a un máximo de 8 hs totales
   const handleInputHoras = (proyecto, valor) => {
     const num = parseFloat(valor);
-    if (!isNaN(num) && num >= 0) {
-      setHorasPorProyecto(prev => ({ ...prev, [proyecto]: num }));
+    if (isNaN(num)) {
+      setHorasPorProyecto(prev => ({ ...prev, [proyecto]: 0 }));
+      return;
     }
+
+    setHorasPorProyecto(prev => {
+      const totalOtros = proyectosSeleccionados
+        .filter(p => p !== proyecto)
+        .reduce((acc, p) => acc + (Number(prev[p]) || 0), 0);
+
+      const maxPermitido = Math.max(0.5, Math.round((8.0 - totalOtros) * 10) / 10);
+      const valorAjustado = Math.min(maxPermitido, Math.max(0, Math.round(num * 10) / 10));
+      return { ...prev, [proyecto]: valorAjustado };
+    });
+  };
+
+  // Manejo de horas para tiempo al área (sin proyectos)
+  const handleCambiarHorasArea = (delta) => {
+    setHorasArea(prev => Math.min(8.0, Math.max(0.5, Math.round((prev + delta) * 10) / 10)));
+  };
+
+  const handleInputHorasArea = (valor) => {
+    const num = parseFloat(valor);
+    if (isNaN(num)) {
+      setHorasArea(0);
+      return;
+    }
+    setHorasArea(Math.min(8.0, Math.max(0.5, Math.round(num * 10) / 10)));
   };
 
   // Cálculo de horas equitativas
   const getHorasEquitativas = () => {
     if (proyectosSeleccionados.length === 0) return 8;
     return Number((8 / proyectosSeleccionados.length).toFixed(2));
-  };
-
-  // Cálculo total horas personalizadas
-  const getTotalHorasPersonalizadas = () => {
-    if (proyectosSeleccionados.length === 0) return horasArea;
-    return proyectosSeleccionados.reduce((acc, p) => acc + (Number(horasPorProyecto[p]) || 0), 0);
   };
 
   // Enviar formulario
@@ -121,6 +164,19 @@ export default function CheckForm({ onRegistroGuardado, onVolver }) {
     if (!fecha || !lugar) {
       setMensajeError('Por favor selecciona la fecha y la ubicación.');
       return;
+    }
+
+    // Validación estricta: las horas asignadas no deben superar las 8 horas
+    if (lugar !== 'Franco' && modoDivision === 'personalizado') {
+      const total = getTotalHorasPersonalizadas();
+      if (total > 8.001) {
+        setMensajeError(`El total de horas asignadas (${total} hs) no debe superar las 8 horas.`);
+        return;
+      }
+      if (total <= 0) {
+        setMensajeError('Debes asignar horas a los proyectos trabajados.');
+        return;
+      }
     }
 
     setEnviando(true);
@@ -400,7 +456,8 @@ export default function CheckForm({ onRegistroGuardado, onVolver }) {
                           <button
                             type="button"
                             className="btn-step"
-                            onClick={() => setHorasArea(prev => Math.max(0.5, prev - 0.5))}
+                            onClick={() => handleCambiarHorasArea(-0.5)}
+                            disabled={horasArea <= 0.5}
                           >
                             -
                           </button>
@@ -408,61 +465,103 @@ export default function CheckForm({ onRegistroGuardado, onVolver }) {
                             type="number"
                             step="0.5"
                             min="0.5"
-                            max="24"
+                            max="8"
                             className="input-hours"
                             value={horasArea}
-                            onChange={(e) => setHorasArea(parseFloat(e.target.value) || 0)}
+                            onChange={(e) => handleInputHorasArea(e.target.value)}
                           />
                           <button
                             type="button"
                             className="btn-step"
-                            onClick={() => setHorasArea(prev => prev + 0.5)}
+                            onClick={() => handleCambiarHorasArea(0.5)}
+                            disabled={horasArea >= 8.0}
                           >
                             +
                           </button>
                         </div>
                       </div>
                     ) : (
-                      proyectosSeleccionados.map((p) => (
-                        <div key={p} className="custom-hours-item">
-                          <span className="custom-hours-name" title={p}>
-                            {p}
-                          </span>
-                          <div className="custom-hours-controls">
-                            <button
-                              type="button"
-                              className="btn-step"
-                              onClick={() => handleCambiarHoras(p, -0.5)}
-                            >
-                              -
-                            </button>
-                            <input
-                              type="number"
-                              step="0.5"
-                              min="0.5"
-                              max="24"
-                              className="input-hours"
-                              value={horasPorProyecto[p] ?? getHorasEquitativas()}
-                              onChange={(e) => handleInputHoras(p, e.target.value)}
-                            />
-                            <button
-                              type="button"
-                              className="btn-step"
-                              onClick={() => handleCambiarHoras(p, 0.5)}
-                            >
-                              +
-                            </button>
+                      proyectosSeleccionados.map((p) => {
+                        const totalActual = getTotalHorasPersonalizadas();
+                        const puedeSumar = totalActual < 8.0;
+                        const valorActual = horasPorProyecto[p] ?? getHorasEquitativas();
+
+                        return (
+                          <div key={p} className="custom-hours-item">
+                            <span className="custom-hours-name" title={p}>
+                              {p}
+                            </span>
+                            <div className="custom-hours-controls">
+                              <button
+                                type="button"
+                                className="btn-step"
+                                onClick={() => handleCambiarHoras(p, -0.5)}
+                                disabled={Number(valorActual) <= 0.5}
+                                title="Restar 0.5 hs"
+                              >
+                                -
+                              </button>
+                              <input
+                                type="number"
+                                step="0.5"
+                                min="0.5"
+                                max="8"
+                                className="input-hours"
+                                value={valorActual}
+                                onChange={(e) => handleInputHoras(p, e.target.value)}
+                              />
+                              <button
+                                type="button"
+                                className="btn-step"
+                                onClick={() => handleCambiarHoras(p, 0.5)}
+                                disabled={!puedeSumar}
+                                title={puedeSumar ? "Sumar 0.5 hs" : "Límite de 8 hs alcanzado"}
+                              >
+                                +
+                              </button>
+                            </div>
                           </div>
-                        </div>
-                      ))
+                        );
+                      })
                     )}
 
-                    <div className="hours-total-bar">
-                      <span>Total acumulado:</span>
-                      <span style={{ color: 'var(--primary)', fontWeight: 800 }}>
-                        {getTotalHorasPersonalizadas()} hs
-                      </span>
-                    </div>
+                    {/* Barra de progreso y resumen de horas */}
+                    {(() => {
+                      const totalHs = getTotalHorasPersonalizadas();
+                      const porcentaje = Math.min(100, Math.max(0, (totalHs / 8.0) * 100));
+                      const esCompleto = totalHs === 8.0;
+                      const esExcedido = totalHs > 8.0;
+
+                      return (
+                        <div className="hours-total-bar">
+                          <div className="hours-total-info">
+                            <span className="hours-total-label">Total asignado:</span>
+                            <span className={`hours-total-value ${esCompleto ? 'complete' : ''} ${esExcedido ? 'over-limit' : ''}`}>
+                              {totalHs} / 8.0 hs
+                            </span>
+                          </div>
+
+                          <div className="hours-progress-track">
+                            <div
+                              className={`hours-progress-fill ${esCompleto ? 'complete' : ''} ${esExcedido ? 'over-limit' : ''}`}
+                              style={{ width: `${porcentaje}%` }}
+                            />
+                          </div>
+
+                          <div className="hours-status-badge">
+                            {esCompleto ? (
+                              <span className="badge-complete">✓ Jornada de 8 hs completa</span>
+                            ) : esExcedido ? (
+                              <span className="badge-over">⚠️ No debe superar 8 hs</span>
+                            ) : (
+                              <span className="badge-remaining">
+                                Restan {(8.0 - totalHs).toFixed(1)} hs por asignar
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })()}
                   </div>
                 )}
               </div>

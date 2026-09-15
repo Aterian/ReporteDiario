@@ -248,3 +248,76 @@ def sincronizar_pendientes() -> dict:
             "exito": False,
             "error": str(e)
         }
+
+
+def obtener_proyectos_remotos(spreadsheet_id: str = "") -> list:
+    """
+    Lee los proyectos activos de la pestaña '0_proyectos'.
+    Retorna lista de diccionarios: [{'id_proyecto': ..., 'denominacion': ..., 'area': ...}, ...]
+    """
+    try:
+        sh, _ = obtener_hoja_trabajo(spreadsheet_id=spreadsheet_id, sheet_name="0_proyectos")
+        ws_p = sh.worksheet("0_proyectos")
+        filas = ws_p.get_all_records()
+        proyectos = []
+        for f in filas:
+            denom = str(f.get("denominacion", "")).strip()
+            area = str(f.get("area", "")).strip()
+            id_p = str(f.get("id_proyecto", "")).strip()
+            if denom:
+                proyectos.append({
+                    "id_proyecto": id_p,
+                    "denominacion": denom,
+                    "area": area
+                })
+        return proyectos
+    except Exception as e:
+        print(f"[Sheets] Error al obtener proyectos remotos: {e}")
+        return []
+
+
+def obtener_usuarios_remotos(spreadsheet_id: str = "") -> list:
+    """
+    Lee los usuarios autorizados de la pestaña '0_usuarios'.
+    Retorna lista de diccionarios: [{'id_usuario': ..., 'nombre': ..., 'email': ..., 'area': ..., 'dni': ...}, ...]
+    """
+    try:
+        sh, _ = obtener_hoja_trabajo(spreadsheet_id=spreadsheet_id, sheet_name="0_usuarios")
+        ws_u = sh.worksheet("0_usuarios")
+        filas = ws_u.get_all_records()
+        usuarios = []
+        for f in filas:
+            nom = str(f.get("nombre", "")).strip()
+            dni = str(f.get("dni", "")).strip()
+            area = str(f.get("area", "")).strip()
+            email = str(f.get("email", "")).strip()
+            id_u = str(f.get("id_usuario", "")).strip()
+            if nom and dni:
+                usuarios.append({
+                    "id_usuario": id_u,
+                    "nombre": nom,
+                    "email": email,
+                    "area": area,
+                    "dni": dni
+                })
+        return usuarios
+    except Exception as e:
+        print(f"[Sheets] Error al obtener usuarios remotos: {e}")
+        return []
+
+
+def obtener_ids_asistencia_remotos(spreadsheet_id: str = "") -> set:
+    """
+    Obtiene el conjunto de todos los id_asistencia existentes en '1_asistencia_informada'.
+    Permite verificar qué registros fueron eliminados de Google Sheets.
+    """
+    try:
+        sh, ws = obtener_hoja_trabajo(spreadsheet_id=spreadsheet_id, sheet_name="1_asistencia_informada")
+        valores_col = ws.col_values(1)
+        # Omitimos el encabezado 'id_asistencia'
+        ids = {str(v).strip() for v in valores_col[1:] if str(v).strip()}
+        return ids
+    except Exception as e:
+        print(f"[Sheets] Error al obtener IDs de asistencia remotos: {e}")
+        return set()
+

@@ -1,0 +1,39 @@
+========================================================================
+ CHECK DIARIO - INGEAP
+ Instrucciones de Instalación y Uso
+========================================================================
+
+DESCRIPCIÓN:
+Aplicación de escritorio para el registro diario de asistencia y horas 
+de proyectos de Ingeap. Se ejecuta en la bandeja del sistema (system tray)
+y sincroniza automáticamente con Google Sheets.
+
+------------------------------------------------------------------------
+INSTALACIÓN RÁPIDA:
+------------------------------------------------------------------------
+1. Haz doble clic en "Instalar.bat" (o "Crear_Acceso_Directo.bat").
+2. El instalador configurará automáticamente:
+   - El acceso directo en tu Escritorio.
+   - El acceso directo en el Menú Inicio de Windows.
+   - El inicio automático al encender el equipo (minimizada en segundo plano).
+
+------------------------------------------------------------------------
+USO DIARIO:
+------------------------------------------------------------------------
+- Puedes abrir la ventana en cualquier momento desde el acceso directo del 
+  Escritorio o haciendo clic en el icono del calendario rojo en la bandeja 
+  del sistema (junto al reloj de Windows).
+- Si cierras la ventana (botón X), la aplicación continuará funcionando en 
+  segundo plano para recordarte tu reporte diario.
+- Para salir completamente: Haz clic derecho en el icono de la bandeja y 
+  selecciona "Salir".
+
+------------------------------------------------------------------------
+DESINSTALACIÓN:
+------------------------------------------------------------------------
+- Para quitar los accesos directos y el inicio automático, haz doble clic 
+  en "Desinstalar.bat".
+
+========================================================================
+ Ingeap - Automatización y Control
+========================================================================

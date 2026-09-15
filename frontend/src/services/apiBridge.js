@@ -21,7 +21,8 @@ const mockApi = {
     
     // Simulación con algunos usuarios válidos de prueba
     if (dniNormalizado.length >= 7) {
-      const usuario = { nombre: nombre.trim(), dni: dniNormalizado };
+      const areaSimulada = dniNormalizado === '33357062' ? 'N' : dniNormalizado.endsWith('4') ? 'I' : 'A';
+      const usuario = { nombre: nombre.trim(), dni: dniNormalizado, area: areaSimulada };
       localStorage.setItem('ingeap_sesion_mock', JSON.stringify(usuario));
       return { exito: true, usuario };
     }
@@ -32,15 +33,10 @@ const mockApi = {
     return { exito: true };
   },
   obtener_servicios: async () => [
-    "352-SF-I-1084-Rel Limp Canales Centro-Sta Fe-MEM",
-    "353-SF-I-1086-Fot Proy empalme ruta-R Neg-Baires ing",
-    "356-SF-I-1003-Fot Bat Cambio Traza CE AL-Neuqúen-Heck",
-    "354-SF-M-1085- VEP SCARAFIA SUNCHALES",
-    "351-SF-M-1076- Replanteo Corestein Santa Fe",
-    "350-SF-M-1088- MENSURA CASA CUNA RINCON",
-    "347-SF-M-1032- PRESUPUESTOS ALLASIA",
-    "345-SF-M-1043- REPLANTEO LOTES SOLARO",
-    "344-SF-M-1040- CEP IMOBERDORF"
+    "175-SF-A-504-OT8",
+    "287-SF-A-813-OT1",
+    "301-SF-A-853-OT1",
+    "355-SF-A-1054-OT1"
   ],
   guardar_check_diario: async (datos) => {
     const sesionLocal = localStorage.getItem('ingeap_sesion_mock');

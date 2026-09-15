@@ -7,45 +7,45 @@
 :root {
   --font-family: 'Montserrat', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
 
-  /* Fondos (Blanco y Grises Claros) */
-  --bg-app: #f4f6f9;
+  /* Fondos (Blanco puro y Slate muy suave) */
+  --bg-app: #f8fafc;
   --bg-surface: #ffffff;
   --bg-surface-elevated: #ffffff;
   --bg-surface-hover: #f1f5f9;
   --bg-card: #ffffff;
 
-  /* Botones y Acentos Rojos */
-  --primary: #dc2626;
-  --primary-light: #ef4444;
-  --primary-dark: #b91c1c;
-  --primary-glow: rgba(220, 38, 38, 0.18);
-  --primary-subtle: rgba(220, 38, 38, 0.08);
+  /* Rojo Corporativo Refinado */
+  --primary: #c81e2b;
+  --primary-light: #d92534;
+  --primary-dark: #9f121a;
+  --primary-glow: rgba(200, 30, 43, 0.12);
+  --primary-subtle: rgba(200, 30, 43, 0.06);
   
   /* Estados */
   --accent-emerald: #059669;
-  --accent-emerald-bg: rgba(5, 150, 105, 0.1);
+  --accent-emerald-bg: rgba(5, 150, 105, 0.08);
   --accent-amber: #d97706;
-  --accent-amber-bg: rgba(217, 119, 6, 0.1);
-  --accent-rose: #dc2626;
-  --accent-rose-bg: rgba(220, 38, 38, 0.1);
+  --accent-amber-bg: rgba(217, 119, 6, 0.08);
+  --accent-rose: #c81e2b;
+  --accent-rose-bg: rgba(200, 30, 43, 0.08);
 
-  /* Texto (Negro y Gris) */
-  --text-primary: #0f172a;    /* Negro pizarra profundo */
-  --text-secondary: #475569;  /* Gris oscuro */
-  --text-muted: #94a3b8;      /* Gris medio */
+  /* Texto (Pizarra suave en lugar de negro puro para evitar fatiga visual) */
+  --text-primary: #1e293b;    /* Slate 800 */
+  --text-secondary: #64748b;  /* Slate 500 */
+  --text-muted: #94a3b8;      /* Slate 400 */
   --text-inverse: #ffffff;
 
   /* Bordes y Líneas */
-  --border-subtle: #e2e8f0;
-  --border-input: #cbd5e1;
-  --border-active: #dc2626;
-  --border-focus: #dc2626;
+  --border-subtle: #edf2f7;
+  --border-input: #e2e8f0;
+  --border-active: #c81e2b;
+  --border-focus: #c81e2b;
 
-  /* Sombras */
-  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.04);
-  --shadow-md: 0 4px 14px rgba(0, 0, 0, 0.06), 0 1px 3px rgba(0, 0, 0, 0.04);
-  --shadow-lg: 0 10px 25px rgba(0, 0, 0, 0.08), 0 4px 10px rgba(0, 0, 0, 0.03);
-  --shadow-red: 0 4px 16px rgba(220, 38, 38, 0.35);
+  /* Sombras Difusas Suaves */
+  --shadow-sm: 0 1px 3px rgba(15, 23, 42, 0.04), 0 1px 2px rgba(15, 23, 42, 0.02);
+  --shadow-md: 0 4px 16px -2px rgba(15, 23, 42, 0.06), 0 2px 6px -1px rgba(15, 23, 42, 0.03);
+  --shadow-lg: 0 12px 28px -4px rgba(15, 23, 42, 0.08), 0 4px 10px -2px rgba(15, 23, 42, 0.03);
+  --shadow-red: 0 4px 14px rgba(200, 30, 43, 0.22);
 
   --radius-sm: 8px;
   --radius-md: 12px;
@@ -1128,37 +1128,48 @@ html, body {
 }
 
 .btn-step {
-  width: 22px;
-  height: 22px;
+  width: 24px;
+  height: 24px;
   background: #ffffff;
   border: 1px solid var(--border-input);
-  border-radius: 4px;
+  border-radius: 6px;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 700;
   color: var(--text-primary);
   cursor: pointer;
   transition: var(--transition);
 }
 
-.btn-step:hover {
+.btn-step:hover:not(:disabled) {
   background: #f1f5f9;
   border-color: #94a3b8;
+  color: var(--primary);
+}
+
+.btn-step:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  background: #f8fafc;
+  color: #cbd5e1;
+  border-color: #e2e8f0;
 }
 
 .input-hours {
-  width: 42px;
+  width: 44px;
   text-align: center;
-  padding: 3px 2px;
+  padding: 4px 2px;
   border: 1px solid var(--border-input);
-  border-radius: 4px;
+  border-radius: 6px;
   font-family: var(--font-family);
-  font-size: 11.5px;
+  font-size: 12px;
   font-weight: 700;
   color: var(--text-primary);
   outline: none;
+  background: #ffffff;
+  transition: var(--transition);
 }
 
 .input-hours:focus {
@@ -1166,16 +1177,100 @@ html, body {
   box-shadow: 0 0 0 2px var(--primary-glow);
 }
 
+/* Barra de progreso y resumen de horas */
 .hours-total-bar {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 12px;
+  background: #ffffff;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
+  margin-top: 4px;
+}
+
+.hours-total-info {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  font-size: 11px;
-  font-weight: 700;
+}
+
+.hours-total-label {
+  font-size: 11.5px;
+  font-weight: 600;
   color: var(--text-secondary);
-  padding: 3px 6px;
+}
+
+.hours-total-value {
+  font-size: 12.5px;
+  font-weight: 800;
+  color: var(--primary);
+}
+
+.hours-total-value.complete {
+  color: #059669;
+}
+
+.hours-total-value.over-limit {
+  color: #dc2626;
+}
+
+.hours-progress-track {
+  width: 100%;
+  height: 6px;
   background: #f1f5f9;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-full);
+  overflow: hidden;
+}
+
+.hours-progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--primary-light), var(--primary));
+  border-radius: var(--radius-full);
+  transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1), background-color 0.3s ease;
+}
+
+.hours-progress-fill.complete {
+  background: linear-gradient(90deg, #10b981, #059669);
+}
+
+.hours-progress-fill.over-limit {
+  background: #dc2626;
+}
+
+.hours-status-badge {
+  display: flex;
+  justify-content: flex-end;
+  font-size: 10.5px;
+  font-weight: 600;
+}
+
+.badge-complete {
+  color: #059669;
+}
+
+.badge-remaining {
+  color: var(--text-muted);
+}
+
+.badge-over {
+  color: #dc2626;
+  font-weight: 700;
+}
+
+.home-area-chip {
+  background: rgba(200, 30, 43, 0.08);
+  color: var(--primary);
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: var(--radius-full);
+  border: 1px solid rgba(200, 30, 43, 0.2);
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  letter-spacing: 0.3px;
 }
 
 /* ==========================================================================

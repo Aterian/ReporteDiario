@@ -19,36 +19,45 @@ from database import (
     guardar_registro_asistencia,
     guardar_registro_historial,
     obtener_ultimos_registros,
-    usuario_registro_hoy
+    usuario_registro_hoy,
+    obtener_area_por_dni,
+    guardar_usuarios_cache,
+    obtener_usuarios_cache,
+    guardar_proyectos_cache,
+    obtener_proyectos_cache,
+    depurar_registros_eliminados
 )
 from sheets_service import (
     sincronizar_pendientes,
     probar_conexion,
     cargar_configuracion,
     guardar_configuracion,
-    extraer_spreadsheet_id
+    extraer_spreadsheet_id,
+    obtener_proyectos_remotos,
+    obtener_usuarios_remotos,
+    obtener_ids_asistencia_remotos
 )
 
 
-# Lista predefinida de los empleados habilitados con sus correos oficiales
+# Lista predefinida de los empleados habilitados con sus correos oficiales y áreas por defecto
 EMPLEADOS_AUTORIZADOS = [
-    {"nombre": "Sergio Juarez", "dni": "33357062", "mail": "sjuarez@ingeap.com"},
-    {"nombre": "Camila Llovio", "dni": "39695074", "mail": "cllovio@ingeap.com"},
-    {"nombre": "Nicolás Parajón", "dni": "35223765", "mail": "nparajon@ingeap.com"},
-    {"nombre": "Pablo Zanor", "dni": "30866202", "mail": "pzanor@ingeap.com"},
-    {"nombre": "Francisco Tibaldo", "dni": "31200004", "mail": "ftibaldo@ingeap.com"},
-    {"nombre": "Rocío Salim", "dni": "37880578", "mail": "rsalim@ingeap.com"},
-    {"nombre": "Daiana Ferrero", "dni": "37875017", "mail": "of.tecnica@ingeap.com"},
-    {"nombre": "Marco Regis", "dni": "38337660", "mail": "sge@ingeap.com"},
-    {"nombre": "Iván Valentin", "dni": "40158951", "mail": "sge@ingeap.com"},
-    {"nombre": "Lionel Juarez", "dni": "43008805", "mail": "ljuarez@ingeap.com"},
-    {"nombre": "Santiago Destefanis", "dni": "36580770", "mail": "sdestefanis@ingeap.com"},
-    {"nombre": "Justina Bertolozzi", "dni": "45411162", "mail": "rrhh@ingeap.com"},
-    {"nombre": "Alejandro Maglianesi", "dni": "32370731", "mail": "amaglianesi@ingeap.com"},
-    {"nombre": "Daiana Sanchez", "dni": "37546183", "mail": "marketing@ingeap.com"}
+    {"nombre": "Sergio Juarez", "dni": "33357062", "mail": "sjuarez@ingeap.com", "area": "N"},
+    {"nombre": "Camila Llovio", "dni": "39695074", "mail": "cllovio@ingeap.com", "area": "I"},
+    {"nombre": "Nicolás Parajón", "dni": "35223765", "mail": "nparajon@ingeap.com", "area": "I"},
+    {"nombre": "Pablo Zanor", "dni": "30866202", "mail": "pzanor@ingeap.com", "area": "I"},
+    {"nombre": "Francisco Tibaldo", "dni": "31200004", "mail": "ftibaldo@ingeap.com", "area": "N"},
+    {"nombre": "Rocío Salim", "dni": "37880578", "mail": "rsalim@ingeap.com", "area": "M"},
+    {"nombre": "Daiana Ferrero", "dni": "37875017", "mail": "of.tecnica@ingeap.com", "area": "M"},
+    {"nombre": "Marco Regis", "dni": "38337660", "mail": "sge@ingeap.com", "area": "A"},
+    {"nombre": "Iván Valentin", "dni": "40158951", "mail": "sge@ingeap.com", "area": "A"},
+    {"nombre": "Lionel Juarez", "dni": "43008805", "mail": "ljuarez@ingeap.com", "area": "A"},
+    {"nombre": "Santiago Destefanis", "dni": "36580770", "mail": "sdestefanis@ingeap.com", "area": "N"},
+    {"nombre": "Justina Bertolozzi", "dni": "45411162", "mail": "rrhh@ingeap.com", "area": "RRHH"},
+    {"nombre": "Alejandro Maglianesi", "dni": "32370731", "mail": "amaglianesi@ingeap.com", "area": "VYM"},
+    {"nombre": "Daiana Sanchez", "dni": "37546183", "mail": "marketing@ingeap.com", "area": "VYM"}
 ]
 
-# Proyectos activos de prueba (más adelante se sincronizarán directo de Google Sheets)
+# Proyectos de respaldo offline si aún no se sincronizó con Google Sheets
 SERVICIOS_DISPONIBLES = [
     "352-SF-I-1084-Rel Limp Canales Centro-Sta Fe-MEM",
     "353-SF-I-1086-Fot Proy empalme ruta-R Neg-Baires ing",
@@ -60,6 +69,40 @@ SERVICIOS_DISPONIBLES = [
     "345-SF-M-1043- REPLANTEO LOTES SOLARO",
     "344-SF-M-1040- CEP IMOBERDORF"
 ]
+
+
+def sincronizar_catalogos_sheets():
+    """
+    Sincroniza en segundo plano los proyectos activos ('0_proyectos')
+    y los usuarios autorizados ('0_usuarios') desde Google Sheets.
+    """
+    try:
+        proyectos = obtener_proyectos_remotos()
+        if proyectos:
+            guardar_proyectos_cache(proyectos)
+            print(f"[Catálogos] {len(proyectos)} proyectos sincronizados desde '0_proyectos'.")
+
+        usuarios = obtener_usuarios_remotos()
+        if usuarios:
+            guardar_usuarios_cache(usuarios)
+            print(f"[Catálogos] {len(usuarios)} usuarios sincronizados desde '0_usuarios'.")
+
+            # Si hay una sesión activa, asegurar que tenga su área actualizada
+            sesion = obtener_sesion_activa()
+            if sesion:
+                dni_act = sesion.get("dni", "").strip()
+                u_match = next((u for u in usuarios if str(u.get("dni", "")).strip() == dni_act), None)
+                if u_match and u_match.get("area") and sesion.get("area") != u_match["area"]:
+                    guardar_sesion_activa(
+                        nombre=sesion.get("nombre", ""),
+                        dni=dni_act,
+                        mail=sesion.get("mail", ""),
+                        avatar=sesion.get("avatar", ""),
+                        area=u_match["area"]
+                    )
+                    print(f"[Catálogos] Área '{u_match['area']}' actualizada para sesión activa.")
+    except Exception as e:
+        print(f"[Catálogos] Aviso al sincronizar proyectos y usuarios: {e}")
 
 class ApiPuente:
     """Métodos accesibles desde React mediante window.pywebview.api."""
@@ -82,25 +125,47 @@ class ApiPuente:
         return {"logueado": sesion is not None, "usuario": sesion}
 
     def iniciar_sesion(self, nombre: str, dni: str):
-        """Valida que el nombre o DNI coincida con el listado autorizado."""
+        """Valida que el nombre o DNI coincida con el listado autorizado y guarda su área."""
         nombre_limpio = nombre.strip().lower()
         dni_limpio = dni.strip()
 
+        # Primero buscar en usuarios de Google Sheets en caché
+        usuarios_disp = obtener_usuarios_cache()
+        if not usuarios_disp:
+            usuarios_disp = EMPLEADOS_AUTORIZADOS
+
         usuario_valido = next(
-            (emp for emp in EMPLEADOS_AUTORIZADOS 
-             if emp["dni"] == dni_limpio and emp["nombre"].lower() == nombre_limpio),
+            (emp for emp in usuarios_disp 
+             if str(emp.get("dni", "")).strip() == dni_limpio and emp.get("nombre", "").strip().lower() == nombre_limpio),
             None
         )
 
+        if not usuario_valido:
+            # Fallback en lista predefinida
+            usuario_valido = next(
+                (emp for emp in EMPLEADOS_AUTORIZADOS 
+                 if emp["dni"] == dni_limpio and emp["nombre"].lower() == nombre_limpio),
+                None
+            )
+
         if usuario_valido:
+            area_val = usuario_valido.get("area", "")
+            if not area_val:
+                area_val = obtener_area_por_dni(dni_limpio)
+
             guardar_sesion_activa(
-                usuario_valido["nombre"],
-                usuario_valido["dni"],
-                usuario_valido.get("mail", "")
+                nombre=usuario_valido["nombre"],
+                dni=usuario_valido["dni"],
+                mail=usuario_valido.get("mail", "") or usuario_valido.get("email", ""),
+                area=area_val
             )
             sesion = obtener_sesion_activa()
             avatar_actual = sesion.get("avatar", "") if sesion else ""
-            res_usuario = {**usuario_valido, "avatar": avatar_actual}
+            res_usuario = {
+                **usuario_valido,
+                "avatar": avatar_actual,
+                "area": sesion.get("area", "") if sesion else area_val
+            }
             return {"exito": True, "usuario": res_usuario}
         
         return {"exito": False, "error": "Los datos ingresados no coinciden con ningún empleado registrado."}
@@ -116,8 +181,34 @@ class ApiPuente:
         return {"exito": True}
 
     def obtener_servicios(self):
-        """Retorna la lista de proyectos para el menú desplegable."""
-        return SERVICIOS_DISPONIBLES
+        """
+        Retorna la lista de proyectos activos cargados desde la pestaña '0_proyectos'.
+        Los proyectos están filtrados por el área del usuario ('0_usuarios').
+        Excepción: Los usuarios de área 'N' (núcleo) ven todos los proyectos.
+        """
+        sesion = obtener_sesion_activa()
+        area_usuario = (sesion.get("area", "") if sesion else "").strip().upper()
+
+        proyectos = obtener_proyectos_cache()
+        if not proyectos:
+            proyectos = obtener_proyectos_remotos()
+            if proyectos:
+                guardar_proyectos_cache(proyectos)
+
+        if not proyectos:
+            return SERVICIOS_DISPONIBLES
+
+        # Regla 4: usuarios de área 'N' (núcleo) o sin área definida pueden ver todos los proyectos
+        if area_usuario == "N" or not area_usuario:
+            return [p["denominacion"] for p in proyectos if p.get("denominacion")]
+
+        # Regla 3: Proyectos filtrados por área correspondiente
+        proyectos_filtrados = [
+            p["denominacion"] for p in proyectos
+            if p.get("area", "").strip().upper() == area_usuario and p.get("denominacion")
+        ]
+
+        return proyectos_filtrados
 
     def guardar_check_diario(self, datos: dict):
         """
@@ -209,10 +300,25 @@ class ApiPuente:
         return {"exito": False, "error": "Datos del reporte incompletos o inválidos."}
 
     def obtener_historial(self):
-        """Retorna los registros para la pestaña de historial filtrados por el empleado en sesión."""
+        """
+        Retorna los registros para la pestaña de historial filtrados por el empleado en sesión.
+        Verifica previamente contra '1_asistencia_informada' en Google Sheets y depura
+        aquellos registros que hayan sido borrados de la hoja de cálculo.
+        """
         sesion = obtener_sesion_activa()
         if not sesion:
             return []
+
+        # Chequeo contra Google Sheets para no mostrar registros borrados en la hoja
+        try:
+            ids_remotos = obtener_ids_asistencia_remotos()
+            if ids_remotos:
+                cant_depurados = depurar_registros_eliminados(ids_remotos)
+                if cant_depurados > 0:
+                    print(f"[Historial] Se depuraron {cant_depurados} registro(s) eliminados de Google Sheets.")
+        except Exception as e:
+            print(f"[Historial] Chequeo de registros borrados omitido: {e}")
+
         return obtener_ultimos_registros(
             empleado=sesion.get("nombre", ""),
             usuario_mail=sesion.get("mail", ""),
@@ -263,40 +369,88 @@ def recurso_path(ruta_relativa: str) -> str:
 
 
 def obtener_icono_tray():
-    """Retorna la imagen del icono para la bandeja del sistema utilizando Logo_Ingeap1."""
+    """Retorna la imagen del icono de calendario rojo corporativo para la bandeja del sistema."""
     ruta_assets = recurso_path("assets")
-    ruta_logo = os.path.join(ruta_assets, "Logo_Ingeap1.png")
-    if os.path.exists(ruta_logo):
-        try:
-            logo = Image.open(ruta_logo)
-            icon_img = Image.new("RGBA", (64, 64), (0, 0, 0, 0))
-            logo_thumb = logo.copy()
-            logo_thumb.thumbnail((60, 60), Image.Resampling.LANCZOS)
-            offset = ((64 - logo_thumb.width) // 2, (64 - logo_thumb.height) // 2)
-            icon_img.paste(logo_thumb, offset, mask=logo_thumb if logo_thumb.mode == "RGBA" else None)
-            return icon_img
-        except Exception as e:
-            print(f"Error procesando Logo_Ingeap1: {e}")
-
     ruta_png = os.path.join(ruta_assets, "icon.png")
     if os.path.exists(ruta_png):
-        return Image.open(ruta_png)
+        try:
+            return Image.open(ruta_png)
+        except Exception as e:
+            print(f"Error procesando icon.png: {e}")
 
-    os.makedirs(ruta_assets, exist_ok=True)
-    img = Image.new("RGBA", (64, 64), (0, 0, 0, 0))
-    draw = ImageDraw.Draw(img)
-    draw.rounded_rectangle([2, 2, 61, 61], radius=14, fill=(220, 38, 38, 255))
-    draw.line([(18, 33), (28, 43)], fill=(255, 255, 255, 255), width=5)
-    draw.line([(28, 43), (46, 21)], fill=(255, 255, 255, 255), width=5)
-    img.save(ruta_png)
-    return img
+    ruta_ico = os.path.join(ruta_assets, "app.ico")
+    if os.path.exists(ruta_ico):
+        try:
+            return Image.open(ruta_ico)
+        except Exception:
+            pass
+
+    from crear_icono import crear_icono_calendario
+    return crear_icono_calendario(64)
 
 
 APP_VERSION = "1.0.0"
 
+_mutex_instancia = None
+
+
+def asegurar_instancia_unica():
+    """
+    Garantiza que solo exista una instancia activa de Check Diario en Windows.
+    Si ya hay otra instancia en ejecución, restaura su ventana y finaliza el proceso duplicado.
+    """
+    global _mutex_instancia
+    if sys.platform != "win32":
+        return
+
+    try:
+        import ctypes
+        kernel32 = ctypes.windll.kernel32
+        ERROR_ALREADY_EXISTS = 183
+        MUTEX_NAME = "Local\\CheckDiarioIngeap_App_SingleInstance_Mutex"
+
+        _mutex_instancia = kernel32.CreateMutexW(None, False, MUTEX_NAME)
+        ultimo_error = kernel32.GetLastError()
+
+        if ultimo_error == ERROR_ALREADY_EXISTS:
+            try:
+                user32 = ctypes.windll.user32
+                hwnd = user32.FindWindowW(None, "Check Diario - Ingeap")
+                if hwnd:
+                    # SW_RESTORE = 9, SW_SHOW = 5
+                    user32.ShowWindow(hwnd, 9)
+                    user32.SetForegroundWindow(hwnd)
+            except Exception:
+                pass
+            sys.exit(0)
+    except Exception as e:
+        print(f"[InstanciaUnica] Advertencia al verificar instancia única: {e}")
+
 
 def asegurar_inicio_automatico():
-    """Registra la aplicación en el Registro de Windows (HKCU/Run) para inicio automático."""
+    """
+    Registra la aplicación en el Registro de Windows (HKCU/Run) para inicio automático
+    y remueve accesos directos redundantes en la carpeta Startup para evitar doble apertura.
+    """
+    if sys.platform == "win32":
+        try:
+            # 1. Eliminar acceso directo duplicado de la carpeta Startup de Windows si existe
+            appdata = os.environ.get("APPDATA", "")
+            if appdata:
+                startup_lnk = os.path.join(
+                    appdata,
+                    r"Microsoft\Windows\Start Menu\Programs\Startup",
+                    "Check Diario - Ingeap.lnk"
+                )
+                if os.path.exists(startup_lnk):
+                    try:
+                        os.remove(startup_lnk)
+                        print("[AutoStart] Acceso directo redundante eliminado de la carpeta Inicio.")
+                    except Exception as err_del:
+                        print(f"[AutoStart] No se pudo eliminar acceso directo de Inicio: {err_del}")
+        except Exception as e:
+            print(f"[AutoStart] Error al verificar carpeta Inicio: {e}")
+
     if getattr(sys, "frozen", False):
         try:
             import winreg
@@ -451,6 +605,9 @@ def main():
     # Intentar sincronizar en segundo plano registros pendientes de sesiones previas
     threading.Thread(target=sincronizar_pendientes, daemon=True).start()
 
+    # Sincronizar en segundo plano proyectos y usuarios desde Google Sheets
+    threading.Thread(target=sincronizar_catalogos_sheets, daemon=True).start()
+
     api = ApiPuente()
     ruta_dist = recurso_path(os.path.join("dist", "index.html"))
     url_objetivo = ruta_dist if os.path.exists(ruta_dist) else "http://localhost:5173"
@@ -532,4 +689,7 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    import multiprocessing
+    multiprocessing.freeze_support()
+    asegurar_instancia_unica()
+    main()
