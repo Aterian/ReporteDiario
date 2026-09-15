@@ -141,6 +141,21 @@ class ApiPuente:
             None
         )
 
+        # Si no se encuentra en caché, intentar consultar de inmediato Google Sheets
+        if not usuario_valido:
+            try:
+                usuarios_remotos = obtener_usuarios_remotos()
+                if usuarios_remotos:
+                    guardar_usuarios_cache(usuarios_remotos)
+                    usuarios_disp = usuarios_remotos
+                    usuario_valido = next(
+                        (emp for emp in usuarios_disp 
+                         if str(emp.get("dni", "")).strip() == dni_limpio and emp.get("nombre", "").strip().lower() == nombre_limpio),
+                        None
+                    )
+            except Exception as e:
+                print(f"[Login] Error al verificar usuarios remotos: {e}")
+
         if not usuario_valido:
             # Fallback en lista predefinida
             usuario_valido = next(
@@ -369,7 +384,14 @@ class ApiPuente:
 
     def obtener_todos_usuarios(self):
         """Retorna la lista de empleados activos para la selección delegada de RRHH."""
-        return obtener_usuarios_cache()
+        try:
+            usuarios_remotos = obtener_usuarios_remotos()
+            if usuarios_remotos:
+                guardar_usuarios_cache(usuarios_remotos)
+                return usuarios_remotos
+        except Exception as e:
+            print(f"[Catálogos] Aviso al consultar usuarios remotos para RRHH: {e}")
+        return obtener_usuarios_cache() or EMPLEADOS_AUTORIZADOS
 
     def obtener_historial(self):
         """

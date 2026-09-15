@@ -94,6 +94,17 @@ export default function CheckForm({ onRegistroGuardado, onVolver }) {
     cargarSesion();
   }, []);
 
+  // Si RRHH activa la opción de cargar para otro, refrescar lista fresca de empleados
+  useEffect(() => {
+    if (cargarParaOtro && esRRHH) {
+      api.obtenerTodosUsuarios().then((listaU) => {
+        if (Array.isArray(listaU) && listaU.length > 0) {
+          setTodosUsuarios(listaU);
+        }
+      }).catch(err => console.error('Error al actualizar usuarios para RRHH:', err));
+    }
+  }, [cargarParaOtro, esRRHH]);
+
   // Determinar área activa y si tiene permiso especial (N, RRHH, A)
   const areaActiva = ((cargarParaOtro && usuarioSeleccionado)
     ? (usuarioSeleccionado.area || '')
