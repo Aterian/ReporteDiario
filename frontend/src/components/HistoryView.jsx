@@ -228,7 +228,7 @@ export default function HistoryView({ onVolver }) {
                     {item.fecha}
                     {item.dia_semana ? ` (${item.dia_semana})` : ''}
                     {item.feriado === 'SI' && (
-                      <span style={{ marginLeft: '4px', fontSize: '9px', background: '#fee2e2', color: '#991b1b', padding: '1px 4px', borderRadius: '4px' }}>
+                      <span style={{ marginLeft: '4px', fontSize: '9px', background: 'var(--accent-rose-bg)', color: 'var(--accent-rose)', border: '1px solid var(--primary-glow)', padding: '1px 4px', borderRadius: '4px', fontWeight: 700 }}>
                         Feriado
                       </span>
                     )}
@@ -241,16 +241,18 @@ export default function HistoryView({ onVolver }) {
                       type="button"
                       onClick={() => setRegistroEditando({ ...item })}
                       style={{
-                        background: '#f8fafc',
-                        border: '1px solid #cbd5e1',
+                        background: 'var(--bg-surface-hover)',
+                        border: '1px solid var(--border-input)',
                         borderRadius: '4px',
                         padding: '2px 6px',
                         fontSize: '10px',
                         cursor: 'pointer',
-                        color: '#475569',
+                        color: 'var(--text-secondary)',
                         display: 'flex',
                         alignItems: 'center',
-                        gap: '3px'
+                        gap: '3px',
+                        fontFamily: 'var(--font-family)',
+                        fontWeight: 600
                       }}
                       title="Modificar este registro"
                     >
@@ -297,7 +299,7 @@ export default function HistoryView({ onVolver }) {
                 </div>
 
                 {item.usuario_mail && (
-                  <div style={{ fontSize: '10px', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '4px', borderTop: '1px dashed #f1f5f9', paddingTop: '4px' }}>
+                  <div style={{ fontSize: '10px', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '4px', borderTop: '1px dashed var(--border-subtle)', paddingTop: '4px' }}>
                     <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                       <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" />
                       <polyline points="22,6 12,13 2,6" />
@@ -353,7 +355,7 @@ export default function HistoryView({ onVolver }) {
 
             <form onSubmit={handleGuardarModificacion} style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
               <div>
-                <label style={{ fontSize: '11px', fontWeight: 600, color: '#475569', display: 'block', marginBottom: '3px' }}>
+                <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: '3px' }}>
                   Fecha:
                 </label>
                 <input
@@ -366,7 +368,7 @@ export default function HistoryView({ onVolver }) {
               </div>
 
               <div>
-                <label style={{ fontSize: '11px', fontWeight: 600, color: '#475569', display: 'block', marginBottom: '3px' }}>
+                <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: '3px' }}>
                   Ubicación / Modalidad:
                 </label>
                 <select
@@ -389,7 +391,7 @@ export default function HistoryView({ onVolver }) {
               </div>
 
               <div>
-                <label style={{ fontSize: '11px', fontWeight: 600, color: '#475569', display: 'block', marginBottom: '3px' }}>
+                <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: '3px' }}>
                   Proyecto o Tarea:
                 </label>
                 <input
@@ -402,7 +404,7 @@ export default function HistoryView({ onVolver }) {
               </div>
 
               <div>
-                <label style={{ fontSize: '11px', fontWeight: 600, color: '#475569', display: 'block', marginBottom: '3px' }}>
+                <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: '3px' }}>
                   Horas:
                 </label>
                 <input

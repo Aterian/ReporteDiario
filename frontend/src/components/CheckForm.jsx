@@ -464,7 +464,7 @@ export default function CheckForm({ onRegistroGuardado, onVolver }) {
 
               {/* Toggle de Rango para Campaña / Campo */}
               {esCampañaOCampo && (
-                <label style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '11px', color: '#64748b', cursor: 'pointer' }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '11px', color: 'var(--text-secondary)', cursor: 'pointer' }}>
                   <input
                     type="checkbox"
                     checked={usarRangoFechas}
@@ -478,7 +478,7 @@ export default function CheckForm({ onRegistroGuardado, onVolver }) {
             {usarRangoFechas && esCampañaOCampo ? (
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
                 <div>
-                  <span style={{ fontSize: '10px', color: '#64748b', display: 'block', marginBottom: '2px' }}>Desde:</span>
+                  <span style={{ fontSize: '10px', color: 'var(--text-secondary)', display: 'block', marginBottom: '2px' }}>Desde:</span>
                   <input
                     type="date"
                     className="form-input"
@@ -488,7 +488,7 @@ export default function CheckForm({ onRegistroGuardado, onVolver }) {
                   />
                 </div>
                 <div>
-                  <span style={{ fontSize: '10px', color: '#64748b', display: 'block', marginBottom: '2px' }}>Hasta (inclusive):</span>
+                  <span style={{ fontSize: '10px', color: 'var(--text-secondary)', display: 'block', marginBottom: '2px' }}>Hasta (inclusive):</span>
                   <input
                     type="date"
                     className="form-input"
@@ -825,7 +825,7 @@ export default function CheckForm({ onRegistroGuardado, onVolver }) {
                             </span>
                           </div>
                           {totalHs >= 8 && (
-                            <div style={{ fontSize: '11px', color: '#166534', marginTop: '3px' }}>
+                            <div style={{ fontSize: '11px', color: 'var(--accent-emerald)', marginTop: '3px', fontWeight: 600 }}>
                               ✓ Jornada completa alcanzada
                             </div>
                           )}

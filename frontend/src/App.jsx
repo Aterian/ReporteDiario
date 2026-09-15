@@ -301,44 +301,20 @@ export default function App() {
 
       {/* Cartel de Actualización Disponible */}
       {actualizacion && (
-        <div
-          style={{
-            margin: '0 16px 12px 16px',
-            padding: '10px 14px',
-            background: 'linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%)',
-            border: '1px solid #bfdbfe',
-            borderRadius: '8px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            gap: '8px',
-            boxShadow: '0 2px 4px rgba(37, 99, 235, 0.08)'
-          }}
-        >
-          <div style={{ fontSize: '11px', color: '#1e40af', lineHeight: '1.4' }}>
-            <div style={{ fontWeight: '700', display: 'flex', alignItems: 'center', gap: '4px' }}>
+        <div className="update-banner">
+          <div className="update-content">
+            <div className="update-title">
               <span>🚀</span> Actualización disponible: v{actualizacion.version_nueva}
             </div>
-            <div style={{ fontSize: '10px', color: '#3b82f6', marginTop: '2px' }}>
+            <div className="update-notes">
               {actualizacion.notas || 'Nueva versión con mejoras'}
             </div>
           </div>
           <button
             type="button"
+            className="btn-update"
             disabled={actualizando}
             onClick={handleActualizar}
-            style={{
-              background: '#2563eb',
-              color: '#fff',
-              border: 'none',
-              padding: '6px 12px',
-              borderRadius: '6px',
-              fontSize: '11px',
-              fontWeight: '600',
-              cursor: actualizando ? 'wait' : 'pointer',
-              whiteSpace: 'nowrap',
-              boxShadow: '0 1px 3px rgba(37, 99, 235, 0.3)'
-            }}
           >
             {actualizando ? 'Descargando...' : 'Actualizar'}
           </button>
@@ -347,67 +323,28 @@ export default function App() {
 
       {/* Cartel / Pop-up de Recordatorio de Registro Diario */}
       {recordatorioPendiente && vistaActiva !== 'check' && (
-        <div
-          style={{
-            margin: '0 16px 10px 16px',
-            padding: '10px 12px',
-            background: recordatorioPendiente.tipo === '16:30' ? '#fffbeb' : '#f0fdf4',
-            border: `1px solid ${recordatorioPendiente.tipo === '16:30' ? '#fde68a' : '#bbf7d0'}`,
-            borderRadius: '8px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            gap: '8px',
-            boxShadow: '0 2px 5px rgba(0, 0, 0, 0.04)'
-          }}
-        >
-          <div
-            style={{
-              fontSize: '11px',
-              color: recordatorioPendiente.tipo === '16:30' ? '#92400e' : '#166534',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-              fontWeight: '500'
-            }}
-          >
-            <span style={{ fontSize: '14px' }}>
+        <div className={`reminder-banner ${recordatorioPendiente.tipo === '16:30' ? 'reminder-alert' : 'reminder-normal'}`}>
+          <div className="reminder-text">
+            <span className="reminder-icon">
               {recordatorioPendiente.tipo === '16:30' ? '⏰' : '☀️'}
             </span>
             <span>{recordatorioPendiente.mensaje}</span>
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <div className="reminder-actions">
             <button
               type="button"
+              className="reminder-btn"
               onClick={() => {
                 setVistaActiva('check');
                 setRecordatorioPendiente(null);
-              }}
-              style={{
-                background: recordatorioPendiente.tipo === '16:30' ? '#d97706' : '#16a34a',
-                color: '#fff',
-                border: 'none',
-                padding: '4px 10px',
-                borderRadius: '5px',
-                fontSize: '11px',
-                fontWeight: '600',
-                cursor: 'pointer',
-                whiteSpace: 'nowrap'
               }}
             >
               Hacer Check
             </button>
             <button
               type="button"
+              className="reminder-close"
               onClick={() => setRecordatorioPendiente(null)}
-              style={{
-                background: 'none',
-                border: 'none',
-                color: '#64748b',
-                fontSize: '12px',
-                cursor: 'pointer',
-                padding: '2px 4px'
-              }}
               title="Cerrar recordatorio"
             >
               ✕
