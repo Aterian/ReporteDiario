@@ -4,6 +4,28 @@ Historial cronológico de cambios, nuevas características y mejoras aplicadas a
 
 ---
 
+## [1.1.1] - 2026-09-15
+
+### 🚀 Nuevas Funcionalidades y Mejoras de Interfaz
+- **Tema Oscuro (Dark Mode)**:
+  - Selector de modo oscuro / claro incorporado en la barra superior (Header) con íconos sol ☀️ y luna 🌙.
+  - Paleta Slate moderna con fondo pizarra oscuro (`#0b0f19` / `#151d2f`), alto contraste, bordes refinados y toques en rojo corporativo luminoso.
+  - Persistencia de la preferencia del tema en `localStorage`.
+- **Combinación Total de Proyectos y Tiempo al Área**:
+  - Se removió el bloque estático superior para integrar la selección de "Dedicado al área" directamente dentro de la lista de actividades.
+  - Permite combinar en la misma jornada uno o varios proyectos específicos junto con tiempo dedicado al área (ej: 5 hs a proyecto de Ingeniería y 3 hs a tareas del área).
+  - Selector contextual de área corporativa de destino para empleados de áreas especiales (`N`, `RRHH` y `A`).
+- **Selección Dinámica de Proyectos para RRHH**:
+  - Al cargar un reporte a nombre de otro colaborador, el listado de proyectos se actualiza dinámicamente según el área a la que pertenece dicho colaborador (ej: si se selecciona a un empleado de Ingeniería, se cargan sus proyectos de ingeniería).
+  - Nueva casilla "Ver proyectos de todas las áreas" que permite a RRHH asignar cualquier proyecto activo de la empresa.
+- **Clarificación de Nomenclatura de Áreas**:
+  - Se estandarizó y documentó que **`A`** corresponde a **Aplicaciones** y **`N`** corresponde a **Núcleo**.
+  - En los desplegables de selección de empleados se muestra el nombre descriptivo completo (ej: `Sergio Juarez (Núcleo)`, `Nicolás Parajón (Ingeniería)`, `Iván Valentin (Aplicaciones)`).
+- **Diagnóstico y Soporte para Autoupdate**:
+  - Documentación del mecanismo de notificación automática para versiones previas mediante GitHub Releases públicas con tag de versión y ejecutable adjunto.
+
+---
+
 ## [1.1.0] - 2026-09-15
 
 ### ✨ Nuevas Características y Funcionalidades

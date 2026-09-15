@@ -54,6 +54,48 @@
   --transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
+[data-theme='dark'] {
+  /* Fondos oscuros modernos (Pizarra Slate 900 / 800) */
+  --bg-app: #0b0f19;
+  --bg-surface: #151d2f;
+  --bg-surface-elevated: #1e293b;
+  --bg-surface-hover: #243149;
+  --bg-card: #151d2f;
+
+  /* Rojo Corporativo Luminoso para modo oscuro */
+  --primary: #ef4444;
+  --primary-light: #f87171;
+  --primary-dark: #dc2626;
+  --primary-glow: rgba(239, 68, 68, 0.25);
+  --primary-subtle: rgba(239, 68, 68, 0.12);
+
+  /* Estados */
+  --accent-emerald: #10b981;
+  --accent-emerald-bg: rgba(16, 185, 129, 0.15);
+  --accent-amber: #f59e0b;
+  --accent-amber-bg: rgba(245, 158, 11, 0.15);
+  --accent-rose: #f43f5e;
+  --accent-rose-bg: rgba(244, 63, 94, 0.15);
+
+  /* Texto */
+  --text-primary: #f8fafc;    /* Slate 50 */
+  --text-secondary: #94a3b8;  /* Slate 400 */
+  --text-muted: #64748b;      /* Slate 500 */
+  --text-inverse: #0b0f19;
+
+  /* Bordes y Líneas */
+  --border-subtle: #1e293b;
+  --border-input: #334155;
+  --border-active: #ef4444;
+  --border-focus: #ef4444;
+
+  /* Sombras oscuras */
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.35);
+  --shadow-md: 0 4px 16px -2px rgba(0, 0, 0, 0.45);
+  --shadow-lg: 0 12px 28px -4px rgba(0, 0, 0, 0.6);
+  --shadow-red: 0 4px 14px rgba(239, 68, 68, 0.35);
+}
+
 * {
   box-sizing: border-box;
   margin: 0;

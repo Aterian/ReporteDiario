@@ -51,7 +51,7 @@ export default function HistoryView({ onVolver }) {
     cargarHistorial();
     async function cargarServicios() {
       try {
-        const s = await api.obtenerServicios();
+        const s = await api.obtenerServicios('TODOS');
         if (Array.isArray(s)) setServiciosDisponibles(s);
       } catch (e) {
         console.error('Error al obtener servicios para modal:', e);
@@ -327,24 +327,25 @@ export default function HistoryView({ onVolver }) {
           padding: '16px'
         }}>
           <div style={{
-            background: '#ffffff',
+            background: 'var(--bg-surface)',
             borderRadius: '12px',
             width: '100%',
             maxWidth: '380px',
             padding: '18px',
-            boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.2)',
+            boxShadow: 'var(--shadow-lg)',
+            border: '1px solid var(--border-input)',
             display: 'flex',
             flexDirection: 'column',
             gap: '12px'
           }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid #f1f5f9', paddingBottom: '8px' }}>
-              <span style={{ fontSize: '13px', fontWeight: 700, color: '#1e293b' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid var(--border-subtle)', paddingBottom: '8px' }}>
+              <span style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-primary)' }}>
                 Modificar Registro
               </span>
               <button
                 type="button"
                 onClick={() => setRegistroEditando(null)}
-                style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '14px', color: '#94a3b8' }}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '14px', color: 'var(--text-muted)' }}
               >
                 ✕
               </button>
@@ -423,9 +424,9 @@ export default function HistoryView({ onVolver }) {
                     flex: 1,
                     padding: '8px',
                     borderRadius: '6px',
-                    border: '1px solid #cbd5e1',
-                    background: '#f8fafc',
-                    color: '#475569',
+                    border: '1px solid var(--border-input)',
+                    background: 'var(--bg-surface-hover)',
+                    color: 'var(--text-secondary)',
                     fontSize: '12px',
                     fontWeight: 600,
                     cursor: 'pointer'

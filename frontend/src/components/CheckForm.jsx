@@ -8,16 +8,26 @@ const LUGARES = [
   { id: 'Franco', label: 'Franco (Descanso)', icon: 'M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z' }
 ];
 
+const MAPA_AREAS = {
+  'A': 'Aplicaciones',
+  'N': 'Núcleo',
+  'I': 'Ingeniería',
+  'M': 'Mensura',
+  'S': 'SIG',
+  'RRHH': 'RRHH',
+  'VYM': 'Ventas y Marketing'
+};
+
 const LISTADO_AREAS_CORPORATIVAS = [
+  'Aplicaciones',
+  'Ingeniería',
+  'Mensura',
+  'SIG',
   'Administración',
   'RRHH',
   'CyF',
   'Marketing',
-  'Ingeniería',
-  'Mensura',
-  'Aplicaciones',
   'Inventario',
-  'SIG',
   'I+D',
   'Ventas',
   'CD'
@@ -47,9 +57,10 @@ export default function CheckForm({ onRegistroGuardado, onVolver }) {
   const [serviciosDisponibles, setServiciosDisponibles] = useState([]);
   const [proyectosSeleccionados, setProyectosSeleccionados] = useState([]);
   const [cargandoServicios, setCargandoServicios] = useState(true);
+  const [verTodosProyectos, setVerTodosProyectos] = useState(false);
 
-  // Sub-área para usuarios N, RRHH y A
-  const [areaElegida, setAreaElegida] = useState('Administración');
+  // Sub-área para usuarios N, RRHH y A (default: Aplicaciones para A, o Ingeniería)
+  const [areaElegida, setAreaElegida] = useState('Aplicaciones');
 
   // División de jornada: 'equitativo' o 'personalizado' (sin límite de 8 horas)
   const [modoDivision, setModoDivision] = useState('equitativo');
@@ -84,17 +95,22 @@ export default function CheckForm({ onRegistroGuardado, onVolver }) {
   }, []);
 
   // Determinar área activa y si tiene permiso especial (N, RRHH, A)
-  const areaActiva = usuarioSeleccionado?.area || sesionUsuario?.area || '';
-  const esUsuarioAreaEspecial = ['N', 'RRHH', 'A'].includes(areaActiva.trim().toUpperCase());
+  const areaActiva = ((cargarParaOtro && usuarioSeleccionado)
+    ? (usuarioSeleccionado.area || '')
+    : (sesionUsuario?.area || '')).trim().toUpperCase();
+
+  const esUsuarioAreaEspecial = ['N', 'RRHH', 'A'].includes(areaActiva);
   const esRRHH = (sesionUsuario?.area || '').toUpperCase() === 'RRHH';
   const esCampañaOCampo = lugar === 'Campaña / Campo';
 
-  // 2. Cargar lista de proyectos disponibles desde el backend
+  // 2. Cargar lista de proyectos disponibles desde el backend (depende del área activa o si se pide ver todos)
   useEffect(() => {
     let activo = true;
     async function cargarServicios() {
+      setCargandoServicios(true);
       try {
-        const lista = await api.obtenerServicios();
+        const areaFiltro = verTodosProyectos ? 'TODOS' : areaActiva;
+        const lista = await api.obtenerServicios(areaFiltro);
         if (activo && Array.isArray(lista)) {
           setServiciosDisponibles(lista);
         }
@@ -108,7 +124,7 @@ export default function CheckForm({ onRegistroGuardado, onVolver }) {
     return () => {
       activo = false;
     };
-  }, []);
+  }, [areaActiva, verTodosProyectos]);
 
   // Agregar un proyecto regular o la opción 'Dedicado al área'
   const handleAgregarProyecto = (e) => {
@@ -364,8 +380,8 @@ export default function CheckForm({ onRegistroGuardado, onVolver }) {
           {/* SECCIÓN RRHH: Cargar para otro empleado */}
           {esRRHH && (
             <div style={{
-              background: '#f8fafc',
-              border: '1px solid #e2e8f0',
+              background: 'var(--bg-surface-hover)',
+              border: '1px solid var(--border-input)',
               borderRadius: '8px',
               padding: '10px 12px',
               display: 'flex',
@@ -373,7 +389,7 @@ export default function CheckForm({ onRegistroGuardado, onVolver }) {
               gap: '8px'
             }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <span style={{ fontSize: '11px', fontWeight: 600, color: '#334155', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                <span style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '5px' }}>
                   <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
                     <circle cx="9" cy="7" r="4" />
@@ -382,7 +398,7 @@ export default function CheckForm({ onRegistroGuardado, onVolver }) {
                   </svg>
                   Gestión RRHH: Cargar reporte para otro empleado
                 </span>
-                <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px', cursor: 'pointer', color: '#64748b' }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px', cursor: 'pointer', color: 'var(--text-secondary)' }}>
                   <input
                     type="checkbox"
                     checked={cargarParaOtro}
@@ -403,14 +419,19 @@ export default function CheckForm({ onRegistroGuardado, onVolver }) {
                     onChange={(e) => {
                       const u = todosUsuarios.find(x => x.dni === e.target.value);
                       setUsuarioSeleccionado(u || null);
+                      setProyectosSeleccionados([]);
+                      setHorasPorProyecto({});
                     }}
                   >
                     <option value="">-- Selecciona el empleado --</option>
-                    {todosUsuarios.map(u => (
-                      <option key={u.dni} value={u.dni}>
-                        {u.nombre} ({u.area || 'Sin área'})
-                      </option>
-                    ))}
+                    {todosUsuarios.map(u => {
+                      const nombreArea = MAPA_AREAS[u.area?.toUpperCase()] || u.area || 'Sin área';
+                      return (
+                        <option key={u.dni} value={u.dni}>
+                          {u.nombre} ({nombreArea})
+                        </option>
+                      );
+                    })}
                   </select>
                 </div>
               )}
@@ -513,36 +534,6 @@ export default function CheckForm({ onRegistroGuardado, onVolver }) {
             </div>
           </div>
 
-          {/* Sub-área destino para usuarios con áreas especiales (N, RRHH, A) */}
-          {esUsuarioAreaEspecial && !esFranco && (
-            <div style={{
-              background: '#fff',
-              border: '1px solid #fed7aa',
-              borderRadius: '8px',
-              padding: '8px 12px',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '4px'
-            }}>
-              <label style={{ fontSize: '11px', fontWeight: 600, color: '#9a3412', display: 'flex', alignItems: 'center', gap: '5px' }}>
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
-                </svg>
-                Área a la que le dedicaste tiempo (Área {areaActiva}):
-              </label>
-              <select
-                className="form-select"
-                value={areaElegida}
-                onChange={(e) => setAreaElegida(e.target.value)}
-                style={{ borderColor: '#fdba74' }}
-              >
-                {LISTADO_AREAS_CORPORATIVAS.map(ar => (
-                  <option key={ar} value={ar}>{ar}</option>
-                ))}
-              </select>
-            </div>
-          )}
-
           {/* FRANCO */}
           {esFranco ? (
             <div className="franco-banner">
@@ -560,7 +551,7 @@ export default function CheckForm({ onRegistroGuardado, onVolver }) {
             <>
               {/* Proyectos Activos */}
               <div className="form-group">
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
                   <label className="form-label" style={{ margin: 0 }}>
                     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                       <polygon points="12 2 2 7 12 12 22 7 12 2" />
@@ -584,11 +575,53 @@ export default function CheckForm({ onRegistroGuardado, onVolver }) {
                       alignItems: 'center',
                       gap: '3px'
                     }}
-                    title="Agregar tiempo dedicado al área como ítem de proyecto"
+                    title="Agregar tiempo dedicado al área a la jornada"
                   >
                     + Dedicado al área
                   </button>
                 </div>
+
+                {/* Sub-selector de área corporativa para empleados de Aplicaciones (A), Núcleo (N) o RRHH */}
+                {esUsuarioAreaEspecial && (
+                  <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    background: 'var(--bg-surface-hover)',
+                    border: '1px solid var(--border-input)',
+                    borderRadius: '6px',
+                    padding: '6px 10px',
+                    marginBottom: '8px'
+                  }}>
+                    <span style={{ fontSize: '11px', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                      🏢 Área de dedicación ({MAPA_AREAS[areaActiva] || areaActiva}):
+                    </span>
+                    <select
+                      className="form-select"
+                      value={areaElegida}
+                      onChange={(e) => setAreaElegida(e.target.value)}
+                      style={{ width: 'auto', padding: '3px 8px', fontSize: '11.5px', height: '28px' }}
+                    >
+                      {LISTADO_AREAS_CORPORATIVAS.map(ar => (
+                        <option key={ar} value={ar}>{ar}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
+                {/* Toggle para RRHH: Ver todos los proyectos */}
+                {esRRHH && (
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', marginBottom: '6px' }}>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '11px', color: 'var(--text-secondary)', cursor: 'pointer' }}>
+                      <input
+                        type="checkbox"
+                        checked={verTodosProyectos}
+                        onChange={(e) => setVerTodosProyectos(e.target.checked)}
+                      />
+                      <span>Ver proyectos de todas las áreas</span>
+                    </label>
+                  </div>
+                )}
 
                 <select
                   className="form-select"

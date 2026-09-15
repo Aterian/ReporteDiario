@@ -32,12 +32,23 @@ const mockApi = {
     localStorage.removeItem('ingeap_sesion_mock');
     return { exito: true };
   },
-  obtener_servicios: async () => [
-    "175-SF-A-504-OT8",
-    "287-SF-A-813-OT1",
-    "301-SF-A-853-OT1",
-    "355-SF-A-1054-OT1"
-  ],
+  obtener_servicios: async (area = null) => {
+    const todos = [
+      "175-SF-A-504-APP Partes diarios Milicic Veladero",
+      "228-SF-I-626-Servicio de informe mensual - Planta de residuos",
+      "287-SF-A-813-Aplicación y asesoramientos en procesos",
+      "301-SF-A-853-App Taller Almendra",
+      "318-SF-I-932-SM VMOS - Río Negro - Milicic",
+      "350-SF-M-1088- MENSURA CASA CUNA RINCON",
+      "352-SF-I-1084-Rel Limp Canales Centro-Sta Fe-MEM"
+    ];
+    if (!area || ['N', 'RRHH', 'TODOS'].includes(area.toUpperCase())) {
+      return todos;
+    }
+    const cod = `-${area.toUpperCase()}-`;
+    const filtrados = todos.filter(t => t.includes(cod));
+    return filtrados.length > 0 ? filtrados : todos;
+  },
   guardar_check_diario: async (datos) => {
     const sesionLocal = localStorage.getItem('ingeap_sesion_mock');
     const sesion = sesionLocal ? JSON.parse(sesionLocal) : null;
@@ -141,9 +152,12 @@ export const api = {
     return await bridge.cerrar_sesion();
   },
 
-  async obtenerServicios() {
+  async obtenerServicios(area = null) {
     const bridge = await getApi();
-    return await bridge.obtener_servicios();
+    if (bridge.obtener_servicios) {
+      return await bridge.obtener_servicios(area);
+    }
+    return [];
   },
 
   async guardarCheckDiario(datos) {

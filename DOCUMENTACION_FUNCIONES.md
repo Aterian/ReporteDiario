@@ -17,10 +17,11 @@ Expone métodos invocables desde el frontend de React a través del objeto globa
   Valida las credenciales ingresadas. Primero coteja en la caché local de usuarios autorizados; si no se encuentra o no hay red, consulta remotamente la hoja `0_usuarios` de Google Sheets. Al autenticar con éxito, guarda la sesión persistente y precarga proyectos y avatares.
 - **`cerrar_sesion(self)`**:
   Elimina el registro de la sesión activa en SQLite sin borrar el historial ni los perfiles guardados.
-- **`obtener_servicios(self)`**:
-  Retorna la lista de proyectos disponibles para el usuario en sesión aplicando las reglas de negocio de Ingeap:
-  - Usuarios del área Núcleo (`N`) o sin área ven **todos** los proyectos activos.
-  - Usuarios de otras áreas ven únicamente los proyectos pertenecientes a su área correspondiente.
+- **`obtener_servicios(self, area: str = None)`**:
+  Retorna la lista de proyectos disponibles aplicando las reglas de negocio de Ingeap:
+  - Si se proporciona el parámetro `area` (por ej. cuando RRHH carga para otro empleado), filtra por dicha área.
+  - Usuarios del área Núcleo (`N`), Recursos Humanos (`RRHH`), o solicitudes con `area='TODOS'` obtienen **todos** los proyectos activos.
+  - Usuarios de otras áreas específicas (`I` - Ingeniería, `A` - Aplicaciones, `M` - Mensura, `S` - SIG, etc.) ven únicamente los proyectos pertenecientes a su área correspondiente.
 - **`guardar_check_diario(self, datos: dict)`**:
   Procesa y persiste el reporte diario:
   - **Soporte de RRHH**: Permite al personal de RRHH cargar reportes a nombre de otro empleado.

@@ -181,14 +181,18 @@ class ApiPuente:
         borrar_sesion()
         return {"exito": True}
 
-    def obtener_servicios(self):
+    def obtener_servicios(self, area: str = None):
         """
         Retorna la lista de proyectos activos cargados desde la pestaña '0_proyectos'.
-        Los proyectos están filtrados por el área del usuario ('0_usuarios').
-        Excepción: Los usuarios de área 'N' (núcleo) ven todos los proyectos.
+        Si se especifica 'area' (por ejemplo cuando RRHH carga para otro empleado),
+        se filtra por dicha área.
+        Si el usuario es de área 'N' (Núcleo) o 'RRHH', o el área solicitada es 'N', 'RRHH' o 'TODOS',
+        o no se especifica área, retorna todos los proyectos.
         """
         sesion = obtener_sesion_activa()
-        area_usuario = (sesion.get("area", "") if sesion else "").strip().upper()
+        area_sesion = (sesion.get("area", "") if sesion else "").strip().upper()
+
+        area_filtro = area.strip().upper() if (area and isinstance(area, str)) else area_sesion
 
         proyectos = obtener_proyectos_cache()
         if not proyectos:
@@ -199,17 +203,20 @@ class ApiPuente:
         if not proyectos:
             return SERVICIOS_DISPONIBLES
 
-        # Regla 4: usuarios de área 'N' (núcleo) o sin área definida pueden ver todos los proyectos
-        if area_usuario == "N" or not area_usuario:
-            return [p["denominacion"] for p in proyectos if p.get("denominacion")]
+        todos = [p["denominacion"] for p in proyectos if p.get("denominacion")]
 
-        # Regla 3: Proyectos filtrados por área correspondiente
+        # Si el área a consultar es N (Núcleo), RRHH, TODOS o no hay filtro definido: ven todos los proyectos
+        if not area_filtro or area_filtro in ["N", "RRHH", "TODOS"]:
+            return todos
+
+        # Proyectos filtrados por el área indicada (ej: 'I', 'A', 'M', 'S', 'VYM')
         proyectos_filtrados = [
             p["denominacion"] for p in proyectos
-            if p.get("area", "").strip().upper() == area_usuario and p.get("denominacion")
+            if p.get("area", "").strip().upper() == area_filtro and p.get("denominacion")
         ]
 
-        return proyectos_filtrados
+        # Si el área tiene proyectos, los retornamos; si no tuviese, retornamos todos como fallback
+        return proyectos_filtrados if proyectos_filtrados else todos
 
     def guardar_check_diario(self, datos: dict):
         """
@@ -454,7 +461,7 @@ def obtener_icono_tray():
     return crear_icono_calendario(64)
 
 
-APP_VERSION = "1.1.0"
+APP_VERSION = "1.1.1"
 
 _mutex_instancia = None
 
