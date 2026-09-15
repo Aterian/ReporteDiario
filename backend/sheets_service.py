@@ -3,6 +3,7 @@ import sys
 import json
 import re
 import gspread
+from gspread.utils import ValueInputOption
 from google.oauth2.service_account import Credentials
 from google.auth.exceptions import GoogleAuthError
 from database import (
@@ -163,7 +164,7 @@ def obtener_hoja_trabajo(spreadsheet_id: str = "", sheet_name: str = ""):
     try:
         fila_1 = ws.row_values(1)
         if not fila_1 or len(fila_1) == 0:
-            ws.append_row(COLUMNAS_ESQUEMA, value_input_option="USER_ENTERED")
+            ws.append_row(COLUMNAS_ESQUEMA, value_input_option=ValueInputOption.user_entered)
     except Exception as e:
         print(f"Aviso al verificar encabezados: {e}")
 
@@ -291,7 +292,7 @@ def sincronizar_pendientes() -> dict:
                 col_ids = ws.col_values(1)
                 for idx, val in enumerate(col_ids, start=1):
                     if val and val != "id_asistencia":
-                        mapa_filas_remotas[val.strip()] = idx
+                        mapa_filas_remotas[str(val).strip()] = idx
             except Exception as e:
                 print(f"Aviso al leer col_ids para actualización: {e}")
 
@@ -320,7 +321,7 @@ def sincronizar_pendientes() -> dict:
             if es_modificado and uid in mapa_filas_remotas:
                 # Actualizar la fila existente en Google Sheets (columnas A a K)
                 row_num = mapa_filas_remotas[uid]
-                ws.update(range_name=f"A{row_num}:K{row_num}", values=[fila], value_input_option="USER_ENTERED")
+                ws.update(range_name=f"A{row_num}:K{row_num}", values=[fila], value_input_option=ValueInputOption.user_entered)
                 ids_sincronizados.append(uid)
             else:
                 filas_a_insertar.append(fila)
@@ -328,7 +329,7 @@ def sincronizar_pendientes() -> dict:
 
         # Inserción en lote en Google Sheets de filas nuevas
         if filas_a_insertar:
-            ws.append_rows(filas_a_insertar, value_input_option="USER_ENTERED")
+            ws.append_rows(filas_a_insertar, value_input_option=ValueInputOption.user_entered)
 
         # Marcar en la base local como sincronizados
         marcar_como_sincronizados(ids_sincronizados)

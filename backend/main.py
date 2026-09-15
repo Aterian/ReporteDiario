@@ -181,7 +181,7 @@ class ApiPuente:
         borrar_sesion()
         return {"exito": True}
 
-    def obtener_servicios(self, area: str = None):
+    def obtener_servicios(self, area: str | None = None):
         """
         Retorna la lista de proyectos activos cargados desde la pestaña '0_proyectos'.
         Si se especifica 'area' (por ejemplo cuando RRHH carga para otro empleado),

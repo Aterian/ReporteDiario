@@ -276,7 +276,7 @@ def normalizar_fecha_iso(fecha_str: str) -> str:
     """Normaliza cualquier formato de fecha (YYYY-MM-DD o DD/MM/YYYY) a YYYY-MM-DD."""
     if not fecha_str:
         return ""
-    texto = str(fecha_str).strip()
+    texto = fecha_str.strip()
     if "/" in texto:
         partes = texto.split("/")
         if len(partes) == 3:
@@ -327,7 +327,7 @@ def obtener_no_laborales_cache() -> list:
         cursor.execute("SELECT fecha, motivo FROM no_laborales_cache ORDER BY fecha ASC")
         return [dict(f) for f in cursor.fetchall()]
 
-def es_fecha_feriado(fecha_str: str, fechas_feriados: set = None) -> str:
+def es_fecha_feriado(fecha_str: str, fechas_feriados: set | None = None) -> str:
     """Determina si la fecha corresponde a un día no laboral ('SI' o 'NO')."""
     try:
         f_iso = normalizar_fecha_iso(fecha_str)
