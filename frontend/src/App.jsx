@@ -5,6 +5,7 @@ import LoginView from './components/LoginView';
 import HomeView from './components/HomeView';
 import CheckForm from './components/CheckForm';
 import HistoryView from './components/HistoryView';
+import ErrorBoundary from './components/ErrorBoundary';
 
 export default function App() {
   const [cargandoSesion, setCargandoSesion] = useState(true);
@@ -24,8 +25,24 @@ export default function App() {
     localStorage.setItem('ingeap_theme', tema);
   }, [tema]);
 
+  const esUsuarioApp = Boolean(
+    usuario && (
+      (usuario.area || '').trim().toUpperCase() === 'A' ||
+      (usuario.nombre || '').toLowerCase().includes('iván') ||
+      (usuario.nombre || '').toLowerCase().includes('ivan')
+    )
+  );
+
   const toggleTema = () => {
-    setTema(prev => (prev === 'dark' ? 'light' : 'dark'));
+    if (esUsuarioApp) {
+      setTema(prev => {
+        if (prev === 'light') return 'dark';
+        if (prev === 'dark') return 'rpg';
+        return 'light';
+      });
+    } else {
+      setTema(prev => (prev === 'dark' ? 'light' : 'dark'));
+    }
   };
 
   useEffect(() => {
@@ -246,14 +263,22 @@ export default function App() {
         </div>
 
         <div className="header-actions">
-          {/* Botón selector de Tema Oscuro / Claro */}
+          {/* Botón selector de Tema (Claro / Oscuro / RPG Quest para Área A) */}
           <button
             type="button"
-            className="btn-header-icon"
+            className={`btn-header-icon ${tema === 'rpg' ? 'btn-header-rpg' : ''}`}
             onClick={toggleTema}
-            title={tema === 'dark' ? 'Cambiar a Tema Claro' : 'Cambiar a Tema Oscuro'}
+            title={
+              tema === 'light'
+                ? 'Cambiar a Tema Oscuro'
+                : tema === 'dark'
+                ? (esUsuarioApp ? 'Cambiar a Modo Aventura RPG (Quest)' : 'Cambiar a Tema Claro')
+                : 'Cambiar a Tema Claro'
+            }
           >
-            {tema === 'dark' ? (
+            {tema === 'rpg' ? (
+              <span style={{ fontSize: '13px', lineHeight: 1 }} title="Modo Aventura RPG">⚔️</span>
+            ) : tema === 'dark' ? (
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                 <circle cx="12" cy="12" r="5" />
                 <line x1="12" y1="1" x2="12" y2="3" />
@@ -353,29 +378,33 @@ export default function App() {
         </div>
       )}
 
-      {/* Navegación por vistas */}
-      {vistaActiva === 'home' && (
-        <HomeView
-          usuario={usuario}
-          onNuevoReporte={() => setVistaActiva('check')}
-          onVerHistorial={() => setVistaActiva('historial')}
-          onAvatarClick={handleTriggerAvatar}
-        />
-      )}
+      {/* Navegación por vistas protegida con ErrorBoundary */}
+      <ErrorBoundary onReset={() => setVistaActiva('home')}>
+        {vistaActiva === 'home' && (
+          <HomeView
+            usuario={usuario}
+            tema={tema}
+            onNuevoReporte={() => setVistaActiva('check')}
+            onVerHistorial={() => setVistaActiva('historial')}
+            onAvatarClick={handleTriggerAvatar}
+          />
+        )}
 
-      {vistaActiva === 'check' && (
-        <CheckForm
-          onRegistroGuardado={() => setRecordatorioPendiente(null)}
-          onVolver={() => setVistaActiva('home')}
-        />
-      )}
+        {vistaActiva === 'check' && (
+          <CheckForm
+            tema={tema}
+            onRegistroGuardado={() => setRecordatorioPendiente(null)}
+            onVolver={() => setVistaActiva('home')}
+          />
+        )}
 
-      {vistaActiva === 'historial' && (
-        <HistoryView
-          onVolver={() => setVistaActiva('home')}
-        />
-      )}
+        {vistaActiva === 'historial' && (
+          <HistoryView
+            tema={tema}
+            onVolver={() => setVistaActiva('home')}
+          />
+        )}
+      </ErrorBoundary>
     </div>
-
   );
 }

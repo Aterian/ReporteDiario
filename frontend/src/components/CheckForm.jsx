@@ -1,11 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { api } from '../services/apiBridge';
 
-const LUGARES = [
-  { id: 'Oficina', label: 'Oficina', icon: 'M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z' },
-  { id: 'Campaña / Campo', label: 'Campaña / Campo', icon: 'M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z' },
-  { id: 'Home Office', label: 'Home Office', icon: 'M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2' },
-  { id: 'Franco', label: 'Franco (Descanso)', icon: 'M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z' }
+const LUGARES_BASE = [
+  { id: 'Oficina', label: 'Oficina', labelRpg: '🏰 Ciudadela (Oficina)', icon: 'M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z' },
+  { id: 'Home Office', label: 'Home Office', labelRpg: '🧙‍♂️ Torre Arcana (Home Office)', icon: 'M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2' },
+  { id: 'Campaña / Campo', label: 'Campaña', labelRpg: '🌲 Expedición (Campaña)', icon: 'M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z' },
+  { id: 'Franco', label: 'Franco', labelRpg: '🍺 Taberna & Descanso', icon: 'M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z' }
 ];
 
 const MAPA_AREAS = {
@@ -33,7 +33,9 @@ const LISTADO_AREAS_CORPORATIVAS = [
   'CD'
 ];
 
-export default function CheckForm({ onRegistroGuardado, onVolver }) {
+export default function CheckForm({ onRegistroGuardado, onVolver, tema }) {
+  const isRpg = tema === 'rpg';
+
   const getFechaHoy = () => {
     const hoy = new Date();
     const anio = hoy.getFullYear();
@@ -62,7 +64,7 @@ export default function CheckForm({ onRegistroGuardado, onVolver }) {
   // Sub-área para usuarios N, RRHH y A (default: Aplicaciones para A, o Ingeniería)
   const [areaElegida, setAreaElegida] = useState('Aplicaciones');
 
-  // División de jornada: 'equitativo' o 'personalizado' (sin límite de 8 horas)
+  // División de jornada: 'equitativo' o 'personalizado'
   const [modoDivision, setModoDivision] = useState('equitativo');
   const [horasPorProyecto, setHorasPorProyecto] = useState({}); // { [proyecto]: number }
   const [horasArea, setHorasArea] = useState(8);
@@ -71,6 +73,17 @@ export default function CheckForm({ onRegistroGuardado, onVolver }) {
   const [mensajeExito, setMensajeExito] = useState('');
   const [mensajeError, setMensajeError] = useState('');
 
+  // =========================================================================
+  // VARIABLES DERIVADAS (Declaradas aquí para evitar errores TDZ antes de los hooks)
+  // =========================================================================
+  const esRRHH = (sesionUsuario?.area || '').toUpperCase() === 'RRHH';
+  const areaActiva = ((cargarParaOtro && usuarioSeleccionado)
+    ? (usuarioSeleccionado.area || '')
+    : (sesionUsuario?.area || '')).trim().toUpperCase();
+  const esUsuarioAreaEspecial = ['N', 'RRHH', 'A'].includes(areaActiva);
+  const esCampañaOCampo = lugar === 'Campaña / Campo';
+  const esFranco = lugar === 'Franco';
+
   // 1. Cargar sesión de usuario
   useEffect(() => {
     async function cargarSesion() {
@@ -78,9 +91,8 @@ export default function CheckForm({ onRegistroGuardado, onVolver }) {
         const estado = await api.obtenerEstadoSesion();
         if (estado && estado.usuario) {
           setSesionUsuario(estado.usuario);
-          // Si el usuario es de RRHH, cargar lista de todos los empleados
-          const esRRHH = (estado.usuario.area || '').toUpperCase() === 'RRHH';
-          if (esRRHH) {
+          const rolRRHH = (estado.usuario.area || '').toUpperCase() === 'RRHH';
+          if (rolRRHH) {
             const listaU = await api.obtenerTodosUsuarios();
             if (Array.isArray(listaU)) {
               setTodosUsuarios(listaU);
@@ -105,16 +117,7 @@ export default function CheckForm({ onRegistroGuardado, onVolver }) {
     }
   }, [cargarParaOtro, esRRHH]);
 
-  // Determinar área activa y si tiene permiso especial (N, RRHH, A)
-  const areaActiva = ((cargarParaOtro && usuarioSeleccionado)
-    ? (usuarioSeleccionado.area || '')
-    : (sesionUsuario?.area || '')).trim().toUpperCase();
-
-  const esUsuarioAreaEspecial = ['N', 'RRHH', 'A'].includes(areaActiva);
-  const esRRHH = (sesionUsuario?.area || '').toUpperCase() === 'RRHH';
-  const esCampañaOCampo = lugar === 'Campaña / Campo';
-
-  // 2. Cargar lista de proyectos disponibles desde el backend (depende del área activa o si se pide ver todos)
+  // 2. Cargar lista de proyectos disponibles desde el backend
   useEffect(() => {
     let activo = true;
     async function cargarServicios() {
@@ -137,31 +140,25 @@ export default function CheckForm({ onRegistroGuardado, onVolver }) {
     };
   }, [areaActiva, verTodosProyectos]);
 
-  // Agregar un proyecto regular o la opción 'Dedicado al área'
+  // Manejo de Proyectos y Áreas dedicadas
   const handleAgregarProyecto = (e) => {
     const seleccionado = e.target.value;
     if (!seleccionado) return;
 
-    if (seleccionado === '__OPCION_AREA__') {
-      const nombreItemArea = esUsuarioAreaEspecial
+    let itemNombre = seleccionado;
+
+    // Si seleccionó un área corporativa específica
+    if (seleccionado.startsWith('__AREA__:')) {
+      const nombreAr = seleccionado.replace('__AREA__:', '').trim();
+      itemNombre = `Dedicado al área - ${nombreAr}`;
+    } else if (seleccionado === '__OPCION_AREA__') {
+      itemNombre = esUsuarioAreaEspecial
         ? `Dedicado al área - ${areaElegida}`
         : 'Dedicado al área';
-
-      if (!proyectosSeleccionados.includes(nombreItemArea)) {
-        const nuevaLista = [...proyectosSeleccionados, nombreItemArea];
-        setProyectosSeleccionados(nuevaLista);
-        const horasDefault = Number((8 / nuevaLista.length).toFixed(1));
-        setHorasPorProyecto(prev => ({
-          ...prev,
-          [nombreItemArea]: horasDefault
-        }));
-      }
-      e.target.value = '';
-      return;
     }
 
-    if (!proyectosSeleccionados.includes(seleccionado)) {
-      const nuevaLista = [...proyectosSeleccionados, seleccionado];
+    if (!proyectosSeleccionados.includes(itemNombre)) {
+      const nuevaLista = [...proyectosSeleccionados, itemNombre];
       setProyectosSeleccionados(nuevaLista);
 
       const horasDefault = Number((8 / nuevaLista.length).toFixed(1));
@@ -175,27 +172,27 @@ export default function CheckForm({ onRegistroGuardado, onVolver }) {
         return nuevo;
       });
     }
-    e.target.value = ''; // Reset select
+    e.target.value = '';
   };
 
-  // Botón directo para agregar tiempo al área como ítem
-  const handleAgregarTiempoAreaBoton = () => {
-    const nombreItemArea = esUsuarioAreaEspecial
-      ? `Dedicado al área - ${areaElegida}`
-      : 'Dedicado al área';
-
-    if (!proyectosSeleccionados.includes(nombreItemArea)) {
-      const nuevaLista = [...proyectosSeleccionados, nombreItemArea];
+  const handleAgregarAreaDirecta = (nombreAr) => {
+    const itemNombre = `Dedicado al área - ${nombreAr}`;
+    if (!proyectosSeleccionados.includes(itemNombre)) {
+      const nuevaLista = [...proyectosSeleccionados, itemNombre];
       setProyectosSeleccionados(nuevaLista);
       const horasDefault = Number((8 / nuevaLista.length).toFixed(1));
-      setHorasPorProyecto(prev => ({
-        ...prev,
-        [nombreItemArea]: horasDefault
-      }));
+      setHorasPorProyecto(prev => {
+        const nuevo = { ...prev };
+        nuevaLista.forEach(p => {
+          if (nuevo[p] === undefined) {
+            nuevo[p] = horasDefault;
+          }
+        });
+        return nuevo;
+      });
     }
   };
 
-  // Remover un proyecto o tiempo al área
   const handleRemoverProyecto = (nombre) => {
     const nuevaLista = proyectosSeleccionados.filter(p => p !== nombre);
     setProyectosSeleccionados(nuevaLista);
@@ -206,23 +203,27 @@ export default function CheckForm({ onRegistroGuardado, onVolver }) {
     });
   };
 
-  // Total horas personalizadas (sin tope artificial de 8 hs)
-  const getTotalHorasPersonalizadas = () => {
+  // Cálculo de horas
+  const getHorasEquitativas = () => {
+    if (proyectosSeleccionados.length === 0) return 8;
+    return Number((8 / proyectosSeleccionados.length).toFixed(1));
+  };
+
+  const getTotalHoras = () => {
     if (proyectosSeleccionados.length === 0) return Math.max(0, horasArea);
+    if (modoDivision === 'equitativo') return 8;
     const total = proyectosSeleccionados.reduce((acc, p) => acc + (Number(horasPorProyecto[p]) || 0), 0);
     return Math.round(total * 10) / 10;
   };
 
-  // Modificar horas con botones +/- (sin limitante de 8 horas)
   const handleCambiarHoras = (proyecto, delta) => {
     setHorasPorProyecto(prev => {
-      const actual = Number(prev[proyecto]) || 0;
+      const actual = Number(prev[proyecto]) || getHorasEquitativas();
       const nuevo = Math.max(0.5, Math.round((actual + delta) * 10) / 10);
       return { ...prev, [proyecto]: nuevo };
     });
   };
 
-  // Modificar horas mediante teclado libremente
   const handleInputHoras = (proyecto, valor) => {
     const num = parseFloat(valor);
     if (isNaN(num)) {
@@ -233,27 +234,11 @@ export default function CheckForm({ onRegistroGuardado, onVolver }) {
     setHorasPorProyecto(prev => ({ ...prev, [proyecto]: valorAjustado }));
   };
 
-  // Horas para tiempo al área (cuando no se agregan proyectos específicos)
   const handleCambiarHorasArea = (delta) => {
     setHorasArea(prev => Math.max(0.5, Math.round((prev + delta) * 10) / 10));
   };
 
-  const handleInputHorasArea = (valor) => {
-    const num = parseFloat(valor);
-    if (isNaN(num)) {
-      setHorasArea(0);
-      return;
-    }
-    setHorasArea(Math.max(0.5, Math.round(num * 10) / 10));
-  };
-
-  // Cálculo de horas equitativas (reparte 8hs base o divide entre los ítems)
-  const getHorasEquitativas = () => {
-    if (proyectosSeleccionados.length === 0) return 8;
-    return Number((8 / proyectosSeleccionados.length).toFixed(2));
-  };
-
-  // Enviar formulario
+  // Envío del formulario
   const handleSubmit = async (e) => {
     e.preventDefault();
     setMensajeExito('');
@@ -269,9 +254,8 @@ export default function CheckForm({ onRegistroGuardado, onVolver }) {
       return;
     }
 
-    // Validación de horas mínimas
-    if (lugar !== 'Franco' && modoDivision === 'personalizado') {
-      const total = getTotalHorasPersonalizadas();
+    if (!esFranco && modoDivision === 'personalizado') {
+      const total = getTotalHoras();
       if (total <= 0) {
         setMensajeError('Debes asignar una cantidad de horas mayor a 0 a los proyectos trabajados.');
         return;
@@ -286,18 +270,16 @@ export default function CheckForm({ onRegistroGuardado, onVolver }) {
         lugar
       };
 
-      // Si es carga delegada de RRHH
       if (cargarParaOtro && usuarioSeleccionado) {
         payload.empleado = usuarioSeleccionado.nombre;
         payload.usuario_mail = usuarioSeleccionado.email || usuarioSeleccionado.mail || '';
       }
 
-      // Si es rango de fechas (Campaña / Campo)
       if (esCampañaOCampo && usarRangoFechas && fechaFin) {
         payload.fecha_fin = fechaFin;
       }
 
-      if (lugar === 'Franco') {
+      if (esFranco) {
         payload.lugar = 'Franco';
       } else if (proyectosSeleccionados.length === 0) {
         // Sin proyectos específicos: Tiempo dedicado al área
@@ -310,7 +292,6 @@ export default function CheckForm({ onRegistroGuardado, onVolver }) {
         payload.servicio = nombreServicio;
         payload.horas = h;
       } else {
-        // Con uno o varios proyectos (incluyendo potencialmente Dedicado al área como ítem)
         if (modoDivision === 'equitativo') {
           const h = getHorasEquitativas();
           payload.proyectos = proyectosSeleccionados.map(p => ({
@@ -328,7 +309,10 @@ export default function CheckForm({ onRegistroGuardado, onVolver }) {
       const res = await api.guardarCheckDiario(payload);
 
       if (res.exito) {
-        setMensajeExito(res.mensaje || '¡Check diario guardado con éxito!');
+        const msg = isRpg 
+          ? '🏆 ¡Misión sellada con honores! EXP acumulada en el Gremio Ingeap.' 
+          : (res.mensaje || '¡Check diario guardado con éxito!');
+        setMensajeExito(msg);
         if (onRegistroGuardado) {
           onRegistroGuardado();
         }
@@ -349,23 +333,26 @@ export default function CheckForm({ onRegistroGuardado, onVolver }) {
     }
   };
 
-  const esFranco = lugar === 'Franco';
+  const totalHs = getTotalHoras();
 
   return (
-    <div className="view-content">
+    <div className={`view-content checkform-container ${isRpg ? 'rpg-view' : ''}`}>
+      {/* Barra superior de navegación */}
       {onVolver && (
         <div className="view-header-bar">
           <button type="button" className="btn-back" onClick={onVolver}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
               <polyline points="15 18 9 12 15 6" />
             </svg>
-            <span>Inicio</span>
+            <span>{isRpg ? 'Gremio' : 'Inicio'}</span>
           </button>
-          <span className="view-header-title">Cargar Reporte Diario</span>
+          <span className="view-header-title">
+            {isRpg ? '📜 Bitácora de la Misión Diaria' : 'Cargar Reporte Diario'}
+          </span>
         </div>
       )}
 
-      <div className="form-card">
+      <div className="form-card clean-form-card">
         {mensajeExito && (
           <div className="alert alert-success">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -386,46 +373,37 @@ export default function CheckForm({ onRegistroGuardado, onVolver }) {
           </div>
         )}
 
-        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-          
-          {/* SECCIÓN RRHH: Cargar para otro empleado */}
+        <form onSubmit={handleSubmit} className="clean-form">
+
+          {/* GESTIÓN RRHH: Acordeón discreto */}
           {esRRHH && (
-            <div style={{
-              background: 'var(--bg-surface-hover)',
-              border: '1px solid var(--border-input)',
-              borderRadius: '8px',
-              padding: '10px 12px',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '8px'
-            }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <span style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '5px' }}>
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <div className={`rrhh-card ${cargarParaOtro ? 'active' : ''}`}>
+              <div className="rrhh-header" onClick={() => setCargarParaOtro(!cargarParaOtro)}>
+                <div className="rrhh-title">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
                     <circle cx="9" cy="7" r="4" />
                     <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
                     <path d="M16 3.13a4 4 0 0 1 0 7.75" />
                   </svg>
-                  Gestión RRHH: Cargar reporte para otro empleado
-                </span>
-                <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px', cursor: 'pointer', color: 'var(--text-secondary)' }}>
-                  <input
-                    type="checkbox"
-                    checked={cargarParaOtro}
-                    onChange={(e) => {
-                      setCargarParaOtro(e.target.checked);
-                      if (!e.target.checked) setUsuarioSeleccionado(null);
-                    }}
-                  />
-                  Activar
-                </label>
+                  <span>Cargar reporte para otro empleado (RRHH)</span>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={cargarParaOtro}
+                  onChange={(e) => {
+                    e.stopPropagation();
+                    setCargarParaOtro(e.target.checked);
+                    if (!e.target.checked) setUsuarioSeleccionado(null);
+                  }}
+                  className="rrhh-checkbox"
+                />
               </div>
 
               {cargarParaOtro && (
-                <div>
+                <div className="rrhh-body">
                   <select
-                    className="form-select"
+                    className="form-select form-select-clean"
                     value={usuarioSeleccionado ? usuarioSeleccionado.dni : ''}
                     onChange={(e) => {
                       const u = todosUsuarios.find(x => x.dni === e.target.value);
@@ -434,7 +412,7 @@ export default function CheckForm({ onRegistroGuardado, onVolver }) {
                       setHorasPorProyecto({});
                     }}
                   >
-                    <option value="">-- Selecciona el empleado --</option>
+                    <option value="">-- Seleccionar empleado --</option>
                     {todosUsuarios.map(u => {
                       const nombreArea = MAPA_AREAS[u.area?.toUpperCase()] || u.area || 'Sin área';
                       return (
@@ -449,345 +427,321 @@ export default function CheckForm({ onRegistroGuardado, onVolver }) {
             </div>
           )}
 
-          {/* Fecha o Rango de Fechas */}
-          <div className="form-group">
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
-              <label className="form-label" htmlFor="fecha" style={{ margin: 0 }}>
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
-                  <line x1="16" y1="2" x2="16" y2="6" />
-                  <line x1="8" y1="2" x2="8" y2="6" />
-                  <line x1="3" y1="10" x2="21" y2="10" />
-                </svg>
-                {usarRangoFechas ? 'Rango de Jornadas' : 'Fecha de Jornada'}
-              </label>
+          {/* SECCIÓN 1: CUÁNDO Y DÓNDE / REINO Y CAMPAMENTO */}
+          <div className="form-section-card">
+            <div className="form-section-header">
+              <span className="form-section-tag">{isRpg ? 'Fase I' : 'Paso 1'}</span>
+              <span className="form-section-title">
+                {isRpg ? '🗺️ Territorio y Modalidad' : 'Fecha y Modalidad'}
+              </span>
+            </div>
 
-              {/* Toggle de Rango para Campaña / Campo */}
-              {esCampañaOCampo && (
-                <label style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '11px', color: 'var(--text-secondary)', cursor: 'pointer' }}>
-                  <input
-                    type="checkbox"
-                    checked={usarRangoFechas}
-                    onChange={(e) => setUsarRangoFechas(e.target.checked)}
-                  />
-                  <span>Rango múltiple</span>
+            {/* Fecha */}
+            <div className="form-group-clean">
+              <div className="form-group-label-row">
+                <label className="form-label-clean" htmlFor="fecha">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+                    <line x1="16" y1="2" x2="16" y2="6" />
+                    <line x1="8" y1="2" x2="8" y2="6" />
+                    <line x1="3" y1="10" x2="21" y2="10" />
+                  </svg>
+                  <span>{isRpg ? 'Ciclo Solar (Fecha)' : (usarRangoFechas ? 'Rango de fechas' : 'Fecha')}</span>
                 </label>
+
+                {esCampañaOCampo && (
+                  <label className="range-toggle-label">
+                    <input
+                      type="checkbox"
+                      checked={usarRangoFechas}
+                      onChange={(e) => setUsarRangoFechas(e.target.checked)}
+                    />
+                    <span>Rango múltiple</span>
+                  </label>
+                )}
+              </div>
+
+              {usarRangoFechas && esCampañaOCampo ? (
+                <div className="range-inputs-grid">
+                  <div>
+                    <span className="input-sublabel">Desde:</span>
+                    <input
+                      type="date"
+                      className="form-input form-input-clean"
+                      value={fecha}
+                      onChange={(e) => setFecha(e.target.value)}
+                      disabled={enviando}
+                    />
+                  </div>
+                  <div>
+                    <span className="input-sublabel">Hasta:</span>
+                    <input
+                      type="date"
+                      className="form-input form-input-clean"
+                      value={fechaFin}
+                      onChange={(e) => setFechaFin(e.target.value)}
+                      disabled={enviando}
+                    />
+                  </div>
+                </div>
+              ) : (
+                <input
+                  id="fecha"
+                  type="date"
+                  className="form-input form-input-clean"
+                  value={fecha}
+                  onChange={(e) => setFecha(e.target.value)}
+                  disabled={enviando}
+                />
               )}
             </div>
 
-            {usarRangoFechas && esCampañaOCampo ? (
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
-                <div>
-                  <span style={{ fontSize: '10px', color: 'var(--text-secondary)', display: 'block', marginBottom: '2px' }}>Desde:</span>
-                  <input
-                    type="date"
-                    className="form-input"
-                    value={fecha}
-                    onChange={(e) => setFecha(e.target.value)}
-                    disabled={enviando}
-                  />
-                </div>
-                <div>
-                  <span style={{ fontSize: '10px', color: 'var(--text-secondary)', display: 'block', marginBottom: '2px' }}>Hasta (inclusive):</span>
-                  <input
-                    type="date"
-                    className="form-input"
-                    value={fechaFin}
-                    onChange={(e) => setFechaFin(e.target.value)}
-                    disabled={enviando}
-                  />
-                </div>
-              </div>
-            ) : (
-              <input
-                id="fecha"
-                type="date"
-                className="form-input"
-                value={fecha}
-                onChange={(e) => setFecha(e.target.value)}
-                disabled={enviando}
-              />
-            )}
-          </div>
+            {/* Modalidad / Ubicación: Selector segmentado estilizado */}
+            <div className="form-group-clean">
+              <label className="form-label-clean">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
+                  <circle cx="12" cy="10" r="3" />
+                </svg>
+                <span>{isRpg ? 'Puesto de Misión' : 'Modalidad'}</span>
+              </label>
 
-          {/* Ubicación / Lugar */}
-          <div className="form-group">
-            <label className="form-label">
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
-                <circle cx="12" cy="10" r="3" />
-              </svg>
-              Ubicación / Modalidad
-            </label>
-            <div className="location-grid">
-              {LUGARES.map((item) => {
-                const isSelected = lugar === item.id;
-                const isFrancoItem = item.id === 'Franco';
-                return (
-                  <button
-                    type="button"
-                    key={item.id}
-                    className={`location-btn ${isSelected ? (isFrancoItem ? 'franco-selected' : 'selected') : ''}`}
-                    onClick={() => {
-                      setLugar(item.id);
-                      if (item.id !== 'Campaña / Campo') {
-                        setUsarRangoFechas(false);
-                      }
-                    }}
-                  >
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d={item.icon} />
-                    </svg>
-                    <span>{item.label}</span>
-                  </button>
-                );
-              })}
+              <div className="segmented-modalidad-grid">
+                {LUGARES_BASE.map((item) => {
+                  const isSelected = lugar === item.id;
+                  const isFrancoItem = item.id === 'Franco';
+                  const labelText = isRpg ? item.labelRpg : item.label;
+                  return (
+                    <button
+                      type="button"
+                      key={item.id}
+                      className={`seg-btn ${isSelected ? (isFrancoItem ? 'seg-franco' : 'seg-active') : ''}`}
+                      onClick={() => {
+                        setLugar(item.id);
+                        if (item.id !== 'Campaña / Campo') {
+                          setUsarRangoFechas(false);
+                        }
+                      }}
+                    >
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d={item.icon} />
+                      </svg>
+                      <span>{labelText}</span>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
           </div>
 
-          {/* FRANCO */}
+          {/* SI ES FRANCO: Banner sereno o de taberna RPG */}
           {esFranco ? (
-            <div className="franco-banner">
-              <div className="franco-banner-icon">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
-                </svg>
+            <div className="franco-serene-card">
+              <div className="franco-serene-icon">☕</div>
+              <div className="franco-serene-body">
+                <h4>{isRpg ? 'Campamento en la Taberna del Reino' : 'Día de Descanso / Franco'}</h4>
+                <p>
+                  {isRpg
+                    ? 'Has hecho una parada en la taberna a descansar y recuperar tus puntos de Maná y Salud. No se requiere asignar hazañas ni computar horas hoy.'
+                    : 'No se requiere imputar proyectos ni cómputo de horas para este día.'}
+                </p>
               </div>
-              <span className="franco-banner-title">Día de Descanso / Franco</span>
-              <p className="franco-banner-desc">
-                No es necesario asignar proyectos ni cómputo de horas para este día.
-              </p>
             </div>
           ) : (
-            <>
-              {/* Proyectos Activos */}
-              <div className="form-group">
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
-                  <label className="form-label" style={{ margin: 0 }}>
+            /* SECCIÓN 2: ACTIVIDAD Y PROYECTOS / HAZAÑAS */
+            <div className="form-section-card">
+              <div className="form-section-header">
+                <span className="form-section-tag">{isRpg ? 'Fase II' : 'Paso 2'}</span>
+                <span className="form-section-title">
+                  {isRpg ? '⚔️ Misiones y Gremios Aliados' : 'Proyectos y Dedicación'} {proyectosSeleccionados.length > 0 && `(${proyectosSeleccionados.length})`}
+                </span>
+              </div>
+
+              {/* Selector desplegable de proyectos y áreas corporativas múltiples */}
+              <div className="form-group-clean">
+                <div className="form-group-label-row">
+                  <span className="form-label-clean">
                     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                       <polygon points="12 2 2 7 12 12 22 7 12 2" />
                       <polyline points="2 17 12 22 22 17" />
                       <polyline points="2 12 12 17 22 12" />
                     </svg>
-                    Proyectos en los que se trabajó ({proyectosSeleccionados.length})
-                  </label>
-
-                  <button
-                    type="button"
-                    onClick={handleAgregarTiempoAreaBoton}
-                    style={{
-                      background: 'none',
-                      border: 'none',
-                      color: 'var(--primary)',
-                      fontSize: '11px',
-                      fontWeight: 600,
-                      cursor: 'pointer',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '3px'
-                    }}
-                    title="Agregar tiempo dedicado al área a la jornada"
-                  >
-                    + Dedicado al área
-                  </button>
-                </div>
-
-                {/* Sub-selector de área corporativa para empleados de Aplicaciones (A), Núcleo (N) o RRHH */}
-                {esUsuarioAreaEspecial && (
-                  <div style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    background: 'var(--bg-surface-hover)',
-                    border: '1px solid var(--border-input)',
-                    borderRadius: '6px',
-                    padding: '6px 10px',
-                    marginBottom: '8px'
-                  }}>
-                    <span style={{ fontSize: '11px', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                      🏢 Área de dedicación ({MAPA_AREAS[areaActiva] || areaActiva}):
+                    <span>
+                      {proyectosSeleccionados.length === 0
+                        ? (isRpg ? '¿En qué misiones luchaste?' : '¿Trabajaste en proyectos o áreas específicas?')
+                        : (isRpg ? '+ Sumar otra misión o gremio' : '+ Agregar otro proyecto o área')}
                     </span>
-                    <select
-                      className="form-select"
-                      value={areaElegida}
-                      onChange={(e) => setAreaElegida(e.target.value)}
-                      style={{ width: 'auto', padding: '3px 8px', fontSize: '11.5px', height: '28px' }}
-                    >
-                      {LISTADO_AREAS_CORPORATIVAS.map(ar => (
-                        <option key={ar} value={ar}>{ar}</option>
-                      ))}
-                    </select>
-                  </div>
-                )}
+                  </span>
 
-                {/* Toggle para RRHH: Ver todos los proyectos */}
-                {esRRHH && (
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', marginBottom: '6px' }}>
-                    <label style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '11px', color: 'var(--text-secondary)', cursor: 'pointer' }}>
+                  {esRRHH && (
+                    <label className="range-toggle-label">
                       <input
                         type="checkbox"
                         checked={verTodosProyectos}
                         onChange={(e) => setVerTodosProyectos(e.target.checked)}
                       />
-                      <span>Ver proyectos de todas las áreas</span>
+                      <span>Todas las áreas</span>
                     </label>
-                  </div>
-                )}
+                  )}
+                </div>
 
                 <select
-                  className="form-select"
+                  className="form-select form-select-clean"
                   value=""
                   onChange={handleAgregarProyecto}
                   disabled={enviando || cargandoServicios}
                 >
                   <option value="">
                     {cargandoServicios
-                      ? 'Cargando proyectos...'
-                      : '+ Seleccionar proyecto de la lista...'}
+                      ? 'Cargando opciones...'
+                      : isRpg
+                      ? '+ Seleccionar misión o gremio aliado...'
+                      : '+ Seleccionar de la lista...'}
                   </option>
-                  <option value="__OPCION_AREA__" style={{ fontWeight: 'bold', color: 'var(--primary)' }}>
-                    ★ [Dedicado al área{esUsuarioAreaEspecial ? ` - ${areaElegida}` : ''}]
-                  </option>
-                  {serviciosDisponibles.map((srv) => (
-                    <option key={srv} value={srv}>
-                      {srv}
-                    </option>
-                  ))}
-                </select>
 
-                {/* Lista de proyectos seleccionados */}
-                {proyectosSeleccionados.length === 0 ? (
-                  <div className="empty-projects-notice">
-                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                      <circle cx="12" cy="12" r="10" />
-                      <line x1="12" y1="16" x2="12" y2="12" />
-                      <line x1="12" y1="8" x2="12.01" y2="8" />
-                    </svg>
-                    <span>
-                      Sin proyectos seleccionados: Se registrará como{' '}
-                      <strong>{esUsuarioAreaEspecial ? `Dedicado al área (${areaElegida})` : 'Tiempo dedicado al Área'}</strong>.
-                    </span>
-                  </div>
-                ) : (
-                  <div className="selected-projects-list">
-                    {proyectosSeleccionados.map((item) => (
-                      <div key={item} className="project-chip">
-                        <span>{item}</span>
-                        <button
-                          type="button"
-                          className="project-chip-remove"
-                          onClick={() => handleRemoverProyecto(item)}
-                          title="Quitar ítem"
-                        >
-                          ✕
-                        </button>
-                      </div>
+                  {/* Si es A, N o RRHH: Permite elegir libremente entre todas las áreas corporativas */}
+                  {esUsuarioAreaEspecial ? (
+                    <optgroup label="🏢 Dedicación a Áreas Internas">
+                      {LISTADO_AREAS_CORPORATIVAS.map(ar => (
+                        <option key={ar} value={`__AREA__:${ar}`}>
+                          🏢 Dedicado al área - {ar}
+                        </option>
+                      ))}
+                    </optgroup>
+                  ) : (
+                    <option value="__OPCION_AREA__">
+                      🏢 ★ Dedicado al área habitual
+                    </option>
+                  )}
+
+                  <optgroup label="📁 Proyectos Activos">
+                    {serviciosDisponibles.map((srv) => (
+                      <option key={srv} value={srv}>
+                        {srv}
+                      </option>
                     ))}
-                  </div>
-                )}
+                  </optgroup>
+                </select>
               </div>
 
-              {/* SECCIÓN: Cómputo de horas */}
-              <div className="division-section">
-                <span className="division-title">
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <circle cx="12" cy="12" r="10" />
-                    <polyline points="12 6 12 12 16 14" />
-                  </svg>
-                  Distribución de horas trabajadas
-                </span>
-
-                <div className="division-modes-grid">
-                  <button
-                    type="button"
-                    className={`division-mode-btn ${modoDivision === 'equitativo' ? 'selected' : ''}`}
-                    onClick={() => setModoDivision('equitativo')}
-                  >
-                    <span className="division-mode-title">Dividir jornada</span>
-                    <span className="division-mode-subtitle">Equitativo (8 hs base)</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    className={`division-mode-btn ${modoDivision === 'personalizado' ? 'selected' : ''}`}
-                    onClick={() => setModoDivision('personalizado')}
-                  >
-                    <span className="division-mode-title">Ingresar horas</span>
-                    <span className="division-mode-subtitle">Libre por proyecto</span>
-                  </button>
-                </div>
-
-                {/* Vista del desglose según el modo */}
-                {modoDivision === 'equitativo' ? (
-                  <div className="breakdown-list">
-                    {proyectosSeleccionados.length === 0 ? (
-                      <div className="breakdown-item">
-                        <span>{esUsuarioAreaEspecial ? `Dedicado al área - ${areaElegida}` : 'Tiempo dedicado al Área'}</span>
-                        <span className="breakdown-hours-badge">8.0 hs</span>
-                      </div>
-                    ) : (
-                      proyectosSeleccionados.map((p) => (
-                        <div key={p} className="breakdown-item">
-                          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '75%' }}>
-                            {p}
-                          </span>
-                          <span className="breakdown-hours-badge">
-                            {getHorasEquitativas()} hs
-                          </span>
-                        </div>
-                      ))
-                    )}
+              {/* CASO A: Sin proyectos/áreas agregadas -> Dedicación habitual */}
+              {proyectosSeleccionados.length === 0 ? (
+                <div className="area-default-card">
+                  <div className="area-default-top">
+                    <div className="area-default-badge">
+                      <span className="dot-green" />
+                      <span>{isRpg ? 'Misión de Gremio' : 'Jornada Habitual'}</span>
+                    </div>
+                    <div className="stepper-compact">
+                      <button
+                        type="button"
+                        className="btn-step-compact"
+                        onClick={() => handleCambiarHorasArea(-0.5)}
+                        disabled={horasArea <= 0.5}
+                        title="Restar 0.5 hs"
+                      >
+                        -
+                      </button>
+                      <span className="area-default-hours">{horasArea} hs</span>
+                      <button
+                        type="button"
+                        className="btn-step-compact"
+                        onClick={() => handleCambiarHorasArea(0.5)}
+                        title="Sumar 0.5 hs"
+                      >
+                        +
+                      </button>
+                    </div>
                   </div>
-                ) : (
-                  /* Modo personalizado (sin límite de 8 horas) */
-                  <div className="custom-hours-list">
-                    {proyectosSeleccionados.length === 0 ? (
-                      <div className="custom-hours-item">
-                        <span className="custom-hours-name">
-                          {esUsuarioAreaEspecial ? `Dedicado al área - ${areaElegida}` : 'Tiempo dedicado al Área'}
-                        </span>
-                        <div className="custom-hours-controls">
-                          <button
-                            type="button"
-                            className="btn-step"
-                            onClick={() => handleCambiarHorasArea(-0.5)}
-                            disabled={horasArea <= 0.5}
-                          >
-                            -
-                          </button>
-                          <input
-                            type="number"
-                            step="0.5"
-                            min="0.5"
-                            className="input-hours"
-                            value={horasArea}
-                            onChange={(e) => handleInputHorasArea(e.target.value)}
-                          />
-                          <button
-                            type="button"
-                            className="btn-step"
-                            onClick={() => handleCambiarHorasArea(0.5)}
-                          >
-                            +
-                          </button>
-                        </div>
-                      </div>
-                    ) : (
-                      proyectosSeleccionados.map((p) => {
-                        const valorActual = horasPorProyecto[p] ?? getHorasEquitativas();
 
-                        return (
-                          <div key={p} className="custom-hours-item">
-                            <span className="custom-hours-name" title={p}>
-                              {p}
+                  <div className="area-default-name">
+                    {isRpg ? 'Dedicado a tareas de la Orden' : 'Dedicado a tareas de área'}
+                  </div>
+
+                  {esUsuarioAreaEspecial && (
+                    <div className="area-subselect-row">
+                      <span className="area-subselect-label">
+                        {isRpg ? '🏛️ Gremio:' : '🏢 Imputar a:'}
+                      </span>
+                      <select
+                        className="form-select-inline"
+                        value={areaElegida}
+                        onChange={(e) => setAreaElegida(e.target.value)}
+                      >
+                        {LISTADO_AREAS_CORPORATIVAS.map(ar => (
+                          <option key={ar} value={ar}>{ar}</option>
+                        ))}
+                      </select>
+
+                      <button
+                        type="button"
+                        className="btn-add-extra-area"
+                        onClick={() => handleAgregarAreaDirecta(areaElegida)}
+                        title="Agregar como ítem para poder combinarlo con más áreas"
+                      >
+                        + Sumar otra área
+                      </button>
+                    </div>
+                  )}
+
+                  <div className="area-default-footer">
+                    <span>
+                      {isRpg
+                        ? 'Se registrará tu jornada completa para el gremio (+800 EXP). Si luchaste en obras o proyectos específicos, selecciónalos arriba.'
+                        : 'Se registrará tu jornada completa asignada al área. Si trabajaste en una obra o proyecto, selecciónalo arriba.'}
+                    </span>
+                  </div>
+                </div>
+              ) : (
+                /* CASO B: Proyectos o Múltiples Áreas seleccionadas */
+                <div className="projects-active-wrapper">
+                  {/* Selector de modo si son 2 o más ítems */}
+                  {proyectosSeleccionados.length >= 2 && (
+                    <div className="division-toggle-bar">
+                      <button
+                        type="button"
+                        className={`division-toggle-btn ${modoDivision === 'equitativo' ? 'active' : ''}`}
+                        onClick={() => setModoDivision('equitativo')}
+                      >
+                        {isRpg ? '⚖️ Reparto de Botín (8 hs)' : '⚖️ Dividir equitativo (8 hs)'}
+                      </button>
+                      <button
+                        type="button"
+                        className={`division-toggle-btn ${modoDivision === 'personalizado' ? 'active' : ''}`}
+                        onClick={() => setModoDivision('personalizado')}
+                      >
+                        {isRpg ? '🗡️ Puntos de Esfuerzo' : '✏️ Ajustar por ítem'}
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Lista de proyectos y áreas añadidas */}
+                  <div className="projects-streamlined-list">
+                    {proyectosSeleccionados.map((p) => {
+                      const horasItem = modoDivision === 'equitativo'
+                        ? getHorasEquitativas()
+                        : (horasPorProyecto[p] ?? getHorasEquitativas());
+
+                      const esAreaItem = p.startsWith('Dedicado al área');
+
+                      return (
+                        <div key={p} className={`project-row-item ${esAreaItem ? 'area-item-highlight' : ''}`}>
+                          <div className="project-row-info">
+                            <span className="project-row-name" title={p}>
+                              {esAreaItem ? `🏢 ${p.replace('Dedicado al área - ', 'Área: ')}` : p}
                             </span>
-                            <div className="custom-hours-controls">
+                            {modoDivision === 'equitativo' && (
+                              <span className="project-row-badge-hours">{horasItem} hs</span>
+                            )}
+                          </div>
+
+                          {modoDivision === 'personalizado' && (
+                            <div className="stepper-compact">
                               <button
                                 type="button"
-                                className="btn-step"
+                                className="btn-step-compact"
                                 onClick={() => handleCambiarHoras(p, -0.5)}
-                                disabled={Number(valorActual) <= 0.5}
-                                title="Restar 0.5 hs"
+                                disabled={Number(horasItem) <= 0.5}
                               >
                                 -
                               </button>
@@ -795,55 +749,56 @@ export default function CheckForm({ onRegistroGuardado, onVolver }) {
                                 type="number"
                                 step="0.5"
                                 min="0.5"
-                                className="input-hours"
-                                value={valorActual}
+                                className="input-step-compact"
+                                value={horasItem}
                                 onChange={(e) => handleInputHoras(p, e.target.value)}
                               />
                               <button
                                 type="button"
-                                className="btn-step"
+                                className="btn-step-compact"
                                 onClick={() => handleCambiarHoras(p, 0.5)}
-                                title="Sumar 0.5 hs"
                               >
                                 +
                               </button>
                             </div>
-                          </div>
-                        );
-                      })
-                    )}
-
-                    {/* Resumen de horas totales sin limitante restrictivo */}
-                    {(() => {
-                      const totalHs = getTotalHorasPersonalizadas();
-                      return (
-                        <div className="hours-total-bar">
-                          <div className="hours-total-info">
-                            <span className="hours-total-label">Total asignado:</span>
-                            <span className="hours-total-value complete" style={{ fontSize: '13px', fontWeight: 700 }}>
-                              {totalHs} hs
-                            </span>
-                          </div>
-                          {totalHs >= 8 && (
-                            <div style={{ fontSize: '11px', color: 'var(--accent-emerald)', marginTop: '3px', fontWeight: 600 }}>
-                              ✓ Jornada completa alcanzada
-                            </div>
                           )}
+
+                          <button
+                            type="button"
+                            className="btn-del-project"
+                            onClick={() => handleRemoverProyecto(p)}
+                            title="Quitar ítem"
+                          >
+                            ✕
+                          </button>
                         </div>
                       );
-                    })()}
+                    })}
                   </div>
-                )}
-              </div>
-            </>
+
+                  {/* Resumen total de horas */}
+                  <div className="hours-summary-strip">
+                    <span className="hours-summary-label">
+                      {isRpg ? '✨ Esfuerzo Heroico:' : 'Total asignado:'}
+                    </span>
+                    <span className="hours-summary-value">{totalHs} hs</span>
+                    {totalHs >= 8 && (
+                      <span className="hours-summary-tag">
+                        {isRpg ? `🏆 ¡Quest Cumplida! (+${Math.round(totalHs * 100)} EXP)` : '✓ Completa'}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
           )}
 
-          {/* Botón de Confirmación */}
-          <button type="submit" className="btn-submit" disabled={enviando}>
+          {/* BOTÓN DE CONFIRMACIÓN */}
+          <button type="submit" className="btn-submit btn-submit-spacious" disabled={enviando}>
             {enviando ? (
               <>
                 <div className="spinner" />
-                <span>Guardando...</span>
+                <span>{isRpg ? 'Conjurando registro...' : 'Guardando...'}</span>
               </>
             ) : (
               <>
@@ -854,10 +809,10 @@ export default function CheckForm({ onRegistroGuardado, onVolver }) {
                 </svg>
                 <span>
                   {esFranco
-                    ? 'Registrar Franco (Descanso)'
+                    ? (isRpg ? '🍺 Descansar en la Posada' : 'Registrar Franco (Descanso)')
                     : usarRangoFechas && esCampañaOCampo
-                    ? 'Registrar Rango Campaña/Campo'
-                    : 'Registrar Check Diario'}
+                    ? (isRpg ? '🌲 Registrar Gran Expedición' : 'Registrar Rango Campaña')
+                    : (isRpg ? `⚡ ¡Sellar Misión Diaria! (+${Math.round(totalHs * 100)} EXP)` : 'Registrar Check Diario')}
                 </span>
               </>
             )}

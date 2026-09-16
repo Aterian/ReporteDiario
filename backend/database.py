@@ -1,7 +1,9 @@
 import sqlite3
 import os
+import sys
 import shutil
 import uuid
+import json
 from datetime import datetime
 
 def obtener_directorio_datos() -> str:
@@ -14,18 +16,27 @@ def obtener_directorio_datos() -> str:
     os.makedirs(directorio, exist_ok=True)
     return directorio
 
-# Ruta del archivo de base de datos en AppData (persistente para ejecutables)
+# Ruta fija y permanente del archivo de base de datos en AppData (persistente ante reinicios)
 RUTA_DB_APPDATA = os.path.join(obtener_directorio_datos(), "registro_local.db")
-RUTA_DB_LOCAL = os.path.join(os.path.dirname(os.path.abspath(__file__)), "registro_local.db")
+RUTA_SESION_BACKUP = os.path.join(obtener_directorio_datos(), "sesion_activa.json")
 
-# Si ya existe una base local de pruebas en la carpeta del backend, la copiamos a AppData
-if os.path.exists(RUTA_DB_LOCAL) and not os.path.exists(RUTA_DB_APPDATA):
-    try:
-        shutil.copy2(RUTA_DB_LOCAL, RUTA_DB_APPDATA)
-    except Exception as e:
-        print(f"Aviso al migrar BD local a AppData: {e}")
+# Migración defensiva: Si no existe aún la BD en AppData, buscar si existe alguna previa
+if not os.path.exists(RUTA_DB_APPDATA):
+    posibles_origenes = []
+    if getattr(sys, "frozen", False):
+        posibles_origenes.append(os.path.join(os.path.dirname(sys.executable), "registro_local.db"))
+    posibles_origenes.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), "registro_local.db"))
+    for ruta_origen in posibles_origenes:
+        if os.path.exists(ruta_origen) and ruta_origen != RUTA_DB_APPDATA:
+            try:
+                shutil.copy2(ruta_origen, RUTA_DB_APPDATA)
+                print(f"[BD] Base de datos migrada exitosamente desde {ruta_origen} a AppData.")
+                break
+            except Exception as e:
+                print(f"[BD] Aviso al migrar BD previa: {e}")
 
-RUTA_DB = RUTA_DB_APPDATA if os.path.exists(RUTA_DB_APPDATA) else RUTA_DB_LOCAL
+# RUTA_DB es SIEMPRE la ruta persistente en AppData (nunca temporal)
+RUTA_DB = RUTA_DB_APPDATA
 
 def obtener_conexion():
     """Crea y retorna una conexión a la base de datos local SQLite."""
@@ -387,6 +398,35 @@ def obtener_sesion_activa():
                 "avatar": avatar_val,
                 "area": area_val
             }
+        
+        # Si la tabla sesion en SQLite está vacía, intentar restaurar desde el archivo de respaldo permanente
+        if os.path.exists(RUTA_SESION_BACKUP):
+            try:
+                with open(RUTA_SESION_BACKUP, "r", encoding="utf-8") as f:
+                    datos = json.load(f)
+                    if isinstance(datos, dict) and datos.get("dni") and datos.get("nombre"):
+                        # Restaurar en SQLite para futuras consultas rápidas
+                        cursor.execute("""
+                            INSERT INTO sesion (id, nombre, dni, mail, avatar, area)
+                            VALUES (1, ?, ?, ?, ?, ?)
+                            ON CONFLICT(id) DO UPDATE SET 
+                                nombre = excluded.nombre, 
+                                dni = excluded.dni,
+                                mail = excluded.mail,
+                                avatar = excluded.avatar,
+                                area = excluded.area
+                        """, (
+                            datos["nombre"],
+                            datos["dni"],
+                            datos.get("mail", ""),
+                            datos.get("avatar", ""),
+                            datos.get("area", "")
+                        ))
+                        conn.commit()
+                        return datos
+            except Exception as e:
+                print(f"[Sesion] Aviso al recuperar sesion desde backup JSON: {e}")
+
         return None
 
 def guardar_sesion_activa(nombre: str, dni: str, mail: str = "", avatar: str = "", area: str = ""):
@@ -425,6 +465,19 @@ def guardar_sesion_activa(nombre: str, dni: str, mail: str = "", avatar: str = "
         """, (nombre.strip(), dni_limpio, mail.strip(), avatar_final, area_final))
         conn.commit()
 
+    # Respaldo permanente espejo en JSON
+    try:
+        with open(RUTA_SESION_BACKUP, "w", encoding="utf-8") as f:
+            json.dump({
+                "nombre": nombre.strip(),
+                "dni": dni_limpio,
+                "mail": mail.strip(),
+                "avatar": avatar_final,
+                "area": area_final
+            }, f, ensure_ascii=False)
+    except Exception as e:
+        print(f"[Sesion] Aviso al guardar backup JSON: {e}")
+
 def actualizar_avatar_sesion(avatar_base64: str):
     """Actualiza el avatar tanto en la sesión activa como en el perfil permanente del empleado."""
     sesion = obtener_sesion_activa()
@@ -447,6 +500,11 @@ def borrar_sesion():
         cursor = conn.cursor()
         cursor.execute("DELETE FROM sesion WHERE id = 1")
         conn.commit()
+    if os.path.exists(RUTA_SESION_BACKUP):
+        try:
+            os.remove(RUTA_SESION_BACKUP)
+        except Exception:
+            pass
 
 def guardar_registro_asistencia(
     empleado: str,

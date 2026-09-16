@@ -1,6 +1,8 @@
 import React from 'react';
 
-export default function HomeView({ usuario, onNuevoReporte, onVerHistorial, onAvatarClick }) {
+export default function HomeView({ usuario, tema, onNuevoReporte, onVerHistorial, onAvatarClick }) {
+  const isRpg = tema === 'rpg';
+
   const getFechaFormateada = () => {
     const hoy = new Date();
     const opciones = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
@@ -31,7 +33,7 @@ export default function HomeView({ usuario, onNuevoReporte, onVerHistorial, onAv
   };
 
   return (
-    <div className="view-content home-container">
+    <div className={`view-content home-container ${isRpg ? 'rpg-home' : ''}`}>
       {/* Tarjeta de bienvenida del empleado */}
       <div className="home-profile-card">
         <div 
@@ -56,10 +58,12 @@ export default function HomeView({ usuario, onNuevoReporte, onVerHistorial, onAv
 
         <div className="home-profile-details">
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <span className="home-welcome-text">Bienvenido</span>
+            <span className="home-welcome-text">
+              {isRpg ? '⚔️ Héroe del Gremio' : 'Bienvenido'}
+            </span>
             {usuario.area && (
               <span className="home-area-chip">
-                {getNombreArea(usuario.area)}
+                {isRpg ? '🧙‍♂️ Desarrollador Arcano (Nv. 42)' : getNombreArea(usuario.area)}
               </span>
             )}
           </div>
@@ -87,24 +91,34 @@ export default function HomeView({ usuario, onNuevoReporte, onVerHistorial, onAv
       </div>
 
       {/* Botones de acción principales */}
-      <div className="home-actions-title">¿Qué deseas hacer hoy?</div>
+      <div className="home-actions-title">
+        {isRpg ? '¿Qué gran hazaña emprenderás hoy?' : '¿Qué deseas hacer hoy?'}
+      </div>
 
       <div className="home-actions-grid">
-        {/* Botón 1: Nuevo Reporte */}
+        {/* Botón 1: Nuevo Reporte / Nueva Misión */}
         <button 
           type="button" 
           className="home-action-card card-primary" 
           onClick={onNuevoReporte}
         >
           <div className="action-card-icon-box">
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
-              <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
-            </svg>
+            {isRpg ? (
+              <span style={{ fontSize: '20px' }}>📜</span>
+            ) : (
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+              </svg>
+            )}
           </div>
           <div className="action-card-content">
-            <span className="action-card-title">Cargar Nuevo Reporte</span>
-            <span className="action-card-desc">Registra tus proyectos activos, jornada y ubicación</span>
+            <span className="action-card-title">
+              {isRpg ? '📜 Aceptar Nueva Misión Diaria' : 'Cargar Nuevo Reporte'}
+            </span>
+            <span className="action-card-desc">
+              {isRpg ? 'Registra tus hazañas, proyectos y horas completadas (+EXP)' : 'Registra tus proyectos activos, jornada y ubicación'}
+            </span>
           </div>
           <div className="action-card-arrow">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -113,21 +127,29 @@ export default function HomeView({ usuario, onNuevoReporte, onVerHistorial, onAv
           </div>
         </button>
 
-        {/* Botón 2: Ver Historial */}
+        {/* Botón 2: Ver Historial / Crónicas */}
         <button 
           type="button" 
           className="home-action-card card-secondary" 
           onClick={onVerHistorial}
         >
           <div className="action-card-icon-box secondary">
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-              <circle cx="12" cy="12" r="10" />
-              <polyline points="12 6 12 12 14 14" />
-            </svg>
+            {isRpg ? (
+              <span style={{ fontSize: '20px' }}>📖</span>
+            ) : (
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="10" />
+                <polyline points="12 6 12 12 14 14" />
+              </svg>
+            )}
           </div>
           <div className="action-card-content">
-            <span className="action-card-title">Ver Historial de Registros</span>
-            <span className="action-card-desc">Consulta los reportes y horas enviadas</span>
+            <span className="action-card-title">
+              {isRpg ? '📖 Tomo de Crónicas (Historial)' : 'Ver Historial de Registros'}
+            </span>
+            <span className="action-card-desc">
+              {isRpg ? 'Revisa el pergamino de misiones y botines sellados' : 'Consulta los reportes y horas enviadas'}
+            </span>
           </div>
           <div className="action-card-arrow">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -143,7 +165,11 @@ export default function HomeView({ usuario, onNuevoReporte, onVerHistorial, onAv
           <line x1="12" y1="16" x2="12" y2="12" />
           <line x1="12" y1="8" x2="12.01" y2="8" />
         </svg>
-        <span>Al guardar un nuevo reporte, volverás automáticamente a esta pantalla.</span>
+        <span>
+          {isRpg
+            ? '🏆 Cada misión sellada alimenta el poder del Gremio Ingeap y aumenta tu rango.'
+            : 'Al guardar un nuevo reporte, volverás automáticamente a esta pantalla.'}
+        </span>
       </div>
     </div>
   );

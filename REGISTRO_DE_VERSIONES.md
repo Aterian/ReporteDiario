@@ -4,6 +4,41 @@ Historial cronológico de cambios, nuevas características y mejoras aplicadas a
 
 ---
 
+## [1.2.0] - 2026-09-16
+
+### 🛡️ Persistencia y Confiabilidad de Sesión
+- **Persistencia en Reinicio de PC**:
+  - Almacenamiento definitivo de SQLite fijado en `%LOCALAPPDATA%\Ingeap\CheckDiario\registro_local.db` para evitar pérdidas de sesión al reiniciar el equipo debido a la limpieza de temporales de Windows.
+  - Creación automática de archivo espejo en `sesion_activa.json` en AppData para autorecuperación transparente de la sesión.
+
+### ⚡ Estabilidad y Resiliencia de Interfaz
+- **Corrección de Pantalla en Blanco**:
+  - Corrección de inicialización de variables de roles y áreas en el formulario de registro (`Temporal Dead Zone`).
+  - Implementación de `ErrorBoundary` global en React con tarjeta amigable de recuperación y botones de navegación ante cualquier error imprevisto.
+
+### 🎨 Rediseño Ergonómico del Formulario de Registro
+- **Selector de Modalidad Segmentado**:
+  - Reemplazo de botones pesados y amontonados por una botonera compacta y moderna: `[ 🏢 Oficina ] [ 💻 Home Office ] [ 🌲 Campaña ] [ ☕ Franco ]`.
+- **Flujo Directo para Días de Franco**:
+  - Al seleccionar `Franco`, se ocultan automáticamente los bloques de actividades y proyectos, ofreciendo un registro limpio en un solo paso.
+- **Simplificación de Jornada Habitual**:
+  - Tarjeta serena y predeterminada de 8.0 horas para tareas del área que permite guardar el reporte en 2 clics.
+- **Distribución de Horas Inteligente**:
+  - Stepper compacto (`-` / `+`) y pastillas de distribución para múltiples actividades (`⚖️ Dividir equitativo` o `✏️ Ajustar por ítem`).
+
+### 🏢 Dedicación a Múltiples Áreas Corporativas
+- **Soporte Multi-área para 'A' (Aplicaciones), 'N' (Núcleo) y 'RRHH'**:
+  - Posibilidad de seleccionar y combinar en un mismo día tareas dedicadas a diferentes áreas corporativas (ej: 4 hs a Ingeniería y 4 hs a Administración).
+  - Nuevo grupo `🏢 Dedicación a Áreas Internas` en el desplegable de actividades y botón rápido `+ Sumar otra área`.
+
+### ⚔️ Modo Aventura Fantasía RPG (Quest)
+- **Tema Exclusivo para Área Aplicaciones ('A') e Iván Valentín**:
+  - Selector de temas cíclico en el header: `Claro ☀️ -> Oscuro 🌙 -> Aventura RPG ⚔️ -> Claro ☀️`.
+  - Paleta mística en obsidiana (`#0d0b18`), amatista profundo (`#17132a`) y dorado legendario (`#f59e0b`).
+  - Textos e iconos ambientados en misiones épicas, rangos de gremio (`🧙‍♂️ Desarrollador Arcano`), descanso en taberna y botón de sellado diario `⚡ ¡Sellar Misión Diaria! (+800 EXP)`.
+
+---
+
 ## [1.1.1] - 2026-09-15
 
 ### 🚀 Nuevas Funcionalidades y Mejoras de Interfaz
