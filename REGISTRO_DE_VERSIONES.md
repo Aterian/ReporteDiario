@@ -6,6 +6,14 @@ Historial cronológico de cambios, nuevas características y mejoras aplicadas a
 
 ## [1.2.0] - 2026-09-16
 
+### 📦 Instalador de Archivo Único Autónomo
+- **Instalador de 1 Solo Archivo (`Instalador_CheckDiario_Ingeap.exe`)**:
+  - Se elimina la necesidad de distribuir carpetas completas con archivos `.bat`, `.ps1` y guías `.txt`.
+  - El usuario únicamente recibe y ejecuta **1 solo archivo `.exe`**.
+  - Ubica la aplicación automáticamente en la ruta estándar y segura de usuario `%LOCALAPPDATA%\Ingeap\CheckDiario\CheckDiarioIngeap.exe` (inmune a restricciones de permisos o carpetas temporales).
+  - Genera accesos directos en el **Escritorio** y en el **Menú Inicio de Windows** con el icono institucional.
+  - Registra el inicio automático con Windows (`HKCU\Run`) y abre la aplicación inmediatamente.
+
 ### 🛡️ Persistencia y Confiabilidad de Sesión
 - **Persistencia en Reinicio de PC**:
   - Almacenamiento definitivo de SQLite fijado en `%LOCALAPPDATA%\Ingeap\CheckDiario\registro_local.db` para evitar pérdidas de sesión al reiniciar el equipo debido a la limpieza de temporales de Windows.
@@ -31,11 +39,16 @@ Historial cronológico de cambios, nuevas características y mejoras aplicadas a
   - Posibilidad de seleccionar y combinar en un mismo día tareas dedicadas a diferentes áreas corporativas (ej: 4 hs a Ingeniería y 4 hs a Administración).
   - Nuevo grupo `🏢 Dedicación a Áreas Internas` en el desplegable de actividades y botón rápido `+ Sumar otra área`.
 
-### ⚔️ Modo Aventura Fantasía RPG (Quest)
-- **Tema Exclusivo para Área Aplicaciones ('A') e Iván Valentín**:
-  - Selector de temas cíclico en el header: `Claro ☀️ -> Oscuro 🌙 -> Aventura RPG ⚔️ -> Claro ☀️`.
-  - Paleta mística en obsidiana (`#0d0b18`), amatista profundo (`#17132a`) y dorado legendario (`#f59e0b`).
-  - Textos e iconos ambientados en misiones épicas, rangos de gremio (`🧙‍♂️ Desarrollador Arcano`), descanso en taberna y botón de sellado diario `⚡ ¡Sellar Misión Diaria! (+800 EXP)`.
+### ⚔️ Modo Aventura RPG: Tablón de Misiones de Taberna Medieval
+- **Diseño Inmersivo "The Adventurer's Daily Log"**:
+  - Estructura inspirada fielmente en el tablón de anuncios de una taberna de aventureros.
+  - Marco de madera de roble oscuro con esquineros de hierro forjado y remaches metálicos.
+  - Banner superior curvado en pergamino antiguo con caligrafía gótica y drop-cap iluminado.
+  - Pergaminos envejecidos clavados con tachuelas metálicas:
+    - **Misiones de Hoy (*Today's Quests*)**: Registro activo de tareas de jornada y gremios, notas de campo manuscritas y botón de sellado.
+    - **Hazañas Recientes (*Recent Achievements*)**: Crónicas y logros completados con casillas de verificación.
+    - **Recompensas y Botín (*Rewards & Notes*)**: Medidor visual de EXP, nivel de aventurero y monedas de oro.
+  - Viga de madera inferior tallada con medallones y botones de navegación rápida.
 
 ---
 

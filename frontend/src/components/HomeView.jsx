@@ -1,7 +1,19 @@
 import React from 'react';
+import RpgTavernBoard from './RpgTavernBoard';
 
 export default function HomeView({ usuario, tema, onNuevoReporte, onVerHistorial, onAvatarClick }) {
-  const isRpg = tema === 'rpg';
+  if (tema === 'rpg') {
+    return (
+      <RpgTavernBoard
+        usuario={usuario}
+        onNuevoReporte={onNuevoReporte}
+        onVerHistorial={onVerHistorial}
+        onAvatarClick={onAvatarClick}
+      />
+    );
+  }
+
+  const isRpg = false;
 
   const getFechaFormateada = () => {
     const hoy = new Date();

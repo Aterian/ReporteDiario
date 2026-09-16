@@ -3047,79 +3047,660 @@ html, body {
   50% {
     box-shadow: 0 0 14px rgba(245, 158, 11, 0.65);
   }
+/* ==========================================================================
+   TEMA MODO AVENTURA FANTASÍA RPG - TABLÓN DE TABERNA MEDIEVAL
+   (THE ADVENTURER'S DAILY LOG)
+   ========================================================================== */
+
+.btn-header-rpg {
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.2), rgba(168, 85, 247, 0.2)) !important;
+  border: 1px solid #f59e0b !important;
+  box-shadow: 0 0 10px rgba(245, 158, 11, 0.3);
+  animation: pulseRpgGlow 2.5s infinite ease-in-out;
+}
+
+@keyframes pulseRpgGlow {
+  0%, 100% {
+    box-shadow: 0 0 6px rgba(245, 158, 11, 0.3);
+  }
+  50% {
+    box-shadow: 0 0 14px rgba(245, 158, 11, 0.65);
+  }
+}
+
+[data-theme='rpg'] {
+  --font-family-medieval: 'Cinzel', serif;
+  --font-family-handwritten: 'MedievalSharp', cursive, Georgia, serif;
 }
 
 [data-theme='rpg'] .app-header {
-  background: linear-gradient(180deg, #1d1733 0%, #17132a 100%);
-  border-bottom: 1px solid #3d3260;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+  background: linear-gradient(180deg, #2b180d 0%, #1a0e07 100%);
+  border-bottom: 2px solid #54311c;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.7);
 }
 
-[data-theme='rpg'] .home-action-card.card-primary {
-  background: linear-gradient(135deg, #231b40 0%, #2f2257 100%);
-  border: 1px solid rgba(245, 158, 11, 0.45);
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.5), 0 0 12px rgba(245, 158, 11, 0.15);
+/* --- TABLÓN DE MADERA Y TABERNA --- */
+.rpg-board-viewport {
+  width: 100%;
+  height: 100%;
+  overflow-y: auto;
+  padding: 10px 12px 14px 12px;
+  background: radial-gradient(circle at 10% 20%, rgba(251, 191, 36, 0.1) 0%, transparent 40%),
+              radial-gradient(circle at 90% 80%, rgba(245, 158, 11, 0.08) 0%, transparent 40%),
+              #120c08;
 }
 
-[data-theme='rpg'] .home-action-card.card-primary:hover {
-  border-color: #f59e0b;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6), 0 0 20px rgba(245, 158, 11, 0.35);
+.rpg-notice-board {
+  position: relative;
+  background: linear-gradient(135deg, #3d2314 0%, #29160a 45%, #1c0e06 100%);
+  border: 7px solid #54311c;
+  outline: 2px solid #1c0e06;
+  border-radius: 12px;
+  box-shadow: inset 0 0 35px rgba(0, 0, 0, 0.95), 0 10px 28px rgba(0, 0, 0, 0.85);
+  padding: 14px 12px 8px 12px;
 }
 
-[data-theme='rpg'] .home-action-card.card-secondary {
-  background: #19142e;
-  border: 1px solid #3d3260;
+/* Esquineros de hierro forjado */
+.rpg-iron-bracket {
+  width: 24px;
+  height: 24px;
+  background: #1e2024;
+  border: 1px solid #475569;
+  position: absolute;
+  z-index: 6;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.7);
 }
 
-[data-theme='rpg'] .home-action-card.card-secondary:hover {
-  border-color: #8b5cf6;
+.rpg-iron-bracket::after {
+  content: '';
+  width: 6px;
+  height: 6px;
+  background: radial-gradient(circle, #cbd5e1 0%, #334155 100%);
+  border-radius: 50%;
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
 }
 
-[data-theme='rpg'] .home-area-chip {
-  background: rgba(139, 92, 246, 0.2);
-  color: #c4b5fd;
-  border: 1px solid #8b5cf6;
+.rpg-iron-bracket.top-left {
+  top: -4px;
+  left: -4px;
+  border-bottom-right-radius: 6px;
+}
+
+.rpg-iron-bracket.top-right {
+  top: -4px;
+  right: -4px;
+  border-bottom-left-radius: 6px;
+}
+
+.rpg-iron-bracket.bottom-left {
+  bottom: -4px;
+  left: -4px;
+  border-top-right-radius: 6px;
+}
+
+.rpg-iron-bracket.bottom-right {
+  bottom: -4px;
+  right: -4px;
+  border-top-left-radius: 6px;
+}
+
+/* Banner de Pergamino Superior Curvado */
+.rpg-curved-banner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(180deg, #f9edd0 0%, #edd39e 50%, #dfbf83 100%);
+  border: 2px solid #8c6a38;
+  border-radius: 6px;
+  padding: 6px 14px;
+  margin-bottom: 12px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.65), inset 0 1px 0 rgba(255, 255, 255, 0.4);
+  position: relative;
+}
+
+.rpg-banner-body {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  text-align: center;
+}
+
+.rpg-dropcap {
+  font-family: 'Cinzel', serif;
+  font-size: 28px;
+  font-weight: 900;
+  color: #881337;
+  line-height: 1;
+  text-shadow: 1px 1px 0 #edd39e;
+}
+
+.rpg-banner-titles {
+  display: flex;
+  flex-direction: column;
+}
+
+.rpg-banner-main-title {
+  font-family: 'Cinzel', serif;
+  font-size: 12.5px;
+  font-weight: 900;
+  color: #3b220c;
+  letter-spacing: 1px;
+  margin: 0;
+  line-height: 1.15;
+}
+
+.rpg-banner-subtitle {
+  font-family: 'Cinzel', serif;
+  font-size: 8px;
+  font-weight: 800;
+  color: #785324;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+  margin-top: 2px;
+}
+
+/* Cuadrícula de pergaminos */
+.rpg-parchments-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.rpg-parchments-column-right {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* Pergamino Clavado a la Madera */
+.rpg-pinned-parchment {
+  position: relative;
+  background: #f5e4bf;
+  background-image: radial-gradient(circle at 50% 50%, rgba(255, 255, 255, 0.4) 0%, rgba(184, 137, 72, 0.15) 100%);
+  border: 1px solid #c9aa6d;
+  border-radius: 4px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.55), 2px 2px 4px rgba(0, 0, 0, 0.3);
+  padding: 12px 14px;
+  color: #2b1d0c;
+}
+
+/* Tachuelas metálicas en las 4 esquinas */
+.rpg-tack {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 35%, #f1f5f9 0%, #64748b 60%, #1e293b 100%);
+  position: absolute;
+  box-shadow: 1px 2px 4px rgba(0, 0, 0, 0.65);
+  z-index: 4;
+}
+
+.rpg-tack.tack-tl { top: 6px; left: 6px; }
+.rpg-tack.tack-tr { top: 6px; right: 6px; }
+.rpg-tack.tack-bl { bottom: 6px; left: 6px; }
+.rpg-tack.tack-br { bottom: 6px; right: 6px; }
+
+.parchment-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px dashed #b89758;
+  padding-bottom: 5px;
+  margin-bottom: 8px;
+}
+
+.parchment-title-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.parchment-quill-icon,
+.parchment-axes-icon,
+.parchment-bag-icon {
+  font-size: 15px;
+  line-height: 1;
+}
+
+.parchment-title {
+  font-family: 'Cinzel', serif;
+  font-size: 11.5px;
+  font-weight: 900;
+  color: #3b220c;
+  letter-spacing: 0.6px;
+  margin: 0;
+}
+
+.parchment-date {
+  font-family: 'Cinzel', serif;
+  font-size: 9px;
+  font-weight: 700;
+  color: #785324;
+}
+
+/* Barra de héroe en pergamino */
+.parchment-hero-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(184, 137, 72, 0.12);
+  border: 1px solid #d4b880;
+  border-radius: 6px;
+  padding: 5px 8px;
+  margin-bottom: 8px;
+}
+
+.parchment-avatar-mini {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 2px solid #8c6a38;
+  position: relative;
+  cursor: pointer;
+  background: #2b170c;
+  flex-shrink: 0;
+}
+
+.parchment-avatar-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 50%;
+}
+
+.parchment-avatar-ph {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fef3c7;
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.parchment-avatar-pen {
+  position: absolute;
+  bottom: -2px;
+  right: -2px;
+  background: #881337;
+  color: #fff;
+  font-size: 7px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.parchment-hero-meta {
+  display: flex;
+  flex-direction: column;
+}
+
+.hero-name {
+  font-family: 'Cinzel', serif;
+  font-size: 11px;
+  font-weight: 800;
+  color: #2b170c;
+  line-height: 1.2;
+}
+
+.hero-class {
+  font-size: 9px;
+  color: #6b4317;
+  font-weight: 600;
+}
+
+.parchment-section-heading {
+  font-family: 'Cinzel', serif;
+  font-size: 9.5px;
+  font-weight: 800;
+  color: #6b4317;
+  letter-spacing: 0.5px;
+  margin: 6px 0 4px 0;
+  border-bottom: 1px dotted #c9aa6d;
+  padding-bottom: 2px;
+}
+
+.rpg-quest-list,
+.rpg-achievements-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 10.5px;
+  color: #2b1d0c;
+}
+
+.rpg-quest-list li,
+.rpg-achievements-list li {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  line-height: 1.3;
+}
+
+.quest-bullet {
+  font-family: monospace;
+  font-weight: 700;
+  color: #8c6a38;
+}
+
+.achieve-check {
+  color: #15803d;
+  font-weight: 800;
+  font-size: 12px;
+}
+
+.achieve-name {
+  font-weight: 600;
+}
+
+/* Nota estilo caligrafía manual */
+.rpg-handwritten-box {
+  font-family: 'MedievalSharp', cursive, Georgia, serif;
+  font-size: 11px;
+  line-height: 1.35;
+  color: #3b220c;
+  background: rgba(184, 137, 72, 0.12);
+  border-left: 2px solid #8c6a38;
+  padding: 6px 8px;
+  margin: 6px 0 10px 0;
+  border-radius: 2px;
+  font-style: italic;
+}
+
+/* Botón de Sello de Acción Principal */
+.rpg-seal-action-btn {
+  width: 100%;
+  background: linear-gradient(135deg, #991b1b 0%, #7f1d1d 50%, #581c87 100%);
+  color: #fef3c7;
+  border: 1px solid #b91c1c;
+  border-radius: 6px;
+  padding: 9px 12px;
+  font-family: 'Cinzel', serif;
+  font-size: 10.5px;
+  font-weight: 800;
+  letter-spacing: 0.6px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.25);
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.rpg-seal-action-btn:hover {
+  background: linear-gradient(135deg, #b91c1c 0%, #991b1b 50%, #6b21a8 100%);
+  transform: translateY(-1px);
+  box-shadow: 0 6px 14px rgba(0, 0, 0, 0.65);
+}
+
+.wax-stamp-icon {
+  font-size: 14px;
+}
+
+.rpg-parchment-btn-sec {
+  width: 100%;
+  background: rgba(184, 137, 72, 0.18);
+  border: 1px solid #8c6a38;
+  border-radius: 6px;
+  padding: 6px 8px;
+  font-family: 'Cinzel', serif;
+  font-size: 9.5px;
+  font-weight: 800;
+  color: #3b220c;
+  cursor: pointer;
+  margin-top: 8px;
+  transition: all 0.2s;
+}
+
+.rpg-parchment-btn-sec:hover {
+  background: #8c6a38;
+  color: #fef3c7;
+}
+
+/* Estado de EXP y Monedas */
+.rpg-exp-status {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 4px;
+}
+
+.exp-label-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 10px;
+  font-family: 'Cinzel', serif;
+  color: #3b220c;
+}
+
+.exp-numbers {
+  font-weight: 700;
+  color: #855b25;
+}
+
+.rpg-exp-bar-frame {
+  width: 100%;
+  height: 8px;
+  background: #2b170c;
+  border: 1px solid #8c6a38;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.rpg-exp-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #d97706, #10b981);
+  border-radius: 3px;
+  box-shadow: 0 0 6px rgba(16, 185, 129, 0.6);
+}
+
+.rpg-coins-signature-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 6px;
+  padding-top: 4px;
+  border-top: 1px dashed #b89758;
+}
+
+.rpg-coins-drawing {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 9.5px;
+  font-weight: 700;
+  color: #785324;
+}
+
+.rpg-signature {
+  font-family: 'MedievalSharp', cursive, serif;
+  font-size: 11px;
+  color: #422a16;
+}
+
+/* Viga de Madera Inferior */
+.rpg-wood-bottom-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: linear-gradient(180deg, #381f11 0%, #1f0f06 100%);
+  border-top: 2px solid #54311c;
+  border-radius: 0 0 6px 6px;
+  padding: 6px 6px;
+  margin-top: 10px;
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.8);
+}
+
+.rpg-wood-medallion {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #54311c;
+  border: 1px solid #8c6a38;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
+}
+
+.rpg-wood-nav-buttons {
+  display: flex;
+  gap: 4px;
+}
+
+.rpg-wood-btn {
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid #54311c;
+  border-radius: 4px;
+  color: #d4b077;
+  font-family: 'Cinzel', serif;
+  font-size: 9px;
+  font-weight: 700;
+  padding: 4px 7px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.rpg-wood-btn:hover,
+.rpg-wood-btn.active {
+  background: #6b4317;
+  color: #fff;
+  border-color: #d4b077;
+}
+
+/* --- ESTILO DE CHECKFORM EN MODO RPG (CONTRATO EN PERGAMINO) --- */
+[data-theme='rpg'] .check-form-wrapper {
+  background: radial-gradient(circle at 50% 20%, rgba(251, 191, 36, 0.08) 0%, transparent 50%),
+              #120c08;
+  padding: 10px;
 }
 
 [data-theme='rpg'] .check-form-card {
-  background: #17132a;
-  border: 1px solid #3d3260;
-  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.6), 0 0 16px rgba(245, 158, 11, 0.08);
+  background: #f5e4bf;
+  background-image: radial-gradient(circle at 50% 50%, rgba(255, 255, 255, 0.35) 0%, rgba(184, 137, 72, 0.15) 100%);
+  border: 2px solid #8c6a38;
+  color: #2b1d0c;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.8), 0 0 20px rgba(245, 158, 11, 0.15);
+  border-radius: 8px;
+  position: relative;
+}
+
+[data-theme='rpg'] .form-header-clean {
+  border-bottom: 2px solid #8c6a38;
+}
+
+[data-theme='rpg'] .form-title-clean {
+  font-family: 'Cinzel', serif;
+  font-size: 15px;
+  font-weight: 900;
+  color: #3b220c;
+  letter-spacing: 0.8px;
+}
+
+[data-theme='rpg'] .form-subtitle-clean {
+  font-family: 'Cinzel', serif;
+  color: #785324;
+  font-size: 9.5px;
+}
+
+[data-theme='rpg'] .btn-back-clean {
+  background: rgba(184, 137, 72, 0.2);
+  border: 1px solid #8c6a38;
+  color: #3b220c;
+  font-family: 'Cinzel', serif;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+[data-theme='rpg'] .btn-back-clean:hover {
+  background: #8c6a38;
+  color: #fef3c7;
 }
 
 [data-theme='rpg'] .form-section-card {
-  background: #1f1938;
-  border-color: #372b54;
+  background: rgba(255, 255, 255, 0.45);
+  border: 1px solid #c9aa6d;
+  border-radius: 6px;
+}
+
+[data-theme='rpg'] .form-section-tag {
+  background: #881337;
+  color: #fef3c7;
+  font-family: 'Cinzel', serif;
+}
+
+[data-theme='rpg'] .form-section-title {
+  font-family: 'Cinzel', serif;
+  font-size: 11.5px;
+  font-weight: 900;
+  color: #3b220c;
+}
+
+[data-theme='rpg'] .form-label-clean {
+  color: #6b4317;
+  font-weight: 700;
+  font-family: 'Cinzel', serif;
+  font-size: 10px;
+}
+
+[data-theme='rpg'] .segmented-modalidad-grid {
+  background: rgba(184, 137, 72, 0.2);
+  border: 1px solid #c9aa6d;
+}
+
+[data-theme='rpg'] .seg-btn {
+  color: #523412;
+  font-family: 'Cinzel', serif;
+  font-weight: 700;
 }
 
 [data-theme='rpg'] .seg-btn.seg-active {
-  background: #2b224d;
-  color: #fbbf24;
-  border-color: #f59e0b;
-  box-shadow: 0 0 10px rgba(245, 158, 11, 0.3);
+  background: #881337;
+  color: #fef3c7;
+  border-color: #9f1239;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
+}
+
+[data-theme='rpg'] .form-input-clean,
+[data-theme='rpg'] .form-select-clean {
+  background: #fff8eb;
+  border: 1px solid #b89758;
+  color: #2b1d0c;
+  font-weight: 600;
+}
+
+[data-theme='rpg'] .area-default-card {
+  background: rgba(184, 137, 72, 0.15);
+  border: 1px solid #c9aa6d;
+  color: #2b1d0c;
 }
 
 [data-theme='rpg'] .btn-submit-spacious {
-  background: linear-gradient(135deg, #d97706 0%, #f59e0b 50%, #fbbf24 100%);
-  color: #0d0b18;
-  font-weight: 800;
-  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.3);
-  box-shadow: 0 4px 16px rgba(245, 158, 11, 0.4);
+  background: linear-gradient(135deg, #991b1b 0%, #881337 50%, #4c0519 100%);
+  color: #fef3c7;
+  font-family: 'Cinzel', serif;
+  font-weight: 900;
+  font-size: 12px;
+  letter-spacing: 0.8px;
+  border: 2px solid #b91c1c;
+  box-shadow: 0 4px 14px rgba(153, 27, 27, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.3);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
 }
 
 [data-theme='rpg'] .btn-submit-spacious:hover:not(:disabled) {
-  background: linear-gradient(135deg, #b45309 0%, #d97706 50%, #f59e0b 100%);
-  box-shadow: 0 6px 22px rgba(245, 158, 11, 0.6);
+  background: linear-gradient(135deg, #b91c1c 0%, #9f1239 50%, #70092b 100%);
+  box-shadow: 0 6px 18px rgba(153, 27, 27, 0.8);
 }
 
-[data-theme='rpg'] .project-row-item.area-item-highlight {
-  background: rgba(245, 158, 11, 0.12);
-  border-left: 3px solid #f59e0b;
-}
-
-[data-theme='rpg'] .hours-summary-tag {
-  background: rgba(245, 158, 11, 0.2);
-  color: #fbbf24;
-  border: 1px solid #f59e0b;
-  box-shadow: 0 0 8px rgba(245, 158, 11, 0.3);
-}
