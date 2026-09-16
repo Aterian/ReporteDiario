@@ -611,6 +611,11 @@ def ejecutar_descarga_y_reinicio(url_descarga: str):
         contenido_bat = f"""@echo off
 timeout /t 2 /nobreak > nul
 move /y "{nuevo_exe}" "{ruta_actual_exe}"
+set PYINSTALLER_RESET_ENVIRONMENT=1
+set _PYI_APPLICATION_HOME_DIR=
+set _PYI_PARENT_PROCESS_LEVEL=
+set _PYI_ARCHIVE_FILE=
+set _PYI_SPLASH_IPC=
 start "" "{ruta_actual_exe}"
 del "%~f0"
 """
@@ -618,7 +623,13 @@ del "%~f0"
             f.write(contenido_bat)
 
         creationflags = subprocess.CREATE_NO_WINDOW if hasattr(subprocess, "CREATE_NO_WINDOW") else 0
-        subprocess.Popen(["cmd.exe", "/c", ruta_bat], creationflags=creationflags)
+
+        clean_env = os.environ.copy()
+        clean_env["PYINSTALLER_RESET_ENVIRONMENT"] = "1"
+        for pyi_var in ("_PYI_APPLICATION_HOME_DIR", "_PYI_PARENT_PROCESS_LEVEL", "_PYI_ARCHIVE_FILE", "_PYI_SPLASH_IPC"):
+            clean_env.pop(pyi_var, None)
+
+        subprocess.Popen(["cmd.exe", "/c", ruta_bat], env=clean_env, creationflags=creationflags)
         os._exit(0)
     except Exception as e:
         return {"exito": False, "error": str(e)}
