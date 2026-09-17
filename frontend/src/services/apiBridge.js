@@ -93,7 +93,65 @@ const mockApi = {
     return { registrado };
   },
   verificar_actualizacion: async () => ({ actualizacion_disponible: false }),
-  aplicar_actualizacion: async () => ({ exito: true })
+  aplicar_actualizacion: async () => ({ exito: true }),
+  guardar_roster: async (datos) => {
+    const raw = localStorage.getItem('ingeap_rosters_mock') || '[]';
+    const lista = JSON.parse(raw);
+    const id = datos.id || 'mock-' + Math.random().toString(36).substring(2, 9);
+    const nuevo = { ...datos, id, creado_en: new Date().toISOString() };
+    const idx = lista.findIndex(r => r.id === id);
+    if (idx >= 0) {
+      lista[idx] = nuevo;
+    } else {
+      lista.push(nuevo);
+    }
+    localStorage.setItem('ingeap_rosters_mock', JSON.stringify(lista));
+    return { exito: true, id };
+  },
+  obtener_rosters: async (desde, hasta) => {
+    const raw = localStorage.getItem('ingeap_rosters_mock') || '[]';
+    const lista = JSON.parse(raw);
+    if (!desde || !hasta) return lista;
+    return lista.filter(r => r.fecha_inicio <= hasta && r.fecha_fin >= desde);
+  },
+  eliminar_roster: async (id) => {
+    const raw = localStorage.getItem('ingeap_rosters_mock') || '[]';
+    let lista = JSON.parse(raw);
+    lista = lista.filter(r => r.id !== id);
+    localStorage.setItem('ingeap_rosters_mock', JSON.stringify(lista));
+    return { exito: true };
+  },
+  exportar_roster_excel: async (anio, mes, proyecto = '') => {
+    alert(`[Modo Simulado] Se exportaría el Excel para el proyecto "${proyecto || 'Todos'}" del mes ${mes}/${anio} con 3 hojas.`);
+    return { exito: true, mensaje: `Excel generado en modo simulado para ${proyecto || 'Ingeap'}.` };
+  },
+  redimensionar_ventana: async () => ({ exito: true }),
+  maximizar_ventana: async () => ({ exito: true }),
+  restaurar_ventana: async () => ({ exito: true }),
+  obtener_todos_usuarios: async (area = null) => {
+    const mockUsers = [
+      { id: 1, nombre: 'Gabriel Juarez', area: 'I', mail: 'gabriel.juarez@ingeap.com' },
+      { id: 2, nombre: 'Fernando Aimar', area: 'I', mail: 'fernando.aimar@ingeap.com' },
+      { id: 3, nombre: 'Maximiliano Kromm', area: 'I', mail: 'maximiliano.kromm@ingeap.com' },
+      { id: 4, nombre: 'Santiago Suarez', area: 'I', mail: 'santiago.suarez@ingeap.com' },
+      { id: 5, nombre: 'Ivan Emanuel Altamirano', area: 'I', mail: 'ivan.altamirano@ingeap.com' },
+      { id: 6, nombre: 'Agustina Ferrante', area: 'I', mail: 'agustina.ferrante@ingeap.com' },
+      { id: 7, nombre: 'Camila Llovio', area: 'I', mail: 'camila.llovio@ingeap.com' },
+      { id: 8, nombre: 'Facundo Ezequiel Calgaro', area: 'I', mail: 'facundo.calgaro@ingeap.com' },
+      { id: 9, nombre: 'Alejo Ferrero', area: 'I', mail: 'alejo.ferrero@ingeap.com' },
+      { id: 10, nombre: 'José María Zufiaurre', area: 'I', mail: 'jose.zufiaurre@ingeap.com' },
+      { id: 11, nombre: 'Nicolás Parajón', area: 'I', mail: 'nicolas.parajon@ingeap.com' },
+      { id: 12, nombre: 'Norberto José Luis Botto', area: 'I', mail: 'norberto.botto@ingeap.com' },
+      { id: 13, nombre: 'Pablo Zanor', area: 'I', mail: 'pablo.zanor@ingeap.com' },
+      { id: 14, nombre: 'Rodolfo Julian Lescano', area: 'I', mail: 'rodolfo.lescano@ingeap.com' },
+      { id: 15, nombre: 'Usuario Admin', area: 'N', mail: 'admin@ingeap.com' },
+      { id: 16, nombre: 'Usuario RRHH', area: 'RRHH', mail: 'rrhh@ingeap.com' }
+    ];
+    if (area && area !== 'TODOS') {
+      return mockUsers.filter(u => (u.area || '').toUpperCase() === area.toUpperCase());
+    }
+    return mockUsers;
+  }
 };
 
 
@@ -242,12 +300,68 @@ export const api = {
     return { exito: false, error: 'Función no disponible' };
   },
 
-  async obtenerTodosUsuarios() {
+  async obtenerTodosUsuarios(area = null) {
     const bridge = await getApi();
     if (bridge.obtener_todos_usuarios) {
-      return await bridge.obtener_todos_usuarios();
+      return await bridge.obtener_todos_usuarios(area);
     }
     return [];
+  },
+
+  async guardarRoster(datos) {
+    const bridge = await getApi();
+    if (bridge.guardar_roster) {
+      return await bridge.guardar_roster(datos);
+    }
+    return { exito: false, error: 'Función no disponible' };
+  },
+
+  async obtenerRosters(fechaDesde = null, fechaHasta = null) {
+    const bridge = await getApi();
+    if (bridge.obtener_rosters) {
+      return await bridge.obtener_rosters(fechaDesde, fechaHasta);
+    }
+    return [];
+  },
+
+  async eliminarRoster(idRoster) {
+    const bridge = await getApi();
+    if (bridge.eliminar_roster) {
+      return await bridge.eliminar_roster(idRoster);
+    }
+    return { exito: false };
+  },
+
+  async exportarRosterExcel(anio, mes, proyecto = '') {
+    const bridge = await getApi();
+    if (bridge.exportar_roster_excel) {
+      return await bridge.exportar_roster_excel(anio, mes, proyecto);
+    }
+    return { exito: false, error: 'Función no disponible' };
+  },
+
+  async redimensionarVentana(ancho, alto) {
+    const bridge = await getApi();
+    if (bridge.redimensionar_ventana) {
+      return await bridge.redimensionar_ventana(ancho, alto);
+    }
+    return { exito: true };
+  },
+
+  async maximizarVentana() {
+    const bridge = await getApi();
+    if (bridge.maximizar_ventana) {
+      return await bridge.maximizar_ventana();
+    }
+    return { exito: true };
+  },
+
+  async restaurarVentana() {
+    const bridge = await getApi();
+    if (bridge.restaurar_ventana) {
+      return await bridge.restaurar_ventana();
+    }
+    return { exito: true };
   }
 };
 

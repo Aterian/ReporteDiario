@@ -39,6 +39,10 @@ def main():
 
         shutil.copy2(payload_exe, target_exe)
 
+        # Desbloquear permisos de Windows 11 SmartScreen (quitar Zone.Identifier) en el ejecutable instalado
+        ps_unblock = f"Unblock-File -LiteralPath '{target_exe}' -ErrorAction SilentlyContinue"
+        subprocess.run(["powershell", "-NoProfile", "-NonInteractive", "-Command", ps_unblock], capture_output=True, creationflags=no_window_flag)
+
         # 4. Crear accesos directos en Escritorio y Menú Inicio
         desktop_dir = os.path.join(os.environ.get("USERPROFILE", ""), "Desktop")
         programs_dir = os.path.join(os.environ.get("APPDATA", ""), r"Microsoft\Windows\Start Menu\Programs")
@@ -72,14 +76,14 @@ $s2.Save()
         except Exception as reg_err:
             print(f"[Installer] Registro Run omitido o con advertencia: {reg_err}")
 
-        # 6. Lanzar la aplicación instalada con entorno limpio de PyInstaller
+        # 6. Lanzar la aplicación instalada con entorno limpio de PyInstaller y directorio de trabajo correcto
         clean_env = os.environ.copy()
         clean_env["PYINSTALLER_RESET_ENVIRONMENT"] = "1"
         for pyi_var in ("_PYI_APPLICATION_HOME_DIR", "_PYI_PARENT_PROCESS_LEVEL", "_PYI_ARCHIVE_FILE", "_PYI_SPLASH_IPC"):
             clean_env.pop(pyi_var, None)
 
         creation_flags = subprocess.CREATE_NEW_PROCESS_GROUP if hasattr(subprocess, "CREATE_NEW_PROCESS_GROUP") else 0
-        subprocess.Popen([target_exe], env=clean_env, creationflags=creation_flags)
+        subprocess.Popen([target_exe], cwd=target_dir, env=clean_env, creationflags=creation_flags)
 
         # 7. Cuadro de diálogo de confirmación
         ctypes.windll.user32.MessageBoxW(

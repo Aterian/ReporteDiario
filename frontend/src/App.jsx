@@ -5,6 +5,8 @@ import LoginView from './components/LoginView';
 import HomeView from './components/HomeView';
 import CheckForm from './components/CheckForm';
 import HistoryView from './components/HistoryView';
+import RosterView from './components/RosterView';
+import RosterHistoryView from './components/RosterHistoryView';
 import ErrorBoundary from './components/ErrorBoundary';
 
 export default function App() {
@@ -217,7 +219,7 @@ export default function App() {
   }
 
   return (
-    <div className="app-container">
+    <div className={`app-container ${['roster', 'historial-roster'].includes(vistaActiva) ? 'app-panoramic' : ''}`}>
       {/* Input oculto para abrir el explorador de Windows al elegir avatar */}
       <input
         type="file"
@@ -386,6 +388,8 @@ export default function App() {
             tema={tema}
             onNuevoReporte={() => setVistaActiva('check')}
             onVerHistorial={() => setVistaActiva('historial')}
+            onNuevoRoster={() => setVistaActiva('roster')}
+            onHistorialRoster={() => setVistaActiva('historial-roster')}
             onAvatarClick={handleTriggerAvatar}
           />
         )}
@@ -402,6 +406,24 @@ export default function App() {
           <HistoryView
             tema={tema}
             onVolver={() => setVistaActiva('home')}
+            onNuevoReporte={() => setVistaActiva('check')}
+          />
+        )}
+
+        {vistaActiva === 'roster' && (
+          <RosterView
+            usuario={usuario}
+            tema={tema}
+            onVolver={() => setVistaActiva('home')}
+          />
+        )}
+
+        {vistaActiva === 'historial-roster' && (
+          <RosterHistoryView
+            usuario={usuario}
+            tema={tema}
+            onVolver={() => setVistaActiva('home')}
+            onNuevoRoster={() => setVistaActiva('roster')}
           />
         )}
       </ErrorBoundary>

@@ -26,8 +26,13 @@ from database import (
     guardar_proyectos_cache,
     obtener_proyectos_cache,
     depurar_registros_eliminados,
-    actualizar_registro_asistencia
+    actualizar_registro_asistencia,
+    guardar_registro_roster,
+    obtener_rosters,
+    eliminar_registro_roster,
+    obtener_conexion
 )
+from roster_export import generar_excel_roster_mes
 from sheets_service import (
     sincronizar_pendientes,
     probar_conexion,
@@ -218,17 +223,28 @@ class ApiPuente:
         if not proyectos:
             return SERVICIOS_DISPONIBLES
 
-        todos = [p["denominacion"] for p in proyectos if p.get("denominacion")]
+        todos = []
+        vistos_todos = set()
+        for p in proyectos:
+            if p.get("denominacion"):
+                nom = p["denominacion"].strip()
+                if nom not in vistos_todos:
+                    vistos_todos.add(nom)
+                    todos.append(nom)
 
         # Si el área a consultar es N (Núcleo), RRHH, TODOS o no hay filtro definido: ven todos los proyectos
         if not area_filtro or area_filtro in ["N", "RRHH", "TODOS"]:
             return todos
 
         # Proyectos filtrados por el área indicada (ej: 'I', 'A', 'M', 'S', 'VYM')
-        proyectos_filtrados = [
-            p["denominacion"] for p in proyectos
-            if p.get("area", "").strip().upper() == area_filtro and p.get("denominacion")
-        ]
+        proyectos_filtrados = []
+        vistos_area = set()
+        for p in proyectos:
+            if p.get("area", "").strip().upper() == area_filtro and p.get("denominacion"):
+                nom = p["denominacion"].strip()
+                if nom not in vistos_area:
+                    vistos_area.add(nom)
+                    proyectos_filtrados.append(nom)
 
         # Si el área tiene proyectos, los retornamos; si no tuviese, retornamos todos como fallback
         return proyectos_filtrados if proyectos_filtrados else todos
@@ -382,16 +398,24 @@ class ApiPuente:
             return {"exito": True, "mensaje": "Reporte modificado exitosamente."}
         return {"exito": False, "error": "No se encontró el registro a modificar en la base local."}
 
-    def obtener_todos_usuarios(self):
-        """Retorna la lista de empleados activos para la selección delegada de RRHH."""
+    def obtener_todos_usuarios(self, area: str | None = None):
+        """Retorna la lista de empleados activos para la selección delegada de RRHH, opcionalmente filtrada por área."""
         try:
             usuarios_remotos = obtener_usuarios_remotos()
             if usuarios_remotos:
                 guardar_usuarios_cache(usuarios_remotos)
-                return usuarios_remotos
+                usuarios = usuarios_remotos
+            else:
+                usuarios = obtener_usuarios_cache() or EMPLEADOS_AUTORIZADOS
         except Exception as e:
             print(f"[Catálogos] Aviso al consultar usuarios remotos para RRHH: {e}")
-        return obtener_usuarios_cache() or EMPLEADOS_AUTORIZADOS
+            usuarios = obtener_usuarios_cache() or EMPLEADOS_AUTORIZADOS
+
+        if area and isinstance(area, str) and area.strip().upper() != "TODOS":
+            area_filtro = area.strip().upper()
+            return [u for u in usuarios if (u.get("area") or "").strip().upper() == area_filtro]
+
+        return usuarios
 
     def obtener_historial(self):
         """
@@ -454,6 +478,177 @@ class ApiPuente:
         guardar_configuracion(cfg)
         return probar_conexion(sp_id)
 
+    def redimensionar_ventana(self, ancho: int, alto: int):
+        """Ajusta el tamaño de la ventana de pywebview dinámicamente."""
+        if self._ventana:
+            try:
+                self._ventana.resize(ancho, alto)
+            except Exception as e:
+                print(f"[Ventana] Error al redimensionar: {e}")
+        return {"exito": True}
+
+    def maximizar_ventana(self):
+        """Maximiza la ventana de pywebview a pantalla completa."""
+        if self._ventana:
+            try:
+                self._ventana.maximize()
+            except Exception as e:
+                print(f"[Ventana] Error al maximizar: {e}")
+        return {"exito": True}
+
+    def restaurar_ventana(self):
+        """Restaura la ventana de pywebview a su tamaño compacto habitual (440x660)."""
+        if self._ventana:
+            try:
+                self._ventana.restore()
+                self._ventana.resize(440, 660)
+            except Exception as e:
+                print(f"[Ventana] Error al restaurar: {e}")
+        return {"exito": True}
+
+    def guardar_roster(self, datos: dict):
+        """Guarda o actualiza un registro de roster con identificador UUID y sincroniza con Google Sheets."""
+        try:
+            res = guardar_registro_roster(datos)
+            if not res or not res.get("exito"):
+                return res
+
+            # Cargar los registros en el historial y Google Sheets siguiendo el mismo concepto
+            # que un registro normal, pero en lugar de campo/campaña debe decir "Roster"
+            empleado = str(datos.get("empleado", "")).strip()
+            proyecto = str(datos.get("proyecto", "")).strip()
+            fecha_inicio = str(datos.get("fecha_inicio", "")).strip()
+            fecha_fin = str(datos.get("fecha_fin", "")).strip()
+            tipo = str(datos.get("tipo", "Campo")).strip()
+
+            # Obtener correo del empleado para las columnas de Google Sheets
+            usuario_mail = str(datos.get("usuario_mail", "")).strip()
+            if not usuario_mail and empleado:
+                usuarios_disp = obtener_usuarios_cache() or EMPLEADOS_AUTORIZADOS
+                emp_match = next((u for u in usuarios_disp if u.get("nombre", "").strip().lower() == empleado.lower()), None)
+                if emp_match:
+                    usuario_mail = emp_match.get("mail") or emp_match.get("email") or ""
+
+            # Determinar lista de fechas del rango
+            fechas_a_cargar = []
+            if fecha_inicio and fecha_fin:
+                from datetime import datetime as dt, timedelta
+                try:
+                    d_ini = dt.strptime(fecha_inicio, "%Y-%m-%d")
+                    d_fin = dt.strptime(fecha_fin, "%Y-%m-%d")
+                    if d_ini > d_fin:
+                        d_ini, d_fin = d_fin, d_ini
+                    curr = d_ini
+                    while curr <= d_fin:
+                        fechas_a_cargar.append(curr.strftime("%Y-%m-%d"))
+                        curr += timedelta(days=1)
+                except Exception:
+                    fechas_a_cargar = [fecha_inicio]
+            elif fecha_inicio:
+                fechas_a_cargar = [fecha_inicio]
+
+            es_campo = (tipo.lower() == "campo")
+            # En lugar de campo/campaña debe decir "Roster"
+            tipo_ocf = "Roster" if es_campo else "Franco"
+            servicio = proyecto if es_campo else "Franco"
+            horas = 8.0 if es_campo else 0.0
+            fecha_hora = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+            with obtener_conexion() as conn:
+                cursor = conn.cursor()
+                for dia_f in fechas_a_cargar:
+                    cursor.execute(
+                        "SELECT id FROM historial WHERE empleado = ? AND fecha = ?",
+                        (empleado, dia_f)
+                    )
+                    existente = cursor.fetchone()
+                    if existente:
+                        actualizar_registro_asistencia(
+                            id_registro=existente["id"],
+                            fecha=dia_f,
+                            tipo_ocf=tipo_ocf,
+                            servicio=servicio,
+                            horas=horas
+                        )
+                    else:
+                        guardar_registro_asistencia(
+                            id_asistencia=str(uuid.uuid4()),
+                            empleado=empleado,
+                            fecha=dia_f,
+                            tipo_ocf=tipo_ocf,
+                            servicio=servicio,
+                            horas=horas,
+                            instrumental="",
+                            usuario_mail=usuario_mail,
+                            fecha_hora=fecha_hora,
+                            sincronizado=False
+                        )
+
+            # Disparar sincronización en segundo plano con Google Sheets
+            threading.Thread(target=sincronizar_pendientes, daemon=True).start()
+
+            return res
+        except Exception as e:
+            print(f"[Rosters] Error al guardar roster y sincronizar con Google Sheets: {e}")
+            return {"exito": False, "error": str(e)}
+
+    def obtener_rosters(self, fecha_desde: str | None = None, fecha_hasta: str | None = None):
+        """Retorna los registros de roster que se superpongan con el período especificado."""
+        try:
+            return obtener_rosters(fecha_desde, fecha_hasta)
+        except Exception as e:
+            print(f"[Rosters] Error al obtener rosters: {e}")
+            return []
+
+    def eliminar_roster(self, id_roster: str):
+        """Elimina un registro de roster por su ID UUID."""
+        try:
+            exito = eliminar_registro_roster(id_roster)
+            return {"exito": exito}
+        except Exception as e:
+            return {"exito": False, "error": str(e)}
+
+    def exportar_roster_excel(self, anio: int, mes: int, proyecto: str = ""):
+        """Abre un diálogo nativo de Windows para guardar el archivo Excel de Roster por proyecto en 3 hojas."""
+        try:
+            nombres_meses = [
+                "", "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
+                "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"
+            ]
+            nombre_mes = nombres_meses[mes] if 1 <= mes <= 12 else str(mes)
+            
+            import re
+            proy_limpio = proyecto.strip() if isinstance(proyecto, str) else ""
+            if proy_limpio and proy_limpio.upper() != "TODOS":
+                # Limpiar caracteres no válidos para nombres de archivo en Windows
+                proy_slug = re.sub(r'[\\/*?:"<>|]', "", proy_limpio).strip()
+                proy_slug = (proy_slug[:35]).strip()
+                nombre_sugerido = f"Roster_{proy_slug}_{nombre_mes}_{anio}.xlsx"
+            else:
+                nombre_sugerido = f"Roster_Ingeap_{nombre_mes}_{anio}.xlsx"
+            
+            ruta_destino = None
+            if self._ventana:
+                try:
+                    dialog_mode = getattr(getattr(webview, 'FileDialog', object), 'SAVE', getattr(webview, 'SAVE_DIALOG', 0))
+                    res = self._ventana.create_file_dialog(
+                        dialog_mode,
+                        save_filename=nombre_sugerido,
+                        file_types=('Archivos de Excel (*.xlsx)', 'Todos los archivos (*.*)')
+                    )
+                    if res:
+                        ruta_destino = res if isinstance(res, str) else res[0]
+                except Exception as err_dialog:
+                    print(f"[Rosters] Error en create_file_dialog: {err_dialog}")
+
+            if not ruta_destino:
+                return {"exito": False, "cancelado": True}
+
+            return generar_excel_roster_mes(anio, mes, ruta_destino, proyecto=proy_limpio)
+        except Exception as e:
+            print(f"[Rosters] Error al exportar Excel: {e}")
+            return {"exito": False, "error": str(e)}
+
 
 
 def recurso_path(ruta_relativa: str) -> str:
@@ -483,7 +678,7 @@ def obtener_icono_tray():
     return crear_icono_calendario(64)
 
 
-APP_VERSION = "1.2.0"
+APP_VERSION = "1.3.0"
 
 _mutex_instancia = None
 
@@ -570,12 +765,27 @@ def verificar_actualizacion_github():
             return {"actualizacion_disponible": False, "version_actual": APP_VERSION}
 
         url = f"https://api.github.com/repos/{repo}/releases/latest"
-        req = urllib.request.Request(url, headers={"User-Agent": "CheckDiarioIngeap-App"})
-        with urllib.request.urlopen(req, timeout=4) as response:
+        req = urllib.request.Request(
+            url,
+            headers={
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) CheckDiarioIngeap-App",
+                "Accept": "application/vnd.github.v3+json"
+            }
+        )
+        import ssl
+        ctx = ssl.create_default_context()
+        with urllib.request.urlopen(req, timeout=8, context=ctx) as response:
             data = json.loads(response.read().decode("utf-8"))
             version_remota = data.get("tag_name", "").lstrip("v").strip()
             assets = data.get("assets", [])
-            exe_asset = next((a for a in assets if a.get("name", "").lower().endswith(".exe")), None)
+
+            # Priorizar CheckDiarioIngeap.exe para el reemplazo in-place del ejecutable principal
+            exe_asset = next((a for a in assets if a.get("name", "").strip().lower() == "checkdiarioingeap.exe"), None)
+            if not exe_asset:
+                exe_asset = next((a for a in assets if "instalador" not in a.get("name", "").lower() and a.get("name", "").lower().endswith(".exe")), None)
+            if not exe_asset:
+                exe_asset = next((a for a in assets if a.get("name", "").lower().endswith(".exe")), None)
+
             url_descarga = exe_asset.get("browser_download_url", "") if exe_asset else ""
 
             if version_remota and version_remota != APP_VERSION and url_descarga:
@@ -593,7 +803,11 @@ def verificar_actualizacion_github():
 
 
 def ejecutar_descarga_y_reinicio(url_descarga: str):
-    """Descarga el nuevo .exe en TEMP y ejecuta el reemplazo en segundo plano."""
+    """
+    Descarga el nuevo .exe en TEMP y ejecuta el reemplazo en segundo plano.
+    Diseñado específicamente para compatibilidad total con Windows 11, evitando bloqueos
+    por escaneo en tiempo real de Microsoft Defender y permisos de SmartScreen.
+    """
     if not getattr(sys, "frozen", False):
         return {"exito": False, "error": "La actualización automática solo aplica sobre el ejecutable (.exe)."}
 
@@ -601,35 +815,89 @@ def ejecutar_descarga_y_reinicio(url_descarga: str):
         temp_dir = os.environ.get("TEMP", os.path.expanduser("~"))
         nuevo_exe = os.path.join(temp_dir, "CheckDiarioIngeap_update.exe")
 
-        req = urllib.request.Request(url_descarga, headers={"User-Agent": "CheckDiarioIngeap-App"})
-        with urllib.request.urlopen(req, timeout=120) as resp, open(nuevo_exe, "wb") as f:
+        req = urllib.request.Request(
+            url_descarga,
+            headers={
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) CheckDiarioIngeap-App",
+                "Accept": "*/*"
+            }
+        )
+        import ssl
+        ctx = ssl.create_default_context()
+        with urllib.request.urlopen(req, timeout=120, context=ctx) as resp, open(nuevo_exe, "wb") as f:
             f.write(resp.read())
 
+        # Desbloquear permisos de Windows 11 SmartScreen en el archivo recién descargado (quitar Zone.Identifier)
+        no_window_flag = subprocess.CREATE_NO_WINDOW if hasattr(subprocess, "CREATE_NO_WINDOW") else 0
+        try:
+            subprocess.run(
+                ["powershell", "-NoProfile", "-NonInteractive", "-Command", f"Unblock-File -LiteralPath '{nuevo_exe}' -ErrorAction SilentlyContinue"],
+                creationflags=no_window_flag,
+                timeout=5
+            )
+        except Exception:
+            pass
+
         ruta_actual_exe = sys.executable
+        dir_actual_exe = os.path.dirname(ruta_actual_exe)
         ruta_bat = os.path.join(temp_dir, "update_check_diario.bat")
 
+        # Script Batch robusto con bucle de espera y reintentos (hasta 30 segundos)
+        # para tolerar el escaneo en tiempo real de Microsoft Defender y la liberación de locks de Windows 11
         contenido_bat = f"""@echo off
-timeout /t 2 /nobreak > nul
-move /y "{nuevo_exe}" "{ruta_actual_exe}"
+setlocal enabledelayedexpansion
+
+:: 1. Finalizar cualquier proceso previo para liberar bloqueos del binario
+taskkill /F /IM CheckDiarioIngeap.exe >nul 2>&1
+
+:: 2. Bucle de reintentos de reemplazo (espera a que Defender y Windows liberen el archivo)
+set INTENTO=0
+:INTENTO_COPIA
+set /a INTENTO+=1
+timeout /t 1 /nobreak >nul
+
+copy /y "{nuevo_exe}" "{ruta_actual_exe}" >nul 2>&1
+if !ERRORLEVEL! equ 0 goto EXITO_COPIA
+
+:: Reintentar forzar cierre si continúa ocupado
+taskkill /F /IM CheckDiarioIngeap.exe >nul 2>&1
+
+if !INTENTO! lss 30 goto INTENTO_COPIA
+
+:: Registro de diagnóstico en caso de fallo
+echo [ERROR] No se pudo reemplazar CheckDiarioIngeap.exe tras 30 intentos. > "%TEMP%\\checkdiario_update_fail.log"
+goto LIMPIEZA
+
+:EXITO_COPIA
+:: 3. Limpiar archivo temporal de descarga
+del /f /q "{nuevo_exe}" >nul 2>&1
+
+:: 4. Desbloquear la aplicación actualizada para Windows 11 SmartScreen (quitar Zone.Identifier)
+powershell -NoProfile -ExecutionPolicy Bypass -Command "Unblock-File -LiteralPath '{ruta_actual_exe}' -ErrorAction SilentlyContinue" >nul 2>&1
+
+:: 5. Limpiar variables de entorno de PyInstaller para asegurar inicio limpio
 set PYINSTALLER_RESET_ENVIRONMENT=1
 set _PYI_APPLICATION_HOME_DIR=
 set _PYI_PARENT_PROCESS_LEVEL=
 set _PYI_ARCHIVE_FILE=
 set _PYI_SPLASH_IPC=
-start "" "{ruta_actual_exe}"
-del "%~f0"
+
+:: 6. Lanzar la aplicación desde su carpeta oficial de instalación
+cd /d "{dir_actual_exe}"
+start "" /D "{dir_actual_exe}" "{ruta_actual_exe}"
+
+:LIMPIEZA
+del "%~f0" >nul 2>&1
 """
         with open(ruta_bat, "w", encoding="utf-8") as f:
             f.write(contenido_bat)
-
-        creationflags = subprocess.CREATE_NO_WINDOW if hasattr(subprocess, "CREATE_NO_WINDOW") else 0
 
         clean_env = os.environ.copy()
         clean_env["PYINSTALLER_RESET_ENVIRONMENT"] = "1"
         for pyi_var in ("_PYI_APPLICATION_HOME_DIR", "_PYI_PARENT_PROCESS_LEVEL", "_PYI_ARCHIVE_FILE", "_PYI_SPLASH_IPC"):
             clean_env.pop(pyi_var, None)
 
-        subprocess.Popen(["cmd.exe", "/c", ruta_bat], env=clean_env, creationflags=creationflags)
+        subprocess.Popen(["cmd.exe", "/c", ruta_bat], env=clean_env, creationflags=no_window_flag)
         os._exit(0)
     except Exception as e:
         return {"exito": False, "error": str(e)}
@@ -661,7 +929,6 @@ def demonio_recordatorios(ventana, tray_icon):
                     print(f"[Recordatorios] Error en notify matutino: {e}")
             if ventana:
                 ventana.show()
-                ventana.restore()
     except Exception as e:
         print(f"[Recordatorios] Error en chequeo inicial: {e}")
 
@@ -690,7 +957,6 @@ def demonio_recordatorios(ventana, tray_icon):
                             print(f"[Recordatorios] Error en notify 16:30: {e}")
                     if ventana:
                         ventana.show()
-                        ventana.restore()
                         try:
                             ventana.evaluate_js("window.dispararAlertaRecordatorio && window.dispararAlertaRecordatorio('16:30');")
                         except Exception:
@@ -721,9 +987,10 @@ def main():
         title="Check Diario - Ingeap",
         url=url_objetivo,
         js_api=api,
-        width=420,
-        height=640,
-        resizable=False
+        width=440,
+        height=660,
+        resizable=True,
+        min_size=(380, 560)
     )
     if ventana is None:
         raise RuntimeError("No se pudo crear la ventana de la aplicación.")
@@ -737,7 +1004,6 @@ def main():
     def mostrar_ventana(icon=None, item=None):
         if ventana:
             ventana.show()
-            ventana.restore()
 
     def ocultar_ventana(icon=None, item=None):
         if ventana:

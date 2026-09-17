@@ -4,6 +4,33 @@ Historial cronológico de cambios, nuevas características y mejoras aplicadas a
 
 ---
 
+## [1.3.0] - 2026-09-17
+
+### 📅 Módulo de Carga y Gestión de Rosters para RRHH
+- **Carga de Roster Dividida y Ágil**:
+  - Pantalla completa optimizada para Recursos Humanos (RRHH).
+  - Formulario en panel izquierdo para registrar turnos de Campo y Franco por empleado y proyecto con asignación de rango de fechas (calendario de inicio y fin).
+  - Campos dedicados para valor de día estándar y valor de día domingo.
+  - Flujo continuo de carga sin cierre abrupto ni retorno al menú principal al guardar.
+
+- **Filtro Exclusivo de Ingeniería**:
+  - Catálogo de proyectos y nómina de empleados restringidos exclusivamente al Área de Ingeniería (`I`).
+
+- **Calendario Gantt Interactivo**:
+  - Vista mensual detallada con distinción cromática por proyecto asignado.
+  - Días domingo resaltados con indicador visual y leyenda de tarifa especial.
+  - Ajuste manual de ancho de columnas por arrastre (`drag-to-resize`) y controles de zoom (`-`, `+`, `Reset`).
+
+- **Exportación Mensual Oficial a Excel**:
+  - Generación de libro Excel (`.xlsx`) por proyecto individual para el mes seleccionado.
+  - Dividido en 3 hojas de cálculo formateadas profesionalmente: *Ciclo Completo*, *1ra Quincena (1 al 15)* y *2da Quincena (16 a fin de mes)*.
+  - Resumen automático de días de campo trabajados, domingos en obra y días de descanso/franco.
+
+- **Sincronización con Google Sheets**:
+  - Registro automático de cada jornada del ciclo en la hoja corporativa `1_asistencia_informada` bajo la modalidad `"Roster"`.
+
+---
+
 ## [1.2.0] - 2026-09-16
 
 ### 📦 Instalador de Archivo Único Autónomo

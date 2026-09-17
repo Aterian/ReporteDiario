@@ -173,6 +173,22 @@ def inicializar_bd():
         if "modificado" not in columnas_hist:
             cursor.execute("ALTER TABLE historial ADD COLUMN modificado INTEGER DEFAULT 0")
 
+        # Tabla de rosters para planificación y turnos de RRHH
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS rosters (
+                id TEXT PRIMARY KEY,
+                empleado TEXT NOT NULL,
+                dni TEXT DEFAULT '',
+                fecha_inicio TEXT NOT NULL,
+                fecha_fin TEXT NOT NULL,
+                tipo TEXT NOT NULL,
+                proyecto TEXT NOT NULL,
+                precio_dia REAL DEFAULT 0,
+                precio_domingo REAL DEFAULT 0,
+                creado_en TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+
         conn.commit()
 
 def obtener_avatar_por_dni(dni: str) -> str:
@@ -739,3 +755,75 @@ def usuario_registro_hoy(empleado: str = "", usuario_mail: str = "") -> bool:
         """, (fecha_hoy, mail_clean, emp_clean))
         fila = cursor.fetchone()
         return (fila["cant"] if fila else 0) > 0
+
+def guardar_registro_roster(datos: dict) -> dict:
+    """Guarda o actualiza un registro de roster con ID UUID obligatorio."""
+    id_roster = str(datos.get("id") or "").strip()
+    if not id_roster:
+        id_roster = str(uuid.uuid4())
+    
+    empleado = str(datos.get("empleado") or "").strip()
+    dni = str(datos.get("dni") or "").strip()
+    fecha_inicio = str(datos.get("fecha_inicio") or "").strip()
+    fecha_fin = str(datos.get("fecha_fin") or "").strip()
+    tipo = str(datos.get("tipo") or "Campo").strip()
+    proyecto = str(datos.get("proyecto") or "").strip()
+    
+    try:
+        precio_dia = float(datos.get("precio_dia") or 0)
+    except (ValueError, TypeError):
+        precio_dia = 0.0
+
+    try:
+        precio_domingo = float(datos.get("precio_domingo") or 0)
+    except (ValueError, TypeError):
+        precio_domingo = 0.0
+
+    with obtener_conexion() as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            INSERT INTO rosters (id, empleado, dni, fecha_inicio, fecha_fin, tipo, proyecto, precio_dia, precio_domingo, creado_en)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+            ON CONFLICT(id) DO UPDATE SET
+                empleado = excluded.empleado,
+                dni = excluded.dni,
+                fecha_inicio = excluded.fecha_inicio,
+                fecha_fin = excluded.fecha_fin,
+                tipo = excluded.tipo,
+                proyecto = excluded.proyecto,
+                precio_dia = excluded.precio_dia,
+                precio_domingo = excluded.precio_domingo
+        """, (id_roster, empleado, dni, fecha_inicio, fecha_fin, tipo, proyecto, precio_dia, precio_domingo))
+        conn.commit()
+    return {"exito": True, "id": id_roster}
+
+def obtener_rosters(fecha_desde: str | None = None, fecha_hasta: str | None = None) -> list:
+    """Retorna registros de roster que se superpongan con el rango especificado o todos."""
+    with obtener_conexion() as conn:
+        cursor = conn.cursor()
+        if fecha_desde and fecha_hasta:
+            # Se superpone si fecha_inicio <= fecha_hasta Y fecha_fin >= fecha_desde
+            cursor.execute("""
+                SELECT id, empleado, dni, fecha_inicio, fecha_fin, tipo, proyecto, precio_dia, precio_domingo, creado_en
+                FROM rosters
+                WHERE fecha_inicio <= ? AND fecha_fin >= ?
+                ORDER BY fecha_inicio ASC, empleado ASC
+            """, (fecha_hasta, fecha_desde))
+        else:
+            cursor.execute("""
+                SELECT id, empleado, dni, fecha_inicio, fecha_fin, tipo, proyecto, precio_dia, precio_domingo, creado_en
+                FROM rosters
+                ORDER BY fecha_inicio DESC, empleado ASC
+            """)
+        filas = cursor.fetchall()
+        return [dict(f) for f in filas]
+
+def eliminar_registro_roster(id_roster: str) -> bool:
+    """Elimina un registro de roster por su ID UUID."""
+    if not id_roster:
+        return False
+    with obtener_conexion() as conn:
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM rosters WHERE id = ?", (id_roster.strip(),))
+        conn.commit()
+        return cursor.rowcount > 0

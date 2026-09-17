@@ -336,23 +336,39 @@ export default function CheckForm({ onRegistroGuardado, onVolver, tema }) {
   const totalHs = getTotalHoras();
 
   return (
-    <div className={`view-content checkform-container ${isRpg ? 'rpg-view' : ''}`}>
+    <div className={`view-content checkform-container ${isRpg ? 'rpg-board-viewport rpg-table-desk' : ''}`}>
       {/* Barra superior de navegación */}
       {onVolver && (
-        <div className="view-header-bar">
-          <button type="button" className="btn-back" onClick={onVolver}>
+        <div className={`view-header-bar ${isRpg ? 'rpg-parchment-nav' : ''}`}>
+          <button type="button" className={`btn-back ${isRpg ? 'rpg-wood-btn' : ''}`} onClick={onVolver}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
               <polyline points="15 18 9 12 15 6" />
             </svg>
-            <span>{isRpg ? 'Gremio' : 'Inicio'}</span>
+            <span>{isRpg ? '↩ Volver al Tablón' : 'Inicio'}</span>
           </button>
-          <span className="view-header-title">
-            {isRpg ? '📜 Bitácora de la Misión Diaria' : 'Cargar Reporte Diario'}
+          <span className={`view-header-title ${isRpg ? 'rpg-nav-title' : ''}`}>
+            {isRpg ? '📜 Contrato de Misión Diaria' : 'Cargar Reporte Diario'}
           </span>
         </div>
       )}
 
-      <div className="form-card clean-form-card">
+      <div className={`form-card clean-form-card ${isRpg ? 'rpg-scroll-parchment' : ''}`}>
+        {isRpg && (
+          <>
+            <div className="rpg-tack tack-tl" />
+            <div className="rpg-tack tack-tr" />
+            <div className="rpg-tack tack-bl" />
+            <div className="rpg-tack tack-br" />
+
+            <div className="rpg-scroll-banner-top">
+              <div className="rpg-scroll-crest">📜</div>
+              <div className="rpg-scroll-titles">
+                <h3 className="rpg-scroll-main-title">CONTRATO DE MISIÓN DIARIA</h3>
+                <span className="rpg-scroll-sub-title">GREMIO INGEAP • REGISTRA TUS HAZAÑAS DEL CICLO SOLAR</span>
+              </div>
+            </div>
+          </>
+        )}
         {mensajeExito && (
           <div className="alert alert-success">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">

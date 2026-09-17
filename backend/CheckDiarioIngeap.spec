@@ -28,6 +28,10 @@ hidden_imports = [
     "google.auth",
     "google.oauth2.service_account",
     "sqlite3",
+    "openpyxl",
+    "openpyxl.styles",
+    "openpyxl.utils",
+    "openpyxl.worksheet",
 ]
 
 a = Analysis(

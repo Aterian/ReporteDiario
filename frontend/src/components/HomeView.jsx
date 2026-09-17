@@ -1,7 +1,16 @@
 import React from 'react';
 import RpgTavernBoard from './RpgTavernBoard';
+import { getTituloRpg } from '../utils/rpgTitles';
 
-export default function HomeView({ usuario, tema, onNuevoReporte, onVerHistorial, onAvatarClick }) {
+export default function HomeView({
+  usuario,
+  tema,
+  onNuevoReporte,
+  onVerHistorial,
+  onAvatarClick,
+  onNuevoRoster,
+  onHistorialRoster
+}) {
   if (tema === 'rpg') {
     return (
       <RpgTavernBoard
@@ -14,6 +23,8 @@ export default function HomeView({ usuario, tema, onNuevoReporte, onVerHistorial
   }
 
   const isRpg = false;
+  const esRRHH = (usuario?.area || '').trim().toUpperCase() === 'RRHH' ||
+                 (usuario?.area || '').trim().toUpperCase() === 'A';
 
   const getFechaFormateada = () => {
     const hoy = new Date();
@@ -75,7 +86,7 @@ export default function HomeView({ usuario, tema, onNuevoReporte, onVerHistorial
             </span>
             {usuario.area && (
               <span className="home-area-chip">
-                {isRpg ? '🧙‍♂️ Desarrollador Arcano (Nv. 42)' : getNombreArea(usuario.area)}
+                {isRpg ? `${getTituloRpg(usuario.nombre)} (Nv. 42)` : getNombreArea(usuario.area)}
               </span>
             )}
           </div>
@@ -170,6 +181,72 @@ export default function HomeView({ usuario, tema, onNuevoReporte, onVerHistorial
           </div>
         </button>
       </div>
+
+      {/* Sección exclusiva para Recursos Humanos (RRHH) */}
+      {esRRHH && (
+        <>
+          <div className="home-actions-title rrhh-title-divider">
+            Gestión de RRHH - Rosters y Turnos
+          </div>
+          <div className="home-actions-grid rrhh-actions-grid">
+            {/* Botón: Cargar Nuevo Roster */}
+            <button 
+              type="button" 
+              className="home-action-card card-roster" 
+              onClick={onNuevoRoster}
+            >
+              <div className="action-card-icon-box roster-icon">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+                  <line x1="16" y1="2" x2="16" y2="6" />
+                  <line x1="8" y1="2" x2="8" y2="6" />
+                  <line x1="3" y1="10" x2="21" y2="10" />
+                  <path d="M8 14h.01M12 14h.01M16 14h.01M8 18h.01M12 18h.01M16 18h.01" />
+                </svg>
+              </div>
+              <div className="action-card-content">
+                <span className="action-card-title">Cargar Nuevo Roster</span>
+                <span className="action-card-desc">
+                  Asignación de turnos, obra, francos y tarifas con calendario Gantt
+                </span>
+              </div>
+              <div className="action-card-arrow">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="9 18 15 12 9 6" />
+                </svg>
+              </div>
+            </button>
+
+            {/* Botón: Historial de Roster */}
+            <button 
+              type="button" 
+              className="home-action-card card-roster-hist" 
+              onClick={onHistorialRoster}
+            >
+              <div className="action-card-icon-box roster-hist-icon">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                  <polyline points="14 2 14 8 20 8" />
+                  <line x1="16" y1="13" x2="8" y2="13" />
+                  <line x1="16" y1="17" x2="8" y2="17" />
+                  <polyline points="10 9 9 9 8 9" />
+                </svg>
+              </div>
+              <div className="action-card-content">
+                <span className="action-card-title">Historial de Roster</span>
+                <span className="action-card-desc">
+                  Consultar turnos y descargar reporte .xlsx mensual en 3 hojas
+                </span>
+              </div>
+              <div className="action-card-arrow">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="9 18 15 12 9 6" />
+                </svg>
+              </div>
+            </button>
+          </div>
+        </>
+      )}
 
       <div className="home-quick-info">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">

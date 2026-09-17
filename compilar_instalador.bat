@@ -12,7 +12,7 @@ set "FRONTEND_DIR=%ROOT_DIR%frontend"
 set "BACKEND_DIR=%ROOT_DIR%backend"
 set "INSTALADOR_DIR=%ROOT_DIR%instalador"
 
-echo [1/3] Compilando Frontend (Vite)...
+echo [1/4] Compilando Frontend (Vite)...
 cd /d "%FRONTEND_DIR%"
 call npm run build
 if %errorlevel% neq 0 (
@@ -22,26 +22,36 @@ if %errorlevel% neq 0 (
 )
 
 echo.
-echo [2/3] Empaquetando Aplicacion con PyInstaller...
+echo [2/4] Empaquetando Aplicacion con PyInstaller...
 cd /d "%BACKEND_DIR%"
 call .\venv\Scripts\activate.bat
 call pyinstaller --clean --distpath "%INSTALADOR_DIR%" CheckDiarioIngeap.spec
 if %errorlevel% neq 0 (
-    echo [ERROR] Fallo el empaquetado de PyInstaller.
+    echo [ERROR] Fallo el empaquetado de PyInstaller (CheckDiarioIngeap).
     pause
     exit /b %errorlevel%
 )
 
 echo.
-echo [3/3] Verificando instalador generado...
-if exist "%INSTALADOR_DIR%\CheckDiarioIngeap.exe" (
+echo [3/4] Empaquetando Instalador Autonomo de Archivo Unico...
+call pyinstaller --clean --distpath "%INSTALADOR_DIR%" Instalador_CheckDiario_Ingeap.spec
+if %errorlevel% neq 0 (
+    echo [ERROR] Fallo el empaquetado de PyInstaller (Instalador_CheckDiario_Ingeap).
+    pause
+    exit /b %errorlevel%
+)
+
+echo.
+echo [4/4] Verificando ejecutables generados...
+if exist "%INSTALADOR_DIR%\Instalador_CheckDiario_Ingeap.exe" (
     echo.
     echo ============================================================
     echo   Compilacion finalizada exitosamente!
-    echo   Ejecutable: instalador\CheckDiarioIngeap.exe
+    echo   Ejecutable App:        instalador\CheckDiarioIngeap.exe
+    echo   Instalador Autonomo:   instalador\Instalador_CheckDiario_Ingeap.exe
     echo ============================================================
 ) else (
-    echo [ERROR] No se encontro CheckDiarioIngeap.exe en la carpeta instalador.
+    echo [ERROR] No se encontro el instalador generado en la carpeta instalador.
 )
 
 echo.

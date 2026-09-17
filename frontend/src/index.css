@@ -192,16 +192,37 @@ html, body {
 .app-container {
   width: 100%;
   height: 100%;
-  max-width: 420px;
-  max-height: 640px;
   margin: 0 auto;
   display: flex;
   flex-direction: column;
   background: var(--bg-app);
   position: relative;
   overflow: hidden;
-  border-left: 1px solid var(--border-subtle);
-  border-right: 1px solid var(--border-subtle);
+}
+
+.view-content {
+  flex: 1;
+  overflow-y: auto;
+  width: 100%;
+}
+
+/* En ventanas maximizadas o ampliadas, centrar armónicamente los módulos estándar */
+.home-container,
+.checkform-container,
+.clean-form-card,
+.history-header,
+.history-list {
+  max-width: 680px;
+  width: 100%;
+  margin-left: auto;
+  margin-right: auto;
+  box-sizing: border-box;
+}
+
+.rpg-notice-board {
+  max-width: 740px;
+  margin-left: auto;
+  margin-right: auto;
 }
 
 /* ==========================================================================
@@ -3030,24 +3051,6 @@ html, body {
 }
 
 /* ==========================================================================
-   TEMA MODO AVENTURA FANTASÍA RPG (QUEST)
-   ========================================================================== */
-
-.btn-header-rpg {
-  background: linear-gradient(135deg, rgba(245, 158, 11, 0.2), rgba(168, 85, 247, 0.2)) !important;
-  border: 1px solid #f59e0b !important;
-  box-shadow: 0 0 10px rgba(245, 158, 11, 0.3);
-  animation: pulseRpgGlow 2.5s infinite ease-in-out;
-}
-
-@keyframes pulseRpgGlow {
-  0%, 100% {
-    box-shadow: 0 0 6px rgba(245, 158, 11, 0.3);
-  }
-  50% {
-    box-shadow: 0 0 14px rgba(245, 158, 11, 0.65);
-  }
-/* ==========================================================================
    TEMA MODO AVENTURA FANTASÍA RPG - TABLÓN DE TABERNA MEDIEVAL
    (THE ADVENTURER'S DAILY LOG)
    ========================================================================== */
@@ -3081,13 +3084,28 @@ html, body {
 
 /* --- TABLÓN DE MADERA Y TABERNA --- */
 .rpg-board-viewport {
+  flex: 1;
+  min-height: 0;
   width: 100%;
-  height: 100%;
   overflow-y: auto;
-  padding: 10px 12px 14px 12px;
+  padding: 8px 10px 14px 10px;
   background: radial-gradient(circle at 10% 20%, rgba(251, 191, 36, 0.1) 0%, transparent 40%),
               radial-gradient(circle at 90% 80%, rgba(245, 158, 11, 0.08) 0%, transparent 40%),
               #120c08;
+}
+
+.rpg-board-viewport::-webkit-scrollbar {
+  width: 5px;
+}
+.rpg-board-viewport::-webkit-scrollbar-track {
+  background: #1c0e06;
+}
+.rpg-board-viewport::-webkit-scrollbar-thumb {
+  background: #54311c;
+  border-radius: 4px;
+}
+.rpg-board-viewport::-webkit-scrollbar-thumb:hover {
+  background: #784728;
 }
 
 .rpg-notice-board {
@@ -3097,7 +3115,7 @@ html, body {
   outline: 2px solid #1c0e06;
   border-radius: 12px;
   box-shadow: inset 0 0 35px rgba(0, 0, 0, 0.95), 0 10px 28px rgba(0, 0, 0, 0.85);
-  padding: 14px 12px 8px 12px;
+  padding: 12px 10px 8px 10px;
 }
 
 /* Esquineros de hierro forjado */
@@ -3152,54 +3170,69 @@ html, body {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(180deg, #f9edd0 0%, #edd39e 50%, #dfbf83 100%);
+  background: linear-gradient(180deg, #fbf2db 0%, #ecd49e 50%, #dfbf83 100%);
   border: 2px solid #8c6a38;
   border-radius: 6px;
-  padding: 6px 14px;
-  margin-bottom: 12px;
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.65), inset 0 1px 0 rgba(255, 255, 255, 0.4);
+  padding: 8px 10px;
+  margin-bottom: 10px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.65), inset 0 1px 0 rgba(255, 255, 255, 0.45);
   position: relative;
 }
 
 .rpg-banner-body {
   display: flex;
-  align-items: center;
-  gap: 6px;
-  text-align: center;
-}
-
-.rpg-dropcap {
-  font-family: 'Cinzel', serif;
-  font-size: 28px;
-  font-weight: 900;
-  color: #881337;
-  line-height: 1;
-  text-shadow: 1px 1px 0 #edd39e;
-}
-
-.rpg-banner-titles {
-  display: flex;
   flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  text-align: center;
+  width: 100%;
+}
+
+.rpg-banner-heading-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.rpg-illuminated-box {
+  width: 24px;
+  height: 24px;
+  background: linear-gradient(135deg, #881337 0%, #4c0519 100%);
+  border: 1.5px solid #d97706;
+  border-radius: 4px;
+  color: #fef3c7;
+  font-family: 'Cinzel', 'Palatino Linotype', Georgia, serif;
+  font-size: 17px;
+  font-weight: 900;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.4), inset 0 0 4px rgba(251, 191, 36, 0.5);
+  text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.7);
+  flex-shrink: 0;
 }
 
 .rpg-banner-main-title {
-  font-family: 'Cinzel', serif;
-  font-size: 12.5px;
+  font-family: 'Cinzel', 'Palatino Linotype', Georgia, serif;
+  font-size: 12px;
   font-weight: 900;
   color: #3b220c;
-  letter-spacing: 1px;
+  letter-spacing: 0.8px;
   margin: 0;
-  line-height: 1.15;
+  line-height: 1.2;
 }
 
 .rpg-banner-subtitle {
-  font-family: 'Cinzel', serif;
-  font-size: 8px;
+  font-family: 'Cinzel', 'Palatino Linotype', Georgia, serif;
+  font-size: 7.5px;
   font-weight: 800;
   color: #785324;
-  letter-spacing: 0.8px;
+  letter-spacing: 0.7px;
   text-transform: uppercase;
-  margin-top: 2px;
+  margin-top: 1px;
 }
 
 /* Cuadrícula de pergaminos */
@@ -3580,127 +3613,2372 @@ html, body {
   border-color: #d4b077;
 }
 
-/* --- ESTILO DE CHECKFORM EN MODO RPG (CONTRATO EN PERGAMINO) --- */
-[data-theme='rpg'] .check-form-wrapper {
-  background: radial-gradient(circle at 50% 20%, rgba(251, 191, 36, 0.08) 0%, transparent 50%),
-              #120c08;
-  padding: 10px;
+/* ==========================================================================
+   TEMA MODO AVENTURA RPG - PANTALLA DE REPORTE (PERGAMINO SOBRE MESA DE MADERA)
+   ========================================================================== */
+
+/* Mesa de Madera de la Taberna */
+.rpg-table-desk {
+  width: 100%;
+  height: 100%;
+  overflow-y: auto;
+  padding: 14px 16px 24px 16px;
+  background: radial-gradient(circle at 10% 20%, rgba(251, 191, 36, 0.12) 0%, transparent 40%),
+              radial-gradient(circle at 90% 80%, rgba(245, 158, 11, 0.09) 0%, transparent 40%),
+              linear-gradient(180deg, #2b180d 0%, #1c0e06 50%, #120904 100%);
+  background-attachment: fixed;
 }
 
-[data-theme='rpg'] .check-form-card {
-  background: #f5e4bf;
-  background-image: radial-gradient(circle at 50% 50%, rgba(255, 255, 255, 0.35) 0%, rgba(184, 137, 72, 0.15) 100%);
-  border: 2px solid #8c6a38;
-  color: #2b1d0c;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.8), 0 0 20px rgba(245, 158, 11, 0.15);
-  border-radius: 8px;
-  position: relative;
+.rpg-parchment-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  max-width: 680px;
+  margin: 0 auto 12px auto;
 }
 
-[data-theme='rpg'] .form-header-clean {
-  border-bottom: 2px solid #8c6a38;
-}
-
-[data-theme='rpg'] .form-title-clean {
+.rpg-nav-title {
   font-family: 'Cinzel', serif;
-  font-size: 15px;
+  font-weight: 800;
+  font-size: 13px;
+  color: #fef3c7;
+  letter-spacing: 0.6px;
+  text-shadow: 1px 1px 3px rgba(0, 0, 0, 0.8);
+}
+
+/* El Gran Pergamino Desplegado sobre la Madera */
+.rpg-scroll-parchment {
+  position: relative;
+  background: #f8ebd2 !important;
+  background-image: radial-gradient(circle at 50% 30%, rgba(255, 255, 255, 0.5) 0%, rgba(184, 137, 72, 0.2) 100%) !important;
+  border: 2px solid #8c6a38 !important;
+  border-radius: 6px !important;
+  box-shadow: 0 12px 35px rgba(0, 0, 0, 0.9), inset 0 0 45px rgba(180, 130, 60, 0.25) !important;
+  padding: 18px 16px 22px 16px !important;
+  color: #2b1d0c !important;
+  max-width: 680px;
+  margin: 0 auto !important;
+}
+
+/* Banner de Cabecera del Pergamino */
+.rpg-scroll-banner-top {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border-bottom: 2px solid #8c6a38;
+  padding-bottom: 10px;
+  margin-bottom: 14px;
+}
+
+.rpg-scroll-crest {
+  font-size: 24px;
+  line-height: 1;
+}
+
+.rpg-scroll-titles {
+  display: flex;
+  flex-direction: column;
+}
+
+.rpg-scroll-main-title {
+  font-family: 'Cinzel', serif;
+  font-size: 14px;
   font-weight: 900;
   color: #3b220c;
   letter-spacing: 0.8px;
+  margin: 0;
+  line-height: 1.2;
 }
 
-[data-theme='rpg'] .form-subtitle-clean {
+.rpg-scroll-sub-title {
   font-family: 'Cinzel', serif;
+  font-size: 8.5px;
+  font-weight: 800;
   color: #785324;
-  font-size: 9.5px;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
 }
 
-[data-theme='rpg'] .btn-back-clean {
-  background: rgba(184, 137, 72, 0.2);
-  border: 1px solid #8c6a38;
-  color: #3b220c;
+/* Secciones dentro del pergamino */
+.rpg-scroll-parchment .form-section-card {
+  background: rgba(184, 137, 72, 0.08) !important;
+  border: 1.5px dashed #b89758 !important;
+  box-shadow: inset 0 1px 4px rgba(184, 137, 72, 0.12) !important;
+  border-radius: 6px !important;
+  padding: 12px 14px !important;
+  margin-bottom: 12px !important;
+}
+
+.rpg-scroll-parchment .form-section-tag {
+  background: #881337 !important;
+  color: #fef3c7 !important;
+  font-family: 'Cinzel', serif !important;
+  font-size: 9.5px !important;
+  font-weight: 800 !important;
+  border: 1px solid #9f1239 !important;
+  border-radius: 4px !important;
+  padding: 2px 7px !important;
+}
+
+.rpg-scroll-parchment .form-section-title {
+  font-family: 'Cinzel', serif !important;
+  font-size: 12px !important;
+  font-weight: 900 !important;
+  color: #3b220c !important;
+  letter-spacing: 0.5px !important;
+}
+
+.rpg-scroll-parchment .form-label-clean {
+  color: #6b4317 !important;
+  font-weight: 700 !important;
+  font-family: 'Cinzel', serif !important;
+  font-size: 10.5px !important;
+}
+
+/* Grid de Modalidades (Estampas en pergamino) */
+.rpg-scroll-parchment .segmented-modalidad-grid {
+  background: rgba(184, 137, 72, 0.16) !important;
+  border: 1.5px solid #c9aa6d !important;
+  border-radius: 8px !important;
+  padding: 4px !important;
+}
+
+.rpg-scroll-parchment .seg-btn {
+  color: #4a2d14 !important;
+  font-family: 'Cinzel', serif !important;
+  font-weight: 700 !important;
+  font-size: 9.5px !important;
+}
+
+.rpg-scroll-parchment .seg-btn:hover {
+  background: rgba(184, 137, 72, 0.25) !important;
+  color: #2b170c !important;
+}
+
+.rpg-scroll-parchment .seg-btn.seg-active {
+  background: linear-gradient(135deg, #881337 0%, #4c0519 100%) !important;
+  color: #fef3c7 !important;
+  border: 1.5px solid #b91c1c !important;
+  box-shadow: 0 4px 10px rgba(136, 19, 55, 0.45) !important;
+  font-weight: 800 !important;
+}
+
+.rpg-scroll-parchment .seg-btn.seg-franco {
+  background: linear-gradient(135deg, #065f46 0%, #064e3b 100%) !important;
+  color: #d1fae5 !important;
+  border: 1.5px solid #059669 !important;
+}
+
+/* Campos de entrada en pergamino */
+.rpg-scroll-parchment .form-input-clean,
+.rpg-scroll-parchment .form-select-clean {
+  background: #fffdf8 !important;
+  border: 1.5px solid #b89758 !important;
+  color: #2b1d0c !important;
+  font-weight: 600 !important;
+  font-size: 11.5px !important;
+  border-radius: 6px !important;
+}
+
+.rpg-scroll-parchment .form-input-clean:focus,
+.rpg-scroll-parchment .form-select-clean:focus {
+  border-color: #881337 !important;
+  box-shadow: 0 0 0 2px rgba(136, 19, 55, 0.25) !important;
+}
+
+/* Tarjeta por defecto de área */
+.rpg-scroll-parchment .area-default-card {
+  background: rgba(184, 137, 72, 0.12) !important;
+  border: 1px solid #c9aa6d !important;
+  color: #2b1d0c !important;
+  border-radius: 6px !important;
+}
+
+.rpg-scroll-parchment .area-default-badge {
+  color: #3b220c !important;
+  font-family: 'Cinzel', serif !important;
+}
+
+.rpg-scroll-parchment .area-default-hours {
+  color: #881337 !important;
+  font-weight: 900 !important;
+}
+
+.rpg-scroll-parchment .area-default-name {
+  color: #3b220c !important;
+  font-weight: 800 !important;
+  font-size: 12.5px !important;
+}
+
+.rpg-scroll-parchment .area-subselect-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+  flex-wrap: wrap;
+}
+
+.rpg-scroll-parchment .area-subselect-label {
+  color: #54311c !important;
+  font-weight: 800 !important;
+  font-family: 'Cinzel', serif !important;
+  font-size: 11.5px !important;
+}
+
+.rpg-scroll-parchment .form-select-inline {
+  background: #fffdf8 !important;
+  border: 1.5px solid #b89758 !important;
+  color: #2b1d0c !important;
+  font-weight: 700 !important;
+  border-radius: 6px !important;
+  outline: none;
+}
+
+.rpg-scroll-parchment .form-select-inline option,
+.rpg-scroll-parchment .form-select-inline optgroup {
+  background: #fffdf8 !important;
+  color: #2b1d0c !important;
+}
+
+.rpg-scroll-parchment .btn-add-extra-area {
+  background: rgba(184, 137, 72, 0.22) !important;
+  border: 1.5px solid #8c6a38 !important;
+  color: #3b220c !important;
+  font-weight: 800 !important;
+  font-family: 'Cinzel', serif !important;
+  border-radius: 20px !important;
+  transition: all 0.2s;
+}
+
+.rpg-scroll-parchment .btn-add-extra-area:hover {
+  background: #8c6a38 !important;
+  color: #fef3c7 !important;
+}
+
+.rpg-scroll-parchment .area-default-footer {
+  color: #634324 !important;
+  border-top: 1px dashed #b89758 !important;
+  font-weight: 600 !important;
+}
+
+.rpg-scroll-parchment .area-default-footer span {
+  color: #634324 !important;
+}
+
+.rpg-scroll-parchment .range-toggle-label {
+  color: #54311c !important;
+  font-weight: 700 !important;
+  font-family: 'Cinzel', serif !important;
+}
+
+.rpg-scroll-parchment .range-toggle-label span {
+  color: #54311c !important;
+}
+
+.rpg-scroll-parchment .input-sublabel {
+  color: #6b4317 !important;
+  font-weight: 700 !important;
+}
+
+.rpg-scroll-parchment .form-label-clean {
+  color: #4a280d !important;
+  font-weight: 800 !important;
+  font-family: 'Cinzel', serif !important;
+}
+
+.rpg-scroll-parchment .form-label-clean span {
+  color: #4a280d !important;
+}
+
+.rpg-scroll-parchment select.form-select-clean option,
+.rpg-scroll-parchment select.form-select-clean optgroup {
+  background: #fffdf8 !important;
+  color: #2b1d0c !important;
+}
+
+.rpg-scroll-parchment select.form-select-clean optgroup {
+  font-weight: 800 !important;
+  color: #6b4317 !important;
+  background: #f4e4c3 !important;
+}
+
+/* Modos de reparto y proyectos múltiples */
+.rpg-scroll-parchment .division-toggle-bar {
+  background: rgba(184, 137, 72, 0.18) !important;
+  border: 1.5px solid #c9aa6d !important;
+  border-radius: 8px !important;
+  padding: 3px !important;
+}
+
+.rpg-scroll-parchment .division-toggle-btn {
+  color: #54311c !important;
+  font-family: 'Cinzel', serif !important;
+  font-weight: 700 !important;
+}
+
+.rpg-scroll-parchment .division-toggle-btn.active {
+  background: #881337 !important;
+  color: #fef3c7 !important;
+  border: 1px solid #9f1239 !important;
+  box-shadow: 0 2px 6px rgba(136, 19, 55, 0.35) !important;
+}
+
+.rpg-scroll-parchment .project-row-item {
+  background: rgba(255, 255, 255, 0.75) !important;
+  border: 1px solid #c9aa6d !important;
+  color: #2b1d0c !important;
+  border-radius: 6px !important;
+}
+
+.rpg-scroll-parchment .project-row-item.area-item-highlight {
+  background: rgba(245, 158, 11, 0.18) !important;
+  border-left: 3px solid #b45309 !important;
+}
+
+.rpg-scroll-parchment .project-row-name {
+  color: #2b1d0c !important;
+  font-weight: 700 !important;
+}
+
+.rpg-scroll-parchment .project-row-badge-hours {
+  background: rgba(184, 137, 72, 0.28) !important;
+  color: #54311c !important;
+  border: 1px solid #8c6a38 !important;
+  font-weight: 800 !important;
+}
+
+.rpg-scroll-parchment .btn-del-project {
+  color: #991b1b !important;
+  font-weight: 900 !important;
+}
+
+.rpg-scroll-parchment .btn-del-project:hover {
+  background: rgba(185, 28, 28, 0.15) !important;
+}
+
+/* Acordeón RRHH en pergamino */
+.rpg-scroll-parchment .rrhh-card {
+  background: rgba(184, 137, 72, 0.12) !important;
+  border: 1.5px dashed #b89758 !important;
+}
+
+.rpg-scroll-parchment .rrhh-title {
+  color: #3b220c !important;
+  font-family: 'Cinzel', serif !important;
+  font-weight: 700 !important;
+}
+
+.rpg-scroll-parchment .rrhh-title svg {
+  color: #881337 !important;
+}
+
+/* Tarjeta Franco en pergamino */
+.rpg-scroll-parchment .franco-serene-card {
+  background: rgba(6, 95, 70, 0.12) !important;
+  border: 1.5px dashed #059669 !important;
+  color: #064e3b !important;
+}
+
+.rpg-scroll-parchment .franco-serene-body h4 {
+  color: #065f46 !important;
+  font-family: 'Cinzel', serif !important;
+  font-weight: 800 !important;
+}
+
+.rpg-scroll-parchment .franco-serene-body p {
+  color: #2b1d0c !important;
+  font-weight: 600 !important;
+}
+
+.rpg-scroll-parchment .btn-step-compact {
+  background: #fff8eb !important;
+  border: 1.5px solid #b89758 !important;
+  color: #2b1d0c !important;
+}
+
+.rpg-scroll-parchment .input-step-compact {
+  background: #fff8eb !important;
+  border: 1.5px solid #b89758 !important;
+  color: #2b1d0c !important;
+}
+
+.rpg-scroll-parchment .hours-summary-strip {
+  background: rgba(184, 137, 72, 0.18) !important;
+  border: 1.5px solid #b89758 !important;
+  border-radius: 6px !important;
+}
+
+.rpg-scroll-parchment .hours-summary-label {
+  color: #452a12 !important;
+  font-family: 'Cinzel', serif !important;
+  font-weight: 700 !important;
+}
+
+.rpg-scroll-parchment .hours-summary-value {
+  color: #881337 !important;
+  font-weight: 900 !important;
+}
+
+.rpg-scroll-parchment .hours-summary-tag {
+  background: #881337 !important;
+  color: #fef3c7 !important;
+  font-family: 'Cinzel', serif !important;
+  border: 1px solid #9f1239 !important;
+}
+
+/* Botón de Envío: Sello Real de Lacre */
+.rpg-scroll-parchment .btn-submit-spacious {
+  background: linear-gradient(135deg, #991b1b 0%, #7f1d1d 50%, #581c87 100%) !important;
+  color: #fef3c7 !important;
+  font-family: 'Cinzel', serif !important;
+  font-weight: 900 !important;
+  font-size: 11.5px !important;
+  letter-spacing: 0.8px !important;
+  border: 2px solid #b91c1c !important;
+  border-radius: 6px !important;
+  padding: 12px 14px !important;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.65), inset 0 1px 0 rgba(255, 255, 255, 0.35) !important;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8) !important;
+  cursor: pointer !important;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+
+.rpg-scroll-parchment .btn-submit-spacious:hover:not(:disabled) {
+  background: linear-gradient(135deg, #b91c1c 0%, #991b1b 50%, #6b21a8 100%) !important;
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.8) !important;
+  transform: translateY(-1px) !important;
+}
+
+/* ==========================================================================
+   TEMA MODO AVENTURA RPG - TOMO DE CRÓNICAS HISTÓRICAS (HISTORYVIEW)
+   ========================================================================== */
+
+.parchment-history {
+  width: 100%;
+}
+
+.rpg-history-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.rpg-history-entry {
+  background: rgba(255, 255, 255, 0.55);
+  border: 1px solid #b89758;
+  border-radius: 6px;
+  padding: 8px 10px;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.15);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.rpg-entry-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px dashed #c9aa6d;
+  padding-bottom: 4px;
+}
+
+.rpg-entry-date {
   font-family: 'Cinzel', serif;
   font-size: 10px;
-  font-weight: 700;
+  font-weight: 800;
+  color: #3b220c;
 }
 
-[data-theme='rpg'] .btn-back-clean:hover {
+.rpg-sync-stamp {
+  font-family: 'Cinzel', serif;
+  font-size: 8.5px;
+  font-weight: 800;
+  border-radius: 4px;
+  padding: 1px 6px;
+}
+
+.rpg-sync-stamp.synced {
+  background: rgba(16, 185, 129, 0.2);
+  color: #065f46;
+  border: 1px solid #10b981;
+}
+
+.rpg-sync-stamp.pending {
+  background: rgba(245, 158, 11, 0.2);
+  color: #92400e;
+  border: 1px solid #f59e0b;
+}
+
+.rpg-entry-main {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.rpg-entry-service {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-weight: 700;
+  color: #2b1d0c;
+  font-size: 11px;
+}
+
+.rpg-entry-details {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 10px;
+  color: #6b4317;
+  font-weight: 600;
+}
+
+.rpg-entry-footer {
+  display: flex;
+  justify-content: flex-end;
+  padding-top: 2px;
+}
+
+.rpg-btn-edit-entry {
+  background: rgba(184, 137, 72, 0.2);
+  border: 1px solid #8c6a38;
+  border-radius: 4px;
+  color: #3b220c;
+  font-family: 'Cinzel', serif;
+  font-size: 9px;
+  font-weight: 700;
+  padding: 2px 7px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.rpg-btn-edit-entry:hover {
   background: #8c6a38;
   color: #fef3c7;
 }
 
-[data-theme='rpg'] .form-section-card {
-  background: rgba(255, 255, 255, 0.45);
-  border: 1px solid #c9aa6d;
-  border-radius: 6px;
-}
-
-[data-theme='rpg'] .form-section-tag {
-  background: #881337;
-  color: #fef3c7;
-  font-family: 'Cinzel', serif;
-}
-
-[data-theme='rpg'] .form-section-title {
-  font-family: 'Cinzel', serif;
-  font-size: 11.5px;
-  font-weight: 900;
-  color: #3b220c;
-}
-
-[data-theme='rpg'] .form-label-clean {
-  color: #6b4317;
-  font-weight: 700;
-  font-family: 'Cinzel', serif;
+.rpg-parchment-alert {
+  padding: 6px 10px;
+  border-radius: 5px;
   font-size: 10px;
-}
-
-[data-theme='rpg'] .segmented-modalidad-grid {
-  background: rgba(184, 137, 72, 0.2);
-  border: 1px solid #c9aa6d;
-}
-
-[data-theme='rpg'] .seg-btn {
-  color: #523412;
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   font-family: 'Cinzel', serif;
   font-weight: 700;
 }
 
-[data-theme='rpg'] .seg-btn.seg-active {
-  background: #881337;
-  color: #fef3c7;
-  border-color: #9f1239;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
+.rpg-alert-success {
+  background: rgba(16, 185, 129, 0.2);
+  color: #065f46;
+  border: 1px solid #10b981;
 }
 
-[data-theme='rpg'] .form-input-clean,
-[data-theme='rpg'] .form-select-clean {
-  background: #fff8eb;
-  border: 1px solid #b89758;
-  color: #2b1d0c;
+.rpg-alert-error {
+  background: rgba(239, 68, 68, 0.2);
+  color: #991b1b;
+  border: 1px solid #ef4444;
+}
+
+.rpg-alert-close {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: inherit;
+  font-weight: bold;
+}
+
+.rpg-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 24px 12px;
+  color: #785324;
+  font-family: 'Cinzel', serif;
+  font-size: 11px;
+  text-align: center;
+}
+
+/* Centrado base general */
+.rpg-notice-board,
+.rpg-scroll-parchment,
+.rpg-parchment-nav {
+  max-width: 680px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+/* ==========================================================================
+   SISTEMA DE ESCALADO RESPONSIVO Y ACOPLE DE TIPOGRAFÍA (MEDIA QUERIES)
+   ========================================================================== */
+
+/* --- PANTALLAS MEDIANAS / AMPLIADAS (>= 768px) --- */
+@media (min-width: 768px) {
+  /* Barra Superior */
+  .app-header {
+    padding: 14px 22px;
+  }
+  .user-avatar {
+    width: 44px;
+    height: 44px;
+    font-size: 16px;
+    border-radius: 10px;
+  }
+  .user-name {
+    font-size: 15.5px;
+  }
+  .user-dni {
+    font-size: 12px;
+  }
+  .btn-header-icon, .btn-logout, .btn-theme-toggle {
+    font-size: 12.5px;
+    padding: 7px 12px;
+  }
+
+  /* Contenedores Estándar */
+  .home-container,
+  .check-form-wrapper,
+  .history-view {
+    max-width: 860px;
+    margin: 0 auto;
+  }
+
+  .form-title-clean {
+    font-size: 18px;
+  }
+  .form-section-title {
+    font-size: 14px;
+  }
+  .form-label-clean {
+    font-size: 12.5px;
+  }
+  .form-input-clean,
+  .form-select-clean {
+    font-size: 13.5px;
+    padding: 10px 12px;
+  }
+  .seg-btn {
+    font-size: 11.5px;
+    padding: 10px 6px;
+  }
+  .btn-submit-spacious {
+    font-size: 14px;
+    padding: 14px;
+  }
+
+  /* MODO RPG: Tablón Principal en Doble Columna (Fantasy Quest Board) */
+  .rpg-notice-board {
+    max-width: 1040px;
+    padding: 16px 18px 20px 18px;
+  }
+  .rpg-curved-banner {
+    padding: 12px 18px;
+    margin-bottom: 14px;
+  }
+  .rpg-illuminated-box {
+    width: 32px;
+    height: 32px;
+    font-size: 22px;
+  }
+  .rpg-banner-main-title {
+    font-size: 18px;
+    letter-spacing: 1.2px;
+  }
+  .rpg-banner-subtitle {
+    font-size: 10px;
+    letter-spacing: 1px;
+  }
+
+  .rpg-parchments-grid {
+    display: grid;
+    grid-template-columns: 1.18fr 0.82fr;
+    grid-template-rows: auto 1fr;
+    gap: 16px;
+    align-items: stretch;
+  }
+
+  .parchment-main {
+    grid-column: 1 / 2;
+    grid-row: 1 / 3;
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    padding: 16px 18px !important;
+  }
+
+  .parchment-main .rpg-seal-action-btn {
+    margin-top: auto;
+    font-size: 13px;
+    padding: 13px 16px;
+  }
+
+  .parchment-achievements {
+    grid-column: 2 / 3;
+    grid-row: 1 / 2;
+    padding: 14px 16px !important;
+  }
+
+  .parchment-rewards {
+    grid-column: 2 / 3;
+    grid-row: 2 / 3;
+    padding: 14px 16px !important;
+  }
+
+  /* Tipografía y escalado en pergaminos */
+  .parchment-title {
+    font-size: 14.5px;
+  }
+  .parchment-date {
+    font-size: 10.5px;
+  }
+  .hero-name {
+    font-size: 14.5px;
+  }
+  .hero-class {
+    font-size: 12px;
+  }
+  .parchment-avatar-mini {
+    width: 40px;
+    height: 40px;
+  }
+  .parchment-avatar-ph {
+    font-size: 13px;
+  }
+  .parchment-section-heading {
+    font-size: 11px;
+    margin: 10px 0 6px 0;
+  }
+  .rpg-quest-list,
+  .rpg-achievements-list {
+    font-size: 13px;
+    gap: 7px;
+    line-height: 1.45;
+  }
+  .rpg-handwritten-box {
+    font-size: 13px;
+    line-height: 1.45;
+    padding: 10px 12px;
+    margin: 8px 0 14px 0;
+  }
+  .rpg-parchment-btn-sec {
+    font-size: 11.5px;
+    padding: 8px 12px;
+  }
+  .exp-label-row {
+    font-size: 12px;
+  }
+  .rpg-exp-bar-frame {
+    height: 10px;
+  }
+  .rpg-coins-drawing {
+    font-size: 11.5px;
+  }
+  .rpg-signature {
+    font-size: 13px;
+  }
+  .rpg-wood-bottom-bar {
+    padding: 8px 12px;
+    margin-top: 14px;
+  }
+  .rpg-wood-btn {
+    font-size: 11px;
+    padding: 6px 12px;
+  }
+
+  /* MODO RPG: Pantalla de Nuevo Registro */
+  .rpg-scroll-parchment {
+    max-width: 860px;
+    padding: 24px 28px !important;
+  }
+  .rpg-parchment-nav {
+    max-width: 860px;
+  }
+  .rpg-scroll-crest {
+    font-size: 32px;
+  }
+  .rpg-scroll-main-title {
+    font-size: 17px;
+  }
+  .rpg-scroll-sub-title {
+    font-size: 10.5px;
+  }
+  .rpg-scroll-parchment .form-section-card {
+    padding: 16px 18px !important;
+    margin-bottom: 16px !important;
+  }
+  .rpg-scroll-parchment .form-section-tag {
+    font-size: 11px !important;
+    padding: 3px 9px !important;
+  }
+  .rpg-scroll-parchment .form-section-title {
+    font-size: 14.5px !important;
+  }
+  .rpg-scroll-parchment .form-label-clean {
+    font-size: 12.5px !important;
+  }
+  .rpg-scroll-parchment .form-input-clean,
+  .rpg-scroll-parchment .form-select-clean {
+    font-size: 13.5px !important;
+    padding: 10px 12px !important;
+  }
+  .rpg-scroll-parchment .seg-btn {
+    font-size: 11.5px !important;
+    padding: 10px 6px !important;
+    gap: 6px !important;
+  }
+  .rpg-scroll-parchment .area-default-name {
+    font-size: 14px !important;
+  }
+  .rpg-scroll-parchment .area-default-badge {
+    font-size: 13px !important;
+  }
+  .rpg-scroll-parchment .area-default-hours {
+    font-size: 14px !important;
+  }
+  .rpg-scroll-parchment .area-subselect-label {
+    font-size: 12.5px !important;
+  }
+  .rpg-scroll-parchment .form-select-inline {
+    font-size: 13px !important;
+    padding: 8px 12px !important;
+  }
+  .rpg-scroll-parchment .btn-add-extra-area {
+    font-size: 12px !important;
+    padding: 6px 14px !important;
+  }
+  .rpg-scroll-parchment .btn-step-compact {
+    width: 28px !important;
+    height: 28px !important;
+    font-size: 14px !important;
+  }
+  .rpg-scroll-parchment .input-step-compact {
+    width: 48px !important;
+    font-size: 13px !important;
+    padding: 4px 0 !important;
+  }
+  .rpg-scroll-parchment .area-default-footer {
+    font-size: 12px !important;
+    line-height: 1.45 !important;
+  }
+  .rpg-scroll-parchment .hours-summary-label {
+    font-size: 13px !important;
+  }
+  .rpg-scroll-parchment .hours-summary-value {
+    font-size: 16px !important;
+  }
+  .rpg-scroll-parchment .btn-submit-spacious {
+    font-size: 14px !important;
+    padding: 14px 20px !important;
+  }
+
+  /* MODO RPG: Pantalla de Historial (Tomo de Crónicas en 2 Columnas) */
+  .rpg-pinned-parchment.parchment-history {
+    max-width: 960px;
+    margin: 0 auto;
+  }
+  .rpg-history-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+    gap: 12px;
+  }
+  .rpg-entry-date {
+    font-size: 12px;
+  }
+  .rpg-entry-service {
+    font-size: 13px;
+  }
+  .rpg-entry-details {
+    font-size: 12px;
+  }
+  .rpg-btn-edit-entry {
+    font-size: 11px;
+    padding: 4px 10px;
+  }
+}
+
+/* --- PANTALLAS GRANDES / FULL HD MAXIMIZADO (>= 1200px) --- */
+@media (min-width: 1200px) {
+  .app-header {
+    padding: 16px 30px;
+  }
+  .user-avatar {
+    width: 48px;
+    height: 48px;
+    font-size: 18px;
+  }
+  .user-name {
+    font-size: 17px;
+  }
+  .user-dni {
+    font-size: 13px;
+  }
+  .btn-header-icon, .btn-logout, .btn-theme-toggle {
+    font-size: 13.5px;
+    padding: 8px 14px;
+  }
+
+  /* MODO RPG: Tablón Grande y Espacioso */
+  .rpg-notice-board {
+    max-width: 1180px;
+    padding: 20px 22px 24px 22px;
+  }
+  .rpg-curved-banner {
+    padding: 14px 22px;
+  }
+  .rpg-illuminated-box {
+    width: 36px;
+    height: 36px;
+    font-size: 25px;
+  }
+  .rpg-banner-main-title {
+    font-size: 21px;
+  }
+  .rpg-banner-subtitle {
+    font-size: 11.5px;
+  }
+  .parchment-title {
+    font-size: 16.5px;
+  }
+  .hero-name {
+    font-size: 16px;
+  }
+  .hero-class {
+    font-size: 13px;
+  }
+  .rpg-quest-list,
+  .rpg-achievements-list {
+    font-size: 14px;
+    gap: 9px;
+  }
+  .rpg-handwritten-box {
+    font-size: 14px;
+    padding: 12px 16px;
+  }
+  .parchment-main .rpg-seal-action-btn {
+    font-size: 14.5px;
+    padding: 15px 22px;
+  }
+
+  /* MODO RPG: Formulario de Registro Amplio */
+  .rpg-scroll-parchment {
+    max-width: 960px;
+    padding: 28px 36px !important;
+  }
+  .rpg-parchment-nav {
+    max-width: 960px;
+  }
+  .rpg-scroll-main-title {
+    font-size: 19px;
+  }
+  .rpg-scroll-parchment .form-section-title {
+    font-size: 16px !important;
+  }
+  .rpg-scroll-parchment .form-label-clean {
+    font-size: 13.5px !important;
+  }
+  .rpg-scroll-parchment .form-input-clean,
+  .rpg-scroll-parchment .form-select-clean {
+    font-size: 14.5px !important;
+    padding: 11px 14px !important;
+  }
+  .rpg-scroll-parchment .seg-btn {
+    font-size: 12.5px !important;
+    padding: 12px 8px !important;
+  }
+  .rpg-scroll-parchment .area-default-name {
+    font-size: 15px !important;
+  }
+  .rpg-scroll-parchment .area-default-footer {
+    font-size: 13px !important;
+  }
+  .rpg-scroll-parchment .btn-submit-spacious {
+    font-size: 15px !important;
+    padding: 16px 24px !important;
+  }
+
+  /* MODO RPG: Historial Amplio */
+  .rpg-pinned-parchment.parchment-history {
+    max-width: 1080px;
+  }
+  .rpg-entry-service {
+    font-size: 14px;
+  }
+  .rpg-entry-details {
+    font-size: 13px;
+  }
+}
+
+/* ==========================================================================
+   MÓDULO DE GESTIÓN DE ROSTERS (RRHH) - ESTILOS CORPORATIVOS
+   ========================================================================== */
+
+/* Tarjetas de acción en el Menú Principal */
+.rrhh-title-divider {
+  margin-top: 20px;
+  padding-top: 14px;
+  border-top: 1px dashed var(--border-subtle);
+  color: var(--primary);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.rrhh-title-divider::before {
+  content: '⚡';
+  font-size: 14px;
+}
+
+.home-action-card.card-roster {
+  border-left: 4px solid var(--primary);
+}
+.home-action-card.card-roster:hover {
+  border-color: var(--primary);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 18px rgba(200, 30, 43, 0.12);
+}
+.action-card-icon-box.roster-icon {
+  background: var(--primary-subtle);
+  color: var(--primary);
+}
+
+.home-action-card.card-roster-hist {
+  border-left: 4px solid #475569;
+}
+.home-action-card.card-roster-hist:hover {
+  border-color: #475569;
+  transform: translateY(-2px);
+  box-shadow: 0 6px 18px rgba(71, 85, 105, 0.12);
+}
+.action-card-icon-box.roster-hist-icon {
+  background: #f1f5f9;
+  color: #475569;
+}
+[data-theme='dark'] .action-card-icon-box.roster-hist-icon {
+  background: #1e293b;
+  color: #94a3b8;
+}
+
+/* Contenedor panorámico cuando la ventana se ensancha */
+.app-container.app-panoramic {
+  max-width: 100% !important;
+  width: 100% !important;
+}
+
+/* Contenedor general de la vista de Roster */
+.roster-view-container,
+.roster-history-container {
+  display: flex;
+  flex-direction: column;
+  height: calc(100vh - 65px);
+  background: var(--bg-app);
+  overflow: hidden;
+}
+
+/* Barra de navegación superior de la vista */
+.roster-top-nav {
+  padding: 12px 20px;
+  background: var(--bg-surface);
+  border-bottom: 1px solid var(--border-subtle);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  box-shadow: var(--shadow-sm);
+  z-index: 5;
+  flex-shrink: 0;
+}
+.roster-top-nav-left {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.btn-roster-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: transparent;
+  border: 1px solid var(--border-input);
+  border-radius: var(--radius-sm);
+  padding: 7px 12px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: var(--transition);
+}
+.btn-roster-back:hover {
+  background: var(--bg-surface-hover);
+  color: var(--text-primary);
+  border-color: var(--text-muted);
+}
+.roster-header-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.roster-header-title h2 {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 0;
+}
+.roster-title-badge {
+  background: var(--primary);
+  color: #fff;
+  font-size: 10.5px;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: var(--radius-sm);
+  letter-spacing: 0.5px;
+}
+
+/* Botón para exportar Excel directo desde la cabecera */
+.btn-export-excel-header {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  background: #059669;
+  color: #ffffff;
+  border: none;
+  border-radius: var(--radius-sm);
+  padding: 7px 14px;
+  font-size: 12.5px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: var(--transition);
+  box-shadow: 0 2px 8px rgba(5, 150, 105, 0.2);
+}
+.btn-export-excel-header:hover:not(:disabled) {
+  background: #047857;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(5, 150, 105, 0.3);
+}
+.btn-export-excel-header:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* Botón Toggle Gantt */
+.btn-toggle-gantt {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  background: var(--bg-surface-elevated);
+  border: 1px solid var(--border-input);
+  border-radius: var(--radius-sm);
+  padding: 7px 14px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: var(--transition);
+}
+.btn-toggle-gantt:hover {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+.btn-toggle-gantt.gantt-hidden {
+  background: var(--primary-subtle);
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+.btn-go-new-roster {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--primary);
+  color: #fff;
+  border: none;
+  border-radius: var(--radius-sm);
+  padding: 7px 14px;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: var(--transition);
+}
+.btn-go-new-roster:hover {
+  background: var(--primary-dark);
+}
+
+/* Disposición principal: Split (Dividido) o Centered (Centrado) */
+.roster-main-layout {
+  flex: 1;
+  display: flex;
+  overflow: hidden;
+  padding: 16px 20px;
+  gap: 18px;
+}
+.roster-main-layout.layout-split {
+  display: grid;
+  grid-template-columns: 400px 1fr;
+}
+.roster-main-layout.layout-centered {
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  overflow-y: auto;
+}
+.roster-main-layout.layout-centered .roster-form-panel {
+  max-width: 520px;
+  width: 100%;
+}
+
+/* Panel Izquierdo: Formulario */
+.roster-form-panel {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow-y: auto;
+}
+.roster-form-card {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: 18px 20px;
+  box-shadow: var(--shadow-sm);
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.roster-form-header h3 {
+  margin: 0 0 4px;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+.roster-form-header p {
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+/* Alertas ágiles de feedback */
+.roster-alert {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border-radius: var(--radius-sm);
+  font-size: 12.5px;
+  line-height: 1.4;
+  position: relative;
+}
+.roster-alert.alert-success {
+  background: #ecfdf5;
+  border: 1px solid #a7f3d0;
+  color: #065f46;
+}
+[data-theme='dark'] .roster-alert.alert-success {
+  background: rgba(5, 150, 105, 0.2);
+  border-color: #059669;
+  color: #6ee7b7;
+}
+.roster-alert.alert-error {
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #991b1b;
+}
+[data-theme='dark'] .roster-alert.alert-error {
+  background: rgba(200, 30, 43, 0.2);
+  border-color: #ef4444;
+  color: #fca5a5;
+}
+.roster-alert button {
+  margin-left: auto;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  font-weight: 700;
+  color: inherit;
+}
+
+/* Campos del formulario */
+.roster-form-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.form-group-roster {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.form-group-roster.highlight-project {
+  background: var(--bg-surface-hover);
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-input);
+}
+.roster-label {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+.roster-label-num {
+  width: 19px;
+  height: 19px;
+  background: var(--primary);
+  color: #fff;
+  border-radius: 50%;
+  font-size: 11px;
+  font-weight: 800;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.required {
+  color: var(--primary);
+}
+.form-hint {
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+.roster-select,
+.roster-input {
+  width: 100%;
+  padding: 9px 12px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-input);
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  font-size: 13px;
+  font-family: inherit;
+  transition: var(--transition);
+}
+.roster-select:focus,
+.roster-input:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px var(--primary-glow);
+}
+
+.roster-dates-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.date-field-box {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.date-sublabel {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+/* Selector de Tipo: Campo / Franco */
+.roster-type-selector {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.btn-type-pill {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 10px 12px;
+  border: 1.5px solid var(--border-input);
+  background: var(--bg-surface);
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: var(--transition);
+}
+.btn-type-pill .pill-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--text-muted);
+}
+.btn-type-pill.pill-campo.active {
+  border-color: #059669;
+  background: #ecfdf5;
+  color: #065f46;
+}
+.btn-type-pill.pill-campo.active .pill-dot {
+  background: #059669;
+}
+[data-theme='dark'] .btn-type-pill.pill-campo.active {
+  background: rgba(5, 150, 105, 0.25);
+  color: #6ee7b7;
+}
+
+.btn-type-pill.pill-franco.active {
+  border-color: #7c3aed;
+  background: #f5f3ff;
+  color: #5b21b6;
+}
+.btn-type-pill.pill-franco.active .pill-dot {
+  background: #7c3aed;
+}
+[data-theme='dark'] .btn-type-pill.pill-franco.active {
+  background: rgba(124, 58, 237, 0.25);
+  color: #c4b5fd;
+}
+
+/* Tarifas */
+.tariffs-container {
+  background: var(--bg-surface-hover);
+  padding: 12px 14px;
+  border-radius: var(--radius-sm);
+  border: 1px dashed var(--border-input);
+}
+.tariffs-inputs-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+.tariff-input-box {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.tariff-title {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.sunday-badge-mini {
+  background: #f59e0b;
+  color: #fff;
+  font-size: 9px;
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-weight: 800;
+}
+.input-currency-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+.currency-symbol {
+  position: absolute;
+  left: 10px;
+  font-weight: 700;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+.tariff-input {
+  padding-left: 22px;
+  font-weight: 700;
+}
+.tariff-input-box.sunday-tariff .tariff-input {
+  border-color: #f59e0b;
+}
+
+.franco-info-box {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 10px 12px;
+  background: var(--bg-surface-hover);
+  border-radius: var(--radius-sm);
+  font-size: 11.5px;
+  color: var(--text-secondary);
+  line-height: 1.4;
+}
+.franco-info-box svg {
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+/* Acciones de formulario */
+.roster-form-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 6px;
+}
+.btn-roster-submit {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px 18px;
+  background: var(--primary);
+  color: #fff;
+  border: none;
+  border-radius: var(--radius-sm);
+  font-size: 13.5px;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: var(--shadow-red);
+  transition: var(--transition);
+}
+.btn-roster-submit:hover:not(:disabled) {
+  background: var(--primary-dark);
+  transform: translateY(-1px);
+}
+.btn-roster-submit:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+.save-hint {
+  font-size: 11px;
+  color: var(--text-muted);
+  text-align: center;
+}
+
+/* ==========================================================================
+   PANEL DERECHO: CALENDARIO ESTILO GANTT
+   ========================================================================== */
+.roster-gantt-panel {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+}
+.roster-gantt-card {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;
+}
+
+/* Encabezado y controles del Gantt */
+.gantt-header-controls {
+  padding: 12px 18px;
+  border-bottom: 1px solid var(--border-subtle);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--bg-surface-elevated);
+  flex-shrink: 0;
+}
+.gantt-month-navigator {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.btn-gantt-nav {
+  width: 30px;
+  height: 30px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-input);
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  transition: var(--transition);
+}
+.btn-gantt-nav:hover {
+  background: var(--bg-surface-hover);
+  border-color: var(--primary);
+  color: var(--primary);
+}
+.gantt-current-month {
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--text-primary);
+  min-width: 170px;
+  text-align: center;
+}
+
+.gantt-right-controls-group {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.gantt-project-filter {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.gantt-project-filter label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+.gantt-filter-select {
+  padding: 6px 10px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-input);
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  font-size: 12px;
+  max-width: 260px;
+}
+
+/* Barra de tamaño de columnas / zoom en Gantt */
+.gantt-col-size-bar {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-input);
+  border-radius: var(--radius-sm);
+  padding: 2px 7px;
+  font-size: 11px;
+}
+.size-label {
+  color: var(--text-secondary);
+  font-weight: 600;
+  font-size: 10.5px;
+}
+.size-num-indicator {
+  font-family: monospace;
+  font-weight: 700;
+  color: var(--text-primary);
+  min-width: 28px;
+  text-align: center;
+  font-size: 10.5px;
+}
+.btn-col-step {
+  width: 20px;
+  height: 20px;
+  border-radius: 4px;
+  border: 1px solid var(--border-input);
+  background: var(--bg-surface-hover);
+  color: var(--text-primary);
+  font-weight: 800;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  line-height: 1;
+  transition: var(--transition);
+}
+.btn-col-step:hover {
+  background: var(--primary);
+  color: #fff;
+  border-color: var(--primary);
+}
+.btn-col-reset {
+  background: transparent;
+  border: 1px solid var(--border-subtle);
+  border-radius: 4px;
+  padding: 2px 6px;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: var(--transition);
+  margin-left: 2px;
+}
+.btn-col-reset:hover {
+  color: var(--text-primary);
+  border-color: var(--border-input);
+  background: var(--bg-surface-hover);
+}
+
+/* Barra de leyenda */
+.gantt-legend-bar {
+  padding: 8px 18px;
+  background: var(--bg-app);
+  border-bottom: 1px solid var(--border-subtle);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  font-size: 11.5px;
+  color: var(--text-secondary);
+  flex-shrink: 0;
+}
+.legend-items-left {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  flex-wrap: wrap;
+}
+.legend-resizer-hint {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-style: italic;
+  white-space: nowrap;
+}
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.legend-box {
+  width: 14px;
+  height: 14px;
+  border-radius: 3px;
+}
+.legend-box.campo {
+  background: #059669;
+}
+.legend-box.franco {
+  background: #7c3aed;
+}
+.legend-box.domingo {
+  background: #fde68a;
+  border: 1px solid #f59e0b;
+}
+[data-theme='dark'] .legend-box.domingo {
+  background: #b45309;
+}
+
+/* Grilla del Gantt con scroll */
+.gantt-table-container {
+  flex: 1;
+  overflow: auto;
+  position: relative;
+}
+.gantt-loading,
+.gantt-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  min-height: 250px;
+  color: var(--text-secondary);
+  text-align: center;
+  padding: 20px;
+}
+.spinner-mini {
+  width: 24px;
+  height: 24px;
+  border: 2.5px solid var(--border-input);
+  border-top-color: var(--primary);
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+  margin-bottom: 10px;
+}
+.gantt-empty h4 {
+  margin: 10px 0 4px;
+  color: var(--text-primary);
+}
+.gantt-empty p {
+  margin: 0;
+  font-size: 12px;
+}
+
+/* Tabla del Gantt */
+.gantt-table {
+  width: max-content;
+  min-width: 100%;
+  border-collapse: collapse;
+  font-size: 11.5px;
+}
+.gantt-table th,
+.gantt-table td {
+  border: 1px solid var(--border-subtle);
+  padding: 6px 4px;
+  text-align: center;
+}
+
+/* Encabezados de tabla */
+.gantt-th-emp {
+  position: sticky;
+  left: 0;
+  z-index: 4;
+  background: var(--bg-surface-elevated);
+  text-align: left !important;
+  padding: 6px 10px !important;
+  font-weight: 700;
+  color: var(--text-primary);
+  box-sizing: border-box;
+}
+.gantt-th-totales {
+  position: sticky;
+  z-index: 4;
+  background: var(--bg-surface-elevated);
+  font-weight: 700;
+  color: var(--text-primary);
+  padding: 6px 8px !important;
+  box-sizing: border-box;
+}
+.gantt-th-day {
+  padding: 6px 2px;
+  background: var(--bg-surface);
+  color: var(--text-secondary);
+  font-weight: 600;
+  box-sizing: border-box;
+}
+
+/* Contenido de celda de encabezado redimensionable */
+.th-content-resizable {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  user-select: none;
+}
+.day-header-cell {
+  flex-direction: column;
+  justify-content: center;
+  gap: 1px;
+}
+.col-resizer {
+  position: absolute;
+  top: -6px;
+  right: -5px;
+  width: 10px;
+  height: calc(100% + 12px);
+  cursor: col-resize;
+  z-index: 20;
+  user-select: none;
+}
+.col-resizer:hover,
+.col-resizer:active {
+  background: var(--primary);
+  opacity: 0.7;
+  border-radius: 2px;
+}
+.col-resizer.day-resizer {
+  right: -3px;
+  width: 6px;
+}
+
+.th-day-name {
+  display: block;
+  font-size: 9.5px;
+  text-transform: uppercase;
+}
+.th-day-num {
+  display: block;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+/* RESALTADO ESPECIAL DE DOMINGOS EN GANTT */
+.col-domingo {
+  background: #fffbeb !important;
+  border-left: 1.5px solid #fcd34d !important;
+  border-right: 1.5px solid #fcd34d !important;
+}
+[data-theme='dark'] .col-domingo {
+  background: rgba(245, 158, 11, 0.12) !important;
+  border-color: rgba(245, 158, 11, 0.3) !important;
+}
+.dom-tag {
+  display: inline-block;
+  background: #f59e0b;
+  color: #fff;
+  font-size: 8px;
+  font-weight: 800;
+  padding: 1px 3px;
+  border-radius: 2px;
+  margin-top: 1px;
+}
+
+/* Celdas de empleados */
+.gantt-td-emp {
+  position: sticky;
+  left: 0;
+  z-index: 3;
+  background: var(--bg-surface);
+  text-align: left !important;
+  padding: 6px 10px !important;
+  box-sizing: border-box;
+}
+.emp-info-pill {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+}
+.emp-avatar-mini {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+  color: #fff;
+  font-size: 10px;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.emp-text-col {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+}
+.emp-name-text {
+  font-weight: 700;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 12px;
+  line-height: 1.2;
+}
+
+/* Distinción clara de proyectos asignados */
+.emp-projects-badge-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.emp-proy-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--bg-surface-hover);
+  border: 1px solid var(--border-input);
+  border-radius: 4px;
+  padding: 1px 6px;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  max-width: 100%;
+}
+.emp-proy-chip .proy-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #059669;
+  flex-shrink: 0;
+}
+.emp-proy-chip .proy-text {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.emp-proy-chip.unassigned {
+  color: var(--text-muted);
+  border-style: dashed;
+}
+
+/* Celda de Totales */
+.gantt-td-totales {
+  position: sticky;
+  left: 180px;
+  z-index: 3;
+  background: var(--bg-surface);
+}
+.totals-card-mini {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  padding: 2px 8px;
+}
+.total-money {
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--primary);
+}
+.total-days-detail {
+  font-size: 10px;
+  color: var(--text-secondary);
+}
+
+/* Barras dentro de las celdas diarias */
+.gantt-td-day {
+  height: 38px;
+  position: relative;
+  padding: 3px !important;
+}
+.gantt-bar-cell {
+  width: 100%;
+  height: 100%;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-weight: 800;
+  cursor: pointer;
+  transition: transform 0.15s;
+}
+.gantt-bar-cell:hover {
+  transform: scale(1.08);
+  box-shadow: var(--shadow-sm);
+}
+.gantt-bar-cell.bar-campo {
+  background: #059669;
+  color: #ffffff;
+}
+.gantt-bar-cell.bar-franco {
+  background: #7c3aed;
+  color: #ffffff;
+}
+
+/* ==========================================================================
+   VISTA: HISTORIAL Y EXPORTACIÓN EXCEL DE ROSTERS
+   ========================================================================== */
+.roster-history-content {
+  flex: 1;
+  padding: 20px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+.history-export-card {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: 20px 24px;
+  box-shadow: var(--shadow-sm);
+}
+.history-controls-row {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 20px;
+}
+.history-period-selector {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.history-filter-label {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+.select-row-period {
+  display: flex;
+  gap: 10px;
+}
+.period-select {
+  padding: 9px 14px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-input);
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  font-size: 13.5px;
   font-weight: 600;
 }
-
-[data-theme='rpg'] .area-default-card {
-  background: rgba(184, 137, 72, 0.15);
-  border: 1px solid #c9aa6d;
-  color: #2b1d0c;
+.period-select.year-select {
+  width: 100px;
 }
 
-[data-theme='rpg'] .btn-submit-spacious {
-  background: linear-gradient(135deg, #991b1b 0%, #881337 50%, #4c0519 100%);
-  color: #fef3c7;
-  font-family: 'Cinzel', serif;
-  font-weight: 900;
+.btn-download-excel {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  padding: 11px 22px;
+  background: #059669;
+  color: #fff;
+  border: none;
+  border-radius: var(--radius-sm);
+  font-size: 13.5px;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(5, 150, 105, 0.25);
+  transition: var(--transition);
+}
+.btn-download-excel:hover:not(:disabled) {
+  background: #047857;
+  transform: translateY(-1px);
+}
+.btn-download-excel:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.excel-info-pill-box {
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border-subtle);
+  display: flex;
+  align-items: center;
+  gap: 12px;
   font-size: 12px;
-  letter-spacing: 0.8px;
-  border: 2px solid #b91c1c;
-  box-shadow: 0 4px 14px rgba(153, 27, 27, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.3);
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
+  color: var(--text-secondary);
+}
+.excel-badge {
+  background: #ecfdf5;
+  color: #065f46;
+  border: 1px solid #a7f3d0;
+  padding: 3px 8px;
+  border-radius: 4px;
+  font-weight: 700;
+  font-size: 11px;
+}
+[data-theme='dark'] .excel-badge {
+  background: rgba(5, 150, 105, 0.2);
+  color: #6ee7b7;
+  border-color: #059669;
+}
+.sheet-tag {
+  display: inline-block;
+  background: var(--bg-surface-hover);
+  border: 1px solid var(--border-input);
+  padding: 1px 6px;
+  border-radius: 3px;
+  font-weight: 600;
+  margin: 0 3px;
 }
 
-[data-theme='rpg'] .btn-submit-spacious:hover:not(:disabled) {
-  background: linear-gradient(135deg, #b91c1c 0%, #9f1239 50%, #70092b 100%);
-  box-shadow: 0 6px 18px rgba(153, 27, 27, 0.8);
+/* Tabla de historial de turnos */
+.history-table-card {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: 18px 24px;
+  box-shadow: var(--shadow-sm);
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
 }
+.history-table-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.history-table-header h3 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+.records-count-chip {
+  background: var(--bg-surface-hover);
+  color: var(--text-secondary);
+  font-size: 11.5px;
+  font-weight: 600;
+  padding: 3px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--border-input);
+}
+
+.history-table-wrapper {
+  overflow-x: auto;
+}
+.roster-history-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12.5px;
+}
+.roster-history-table th {
+  background: var(--bg-surface-elevated);
+  color: var(--text-secondary);
+  font-weight: 700;
+  text-align: left;
+  padding: 10px 12px;
+  border-bottom: 1.5px solid var(--border-subtle);
+  font-size: 11.5px;
+}
+.roster-history-table td {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border-subtle);
+  color: var(--text-primary);
+}
+.emp-cell {
+  display: flex;
+  flex-direction: column;
+}
+.emp-dni-sub {
+  font-size: 10.5px;
+  color: var(--text-muted);
+}
+.proy-cell {
+  max-width: 250px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 12px;
+}
+.date-cell {
+  font-family: monospace;
+  font-size: 12px;
+}
+.num-cell {
+  text-align: right;
+  font-weight: 600;
+}
+.status-pill {
+  display: inline-block;
+  padding: 3px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 700;
+}
+.status-pill.status-campo {
+  background: #ecfdf5;
+  color: #065f46;
+}
+.status-pill.status-franco {
+  background: #f5f3ff;
+  color: #5b21b6;
+}
+[data-theme='dark'] .status-pill.status-campo {
+  background: rgba(5, 150, 105, 0.2);
+  color: #6ee7b7;
+}
+[data-theme='dark'] .status-pill.status-franco {
+  background: rgba(124, 58, 237, 0.2);
+  color: #c4b5fd;
+}
+
+.btn-delete-roster {
+  background: transparent;
+  border: 1px solid var(--border-input);
+  border-radius: var(--radius-sm);
+  padding: 5px 8px;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: var(--transition);
+}
+.btn-delete-roster:hover {
+  background: #fef2f2;
+  border-color: #ef4444;
+  color: #ef4444;
+}
+[data-theme='dark'] .btn-delete-roster:hover {
+  background: rgba(239, 68, 68, 0.2);
+}
+
+.btn-empty-action {
+  margin-top: 10px;
+  background: var(--bg-surface);
+  border: 1px solid var(--primary);
+  color: var(--primary);
+  padding: 7px 14px;
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: var(--transition);
+}
+.btn-empty-action:hover {
+  background: var(--primary);
+  color: #fff;
+}
+
+/* ==========================================================================
+   MODAL DE EXPORTACIÓN ROSTER POR PROYECTO
+   ========================================================================== */
+.roster-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.65);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  animation: fadeIn 0.15s ease-out;
+}
+
+.roster-modal-card {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: 24px;
+  max-width: 520px;
+  width: 90%;
+  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.35);
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  animation: modalScaleUp 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes modalScaleUp {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.roster-modal-header h3 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 800;
+  color: var(--text-primary);
+}
+
+.roster-modal-header p {
+  margin: 8px 0 0;
+  font-size: 12px;
+  color: var(--text-secondary);
+  line-height: 1.45;
+}
+
+.roster-modal-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.roster-modal-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  padding-top: 6px;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.btn-modal-cancel {
+  background: transparent;
+  border: 1px solid var(--border-input);
+  border-radius: var(--radius-sm);
+  padding: 8px 16px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: var(--transition);
+}
+
+.btn-modal-cancel:hover:not(:disabled) {
+  background: var(--bg-surface-hover);
+  color: var(--text-primary);
+}
+
+.btn-modal-confirm {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  background: #059669;
+  color: #ffffff;
+  border: none;
+  border-radius: var(--radius-sm);
+  padding: 8px 18px;
+  font-size: 12.5px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: var(--transition);
+  box-shadow: 0 2px 8px rgba(5, 150, 105, 0.25);
+}
+
+.btn-modal-confirm:hover:not(:disabled) {
+  background: #047857;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(5, 150, 105, 0.35);
+}
+
+.btn-modal-confirm:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 
