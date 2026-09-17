@@ -30,12 +30,95 @@ export default function RosterView({ usuario, onVolver, tema }) {
   // Estado del Formulario de Roster
   // IMPORTANTE: Según especificación del usuario, la selección de Proyecto va PRIMERO y es obligatoria
   const [proyecto, setProyecto] = useState('');
-  const [empleadoSeleccionado, setEmpleadoSeleccionado] = useState('');
+  const [empleadosSeleccionados, setEmpleadosSeleccionados] = useState([]);
   const [fechaInicio, setFechaInicio] = useState(getFechaHoy());
   const [fechaFin, setFechaFin] = useState(getFechaHoy());
   const [tipo, setTipo] = useState('Campo'); // 'Campo' | 'Franco'
   const [precioDia, setPrecioDia] = useState('');
   const [precioDomingo, setPrecioDomingo] = useState('');
+
+  // Helpers para selección múltiple
+  const toggleSeleccionEmpleado = (nom) => {
+    setEmpleadosSeleccionados(prev =>
+      prev.includes(nom) ? prev.filter(n => n !== nom) : [...prev, nom]
+    );
+  };
+
+  const seleccionarTodosEmpleados = () => {
+    setEmpleadosSeleccionados(empleadosDisponibles.map(e => e.nombre));
+  };
+
+  const deseleccionarTodosEmpleados = () => {
+    setEmpleadosSeleccionados([]);
+  };
+
+  // Estados para Modal de Modificación de Roster desde el Gantt
+  const [modalEditar, setModalEditar] = useState(false);
+  const [editId, setEditId] = useState('');
+  const [editEmpleado, setEditEmpleado] = useState('');
+  const [editProyecto, setEditProyecto] = useState('');
+  const [editFechaInicio, setEditFechaInicio] = useState('');
+  const [editFechaFin, setEditFechaFin] = useState('');
+  const [editTipo, setEditTipo] = useState('Campo');
+  const [editPrecioDia, setEditPrecioDia] = useState('');
+  const [editPrecioDomingo, setEditPrecioDomingo] = useState('');
+  const [guardandoEdit, setGuardandoEdit] = useState(false);
+
+  const handleAbrirEditarGantt = (r) => {
+    if (!r) return;
+    setEditId(r.id);
+    setEditEmpleado(r.empleado);
+    setEditProyecto(r.proyecto);
+    setEditFechaInicio(r.fecha_inicio);
+    setEditFechaFin(r.fecha_fin);
+    setEditTipo(r.tipo || 'Campo');
+    setEditPrecioDia(r.precio_dia != null ? String(r.precio_dia) : '');
+    setEditPrecioDomingo(r.precio_domingo != null ? String(r.precio_domingo) : '');
+    setModalEditar(true);
+  };
+
+  const handleGuardarEdicionGantt = async (e) => {
+    e.preventDefault();
+    if (!editEmpleado || !editProyecto || !editFechaInicio || !editFechaFin) {
+      alert('Por favor completa todos los campos requeridos.');
+      return;
+    }
+    if (editFechaInicio > editFechaFin) {
+      alert('La fecha de inicio no puede ser posterior a la fecha fin.');
+      return;
+    }
+    setGuardandoEdit(true);
+    try {
+      const empObj = empleadosDisponibles.find(emp => emp.nombre === editEmpleado);
+      const res = await api.guardarRoster({
+        id: editId,
+        empleado: editEmpleado,
+        dni: empObj ? empObj.dni : '',
+        usuario_mail: empObj ? (empObj.mail || empObj.email || '') : '',
+        proyecto: editProyecto,
+        fecha_inicio: editFechaInicio,
+        fecha_fin: editFechaFin,
+        tipo: editTipo,
+        precio_dia: editTipo === 'Campo' ? Number(editPrecioDia) || 0 : 0,
+        precio_domingo: editTipo === 'Campo' ? Number(editPrecioDomingo) || 0 : 0
+      });
+      if (res && res.exito) {
+        setModalEditar(false);
+        setMensajeFeedback({
+          tipo: 'exito',
+          texto: `Turno de roster de ${editEmpleado} modificado y sincronizado correctamente.`
+        });
+        await cargarRostersMes(anioGantt, mesGantt);
+      } else {
+        alert(res?.error || 'Error al guardar la modificación.');
+      }
+    } catch (err) {
+      console.error(err);
+      alert('Error de conexión al modificar el registro.');
+    } finally {
+      setGuardandoEdit(false);
+    }
+  };
 
   // Estados de carga y feedback ágil
   const [guardando, setGuardando] = useState(false);
@@ -218,7 +301,7 @@ export default function RosterView({ usuario, onVolver, tema }) {
     }
   };
 
-  // Envío del formulario
+  // Envío del formulario con soporte para múltiples empleados
   const handleGuardarRoster = async (e) => {
     e.preventDefault();
     setMensajeFeedback(null);
@@ -227,8 +310,8 @@ export default function RosterView({ usuario, onVolver, tema }) {
       setMensajeFeedback({ tipo: 'error', texto: 'Debes seleccionar el proyecto asignado.' });
       return;
     }
-    if (!empleadoSeleccionado) {
-      setMensajeFeedback({ tipo: 'error', texto: 'Debes seleccionar un empleado.' });
+    if (empleadosSeleccionados.length === 0) {
+      setMensajeFeedback({ tipo: 'error', texto: 'Debes seleccionar al menos un empleado para el roster.' });
       return;
     }
     if (!fechaInicio || !fechaFin) {
@@ -240,29 +323,33 @@ export default function RosterView({ usuario, onVolver, tema }) {
       return;
     }
 
-    const empObj = empleadosDisponibles.find(e => e.nombre === empleadoSeleccionado);
-    const dniEmp = empObj ? empObj.dni : '';
-    const mailEmp = empObj ? (empObj.mail || empObj.email || '') : '';
-
     setGuardando(true);
     try {
-      const datos = {
-        empleado: empleadoSeleccionado,
-        dni: dniEmp,
-        usuario_mail: mailEmp,
-        proyecto: proyecto,
-        fecha_inicio: fechaInicio,
-        fecha_fin: fechaFin,
-        tipo: tipo,
-        precio_dia: tipo === 'Campo' ? Number(precioDia) || 0 : 0,
-        precio_domingo: tipo === 'Campo' ? Number(precioDomingo) || 0 : 0
-      };
+      const promesas = empleadosSeleccionados.map(empNombre => {
+        const empObj = empleadosDisponibles.find(e => e.nombre === empNombre);
+        const dniEmp = empObj ? empObj.dni : '';
+        const mailEmp = empObj ? (empObj.mail || empObj.email || '') : '';
+        return api.guardarRoster({
+          empleado: empNombre,
+          dni: dniEmp,
+          usuario_mail: mailEmp,
+          proyecto: proyecto,
+          fecha_inicio: fechaInicio,
+          fecha_fin: fechaFin,
+          tipo: tipo,
+          precio_dia: tipo === 'Campo' ? Number(precioDia) || 0 : 0,
+          precio_domingo: tipo === 'Campo' ? Number(precioDomingo) || 0 : 0
+        });
+      });
 
-      const res = await api.guardarRoster(datos);
-      if (res && res.exito) {
+      const resultados = await Promise.all(promesas);
+      const fallo = resultados.find(r => !r || !r.exito);
+
+      if (!fallo) {
+        const cant = empleadosSeleccionados.length;
         setMensajeFeedback({
           tipo: 'exito',
-          texto: `¡Roster registrado y sincronizado en Google Sheets para ${empleadoSeleccionado}! Podés continuar cargando los siguientes turnos.`
+          texto: `¡Roster registrado y sincronizado en Google Sheets para ${cant} empleado${cant > 1 ? 's' : ''} (${empleadosSeleccionados.join(', ')})! Podés continuar cargando los siguientes turnos.`
         });
         // Actualizar el Gantt en tiempo real
         await cargarRostersMes(anioGantt, mesGantt);
@@ -281,7 +368,7 @@ export default function RosterView({ usuario, onVolver, tema }) {
           setTipo('Franco');
         }
       } else {
-        setMensajeFeedback({ tipo: 'error', texto: res?.error || 'Error al guardar el roster.' });
+        setMensajeFeedback({ tipo: 'error', texto: fallo?.error || 'Ocurrió un error al guardar el roster para algunos empleados.' });
       }
     } catch (err) {
       console.error('Error guardando roster:', err);
@@ -466,25 +553,65 @@ export default function RosterView({ usuario, onVolver, tema }) {
                 <span className="form-hint">Proyectos exclusivos de Ingeniería. Los francos deben asignarse a este mismo proyecto para cerrar el ciclo.</span>
               </div>
 
-              {/* 2. SELECCIÓN DE EMPLEADO (EXCLUSIVAMENTE ÁREA DE INGENIERÍA) */}
+              {/* 2. SELECCIÓN DE EMPLEADOS (CARGA MÚLTIPLE - INGENIERÍA) */}
               <div className="form-group-roster">
-                <label className="roster-label">
-                  <span className="roster-label-num">2</span>
-                  <span>Empleado (Ingeniería - I) <strong className="required">*</strong></span>
-                </label>
-                <select
-                  value={empleadoSeleccionado}
-                  onChange={(e) => setEmpleadoSeleccionado(e.target.value)}
-                  className="roster-select"
-                  required
-                >
-                  <option value="" disabled>Seleccionar empleado de Ingeniería...</option>
-                  {empleadosDisponibles.map((emp, idx) => (
-                    <option key={idx} value={emp.nombre}>
-                      {emp.nombre} {emp.area ? `(${emp.area})` : ''}
-                    </option>
-                  ))}
-                </select>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
+                  <label className="roster-label" style={{ margin: 0 }}>
+                    <span className="roster-label-num">2</span>
+                    <span>Empleados (Ingeniería - I) <strong className="required">*</strong></span>
+                  </label>
+                  <div className="roster-emp-actions-row">
+                    <button
+                      type="button"
+                      className="btn-link-action"
+                      onClick={seleccionarTodosEmpleados}
+                    >
+                      Seleccionar todos
+                    </button>
+                    <span style={{ color: 'var(--border-input)', fontSize: '11px' }}>•</span>
+                    <button
+                      type="button"
+                      className="btn-link-action"
+                      onClick={deseleccionarTodosEmpleados}
+                    >
+                      Limpiar
+                    </button>
+                  </div>
+                </div>
+
+                <div className="roster-multi-emp-container">
+                  {empleadosDisponibles.length === 0 ? (
+                    <div className="roster-multi-emp-empty">No hay empleados disponibles en el área de Ingeniería.</div>
+                  ) : (
+                    empleadosDisponibles.map((emp, idx) => {
+                      const isSelected = empleadosSeleccionados.includes(emp.nombre);
+                      return (
+                        <div
+                          key={idx}
+                          className={`emp-multi-chip ${isSelected ? 'selected' : ''}`}
+                          onClick={() => toggleSeleccionEmpleado(emp.nombre)}
+                          title={`Click para ${isSelected ? 'quitar' : 'seleccionar'} a ${emp.nombre}`}
+                        >
+                          <div className={`chip-checkbox ${isSelected ? 'checked' : ''}`}>
+                            {isSelected ? '✓' : ''}
+                          </div>
+                          <span className="chip-emp-name">{emp.nombre}</span>
+                          {emp.area && <span className="chip-emp-area">({emp.area})</span>}
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+
+                <div className="roster-emp-selected-summary">
+                  {empleadosSeleccionados.length === 0 ? (
+                    <span className="summary-empty">⚠️ Seleccioná uno o más empleados para asignar el roster.</span>
+                  ) : (
+                    <span className="summary-filled">
+                      ✓ <strong>{empleadosSeleccionados.length}</strong> seleccionado{empleadosSeleccionados.length > 1 ? 's' : ''}: {empleadosSeleccionados.join(', ')}
+                    </span>
+                  )}
+                </div>
               </div>
 
               {/* 3. RANGO DE FECHAS (DISPONIBLE TANTO PARA CAMPO COMO PARA FRANCO) */}
@@ -929,7 +1056,9 @@ export default function RosterView({ usuario, onVolver, tema }) {
                                   {rInfo && (
                                     <div
                                       className={`gantt-bar-cell ${rInfo.tipo === 'Campo' ? 'bar-campo' : 'bar-franco'}`}
-                                      title={`${rInfo.tipo === 'Campo' ? '🚜 Campo / Obra' : '🏠 Franco'}\nEmpleado: ${emp.nombre}\nProyecto: ${rInfo.proyecto}\nTarifa día: $${rInfo.precio_dia || 0} | Dom: $${rInfo.precio_domingo || 0}`}
+                                      title={`${rInfo.tipo === 'Campo' ? '🚜 Campo / Obra' : '🏠 Franco'}\nEmpleado: ${emp.nombre}\nProyecto: ${rInfo.proyecto}\nTarifa día: $${rInfo.precio_dia || 0} | Dom: $${rInfo.precio_domingo || 0}\n\n(Click para modificar este turno)`}
+                                      onClick={() => handleAbrirEditarGantt(rInfo)}
+                                      style={{ cursor: 'pointer' }}
                                     >
                                       {rInfo.tipo === 'Campo' ? 'C' : 'F'}
                                     </div>
@@ -1017,6 +1146,150 @@ export default function RosterView({ usuario, onVolver, tema }) {
                 )}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal interactivo para modificar el turno de Roster seleccionado en el Gantt */}
+      {modalEditar && (
+        <div className="roster-modal-overlay" onClick={() => !guardandoEdit && setModalEditar(false)}>
+          <div className="roster-modal-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '540px' }}>
+            <div className="roster-modal-header">
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span className="roster-title-badge" style={{ margin: 0, background: '#2563eb' }}>EDITAR</span>
+                <h3>Modificar Turno de Roster</h3>
+              </div>
+              <p>Actualiza la asignación, fechas o tarifas. Los cambios impactarán en el Gantt y se sincronizarán con Google Sheets.</p>
+            </div>
+
+            <form onSubmit={handleGuardarEdicionGantt} className="roster-modal-body">
+              {/* Empleado */}
+              <div className="form-group-roster" style={{ marginBottom: '10px' }}>
+                <label className="roster-label" style={{ fontSize: '12px' }}>Empleado (Ingeniería - I):</label>
+                <select
+                  value={editEmpleado}
+                  onChange={(e) => setEditEmpleado(e.target.value)}
+                  className="roster-select"
+                  required
+                >
+                  {empleadosDisponibles.map((emp, i) => (
+                    <option key={i} value={emp.nombre}>{emp.nombre}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Proyecto */}
+              <div className="form-group-roster" style={{ marginBottom: '10px' }}>
+                <label className="roster-label" style={{ fontSize: '12px' }}>Proyecto Asignado:</label>
+                <select
+                  value={editProyecto}
+                  onChange={(e) => setEditProyecto(e.target.value)}
+                  className="roster-select"
+                  required
+                >
+                  {proyectosDisponibles.map((p, i) => (
+                    <option key={i} value={p}>{p}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Rango de Fechas */}
+              <div className="form-group-roster" style={{ marginBottom: '10px' }}>
+                <label className="roster-label" style={{ fontSize: '12px' }}>Rango de Fechas:</label>
+                <div className="roster-dates-row">
+                  <div className="date-field-box">
+                    <span className="date-sublabel">Desde:</span>
+                    <input
+                      type="date"
+                      value={editFechaInicio}
+                      onChange={(e) => setEditFechaInicio(e.target.value)}
+                      className="roster-input date-input"
+                      required
+                    />
+                  </div>
+                  <div className="date-field-box">
+                    <span className="date-sublabel">Hasta:</span>
+                    <input
+                      type="date"
+                      value={editFechaFin}
+                      onChange={(e) => setEditFechaFin(e.target.value)}
+                      className="roster-input date-input"
+                      required
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Tipo */}
+              <div className="form-group-roster" style={{ marginBottom: '10px' }}>
+                <label className="roster-label" style={{ fontSize: '12px' }}>Tipo de Jornada:</label>
+                <div className="roster-type-selector">
+                  <button
+                    type="button"
+                    className={`btn-type-pill pill-campo ${editTipo === 'Campo' ? 'active' : ''}`}
+                    onClick={() => setEditTipo('Campo')}
+                  >
+                    🚜 Campo / Obra
+                  </button>
+                  <button
+                    type="button"
+                    className={`btn-type-pill pill-franco ${editTipo === 'Franco' ? 'active' : ''}`}
+                    onClick={() => setEditTipo('Franco')}
+                  >
+                    🏠 Franco / Descanso
+                  </button>
+                </div>
+              </div>
+
+              {/* Tarifas si es Campo */}
+              {editTipo === 'Campo' && (
+                <div className="tariffs-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginTop: '6px' }}>
+                  <div className="tariff-input-box">
+                    <label style={{ fontSize: '11px', fontWeight: 600 }}>Tarifa Día Normal ($):</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={editPrecioDia}
+                      onChange={(e) => setEditPrecioDia(e.target.value)}
+                      placeholder="0.00"
+                      className="roster-input"
+                    />
+                  </div>
+                  <div className="tariff-input-box">
+                    <label style={{ fontSize: '11px', fontWeight: 600 }}>Tarifa Día Domingo ($):</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={editPrecioDomingo}
+                      onChange={(e) => setEditPrecioDomingo(e.target.value)}
+                      placeholder="0.00"
+                      className="roster-input"
+                    />
+                  </div>
+                </div>
+              )}
+
+              <div className="roster-modal-footer" style={{ marginTop: '12px' }}>
+                <button
+                  type="button"
+                  className="btn-modal-cancel"
+                  disabled={guardandoEdit}
+                  onClick={() => setModalEditar(false)}
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="btn-modal-confirm"
+                  disabled={guardandoEdit}
+                  style={{ background: '#2563eb' }}
+                >
+                  {guardandoEdit ? 'Guardando...' : 'Guardar Modificación'}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

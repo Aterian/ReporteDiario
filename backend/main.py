@@ -509,6 +509,16 @@ class ApiPuente:
     def guardar_roster(self, datos: dict):
         """Guarda o actualiza un registro de roster con identificador UUID y sincroniza con Google Sheets."""
         try:
+            id_roster = str(datos.get("id") or "").strip()
+            old_roster = None
+            if id_roster:
+                with obtener_conexion() as conn:
+                    cursor = conn.cursor()
+                    cursor.execute("SELECT * FROM rosters WHERE id = ?", (id_roster,))
+                    row = cursor.fetchone()
+                    if row:
+                        old_roster = dict(row)
+
             res = guardar_registro_roster(datos)
             if not res or not res.get("exito"):
                 return res
@@ -529,10 +539,10 @@ class ApiPuente:
                 if emp_match:
                     usuario_mail = emp_match.get("mail") or emp_match.get("email") or ""
 
-            # Determinar lista de fechas del rango
+            # Determinar lista de fechas del rango nuevo
+            from datetime import datetime as dt, timedelta
             fechas_a_cargar = []
             if fecha_inicio and fecha_fin:
-                from datetime import datetime as dt, timedelta
                 try:
                     d_ini = dt.strptime(fecha_inicio, "%Y-%m-%d")
                     d_fin = dt.strptime(fecha_fin, "%Y-%m-%d")
@@ -546,6 +556,36 @@ class ApiPuente:
                     fechas_a_cargar = [fecha_inicio]
             elif fecha_inicio:
                 fechas_a_cargar = [fecha_inicio]
+
+            # Si se está modificando un registro previo, limpiar días antiguos que ya no correspondan
+            if old_roster:
+                old_emp = old_roster.get("empleado", "")
+                old_ini = old_roster.get("fecha_inicio", "")
+                old_fin = old_roster.get("fecha_fin", "")
+                fechas_antiguas = []
+                if old_ini and old_fin:
+                    try:
+                        oi = dt.strptime(old_ini, "%Y-%m-%d")
+                        of = dt.strptime(old_fin, "%Y-%m-%d")
+                        if oi > of:
+                            oi, of = of, oi
+                        c = oi
+                        while c <= of:
+                            fechas_antiguas.append(c.strftime("%Y-%m-%d"))
+                            c += timedelta(days=1)
+                    except Exception:
+                        fechas_antiguas = [old_ini]
+                
+                # Fechas a remover del historial
+                with obtener_conexion() as conn:
+                    cur = conn.cursor()
+                    for f_ant in fechas_antiguas:
+                        if f_ant not in fechas_a_cargar or old_emp != empleado:
+                            cur.execute(
+                                "DELETE FROM historial WHERE empleado = ? AND fecha = ? AND tipo_ocf IN ('Roster', 'Franco')",
+                                (old_emp, f_ant)
+                            )
+                    conn.commit()
 
             es_campo = (tipo.lower() == "campo")
             # En lugar de campo/campaña debe decir "Roster"
@@ -601,8 +641,34 @@ class ApiPuente:
             return []
 
     def eliminar_roster(self, id_roster: str):
-        """Elimina un registro de roster por su ID UUID."""
+        """Elimina un registro de roster por su ID UUID y limpia las entradas correspondientes en historial."""
         try:
+            if id_roster:
+                with obtener_conexion() as conn:
+                    cursor = conn.cursor()
+                    cursor.execute("SELECT * FROM rosters WHERE id = ?", (id_roster.strip(),))
+                    row = cursor.fetchone()
+                    if row:
+                        emp = row["empleado"]
+                        ini = row["fecha_inicio"]
+                        fin = row["fecha_fin"]
+                        if ini and fin:
+                            from datetime import datetime as dt, timedelta
+                            try:
+                                d_ini = dt.strptime(ini, "%Y-%m-%d")
+                                d_fin = dt.strptime(fin, "%Y-%m-%d")
+                                if d_ini > d_fin:
+                                    d_ini, d_fin = d_fin, d_ini
+                                curr = d_ini
+                                while curr <= d_fin:
+                                    cursor.execute(
+                                        "DELETE FROM historial WHERE empleado = ? AND fecha = ? AND tipo_ocf IN ('Roster', 'Franco')",
+                                        (emp, curr.strftime("%Y-%m-%d"))
+                                    )
+                                    curr += timedelta(days=1)
+                                conn.commit()
+                            except Exception:
+                                pass
             exito = eliminar_registro_roster(id_roster)
             return {"exito": exito}
         except Exception as e:
@@ -678,7 +744,7 @@ def obtener_icono_tray():
     return crear_icono_calendario(64)
 
 
-APP_VERSION = "1.3.0"
+APP_VERSION = "1.3.1"
 
 _mutex_instancia = None
 
@@ -876,15 +942,18 @@ del /f /q "{nuevo_exe}" >nul 2>&1
 powershell -NoProfile -ExecutionPolicy Bypass -Command "Unblock-File -LiteralPath '{ruta_actual_exe}' -ErrorAction SilentlyContinue" >nul 2>&1
 
 :: 5. Limpiar variables de entorno de PyInstaller para asegurar inicio limpio
-set PYINSTALLER_RESET_ENVIRONMENT=1
+set _MEIPASS=
+set _MEIPASS2=
 set _PYI_APPLICATION_HOME_DIR=
 set _PYI_PARENT_PROCESS_LEVEL=
 set _PYI_ARCHIVE_FILE=
 set _PYI_SPLASH_IPC=
+set PYINSTALLER_RESET_ENVIRONMENT=1
 
 :: 6. Lanzar la aplicación desde su carpeta oficial de instalación
 cd /d "{dir_actual_exe}"
 start "" /D "{dir_actual_exe}" "{ruta_actual_exe}"
+timeout /t 1 /nobreak >nul
 
 :LIMPIEZA
 del "%~f0" >nul 2>&1
@@ -893,9 +962,10 @@ del "%~f0" >nul 2>&1
             f.write(contenido_bat)
 
         clean_env = os.environ.copy()
+        for k in list(clean_env.keys()):
+            if k.startswith(("_MEI", "_PYI", "PYINSTALLER")):
+                clean_env.pop(k, None)
         clean_env["PYINSTALLER_RESET_ENVIRONMENT"] = "1"
-        for pyi_var in ("_PYI_APPLICATION_HOME_DIR", "_PYI_PARENT_PROCESS_LEVEL", "_PYI_ARCHIVE_FILE", "_PYI_SPLASH_IPC"):
-            clean_env.pop(pyi_var, None)
 
         subprocess.Popen(["cmd.exe", "/c", ruta_bat], env=clean_env, creationflags=no_window_flag)
         os._exit(0)

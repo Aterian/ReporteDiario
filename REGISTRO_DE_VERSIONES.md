@@ -4,6 +4,29 @@ Historial cronológico de cambios, nuevas características y mejoras aplicadas a
 
 ---
 
+## [1.3.1] - 2026-09-17
+
+### 🛠️ Corrección Crítica del Auto-Updater en Windows 11
+- **Fijación de Bootloader en PyInstaller 6.22.0**:
+  - Solución definitiva al error `Security validation failure: failed to obtain executable path for parent proces!` introducido por la verificación restrictiva de proceso padre de PyInstaller 6.22.1/6.22.2 en Windows 11.
+  - Saneamiento riguroso de todas las variables de entorno de PyInstaller (`_MEIPASS`, `_MEIPASS2`, `_PYI_*`) antes de reiniciar la aplicación y en el instalador.
+
+### 📋 Mejoras en la Gestión de Rosters para RRHH
+- **Modificación de Registros Cargados**:
+  - Habilitación de botón y modal interactivo para modificar turnos de Roster existentes tanto desde la tabla de historial como haciendo clic sobre cualquier celda/turno en el diagrama Gantt.
+  - Sincronización automática de las modificaciones con la base local y Google Sheets.
+- **Carga Múltiple de Empleados**:
+  - Selector multi-selección visual con chips clicables y checkboxes que permite asignar turnos simultáneamente a 2 o más empleados para el mismo proyecto, rango de fechas y condiciones.
+  - Acciones rápidas de *"Seleccionar todos"* y *"Limpiar"*.
+
+### 🎮 Modo Aventura RPG: Mini Calendario Mensual
+- **Sustitución de la Ventana de EXP por Mini Calendario**:
+  - En la pantalla principal de la taberna (Pergamino 3), la antigua barra de EXP se sustituye por un mini calendario medieval del mes en curso.
+  - Resalta visualmente con un sello verde los días que el usuario ya tiene registrados.
+  - Contador destacado con el total de días registrados en el mes actual (`⚔️ X días registrados este mes`).
+
+---
+
 ## [1.3.0] - 2026-09-17
 
 ### 📅 Módulo de Carga y Gestión de Rosters para RRHH

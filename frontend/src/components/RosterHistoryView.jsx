@@ -24,22 +24,43 @@ export default function RosterHistoryView({ onVolver, onNuevoRoster, tema }) {
     'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
   ];
 
-  // Cargar proyectos exclusivos de Ingeniería (I)
+  const [empleadosDisponibles, setEmpleadosDisponibles] = useState([]);
+
+  // Estados para Modal de Edición de Roster
+  const [modalEditar, setModalEditar] = useState(false);
+  const [editId, setEditId] = useState('');
+  const [editEmpleado, setEditEmpleado] = useState('');
+  const [editProyecto, setEditProyecto] = useState('');
+  const [editFechaInicio, setEditFechaInicio] = useState('');
+  const [editFechaFin, setEditFechaFin] = useState('');
+  const [editTipo, setEditTipo] = useState('Campo');
+  const [editPrecioDia, setEditPrecioDia] = useState('');
+  const [editPrecioDomingo, setEditPrecioDomingo] = useState('');
+  const [guardandoEdit, setGuardandoEdit] = useState(false);
+
+  // Cargar proyectos y empleados exclusivos de Ingeniería (I)
   useEffect(() => {
-    async function cargarProyectos() {
+    async function cargarCatalogos() {
       try {
-        const proys = await api.obtenerServicios('I');
+        const [proys, emps] = await Promise.all([
+          api.obtenerServicios('I'),
+          api.obtenerTodosUsuarios('I')
+        ]);
         if (Array.isArray(proys)) {
           setProyectosDisponibles(proys);
           if (proys.length > 0) {
             setProyectoSeleccionado(proys[0]);
           }
         }
+        if (Array.isArray(emps)) {
+          const empsIng = emps.filter(e => (e.area || '').trim().toUpperCase() === 'I');
+          setEmpleadosDisponibles(empsIng.length > 0 ? empsIng : emps);
+        }
       } catch (err) {
-        console.error('Error cargando proyectos de ingeniería:', err);
+        console.error('Error cargando catálogos de ingeniería:', err);
       }
     }
-    cargarProyectos();
+    cargarCatalogos();
   }, []);
 
   const cargarRegistrosMes = async (anio, mes) => {
@@ -63,6 +84,63 @@ export default function RosterHistoryView({ onVolver, onNuevoRoster, tema }) {
   useEffect(() => {
     cargarRegistrosMes(anioSeleccionado, mesSeleccionado);
   }, [anioSeleccionado, mesSeleccionado]);
+
+  const handleAbrirEditar = (r) => {
+    setEditId(r.id);
+    setEditEmpleado(r.empleado);
+    setEditProyecto(r.proyecto);
+    setEditFechaInicio(r.fecha_inicio);
+    setEditFechaFin(r.fecha_fin);
+    setEditTipo(r.tipo || 'Campo');
+    setEditPrecioDia(r.precio_dia != null ? String(r.precio_dia) : '');
+    setEditPrecioDomingo(r.precio_domingo != null ? String(r.precio_domingo) : '');
+    setModalEditar(true);
+  };
+
+  const handleGuardarEdicion = async (e) => {
+    e.preventDefault();
+    if (!editEmpleado || !editProyecto || !editFechaInicio || !editFechaFin) {
+      alert('Por favor completa todos los campos requeridos.');
+      return;
+    }
+    if (editFechaInicio > editFechaFin) {
+      alert('La fecha de inicio no puede ser posterior a la fecha de fin.');
+      return;
+    }
+
+    setGuardandoEdit(true);
+    try {
+      const empObj = empleadosDisponibles.find(emp => emp.nombre === editEmpleado);
+      const res = await api.guardarRoster({
+        id: editId,
+        empleado: editEmpleado,
+        dni: empObj ? empObj.dni : '',
+        usuario_mail: empObj ? (empObj.mail || empObj.email || '') : '',
+        proyecto: editProyecto,
+        fecha_inicio: editFechaInicio,
+        fecha_fin: editFechaFin,
+        tipo: editTipo,
+        precio_dia: editTipo === 'Campo' ? Number(editPrecioDia) || 0 : 0,
+        precio_domingo: editTipo === 'Campo' ? Number(editPrecioDomingo) || 0 : 0
+      });
+
+      if (res && res.exito) {
+        setModalEditar(false);
+        setMensaje({
+          tipo: 'exito',
+          texto: `Turno de roster de ${editEmpleado} modificado y sincronizado correctamente.`
+        });
+        await cargarRegistrosMes(anioSeleccionado, mesSeleccionado);
+      } else {
+        alert(res?.error || 'No se pudo guardar la modificación del roster.');
+      }
+    } catch (err) {
+      console.error(err);
+      alert('Error de conexión al modificar el registro.');
+    } finally {
+      setGuardandoEdit(false);
+    }
+  };
 
   const handleExportarExcel = async () => {
     if (!proyectoSeleccionado) {
@@ -317,17 +395,30 @@ export default function RosterHistoryView({ onVolver, onNuevoRoster, tema }) {
                           : '-'}
                       </td>
                       <td className="action-cell">
-                        <button
-                          type="button"
-                          className="btn-delete-roster"
-                          onClick={() => handleEliminarRegistro(r.id, r.empleado)}
-                          title="Eliminar este turno"
-                        >
-                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                            <polyline points="3 6 5 6 21 6" />
-                            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-                          </svg>
-                        </button>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', justifyContent: 'center' }}>
+                          <button
+                            type="button"
+                            className="btn-edit-roster"
+                            onClick={() => handleAbrirEditar(r)}
+                            title="Modificar este turno de roster"
+                          >
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                              <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                              <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                            </svg>
+                          </button>
+                          <button
+                            type="button"
+                            className="btn-delete-roster"
+                            onClick={() => handleEliminarRegistro(r.id, r.empleado)}
+                            title="Eliminar este turno"
+                          >
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                              <polyline points="3 6 5 6 21 6" />
+                              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                            </svg>
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -337,6 +428,150 @@ export default function RosterHistoryView({ onVolver, onNuevoRoster, tema }) {
           )}
         </div>
       </div>
+
+      {/* Modal para Modificar Registro de Roster Existente */}
+      {modalEditar && (
+        <div className="roster-modal-overlay" onClick={() => !guardandoEdit && setModalEditar(false)}>
+          <div className="roster-modal-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '540px' }}>
+            <div className="roster-modal-header">
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span className="roster-title-badge" style={{ margin: 0, background: '#2563eb' }}>EDITAR</span>
+                <h3>Modificar Registro de Roster</h3>
+              </div>
+              <p>Actualiza la asignación, fechas o tarifas del empleado. Los cambios se sincronizarán con Google Sheets.</p>
+            </div>
+
+            <form onSubmit={handleGuardarEdicion} className="roster-modal-body">
+              {/* Empleado */}
+              <div className="form-group-roster" style={{ marginBottom: '10px' }}>
+                <label className="roster-label" style={{ fontSize: '12px' }}>Empleado (Ingeniería - I):</label>
+                <select
+                  value={editEmpleado}
+                  onChange={(e) => setEditEmpleado(e.target.value)}
+                  className="roster-select"
+                  required
+                >
+                  {empleadosDisponibles.map((emp, i) => (
+                    <option key={i} value={emp.nombre}>{emp.nombre}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Proyecto */}
+              <div className="form-group-roster" style={{ marginBottom: '10px' }}>
+                <label className="roster-label" style={{ fontSize: '12px' }}>Proyecto Asignado:</label>
+                <select
+                  value={editProyecto}
+                  onChange={(e) => setEditProyecto(e.target.value)}
+                  className="roster-select"
+                  required
+                >
+                  {proyectosDisponibles.map((p, i) => (
+                    <option key={i} value={p}>{p}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Rango de Fechas */}
+              <div className="form-group-roster" style={{ marginBottom: '10px' }}>
+                <label className="roster-label" style={{ fontSize: '12px' }}>Rango de Fechas:</label>
+                <div className="roster-dates-row">
+                  <div className="date-field-box">
+                    <span className="date-sublabel">Desde:</span>
+                    <input
+                      type="date"
+                      value={editFechaInicio}
+                      onChange={(e) => setEditFechaInicio(e.target.value)}
+                      className="roster-input date-input"
+                      required
+                    />
+                  </div>
+                  <div className="date-field-box">
+                    <span className="date-sublabel">Hasta:</span>
+                    <input
+                      type="date"
+                      value={editFechaFin}
+                      onChange={(e) => setEditFechaFin(e.target.value)}
+                      className="roster-input date-input"
+                      required
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Tipo */}
+              <div className="form-group-roster" style={{ marginBottom: '10px' }}>
+                <label className="roster-label" style={{ fontSize: '12px' }}>Tipo de Jornada:</label>
+                <div className="roster-type-selector">
+                  <button
+                    type="button"
+                    className={`btn-type-pill pill-campo ${editTipo === 'Campo' ? 'active' : ''}`}
+                    onClick={() => setEditTipo('Campo')}
+                  >
+                    🚜 Campo / Obra
+                  </button>
+                  <button
+                    type="button"
+                    className={`btn-type-pill pill-franco ${editTipo === 'Franco' ? 'active' : ''}`}
+                    onClick={() => setEditTipo('Franco')}
+                  >
+                    🏠 Franco / Descanso
+                  </button>
+                </div>
+              </div>
+
+              {/* Tarifas si es Campo */}
+              {editTipo === 'Campo' && (
+                <div className="tariffs-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginTop: '6px' }}>
+                  <div className="tariff-input-box">
+                    <label style={{ fontSize: '11px', fontWeight: 600 }}>Tarifa Día Normal ($):</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={editPrecioDia}
+                      onChange={(e) => setEditPrecioDia(e.target.value)}
+                      placeholder="0.00"
+                      className="roster-input"
+                    />
+                  </div>
+                  <div className="tariff-input-box">
+                    <label style={{ fontSize: '11px', fontWeight: 600 }}>Tarifa Día Domingo ($):</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={editPrecioDomingo}
+                      onChange={(e) => setEditPrecioDomingo(e.target.value)}
+                      placeholder="0.00"
+                      className="roster-input"
+                    />
+                  </div>
+                </div>
+              )}
+
+              <div className="roster-modal-footer" style={{ marginTop: '12px' }}>
+                <button
+                  type="button"
+                  className="btn-modal-cancel"
+                  disabled={guardandoEdit}
+                  onClick={() => setModalEditar(false)}
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="btn-modal-confirm"
+                  disabled={guardandoEdit}
+                  style={{ background: '#2563eb' }}
+                >
+                  {guardandoEdit ? 'Guardando...' : 'Guardar Modificación'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

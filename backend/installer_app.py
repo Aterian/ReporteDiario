@@ -78,9 +78,10 @@ $s2.Save()
 
         # 6. Lanzar la aplicación instalada con entorno limpio de PyInstaller y directorio de trabajo correcto
         clean_env = os.environ.copy()
+        for k in list(clean_env.keys()):
+            if k.startswith(("_MEI", "_PYI", "PYINSTALLER")):
+                clean_env.pop(k, None)
         clean_env["PYINSTALLER_RESET_ENVIRONMENT"] = "1"
-        for pyi_var in ("_PYI_APPLICATION_HOME_DIR", "_PYI_PARENT_PROCESS_LEVEL", "_PYI_ARCHIVE_FILE", "_PYI_SPLASH_IPC"):
-            clean_env.pop(pyi_var, None)
 
         creation_flags = subprocess.CREATE_NEW_PROCESS_GROUP if hasattr(subprocess, "CREATE_NEW_PROCESS_GROUP") else 0
         subprocess.Popen([target_exe], cwd=target_dir, env=clean_env, creationflags=creation_flags)

@@ -1,5 +1,6 @@
-import React from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { getTituloRpg } from '../utils/rpgTitles';
+import { api } from '../services/apiBridge';
 
 // Iconos vectoriales medievales para garantizar renderizado perfecto sin depender de compatibilidad de emojis
 const QuillIcon = ({ size = 16, color = "#6b4317" }) => (
@@ -31,6 +32,15 @@ const CoinPouchIcon = ({ size = 16, color = "#6b4317" }) => (
   </svg>
 );
 
+const CalendarRpgIcon = ({ size = 16, color = "#6b4317" }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle', flexShrink: 0 }}>
+    <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+    <line x1="16" y1="2" x2="16" y2="6" />
+    <line x1="8" y1="2" x2="8" y2="6" />
+    <line x1="3" y1="10" x2="21" y2="10" />
+  </svg>
+);
+
 const ShieldIcon = ({ size = 15, color = "#6b4317" }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle', flexShrink: 0 }}>
     <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
@@ -38,8 +48,78 @@ const ShieldIcon = ({ size = 15, color = "#6b4317" }) => (
 );
 
 export default function RpgTavernBoard({ usuario, onNuevoReporte, onVerHistorial, onAvatarClick }) {
+  const [diasRegistrados, setDiasRegistrados] = useState(new Set());
+
+  // Fecha actual
+  const hoy = new Date();
+  const anioActual = hoy.getFullYear();
+  const mesActual = hoy.getMonth() + 1; // 1-12
+  const diaHoy = hoy.getDate();
+
+  const nombresMesesEsp = [
+    '', 'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
+    'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
+  ];
+
+  // Consultar historial para saber qué días del mes actual tiene registrados el usuario
+  useEffect(() => {
+    let activo = true;
+    async function cargarDiasDelMes() {
+      try {
+        const data = await api.obtenerHistorial();
+        if (activo && Array.isArray(data)) {
+          const prefijoMes = `${anioActual}-${String(mesActual).padStart(2, '0')}`;
+          const setDias = new Set();
+          data.forEach(item => {
+            const f = item.fecha || '';
+            if (f.startsWith(prefijoMes)) {
+              const partes = f.split('-');
+              if (partes.length === 3) {
+                setDias.add(Number(partes[2]));
+              }
+            }
+          });
+          setDiasRegistrados(setDias);
+        }
+      } catch (err) {
+        console.error('Error cargando historial en RPG board:', err);
+      }
+    }
+    cargarDiasDelMes();
+    return () => { activo = false; };
+  }, [anioActual, mesActual]);
+
+  // Construir matriz de días para el mini calendario (Lunes a Domingo)
+  const celdasCalendario = useMemo(() => {
+    const ultimoDia = new Date(anioActual, mesActual, 0).getDate();
+    const primerDiaSemana = new Date(anioActual, mesActual - 1, 1).getDay();
+    const offsetInicio = (primerDiaSemana + 6) % 7; // 0=Lun ... 6=Dom
+
+    const celdas = [];
+    for (let i = 0; i < offsetInicio; i++) {
+      celdas.push({ tipo: 'vacio', key: `vacio-${i}` });
+    }
+    for (let d = 1; d <= ultimoDia; d++) {
+      const fechaObj = new Date(anioActual, mesActual - 1, d);
+      const diaSemana = fechaObj.getDay();
+      const esDomingo = (diaSemana === 0);
+      const esHoy = (d === diaHoy);
+      const registrado = diasRegistrados.has(d);
+      celdas.push({
+        tipo: 'dia',
+        key: `dia-${d}`,
+        numero: d,
+        esDomingo,
+        esHoy,
+        registrado
+      });
+    }
+    return celdas;
+  }, [anioActual, mesActual, diaHoy, diasRegistrados]);
+
+  const cantRegistradosMes = diasRegistrados.size;
+
   const getFechaMedieval = () => {
-    const hoy = new Date();
     const dias = ['Sol', 'Luna', 'Marte', 'Mercurio', 'Júpiter', 'Venus', 'Saturno'];
     const meses = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
     const diaNom = dias[hoy.getDay()];
@@ -182,7 +262,7 @@ export default function RpgTavernBoard({ usuario, onNuevoReporte, onVerHistorial
             </button>
           </div>
 
-          {/* PERGAMINO 3: RECOMPENSAS Y NOTAS (REWARDS & NOTES) */}
+          {/* PERGAMINO 3: CALENDARIO MENSUAL DE REGISTROS (REEMPLAZA EXP) */}
           <div className="rpg-pinned-parchment parchment-rewards">
             <div className="rpg-tack tack-tl" />
             <div className="rpg-tack tack-tr" />
@@ -191,31 +271,55 @@ export default function RpgTavernBoard({ usuario, onNuevoReporte, onVerHistorial
 
             <div className="parchment-header-row">
               <div className="parchment-title-group">
-                <CoinPouchIcon size={16} color="#78350f" />
-                <h3 className="parchment-title">REWARDS & NOTES</h3>
+                <CalendarRpgIcon size={16} color="#78350f" />
+                <h3 className="parchment-title">REGISTRO MENSUAL</h3>
+              </div>
+              <span className="parchment-date">{nombresMesesEsp[mesActual]} {anioActual}</span>
+            </div>
+
+            {/* Contador de días registrados en el mes */}
+            <div className="rpg-cal-counter-banner">
+              <div className="rpg-cal-counter-chip">
+                <span className="rpg-cal-star">⚔️</span>
+                <span className="rpg-cal-count-text">
+                  <b>{cantRegistradosMes}</b> día{cantRegistradosMes !== 1 ? 's' : ''} registrado{cantRegistradosMes !== 1 ? 's' : ''} este mes
+                </span>
               </div>
             </div>
 
-            <div className="rpg-exp-status">
-              <div className="exp-label-row">
-                <span>Diario del Héroe: <b>Nivel 42</b></span>
-                <span className="exp-numbers">XP: 3,450 / 4,000</span>
+            {/* Mini Calendario Medieval */}
+            <div className="rpg-mini-calendar-wrapper">
+              <div className="rpg-cal-weekdays">
+                <span>L</span><span>M</span><span>M</span><span>J</span><span>V</span><span>S</span><span className="rpg-dom">D</span>
               </div>
-              <div className="rpg-exp-bar-frame">
-                <div className="rpg-exp-bar-fill" style={{ width: '86%' }} />
+              <div className="rpg-cal-grid">
+                {celdasCalendario.map(c => {
+                  if (c.tipo === 'vacio') {
+                    return <div key={c.key} className="rpg-cal-cell empty" />;
+                  }
+                  return (
+                    <div
+                      key={c.key}
+                      className={`rpg-cal-cell ${c.registrado ? 'registered' : ''} ${c.esHoy ? 'today' : ''} ${c.esDomingo ? 'sunday' : ''}`}
+                      title={`Día ${c.numero} de ${nombresMesesEsp[mesActual]}: ${c.registrado ? 'Jornada Registrada' : 'Sin registro'}${c.esHoy ? ' (Hoy)' : ''}`}
+                    >
+                      <span className="cell-day-num">{c.numero}</span>
+                      {c.registrado && <span className="cell-seal-mark">✓</span>}
+                    </div>
+                  );
+                })}
               </div>
             </div>
 
             <div className="rpg-coins-signature-row">
               <div className="rpg-coins-drawing">
                 <span style={{ display: 'inline-flex', gap: '3px' }}>
-                  <CoinPouchIcon size={13} color="#b45309" />
                   <ShieldIcon size={13} color="#b45309" />
                 </span>
-                <small>Botín de Gremio</small>
+                <small>Gremio Ingeap</small>
               </div>
               <div className="rpg-signature">
-                <i>{usuario?.nombre || 'Iván Valentin'}</i>
+                <i>{usuario?.nombre || 'Aventurero'}</i>
               </div>
             </div>
           </div>
