@@ -35,7 +35,9 @@ COLUMNAS_ESQUEMA = [
     "usuario_mail",
     "fecha_hora",
     "dia_semana",
-    "feriado"
+    "feriado",
+    "id_empleado",
+    "id_proyecto"
 ]
 
 def cargar_configuracion():
@@ -160,11 +162,16 @@ def obtener_hoja_trabajo(spreadsheet_id: str = "", sheet_name: str = ""):
                 f"Pestañas disponibles: {', '.join(hojas_disponibles)}"
             )
 
-    # Verificar encabezados: si la hoja está completamente vacía, creamos la fila 1
+    # Verificar encabezados: si la hoja está vacía, creamos la fila 1 completa
     try:
         fila_1 = ws.row_values(1)
         if not fila_1 or len(fila_1) == 0:
             ws.append_row(COLUMNAS_ESQUEMA, value_input_option=ValueInputOption.user_entered)
+        else:
+            headers_limpios = [str(c).strip().lower() for c in fila_1]
+            if "id_empleado" not in headers_limpios:
+                # Agregar columnas L y M al encabezado existente
+                ws.update(range_name="L1:M1", values=[["id_empleado", "id_proyecto"]], value_input_option=ValueInputOption.user_entered)
     except Exception as e:
         print(f"Aviso al verificar encabezados: {e}")
 
@@ -312,16 +319,18 @@ def sincronizar_pendientes() -> dict:
                 str(p.get("usuario_mail", "")),
                 str(p.get("fecha_hora", "")),
                 dia_sem,
-                fer
+                fer,
+                str(p.get("id_empleado", "")),
+                str(p.get("id_proyecto", ""))
             ]
 
             uid = p.get("id_asistencia")
             es_modificado = (p.get("modificado") == 1)
 
             if es_modificado and uid in mapa_filas_remotas:
-                # Actualizar la fila existente en Google Sheets (columnas A a K)
+                # Actualizar la fila existente en Google Sheets (columnas A a M)
                 row_num = mapa_filas_remotas[uid]
-                ws.update(range_name=f"A{row_num}:K{row_num}", values=[fila], value_input_option=ValueInputOption.user_entered)
+                ws.update(range_name=f"A{row_num}:M{row_num}", values=[fila], value_input_option=ValueInputOption.user_entered)
                 ids_sincronizados.append(uid)
             else:
                 filas_a_insertar.append(fila)
@@ -347,6 +356,27 @@ def sincronizar_pendientes() -> dict:
             "exito": False,
             "error": str(e)
         }
+
+def eliminar_registro_remoto(id_asistencia: str) -> bool:
+    """
+    Busca y elimina la fila en '1_asistencia_informada' cuyo id_asistencia (columna A)
+    coincida con el proporcionado.
+    """
+    if not id_asistencia:
+        return False
+    try:
+        _, ws = obtener_hoja_trabajo()
+        col_ids = ws.col_values(1)
+        target = str(id_asistencia).strip()
+        for idx, val in enumerate(col_ids, start=1):
+            if val and str(val).strip() == target:
+                ws.delete_rows(idx)
+                print(f"[Sheets] Fila {idx} eliminada con éxito para id_asistencia={id_asistencia}")
+                return True
+        return False
+    except Exception as e:
+        print(f"[Sheets] Error al eliminar registro remoto ({id_asistencia}): {e}")
+        return False
 
 
 def obtener_proyectos_remotos(spreadsheet_id: str = "") -> list:
@@ -391,9 +421,11 @@ def obtener_usuarios_remotos(spreadsheet_id: str = "") -> list:
             area = str(f.get("area", "")).strip()
             email = str(f.get("email", "")).strip()
             id_u = str(f.get("id_usuario", "")).strip()
+            id_orig = str(f.get("id_origen", "")).strip()
             if nom and dni:
                 usuarios.append({
                     "id_usuario": id_u,
+                    "id_origen": id_orig,
                     "nombre": nom,
                     "email": email,
                     "area": area,

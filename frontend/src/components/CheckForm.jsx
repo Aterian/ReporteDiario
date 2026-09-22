@@ -8,6 +8,11 @@ const LUGARES_BASE = [
   { id: 'Franco', label: 'Franco', labelRpg: '🍺 Taberna & Descanso', icon: 'M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z' }
 ];
 
+const LUGARES_RRHH = [
+  { id: 'Vacaciones', label: 'Vacaciones', labelRpg: '🏖️ Vacaciones', icon: 'M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41' },
+  { id: 'Licencia', label: 'Licencia', labelRpg: '📜 Licencia', icon: 'M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z M14 2v6h6' }
+];
+
 const MAPA_AREAS = {
   'A': 'Aplicaciones',
   'N': 'Núcleo',
@@ -48,6 +53,8 @@ export default function CheckForm({ onRegistroGuardado, onVolver, tema }) {
   const [fechaFin, setFechaFin] = useState(getFechaHoy());
   const [usarRangoFechas, setUsarRangoFechas] = useState(false);
   const [lugar, setLugar] = useState('Oficina');
+  const [tipoLicencia, setTipoLicencia] = useState('Médica');
+  const [detalleLicencia, setDetalleLicencia] = useState('');
 
   // Sesión y permisos
   const [sesionUsuario, setSesionUsuario] = useState(null);
@@ -83,6 +90,10 @@ export default function CheckForm({ onRegistroGuardado, onVolver, tema }) {
   const esUsuarioAreaEspecial = ['N', 'RRHH', 'A'].includes(areaActiva);
   const esCampañaOCampo = lugar === 'Campaña / Campo';
   const esFranco = lugar === 'Franco';
+  const esVacaciones = lugar === 'Vacaciones';
+  const esLicencia = lugar === 'Licencia';
+  const esSinProyectos = esFranco || esVacaciones || esLicencia;
+  const permitirRango = esCampañaOCampo || esRRHH;
 
   // 1. Cargar sesión de usuario
   useEffect(() => {
@@ -254,7 +265,7 @@ export default function CheckForm({ onRegistroGuardado, onVolver, tema }) {
       return;
     }
 
-    if (!esFranco && modoDivision === 'personalizado') {
+    if (!esSinProyectos && modoDivision === 'personalizado') {
       const total = getTotalHoras();
       if (total <= 0) {
         setMensajeError('Debes asignar una cantidad de horas mayor a 0 a los proyectos trabajados.');
@@ -273,14 +284,27 @@ export default function CheckForm({ onRegistroGuardado, onVolver, tema }) {
       if (cargarParaOtro && usuarioSeleccionado) {
         payload.empleado = usuarioSeleccionado.nombre;
         payload.usuario_mail = usuarioSeleccionado.email || usuarioSeleccionado.mail || '';
+        payload.id_empleado = usuarioSeleccionado.id_origen || usuarioSeleccionado.id_usuario || '';
       }
 
-      if (esCampañaOCampo && usarRangoFechas && fechaFin) {
+      if (usarRangoFechas && fechaFin) {
         payload.fecha_fin = fechaFin;
       }
 
       if (esFranco) {
         payload.lugar = 'Franco';
+        payload.servicio = 'Franco';
+        payload.horas = 0.0;
+      } else if (esVacaciones) {
+        payload.lugar = 'Vacaciones';
+        payload.servicio = 'Vacaciones';
+        payload.horas = 0.0;
+      } else if (esLicencia) {
+        const descLic = tipoLicencia === 'Otra' ? (detalleLicencia.trim() || 'Especial') : tipoLicencia;
+        payload.lugar = 'Licencia';
+        payload.tipo_licencia = descLic;
+        payload.servicio = `Licencia - ${descLic}`;
+        payload.horas = 0.0;
       } else if (proyectosSeleccionados.length === 0) {
         // Sin proyectos específicos: Tiempo dedicado al área
         const h = modoDivision === 'equitativo' ? 8 : horasArea;
@@ -465,7 +489,7 @@ export default function CheckForm({ onRegistroGuardado, onVolver, tema }) {
                   <span>{isRpg ? 'Ciclo Solar (Fecha)' : (usarRangoFechas ? 'Rango de fechas' : 'Fecha')}</span>
                 </label>
 
-                {esCampañaOCampo && (
+                {permitirRango && (
                   <label className="range-toggle-label">
                     <input
                       type="checkbox"
@@ -477,7 +501,7 @@ export default function CheckForm({ onRegistroGuardado, onVolver, tema }) {
                 )}
               </div>
 
-              {usarRangoFechas && esCampañaOCampo ? (
+              {usarRangoFechas && permitirRango ? (
                 <div className="range-inputs-grid">
                   <div>
                     <span className="input-sublabel">Desde:</span>
@@ -523,18 +547,24 @@ export default function CheckForm({ onRegistroGuardado, onVolver, tema }) {
               </label>
 
               <div className="segmented-modalidad-grid">
-                {LUGARES_BASE.map((item) => {
+                {(esRRHH ? [...LUGARES_BASE, ...LUGARES_RRHH] : LUGARES_BASE).map((item) => {
                   const isSelected = lugar === item.id;
                   const isFrancoItem = item.id === 'Franco';
+                  const isVacacionesItem = item.id === 'Vacaciones';
+                  const isLicenciaItem = item.id === 'Licencia';
                   const labelText = isRpg ? item.labelRpg : item.label;
                   return (
                     <button
                       type="button"
                       key={item.id}
-                      className={`seg-btn ${isSelected ? (isFrancoItem ? 'seg-franco' : 'seg-active') : ''}`}
+                      className={`seg-btn ${
+                        isSelected 
+                          ? (isFrancoItem ? 'seg-franco' : isVacacionesItem ? 'seg-vacaciones' : isLicenciaItem ? 'seg-licencia' : 'seg-active') 
+                          : ''
+                      }`}
                       onClick={() => {
                         setLugar(item.id);
-                        if (item.id !== 'Campaña / Campo') {
+                        if (!esRRHH && item.id !== 'Campaña / Campo') {
                           setUsarRangoFechas(false);
                         }
                       }}
@@ -550,7 +580,7 @@ export default function CheckForm({ onRegistroGuardado, onVolver, tema }) {
             </div>
           </div>
 
-          {/* SI ES FRANCO: Banner sereno o de taberna RPG */}
+          {/* SI ES FRANCO, VACACIONES O LICENCIA */}
           {esFranco ? (
             <div className="franco-serene-card">
               <div className="franco-serene-icon">☕</div>
@@ -561,6 +591,56 @@ export default function CheckForm({ onRegistroGuardado, onVolver, tema }) {
                     ? 'Has hecho una parada en la taberna a descansar y recuperar tus puntos de Maná y Salud. No se requiere asignar hazañas ni computar horas hoy.'
                     : 'No se requiere imputar proyectos ni cómputo de horas para este día.'}
                 </p>
+              </div>
+            </div>
+          ) : esVacaciones ? (
+            <div className="vacaciones-serene-card">
+              <div className="vacaciones-serene-icon">🏖️</div>
+              <div className="vacaciones-serene-body">
+                <h4>{isRpg ? 'Vacaciones del Aventurero' : 'Período de Vacaciones'}</h4>
+                <p>
+                  Registro oficial de vacaciones. Se computarán las fechas seleccionadas con 0 hs sin requerir imputación de proyectos.
+                </p>
+              </div>
+            </div>
+          ) : esLicencia ? (
+            <div className="licencia-card">
+              <div className="licencia-header">
+                <span className="licencia-icon">📋</span>
+                <div>
+                  <h4 style={{ margin: 0, fontSize: '14px', fontWeight: 600 }}>Registro de Licencia</h4>
+                  <p style={{ margin: '2px 0 0 0', fontSize: '12px', color: 'var(--text-secondary)' }}>Indica el tipo o motivo de la licencia otorgada:</p>
+                </div>
+              </div>
+              <div className="licencia-body" style={{ marginTop: '12px' }}>
+                <div className="form-group-clean">
+                  <label className="form-label-clean">Tipo de Licencia:</label>
+                  <select
+                    className="form-select form-select-clean"
+                    value={tipoLicencia}
+                    onChange={(e) => setTipoLicencia(e.target.value)}
+                  >
+                    <option value="Médica">Médica / Salud</option>
+                    <option value="Especial">Especial</option>
+                    <option value="Estudio / Examen">Estudio / Examen</option>
+                    <option value="Maternidad / Paternidad">Maternidad / Paternidad</option>
+                    <option value="Duelo">Duelo familiar</option>
+                    <option value="Gremial">Gremial</option>
+                    <option value="Otra">Otra (especificar detalle)...</option>
+                  </select>
+                </div>
+                {tipoLicencia === 'Otra' && (
+                  <div className="form-group-clean" style={{ marginTop: '8px' }}>
+                    <label className="form-label-clean">Detalle / Motivo:</label>
+                    <input
+                      type="text"
+                      className="form-input form-input-clean"
+                      placeholder="Ej: Licencia sin goce de sueldo, etc."
+                      value={detalleLicencia}
+                      onChange={(e) => setDetalleLicencia(e.target.value)}
+                    />
+                  </div>
+                )}
               </div>
             </div>
           ) : (
@@ -826,8 +906,14 @@ export default function CheckForm({ onRegistroGuardado, onVolver, tema }) {
                 <span>
                   {esFranco
                     ? (isRpg ? '🍺 Descansar en la Posada' : 'Registrar Franco (Descanso)')
+                    : esVacaciones
+                    ? (usarRangoFechas ? 'Registrar Período de Vacaciones' : 'Registrar Vacaciones')
+                    : esLicencia
+                    ? (usarRangoFechas ? 'Registrar Período de Licencia' : 'Registrar Licencia')
                     : usarRangoFechas && esCampañaOCampo
                     ? (isRpg ? '🌲 Registrar Gran Expedición' : 'Registrar Rango Campaña')
+                    : usarRangoFechas
+                    ? `Registrar Rango (${lugar})`
                     : (isRpg ? `⚡ ¡Sellar Misión Diaria! (+${Math.round(totalHs * 100)} EXP)` : 'Registrar Check Diario')}
                 </span>
               </>

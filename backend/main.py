@@ -25,12 +25,17 @@ from database import (
     obtener_usuarios_cache,
     guardar_proyectos_cache,
     obtener_proyectos_cache,
+    guardar_no_laborales_cache,
     depurar_registros_eliminados,
     actualizar_registro_asistencia,
     guardar_registro_roster,
     obtener_rosters,
     eliminar_registro_roster,
-    obtener_conexion
+    obtener_conexion,
+    obtener_id_empleado,
+    obtener_id_proyecto,
+    eliminar_registro_asistencia,
+    obtener_historial_otros_empleados
 )
 from roster_export import generar_excel_roster_mes
 from sheets_service import (
@@ -41,7 +46,9 @@ from sheets_service import (
     extraer_spreadsheet_id,
     obtener_proyectos_remotos,
     obtener_usuarios_remotos,
-    obtener_ids_asistencia_remotos
+    obtener_no_laborales_remotos,
+    obtener_ids_asistencia_remotos,
+    eliminar_registro_remoto
 )
 
 
@@ -249,12 +256,54 @@ class ApiPuente:
         # Si el área tiene proyectos, los retornamos; si no tuviese, retornamos todos como fallback
         return proyectos_filtrados if proyectos_filtrados else todos
 
+    def refrescar_catalogos_sheets(self):
+        """
+        Descarga remotamente proyectos, usuarios autorizados y días no laborales
+        desde Google Sheets para actualizar las cachés locales SQLite en tiempo real.
+        """
+        try:
+            p_remotos = obtener_proyectos_remotos()
+            if p_remotos:
+                guardar_proyectos_cache(p_remotos)
+
+            u_remotos = obtener_usuarios_remotos()
+            if u_remotos:
+                guardar_usuarios_cache(u_remotos)
+                sesion = obtener_sesion_activa()
+                if sesion:
+                    dni_act = sesion.get("dni", "").strip()
+                    u_match = next((u for u in u_remotos if str(u.get("dni", "")).strip() == dni_act), None)
+                    if u_match and u_match.get("area") and sesion.get("area") != u_match["area"]:
+                        guardar_sesion_activa(
+                            nombre=sesion.get("nombre", ""),
+                            dni=dni_act,
+                            mail=sesion.get("mail", ""),
+                            avatar=sesion.get("avatar", ""),
+                            area=u_match["area"]
+                        )
+
+            nl_remotos = obtener_no_laborales_remotos()
+            if nl_remotos:
+                guardar_no_laborales_cache(nl_remotos)
+
+            cant_p = len(p_remotos) if p_remotos else 0
+            cant_u = len(u_remotos) if u_remotos else 0
+            return {
+                "exito": True,
+                "mensaje": f"Catálogos actualizados ({cant_p} proyectos, {cant_u} empleados).",
+                "proyectos": cant_p,
+                "usuarios": cant_u
+            }
+        except Exception as e:
+            print(f"[Catálogos] Error al refrescar desde Sheets: {e}")
+            return {"exito": False, "error": str(e)}
+
     def guardar_check_diario(self, datos: dict):
         """
         Recibe el reporte diario desde React y lo almacena localmente
         con el esquema exacto de Google Sheets:
-        id_asistencia, empleado, fecha, tipo_ocf, servicio, horas, instrumental, usuario_mail, fecha_hora, dia_semana, feriado
-        Soporta carga para otro usuario (RRHH) y rango de fechas para Campaña / Campo.
+        id_asistencia, empleado, fecha, tipo_ocf, servicio, horas, instrumental, usuario_mail, fecha_hora, dia_semana, feriado, id_empleado, id_proyecto
+        Soporta carga para otro usuario (RRHH), modalidades de Vacaciones y Licencia, y rango de fechas ampliado.
         """
         if not isinstance(datos, dict):
             return {"exito": False, "error": "Formato de datos inválido."}
@@ -266,7 +315,9 @@ class ApiPuente:
             return {"exito": False, "error": "La fecha y la ubicación son obligatorias."}
 
         sesion = obtener_sesion_activa()
+        cargado_por = sesion["nombre"] if sesion else "Empleado"
         es_rrhh = sesion and sesion.get("area", "").strip().upper() == "RRHH"
+
         if es_rrhh and datos.get("empleado"):
             empleado = str(datos["empleado"]).strip()
             usuario_mail = str(datos.get("usuario_mail", "")).strip()
@@ -274,9 +325,10 @@ class ApiPuente:
             empleado = sesion["nombre"] if sesion else str(datos.get("empleado", "Empleado"))
             usuario_mail = sesion["mail"] if sesion and sesion.get("mail") else str(datos.get("usuario_mail", ""))
 
+        id_empleado = str(datos.get("id_empleado", "")).strip() or obtener_id_empleado(empleado)
         fecha_hora = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-        # Calcular lista de fechas si se envió un rango de fechas (Campaña / Campo)
+        # Calcular lista de fechas si se envió un rango de fechas
         fechas_a_cargar = []
         fecha_inicio = fecha
         fecha_fin = datos.get("fecha_fin")
@@ -299,7 +351,10 @@ class ApiPuente:
             fechas_a_cargar = [fecha_inicio]
 
         proyectos = datos.get("proyectos")
-        es_franco = lugar.strip().lower() == "franco"
+        lugar_norm = lugar.strip().lower()
+        es_franco = (lugar_norm == "franco")
+        es_vacaciones = (lugar_norm == "vacaciones")
+        es_licencia = (lugar_norm == "licencia")
 
         for dia_f in fechas_a_cargar:
             # Caso 1: Franco (Día de descanso)
@@ -314,9 +369,48 @@ class ApiPuente:
                     instrumental="",
                     usuario_mail=usuario_mail,
                     fecha_hora=fecha_hora,
-                    sincronizado=False
+                    sincronizado=False,
+                    cargado_por=cargado_por,
+                    id_empleado=id_empleado,
+                    id_proyecto=""
                 )
-            # Caso 2: Múltiples proyectos provistos en datos['proyectos']
+            # Caso 2: Vacaciones
+            elif es_vacaciones:
+                guardar_registro_asistencia(
+                    id_asistencia=str(uuid.uuid4()),
+                    empleado=empleado,
+                    fecha=dia_f,
+                    tipo_ocf="Vacaciones",
+                    servicio="Vacaciones",
+                    horas=0.0,
+                    instrumental="",
+                    usuario_mail=usuario_mail,
+                    fecha_hora=fecha_hora,
+                    sincronizado=False,
+                    cargado_por=cargado_por,
+                    id_empleado=id_empleado,
+                    id_proyecto=""
+                )
+            # Caso 3: Licencia (con detalle del tipo de licencia)
+            elif es_licencia:
+                tipo_lic = str(datos.get("tipo_licencia") or datos.get("servicio") or "Licencia").strip()
+                desc_lic = tipo_lic if tipo_lic.lower().startswith("licencia") else f"Licencia - {tipo_lic}"
+                guardar_registro_asistencia(
+                    id_asistencia=str(uuid.uuid4()),
+                    empleado=empleado,
+                    fecha=dia_f,
+                    tipo_ocf="Licencia",
+                    servicio=desc_lic,
+                    horas=0.0,
+                    instrumental="",
+                    usuario_mail=usuario_mail,
+                    fecha_hora=fecha_hora,
+                    sincronizado=False,
+                    cargado_por=cargado_por,
+                    id_empleado=id_empleado,
+                    id_proyecto=""
+                )
+            # Caso 4: Múltiples proyectos provistos en datos['proyectos']
             elif isinstance(proyectos, list) and len(proyectos) > 0:
                 for item in proyectos:
                     if isinstance(item, dict):
@@ -328,6 +422,8 @@ class ApiPuente:
                         except (ValueError, TypeError):
                             hrs = 8.0
 
+                        id_proy = str(item.get("id_proyecto", "")).strip() or obtener_id_proyecto(srv)
+
                         guardar_registro_asistencia(
                             id_asistencia=str(uuid.uuid4()),
                             empleado=empleado,
@@ -338,15 +434,20 @@ class ApiPuente:
                             instrumental="",
                             usuario_mail=usuario_mail,
                             fecha_hora=fecha_hora,
-                            sincronizado=False
+                            sincronizado=False,
+                            cargado_por=cargado_por,
+                            id_empleado=id_empleado,
+                            id_proyecto=id_proy
                         )
-            # Caso 3: Sin proyectos seleccionados (Tiempo dedicado al Área)
+            # Caso 5: Sin proyectos seleccionados (Tiempo dedicado al Área u Oficina/Home/Campo directo)
             else:
                 srv_area = str(datos.get("servicio", "Tiempo dedicado al Área")).strip() or "Tiempo dedicado al Área"
                 try:
                     hrs = float(datos.get("horas", 8))
                 except (ValueError, TypeError):
                     hrs = 8.0
+
+                id_proy = str(datos.get("id_proyecto", "")).strip() or obtener_id_proyecto(srv_area)
 
                 guardar_registro_asistencia(
                     id_asistencia=str(uuid.uuid4()),
@@ -358,7 +459,10 @@ class ApiPuente:
                     instrumental="",
                     usuario_mail=usuario_mail,
                     fecha_hora=fecha_hora,
-                    sincronizado=False
+                    sincronizado=False,
+                    cargado_por=cargado_por,
+                    id_empleado=id_empleado,
+                    id_proyecto=id_proy
                 )
 
         threading.Thread(target=sincronizar_pendientes, daemon=True).start()
@@ -378,6 +482,10 @@ class ApiPuente:
         fecha = str(datos.get("fecha", "")).strip()
         lugar = str(datos.get("lugar") or datos.get("tipo_ocf", "")).strip()
         servicio = str(datos.get("servicio", "")).strip()
+        empleado = str(datos.get("empleado", "")).strip()
+        id_emp = str(datos.get("id_empleado", "")).strip()
+        id_proy = str(datos.get("id_proyecto", "")).strip()
+
         try:
             horas = float(datos.get("horas", 0.0))
         except (ValueError, TypeError):
@@ -391,12 +499,34 @@ class ApiPuente:
             fecha=fecha,
             tipo_ocf=lugar,
             servicio=servicio,
-            horas=horas
+            horas=horas,
+            empleado=empleado,
+            id_empleado=id_emp,
+            id_proyecto=id_proy
         )
         if ok:
             threading.Thread(target=sincronizar_pendientes, daemon=True).start()
             return {"exito": True, "mensaje": "Reporte modificado exitosamente."}
         return {"exito": False, "error": "No se encontró el registro a modificar en la base local."}
+
+    def obtener_historial_otros_empleados(self, filtro_empleado: str = ""):
+        """Retorna la lista de reportes cargados por RRHH para otros empleados."""
+        sesion = obtener_sesion_activa()
+        usuario_rrhh = sesion.get("nombre", "") if sesion else ""
+        return obtener_historial_otros_empleados(usuario_rrhh=usuario_rrhh, filtro_empleado=filtro_empleado)
+
+    def eliminar_registro_asistencia(self, id_registro: int):
+        """Elimina un reporte de asistencia localmente y dispara el borrado en Google Sheets."""
+        try:
+            res = eliminar_registro_asistencia(int(id_registro))
+            if res.get("exito"):
+                id_asistencia = res.get("id_asistencia")
+                if id_asistencia:
+                    threading.Thread(target=eliminar_registro_remoto, args=(id_asistencia,), daemon=True).start()
+                return {"exito": True, "mensaje": "Registro eliminado correctamente."}
+            return {"exito": False, "error": res.get("error", "No se pudo eliminar el reporte.")}
+        except Exception as e:
+            return {"exito": False, "error": str(e)}
 
     def obtener_todos_usuarios(self, area: str | None = None):
         """Retorna la lista de empleados activos para la selección delegada de RRHH, opcionalmente filtrada por área."""
@@ -594,6 +724,10 @@ class ApiPuente:
             horas = 8.0 if es_campo else 0.0
             fecha_hora = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
+            emp_id = obtener_id_empleado(empleado)
+            proy_id = obtener_id_proyecto(servicio) if es_campo else ""
+            cargado_por_rrhh = sesion["nombre"] if sesion else "RRHH"
+
             with obtener_conexion() as conn:
                 cursor = conn.cursor()
                 for dia_f in fechas_a_cargar:
@@ -608,7 +742,11 @@ class ApiPuente:
                             fecha=dia_f,
                             tipo_ocf=tipo_ocf,
                             servicio=servicio,
-                            horas=horas
+                            horas=horas,
+                            empleado=empleado,
+                            id_empleado=emp_id,
+                            id_proyecto=proy_id,
+                            cargado_por=cargado_por_rrhh
                         )
                     else:
                         guardar_registro_asistencia(
@@ -621,7 +759,10 @@ class ApiPuente:
                             instrumental="",
                             usuario_mail=usuario_mail,
                             fecha_hora=fecha_hora,
-                            sincronizado=False
+                            sincronizado=False,
+                            cargado_por=cargado_por_rrhh,
+                            id_empleado=emp_id,
+                            id_proyecto=proy_id
                         )
 
             # Disparar sincronización en segundo plano con Google Sheets

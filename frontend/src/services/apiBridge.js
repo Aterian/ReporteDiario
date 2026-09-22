@@ -128,6 +128,20 @@ const mockApi = {
   redimensionar_ventana: async () => ({ exito: true }),
   maximizar_ventana: async () => ({ exito: true }),
   restaurar_ventana: async () => ({ exito: true }),
+  refrescar_catalogos_sheets: async () => ({ exito: true, mensaje: 'Catálogos actualizados (simulado).' }),
+  obtener_historial_otros_empleados: async (filtroEmpleado = '') => {
+    const raw = localStorage.getItem('ingeap_historial_mock') || '[]';
+    const lista = JSON.parse(raw);
+    if (!filtroEmpleado || filtroEmpleado.toUpperCase() === 'TODOS') return lista;
+    return lista.filter(r => (r.empleado || '').toLowerCase() === filtroEmpleado.toLowerCase());
+  },
+  eliminar_registro_asistencia: async (idRegistro) => {
+    const raw = localStorage.getItem('ingeap_historial_mock') || '[]';
+    let lista = JSON.parse(raw);
+    lista = lista.filter(r => r.id !== Number(idRegistro));
+    localStorage.setItem('ingeap_historial_mock', JSON.stringify(lista));
+    return { exito: true, mensaje: 'Registro eliminado (simulado).' };
+  },
   obtener_todos_usuarios: async (area = null) => {
     const mockUsers = [
       { id: 1, nombre: 'Gabriel Juarez', area: 'I', mail: 'gabriel.juarez@ingeap.com' },
@@ -362,6 +376,30 @@ export const api = {
       return await bridge.restaurar_ventana();
     }
     return { exito: true };
+  },
+
+  async refrescarCatalogos() {
+    const bridge = await getApi();
+    if (bridge.refrescar_catalogos_sheets) {
+      return await bridge.refrescar_catalogos_sheets();
+    }
+    return { exito: true };
+  },
+
+  async obtenerHistorialOtrosEmpleados(filtroEmpleado = '') {
+    const bridge = await getApi();
+    if (bridge.obtener_historial_otros_empleados) {
+      return await bridge.obtener_historial_otros_empleados(filtroEmpleado);
+    }
+    return [];
+  },
+
+  async eliminarRegistroAsistencia(idRegistro) {
+    const bridge = await getApi();
+    if (bridge.eliminar_registro_asistencia) {
+      return await bridge.eliminar_registro_asistencia(idRegistro);
+    }
+    return { exito: false };
   }
 };
 

@@ -5,6 +5,7 @@ import LoginView from './components/LoginView';
 import HomeView from './components/HomeView';
 import CheckForm from './components/CheckForm';
 import HistoryView from './components/HistoryView';
+import OtherEmployeesHistoryView from './components/OtherEmployeesHistoryView';
 import RosterView from './components/RosterView';
 import RosterHistoryView from './components/RosterHistoryView';
 import ErrorBoundary from './components/ErrorBoundary';
@@ -12,10 +13,12 @@ import ErrorBoundary from './components/ErrorBoundary';
 export default function App() {
   const [cargandoSesion, setCargandoSesion] = useState(true);
   const [usuario, setUsuario] = useState(null);
-  const [vistaActiva, setVistaActiva] = useState('home'); // 'home' | 'check' | 'historial'
+  const [vistaActiva, setVistaActiva] = useState('home'); // 'home' | 'check' | 'historial' | 'historial-otros' | 'roster' | 'historial-roster'
   const [recordatorioPendiente, setRecordatorioPendiente] = useState(null);
   const [actualizacion, setActualizacion] = useState(null);
   const [actualizando, setActualizando] = useState(false);
+  const [refrescando, setRefrescando] = useState(false);
+  const [toastRefresco, setToastRefresco] = useState(null);
   const fileInputRef = useRef(null);
 
   const [tema, setTema] = useState(() => {
@@ -157,6 +160,26 @@ export default function App() {
     }
   };
 
+  const handleRefrescarCatalogos = async () => {
+    if (refrescando) return;
+    setRefrescando(true);
+    setToastRefresco({ tipo: 'cargando', mensaje: 'Sincronizando información de Google Sheets...' });
+    try {
+      const res = await api.refrescarCatalogos();
+      if (res && res.exito) {
+        setToastRefresco({ tipo: 'exito', mensaje: res.mensaje || 'Información actualizada correctamente.' });
+        window.dispatchEvent(new CustomEvent('catalogos-actualizados'));
+      } else {
+        setToastRefresco({ tipo: 'error', mensaje: res?.error || 'Error al actualizar desde Google Sheets.' });
+      }
+    } catch (err) {
+      setToastRefresco({ tipo: 'error', mensaje: 'Error de red al actualizar desde Google Sheets.' });
+    } finally {
+      setRefrescando(false);
+      setTimeout(() => setToastRefresco(null), 4000);
+    }
+  };
+
   // Manejo del selector de avatar
   const handleTriggerAvatar = () => {
     if (fileInputRef.current) {
@@ -219,7 +242,7 @@ export default function App() {
   }
 
   return (
-    <div className={`app-container ${['roster', 'historial-roster'].includes(vistaActiva) ? 'app-panoramic' : ''}`}>
+    <div className={`app-container ${['roster', 'historial-roster', 'historial', 'historial-otros'].includes(vistaActiva) ? 'app-panoramic' : ''}`}>
       {/* Input oculto para abrir el explorador de Windows al elegir avatar */}
       <input
         type="file"
@@ -265,6 +288,21 @@ export default function App() {
         </div>
 
         <div className="header-actions">
+          {/* Botón Refrescar catálogos de Google Sheets */}
+          <button
+            type="button"
+            className={`btn-header-icon ${refrescando ? 'btn-refresh-spinning' : ''}`}
+            onClick={handleRefrescarCatalogos}
+            disabled={refrescando}
+            title="Refrescar proyectos, empleados y feriados desde Google Sheets"
+          >
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="23 4 23 10 17 10" />
+              <polyline points="1 20 1 14 7 14" />
+              <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
+            </svg>
+          </button>
+
           {/* Botón selector de Tema (Claro / Oscuro / RPG Quest para Área A) */}
           <button
             type="button"
@@ -325,6 +363,14 @@ export default function App() {
           </button>
         </div>
       </header>
+
+      {/* Cartel flotante de refresco de catálogos */}
+      {toastRefresco && (
+        <div className={`refresh-toast-banner ${toastRefresco.tipo}`}>
+          <span>{toastRefresco.mensaje}</span>
+          <button type="button" onClick={() => setToastRefresco(null)}>✕</button>
+        </div>
+      )}
 
       {/* Cartel de Actualización Disponible */}
       {actualizacion && (
@@ -390,6 +436,7 @@ export default function App() {
             onVerHistorial={() => setVistaActiva('historial')}
             onNuevoRoster={() => setVistaActiva('roster')}
             onHistorialRoster={() => setVistaActiva('historial-roster')}
+            onHistorialOtrosEmpleados={() => setVistaActiva('historial-otros')}
             onAvatarClick={handleTriggerAvatar}
           />
         )}
@@ -404,8 +451,20 @@ export default function App() {
 
         {vistaActiva === 'historial' && (
           <HistoryView
+            usuario={usuario}
             tema={tema}
             onVolver={() => setVistaActiva('home')}
+            onNuevoReporte={() => setVistaActiva('check')}
+            onHistorialOtrosEmpleados={() => setVistaActiva('historial-otros')}
+          />
+        )}
+
+        {vistaActiva === 'historial-otros' && (
+          <OtherEmployeesHistoryView
+            usuario={usuario}
+            tema={tema}
+            onVolver={() => setVistaActiva('home')}
+            onVerMiHistorial={() => setVistaActiva('historial')}
             onNuevoReporte={() => setVistaActiva('check')}
           />
         )}

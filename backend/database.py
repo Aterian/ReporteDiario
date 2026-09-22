@@ -113,9 +113,16 @@ def inicializar_bd():
                 email TEXT DEFAULT '',
                 area TEXT DEFAULT '',
                 dni TEXT NOT NULL,
+                id_origen TEXT DEFAULT '',
                 actualizado_en TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """)
+
+        # Migración defensiva para usuarios_cache
+        cursor.execute("PRAGMA table_info(usuarios_cache)")
+        cols_usr = [col["name"] for col in cursor.fetchall()]
+        if "id_origen" not in cols_usr:
+            cursor.execute("ALTER TABLE usuarios_cache ADD COLUMN id_origen TEXT DEFAULT ''")
 
         # Tabla de caché para días no laborales (0_no_laborales)
         cursor.execute("""
@@ -143,6 +150,9 @@ def inicializar_bd():
                 jornada TEXT,
                 dia_semana TEXT DEFAULT '',
                 feriado TEXT DEFAULT '',
+                cargado_por TEXT DEFAULT '',
+                id_empleado TEXT DEFAULT '',
+                id_proyecto TEXT DEFAULT '',
                 modificado INTEGER DEFAULT 0,
                 sincronizado INTEGER DEFAULT 1,
                 creado_en TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -170,6 +180,12 @@ def inicializar_bd():
             cursor.execute("ALTER TABLE historial ADD COLUMN dia_semana TEXT DEFAULT ''")
         if "feriado" not in columnas_hist:
             cursor.execute("ALTER TABLE historial ADD COLUMN feriado TEXT DEFAULT ''")
+        if "cargado_por" not in columnas_hist:
+            cursor.execute("ALTER TABLE historial ADD COLUMN cargado_por TEXT DEFAULT ''")
+        if "id_empleado" not in columnas_hist:
+            cursor.execute("ALTER TABLE historial ADD COLUMN id_empleado TEXT DEFAULT ''")
+        if "id_proyecto" not in columnas_hist:
+            cursor.execute("ALTER TABLE historial ADD COLUMN id_proyecto TEXT DEFAULT ''")
         if "modificado" not in columnas_hist:
             cursor.execute("ALTER TABLE historial ADD COLUMN modificado INTEGER DEFAULT 0")
 
@@ -245,15 +261,17 @@ def guardar_usuarios_cache(usuarios: list):
         cursor.execute("DELETE FROM usuarios_cache")
         for u in usuarios:
             id_u = str(u.get("id_usuario", "")).strip() or str(uuid.uuid4())
+            id_orig = str(u.get("id_origen", "")).strip()
             cursor.execute("""
-                INSERT INTO usuarios_cache (id_usuario, nombre, email, area, dni, actualizado_en)
-                VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+                INSERT INTO usuarios_cache (id_usuario, nombre, email, area, dni, id_origen, actualizado_en)
+                VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
             """, (
                 id_u,
                 str(u.get("nombre", "")).strip(),
                 str(u.get("email", "") or u.get("mail", "")).strip(),
                 str(u.get("area", "")).strip(),
-                str(u.get("dni", "")).strip()
+                str(u.get("dni", "")).strip(),
+                id_orig
             ))
         conn.commit()
 
@@ -261,7 +279,7 @@ def obtener_usuarios_cache() -> list:
     """Retorna los usuarios autorizados almacenados en caché local."""
     with obtener_conexion() as conn:
         cursor = conn.cursor()
-        cursor.execute("SELECT id_usuario, nombre, email, area, dni FROM usuarios_cache ORDER BY nombre ASC")
+        cursor.execute("SELECT id_usuario, nombre, email, area, dni, id_origen FROM usuarios_cache ORDER BY nombre ASC")
         return [dict(f) for f in cursor.fetchall()]
 
 def guardar_proyectos_cache(proyectos: list):
@@ -522,6 +540,39 @@ def borrar_sesion():
         except Exception:
             pass
 
+def obtener_id_empleado(nombre_o_dni: str) -> str:
+    """Busca el id_origen (o id_usuario como fallback) asociado al nombre o DNI en la tabla usuarios_cache."""
+    if not nombre_o_dni:
+        return ""
+    val = str(nombre_o_dni).strip().lower()
+    try:
+        with obtener_conexion() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT id_origen, id_usuario FROM usuarios_cache WHERE LOWER(dni) = ? OR LOWER(nombre) = ? LIMIT 1", (val, val))
+            row = cursor.fetchone()
+            if row:
+                id_orig = str(row["id_origen"]).strip() if row["id_origen"] else ""
+                if id_orig:
+                    return id_orig
+                return str(row["id_usuario"]).strip() if row["id_usuario"] else ""
+            return ""
+    except Exception:
+        return ""
+
+def obtener_id_proyecto(denominacion: str) -> str:
+    """Busca el id_proyecto asociado a la denominación en la tabla proyectos_cache."""
+    if not denominacion:
+        return ""
+    val = str(denominacion).strip().lower()
+    try:
+        with obtener_conexion() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT id_proyecto FROM proyectos_cache WHERE LOWER(denominacion) = ? LIMIT 1", (val,))
+            row = cursor.fetchone()
+            return str(row["id_proyecto"]).strip() if row and row["id_proyecto"] else ""
+    except Exception:
+        return ""
+
 def guardar_registro_asistencia(
     empleado: str,
     fecha: str,
@@ -534,11 +585,14 @@ def guardar_registro_asistencia(
     id_asistencia: str = "",
     dia_semana: str = "",
     feriado: str = "",
-    sincronizado: bool = False
+    sincronizado: bool = False,
+    cargado_por: str = "",
+    id_empleado: str = "",
+    id_proyecto: str = ""
 ):
     """
     Inserta una fila de asistencia con las columnas exactas de Google Sheets:
-    id_asistencia, empleado, fecha, tipo_ocf, servicio, horas, instrumental, usuario_mail, fecha_hora, dia_semana, feriado
+    id_asistencia, empleado, fecha, tipo_ocf, servicio, horas, instrumental, usuario_mail, fecha_hora, dia_semana, feriado, id_empleado, id_proyecto
     """
     uid = id_asistencia or str(uuid.uuid4())
     ts = fecha_hora or datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -546,15 +600,19 @@ def guardar_registro_asistencia(
     dia_sem = dia_semana or calcular_dia_semana(fecha)
     fer = feriado or es_fecha_feriado(fecha)
 
+    emp_id = id_empleado or obtener_id_empleado(empleado)
+    proy_id = id_proyecto or obtener_id_proyecto(servicio)
+
     with obtener_conexion() as conn:
         cursor = conn.cursor()
         cursor.execute("""
             INSERT INTO historial (
                 id_asistencia, empleado, fecha, tipo_ocf, servicio, 
                 horas, instrumental, usuario_mail, fecha_hora, 
-                lugar, jornada, dia_semana, feriado, modificado, sincronizado
+                lugar, jornada, dia_semana, feriado, modificado, sincronizado,
+                cargado_por, id_empleado, id_proyecto
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             uid,
             empleado,
@@ -570,7 +628,10 @@ def guardar_registro_asistencia(
             dia_sem,
             fer,
             0,
-            1 if sincronizado else 0
+            1 if sincronizado else 0,
+            cargado_por,
+            emp_id,
+            proy_id
         ))
         conn.commit()
     return uid
@@ -580,7 +641,11 @@ def actualizar_registro_asistencia(
     fecha: str,
     tipo_ocf: str,
     servicio: str,
-    horas: float
+    horas: float,
+    empleado: str = "",
+    cargado_por: str = "",
+    id_empleado: str = "",
+    id_proyecto: str = ""
 ) -> bool:
     """
     Actualiza un reporte de asistencia existente en historial
@@ -592,7 +657,13 @@ def actualizar_registro_asistencia(
 
     with obtener_conexion() as conn:
         cursor = conn.cursor()
-        cursor.execute("""
+        cursor.execute("SELECT empleado, id_empleado, id_proyecto FROM historial WHERE id = ?", (id_registro,))
+        row_ant = cursor.fetchone()
+        emp_actual = empleado or (row_ant["empleado"] if row_ant else "")
+        emp_id = id_empleado or (row_ant["id_empleado"] if row_ant and row_ant["id_empleado"] else obtener_id_empleado(emp_actual))
+        proy_id = id_proyecto or obtener_id_proyecto(servicio)
+
+        query = """
             UPDATE historial
             SET fecha = ?,
                 tipo_ocf = ?,
@@ -602,14 +673,86 @@ def actualizar_registro_asistencia(
                 jornada = ?,
                 dia_semana = ?,
                 feriado = ?,
+                id_proyecto = ?,
                 modificado = 1,
                 sincronizado = 0
-            WHERE id = ?
-        """, (
-            fecha, tipo_ocf, tipo_ocf, servicio, horas, jornada_txt, dia_sem, fer, id_registro
-        ))
+        """
+        params = [fecha, tipo_ocf, tipo_ocf, servicio, horas, jornada_txt, dia_sem, fer, proy_id]
+
+        if empleado:
+            query += ", empleado = ?, id_empleado = ?"
+            params.extend([empleado, emp_id])
+
+        if cargado_por:
+            query += ", cargado_por = ?"
+            params.append(cargado_por)
+
+        query += " WHERE id = ?"
+        params.append(id_registro)
+
+        cursor.execute(query, params)
         conn.commit()
         return cursor.rowcount > 0
+
+def eliminar_registro_asistencia(id_registro: int) -> dict:
+    """Elimina un reporte de la tabla historial por su ID entero y devuelve su id_asistencia."""
+    with obtener_conexion() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT id, id_asistencia, empleado, fecha FROM historial WHERE id = ?", (id_registro,))
+        row = cursor.fetchone()
+        if not row:
+            return {"exito": False, "error": "No se encontró el registro a eliminar."}
+        id_asistencia = str(row["id_asistencia"] or "").strip()
+        cursor.execute("DELETE FROM historial WHERE id = ?", (id_registro,))
+        conn.commit()
+        return {"exito": True, "id_asistencia": id_asistencia}
+
+def obtener_historial_otros_empleados(usuario_rrhh: str = "", filtro_empleado: str = "") -> list:
+    """
+    Retorna los registros de historial cargados por personal de RRHH para otros empleados.
+    Muestra los registros cargados por el usuario o para otros empleados delegados.
+    """
+    with obtener_conexion() as conn:
+        cursor = conn.cursor()
+        u_clean = (usuario_rrhh or "").strip().lower()
+        query = """
+            SELECT 
+                id,
+                COALESCE(id_asistencia, '') as id_asistencia,
+                COALESCE(empleado, '') as empleado,
+                fecha,
+                COALESCE(tipo_ocf, lugar) as tipo_ocf,
+                servicio,
+                COALESCE(horas, 0) as horas,
+                COALESCE(instrumental, '') as instrumental,
+                COALESCE(usuario_mail, '') as usuario_mail,
+                COALESCE(fecha_hora, creado_en) as fecha_hora,
+                COALESCE(lugar, tipo_ocf) as lugar,
+                COALESCE(jornada, '') as jornada,
+                COALESCE(dia_semana, '') as dia_semana,
+                COALESCE(feriado, '') as feriado,
+                COALESCE(cargado_por, '') as cargado_por,
+                COALESCE(id_empleado, '') as id_empleado,
+                COALESCE(id_proyecto, '') as id_proyecto,
+                sincronizado,
+                creado_en
+            FROM historial
+            WHERE (
+                (cargado_por != '' AND LOWER(cargado_por) != LOWER(empleado))
+                OR (cargado_por != '' AND LOWER(cargado_por) = ?)
+                OR (cargado_por = '' AND ? != '' AND LOWER(empleado) != ?)
+            )
+        """
+        params = [u_clean, u_clean, u_clean]
+
+        if filtro_empleado and filtro_empleado.strip().upper() != "TODOS":
+            query += " AND LOWER(empleado) = ?"
+            params.append(filtro_empleado.strip().lower())
+
+        query += " ORDER BY fecha DESC, id DESC LIMIT 200"
+        cursor.execute(query, params)
+        filas = cursor.fetchall()
+        return [dict(f) for f in filas]
 
 def obtener_pendientes_sincronizacion():
     """Retorna todas las filas de historial que aún no han sido sincronizadas con Google Sheets."""
@@ -629,6 +772,9 @@ def obtener_pendientes_sincronizacion():
                 COALESCE(fecha_hora, creado_en) as fecha_hora,
                 COALESCE(dia_semana, '') as dia_semana,
                 COALESCE(feriado, '') as feriado,
+                COALESCE(cargado_por, '') as cargado_por,
+                COALESCE(id_empleado, '') as id_empleado,
+                COALESCE(id_proyecto, '') as id_proyecto,
                 COALESCE(modificado, 0) as modificado
             FROM historial
             WHERE sincronizado = 0
@@ -653,7 +799,6 @@ def marcar_como_sincronizados(ids_asistencia: list):
 
 def guardar_registro_historial(fecha: str, lugar: str, servicio: str, jornada: str, sincronizado: bool = True):
     """Método de conveniencia para compatibilidad."""
-    # Extraer horas si viene en texto tipo '4.0 hs'
     horas_val = 8.0
     try:
         horas_val = float(jornada.replace("hs", "").replace("h", "").strip())
@@ -698,6 +843,9 @@ def obtener_ultimos_registros(empleado: str = "", usuario_mail: str = "", limite
                     COALESCE(jornada, '') as jornada,
                     COALESCE(dia_semana, '') as dia_semana,
                     COALESCE(feriado, '') as feriado,
+                    COALESCE(cargado_por, '') as cargado_por,
+                    COALESCE(id_empleado, '') as id_empleado,
+                    COALESCE(id_proyecto, '') as id_proyecto,
                     sincronizado,
                     creado_en
                 FROM historial 
@@ -723,6 +871,9 @@ def obtener_ultimos_registros(empleado: str = "", usuario_mail: str = "", limite
                     COALESCE(jornada, '') as jornada,
                     COALESCE(dia_semana, '') as dia_semana,
                     COALESCE(feriado, '') as feriado,
+                    COALESCE(cargado_por, '') as cargado_por,
+                    COALESCE(id_empleado, '') as id_empleado,
+                    COALESCE(id_proyecto, '') as id_proyecto,
                     sincronizado,
                     creado_en
                 FROM historial 

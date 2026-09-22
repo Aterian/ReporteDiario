@@ -9,7 +9,8 @@ export default function HomeView({
   onVerHistorial,
   onAvatarClick,
   onNuevoRoster,
-  onHistorialRoster
+  onHistorialRoster,
+  onHistorialOtrosEmpleados
 }) {
   if (tema === 'rpg') {
     return (
@@ -236,6 +237,33 @@ export default function HomeView({
                 <span className="action-card-title">Historial de Roster</span>
                 <span className="action-card-desc">
                   Consultar turnos y descargar reporte .xlsx mensual en 3 hojas
+                </span>
+              </div>
+              <div className="action-card-arrow">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="9 18 15 12 9 6" />
+                </svg>
+              </div>
+            </button>
+
+            {/* Botón: Historial de otros empleados */}
+            <button 
+              type="button" 
+              className="home-action-card card-other-hist" 
+              onClick={onHistorialOtrosEmpleados}
+            >
+              <div className="action-card-icon-box other-hist-icon">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+                  <circle cx="9" cy="7" r="4" />
+                  <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+                  <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+                </svg>
+              </div>
+              <div className="action-card-content">
+                <span className="action-card-title">Historial de otros empleados</span>
+                <span className="action-card-desc">
+                  Gestiona y edita los reportes cargados para otros colaboradores
                 </span>
               </div>
               <div className="action-card-arrow">
