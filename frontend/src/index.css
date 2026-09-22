@@ -7719,3 +7719,353 @@ html, body {
   font-weight: 900;
   color: var(--primary);
 }
+
+/* =========================================================================
+   10. DIFERENCIACIÓN CROMÁTICA DE MODALIDADES (FRANCO OBRA, TRABAJADOS, ETC.)
+   ========================================================================= */
+
+/* Franco Obra: Terracota cálido / Naranja tostado (diferenciado de campo y roster) */
+.badge-modalidad-franco-obra {
+  background: #ffedd5 !important;
+  color: #c2410c !important;
+  border: 1px solid #fed7aa !important;
+}
+.dot-franco-obra {
+  background-color: #ea580c !important;
+}
+[data-theme='dark'] .badge-modalidad-franco-obra {
+  background: rgba(234, 88, 12, 0.22) !important;
+  color: #fdba74 !important;
+  border-color: #ea580c !important;
+}
+
+/* Franco Obra Trabajado: Carmín / Coral oscuro */
+.badge-modalidad-franco-obra-trabajado {
+  background: #fee2e2 !important;
+  color: #991b1b !important;
+  border: 1px solid #fca5a5 !important;
+}
+.dot-franco-obra-trabajado {
+  background-color: #dc2626 !important;
+}
+[data-theme='dark'] .badge-modalidad-franco-obra-trabajado {
+  background: rgba(220, 38, 38, 0.22) !important;
+  color: #fca5a5 !important;
+  border-color: #b91c1c !important;
+}
+
+/* Franco Ofic Trabajado: Ámbar Dorado */
+.badge-modalidad-franco-ofic-trabajado {
+  background: #fef9c3 !important;
+  color: #854d0e !important;
+  border: 1px solid #fde047 !important;
+}
+.dot-franco-ofic-trabajado {
+  background-color: #d97706 !important;
+}
+[data-theme='dark'] .badge-modalidad-franco-ofic-trabajado {
+  background: rgba(217, 119, 6, 0.22) !important;
+  color: #fde047 !important;
+  border-color: #b45309 !important;
+}
+
+/* =========================================================================
+   11. BOTONES DE ACCIÓN ESTILIZADOS (MODIFICAR, ELIMINAR, MI HISTORIAL)
+   ========================================================================= */
+
+/* Botón estilo fantasma refinado para la barra de herramientas (Mi Historial, etc.) */
+.btn-action-ghost {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-input);
+  border-radius: var(--radius-md, 8px);
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+
+.btn-action-ghost:hover {
+  background: var(--bg-surface-hover);
+  border-color: var(--primary);
+  color: var(--primary);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
+}
+
+.btn-action-ghost:active {
+  transform: translateY(0);
+}
+
+/* Botones de acción dentro de las tarjetas (Modificar y Eliminar) */
+.other-card-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border-subtle);
+  margin-top: 6px;
+}
+
+.btn-card-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 11px;
+  border-radius: 6px;
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.18s cubic-bezier(0.4, 0, 0.2, 1);
+  border: 1px solid transparent;
+}
+
+.btn-card-edit,
+.btn-edit-record {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-input);
+  border-radius: 6px;
+  padding: 4px 10px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.18s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.btn-card-edit:hover,
+.btn-edit-record:hover {
+  background: var(--primary-subtle);
+  border-color: var(--primary);
+  color: var(--primary);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.06);
+}
+
+.btn-card-delete {
+  background: rgba(220, 38, 38, 0.05);
+  border: 1px solid rgba(220, 38, 38, 0.25);
+  color: #dc2626;
+}
+
+.btn-card-delete:hover {
+  background: rgba(220, 38, 38, 0.12);
+  border-color: #dc2626;
+  color: #b91c1c;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 5px rgba(220, 38, 38, 0.15);
+}
+
+/* =========================================================================
+   12. VISTA DE HISTORIAL EN MODO RPG (FANTASY TAVERN BOARD AESTHETIC)
+   ========================================================================= */
+
+.rpg-history-viewport {
+  width: 100%;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 10px 14px 24px 14px;
+  box-sizing: border-box;
+}
+
+.rpg-history-viewport .rpg-notice-board {
+  max-width: 100% !important;
+  min-height: calc(100vh - 90px);
+  display: flex;
+  flex-direction: column;
+}
+
+.rpg-nav-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+  padding: 0 4px;
+}
+
+.rpg-wood-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: linear-gradient(180deg, #5c381e 0%, #3e2210 100%);
+  border: 1.5px solid #8c582f;
+  color: #fef3c7;
+  padding: 6px 14px;
+  border-radius: 6px;
+  font-family: 'Cinzel', serif;
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  cursor: pointer;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.2);
+  transition: all 0.15s ease;
+}
+
+.rpg-wood-btn:hover {
+  background: linear-gradient(180deg, #744625 0%, #4f2c15 100%);
+  border-color: #d97706;
+  color: #fff;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 10px rgba(0,0,0,0.7), 0 0 8px rgba(217, 119, 6, 0.35);
+}
+
+.rpg-wood-btn-primary {
+  background: linear-gradient(180deg, #991b1b 0%, #600f0f 100%);
+  border-color: #b91c1c;
+  color: #fef2f2;
+}
+
+.rpg-wood-btn-primary:hover {
+  background: linear-gradient(180deg, #b91c1c 0%, #7f1d1d 100%);
+  border-color: #f87171;
+  color: #fff;
+  box-shadow: 0 4px 10px rgba(0,0,0,0.7), 0 0 10px rgba(239, 68, 68, 0.4);
+}
+
+.rpg-history-split-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  flex: 1;
+  min-height: 0;
+}
+
+@media (max-width: 950px) {
+  .rpg-history-split-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.history-rpg-parchment {
+  position: relative;
+  background: #f5e4bf !important;
+  background-image: radial-gradient(circle at 50% 50%, rgba(255, 255, 255, 0.45) 0%, rgba(184, 137, 72, 0.18) 100%) !important;
+  border: 1.5px solid #c9aa6d !important;
+  border-radius: 6px !important;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.65), 2px 2px 4px rgba(0, 0, 0, 0.3) !important;
+  color: #2b1d0c !important;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.history-rpg-parchment .history-panel-toolbar,
+.history-rpg-parchment .calendar-panel-header {
+  background: rgba(212, 184, 128, 0.25) !important;
+  border-bottom: 1px dashed #b89758 !important;
+  color: #3b220c;
+}
+
+.history-rpg-parchment .calendar-month-title {
+  font-family: 'Cinzel', serif;
+  font-weight: 800;
+  color: #3b220c !important;
+}
+
+.history-rpg-parchment .calendar-weekdays-row {
+  color: #785324;
+  font-family: 'Cinzel', serif;
+  font-size: 11px;
+  font-weight: 700;
+  border-bottom: 1px solid rgba(184, 151, 88, 0.3);
+}
+
+.history-rpg-parchment .calendar-cell {
+  background: rgba(255, 255, 255, 0.45);
+  border: 1px solid rgba(184, 151, 88, 0.35);
+  color: #2b1d0c;
+}
+
+.history-rpg-parchment .calendar-cell:hover {
+  background: rgba(255, 255, 255, 0.85);
+  border-color: #b89758;
+}
+
+.history-rpg-parchment .cell-selected {
+  background: #fef08a !important;
+  border-color: #d97706 !important;
+  box-shadow: 0 0 8px rgba(217, 119, 6, 0.4);
+}
+
+.history-rpg-parchment .cell-today {
+  border-color: #b91c1c !important;
+  background: rgba(254, 226, 226, 0.6) !important;
+}
+
+.history-rpg-parchment .cell-today-dot {
+  background: #b91c1c;
+}
+
+.history-rpg-parchment .history-item-card {
+  background: rgba(255, 255, 255, 0.6);
+  border: 1px solid #d4b880;
+  color: #2b1d0c;
+}
+
+.history-rpg-parchment .history-item-card:hover {
+  background: rgba(255, 255, 255, 0.95);
+  border-color: #b89758;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.12);
+}
+
+.history-rpg-parchment .item-card-active {
+  border-color: #d97706 !important;
+  background: rgba(254, 240, 138, 0.6) !important;
+  box-shadow: 0 0 8px rgba(217, 119, 6, 0.35);
+}
+
+.history-rpg-parchment .item-card-task {
+  color: #3b220c;
+  font-weight: 600;
+}
+
+.history-rpg-parchment .history-search-box input {
+  background: rgba(255, 255, 255, 0.75) !important;
+  border: 1px solid #c9aa6d !important;
+  color: #2b1d0c !important;
+}
+
+.history-rpg-parchment .calendar-legend-bar {
+  border-top: 1px dashed #b89758;
+  color: #5c381e;
+  font-family: 'Cinzel', serif;
+  font-size: 11px;
+}
+
+.rpg-modal-box {
+  background: #f5e4bf !important;
+  background-image: radial-gradient(circle at 50% 50%, rgba(255, 255, 255, 0.5) 0%, rgba(184, 137, 72, 0.2) 100%) !important;
+  border: 2px solid #8c6a38 !important;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.8) !important;
+  color: #2b1d0c !important;
+}
+
+.rpg-modal-box .modal-title {
+  font-family: 'Cinzel', serif !important;
+  color: #3b220c !important;
+  font-weight: 800 !important;
+}
+
+.rpg-modal-box .form-label-clean {
+  color: #5c381e !important;
+  font-weight: 700 !important;
+}
+
+.rpg-modal-box .form-input-clean,
+.rpg-modal-box .form-select-clean {
+  background: rgba(255, 255, 255, 0.8) !important;
+  border-color: #c9aa6d !important;
+  color: #2b1d0c !important;
+}
+

@@ -55,6 +55,8 @@ export default function CheckForm({ onRegistroGuardado, onVolver, tema }) {
   const [lugar, setLugar] = useState('Oficina');
   const [tipoFranco, setTipoFranco] = useState('Franco de Oficina');
   const [proyectoFrancoObra, setProyectoFrancoObra] = useState('');
+  const [proyectoFrancoOfic, setProyectoFrancoOfic] = useState('');
+  const [proyectoFeriado, setProyectoFeriado] = useState('');
   const [horasFrancoTrabajado, setHorasFrancoTrabajado] = useState(8);
   const [horasFeriado, setHorasFeriado] = useState(8);
   const [tipoLicencia, setTipoLicencia] = useState('Médica');
@@ -92,12 +94,15 @@ export default function CheckForm({ onRegistroGuardado, onVolver, tema }) {
     ? (usuarioSeleccionado.area || '')
     : (sesionUsuario?.area || '')).trim().toUpperCase();
   const esUsuarioAreaEspecial = ['N', 'RRHH', 'A'].includes(areaActiva);
+  const areaNombreFinal = (esUsuarioAreaEspecial && areaElegida)
+    ? areaElegida
+    : (MAPA_AREAS[areaActiva] || areaActiva || 'General');
   const esCampañaOCampo = lugar === 'Campaña / Campo';
   const esFranco = lugar === 'Franco';
   const esFeriadoTrabajado = lugar === 'Feriado Trabajado';
   const esVacaciones = lugar === 'Vacaciones';
   const esLicencia = lugar === 'Licencia';
-  const esSinProyectos = (esFranco && tipoFranco !== 'Franco Trabajado') || esVacaciones || esLicencia || esFeriadoTrabajado;
+  const esSinProyectos = esFranco || esVacaciones || esLicencia || esFeriadoTrabajado;
   const permitirRango = esCampañaOCampo || esRRHH;
 
   // 1. Cargar sesión de usuario
@@ -270,8 +275,13 @@ export default function CheckForm({ onRegistroGuardado, onVolver, tema }) {
       return;
     }
 
-    if (esFranco && tipoFranco === 'Franco de Obra' && !proyectoFrancoObra) {
+    if (esFranco && (tipoFranco === 'Franco de Obra' || tipoFranco === 'Franco Obra Trabajado') && !proyectoFrancoObra) {
       setMensajeError('Por favor selecciona el proyecto asignado al Franco de Obra.');
+      return;
+    }
+
+    if (esFeriadoTrabajado && !proyectoFeriado) {
+      setMensajeError('Por favor selecciona el proyecto asignado al Feriado Trabajado.');
       return;
     }
 
@@ -302,23 +312,40 @@ export default function CheckForm({ onRegistroGuardado, onVolver, tema }) {
       }
 
       if (esFranco) {
-        payload.lugar = 'Franco';
         payload.sub_franco = tipoFranco;
         if (tipoFranco === 'Franco de Obra') {
-          payload.servicio = proyectoFrancoObra ? `Franco de Obra - ${proyectoFrancoObra}` : 'Franco de Obra';
+          payload.lugar = 'Franco Obra';
+          payload.tipo_ocf = 'Franco Obra';
+          payload.servicio = proyectoFrancoObra;
           payload.proyecto = proyectoFrancoObra;
           payload.horas = 0.0;
-        } else if (tipoFranco === 'Franco Trabajado') {
-          payload.servicio = 'Franco Trabajado';
+        } else if (tipoFranco === 'Franco Obra Trabajado') {
+          payload.lugar = 'Franco Obra Trabajado';
+          payload.tipo_ocf = 'Franco Obra Trabajado';
+          payload.servicio = proyectoFrancoObra;
+          payload.proyecto = proyectoFrancoObra;
+          payload.horas = Number(horasFrancoTrabajado || 8);
+        } else if (tipoFranco === 'Franco Ofic Trabajado') {
+          payload.lugar = 'Franco Ofic Trabajado';
+          payload.tipo_ocf = 'Franco Ofic Trabajado';
+          const srv = proyectoFrancoOfic || areaNombreFinal;
+          payload.servicio = srv;
+          payload.proyecto = proyectoFrancoOfic || '';
+          payload.area = areaNombreFinal;
           payload.horas = Number(horasFrancoTrabajado || 8);
         } else {
-          payload.servicio = 'Franco de Oficina';
+          // Franco de oficina / normal (0 hs, servicio = area)
+          payload.lugar = 'Franco';
+          payload.tipo_ocf = 'Franco';
+          payload.servicio = areaNombreFinal;
+          payload.area = areaNombreFinal;
           payload.horas = 0.0;
         }
       } else if (esFeriadoTrabajado) {
         payload.lugar = 'Feriado Trabajado';
         payload.tipo_ocf = 'Feriado Trabajado';
-        payload.servicio = 'Feriado Trabajado';
+        payload.servicio = proyectoFeriado;
+        payload.proyecto = proyectoFeriado;
         payload.feriado = 'SI';
         payload.horas = Number(horasFeriado || 8);
       } else if (esVacaciones) {
@@ -622,9 +649,10 @@ export default function CheckForm({ onRegistroGuardado, onVolver, tema }) {
                 {/* Sub-selector de Franco */}
                 <div className="franco-subtypes-grid">
                   {[
-                    { id: 'Franco de Oficina', label: 'Franco de oficina', desc: '0 hs computadas' },
-                    { id: 'Franco de Obra', label: 'Franco de obra', desc: '0 hs computadas' },
-                    { id: 'Franco Trabajado', label: 'Franco trabajado', desc: 'Computa jornada' }
+                    { id: 'Franco de Oficina', label: 'Franco de oficina', desc: '0 hs • Imputa al área' },
+                    { id: 'Franco de Obra', label: 'Franco de obra', desc: '0 hs • Imputa al proyecto' },
+                    { id: 'Franco Ofic Trabajado', label: 'Franco ofic. trabajado', desc: 'Computa hs • Oficina / Área' },
+                    { id: 'Franco Obra Trabajado', label: 'Franco obra trabajado', desc: 'Computa hs • Imputa a obra' }
                   ].map((sub) => (
                     <button
                       key={sub.id}
@@ -638,16 +666,25 @@ export default function CheckForm({ onRegistroGuardado, onVolver, tema }) {
                   ))}
                 </div>
 
-                {tipoFranco === 'Franco de Obra' && (
+                {tipoFranco === 'Franco de Oficina' && (
+                  <div className="franco-hours-box" style={{ background: 'var(--bg-surface)', padding: '10px 14px', borderRadius: '8px', border: '1px solid var(--border-subtle)', marginTop: '8px' }}>
+                    <span style={{ fontSize: '12.5px', color: 'var(--text-secondary)' }}>
+                      Asignación: Se registrará en la columna de servicio el área <strong>{areaNombreFinal}</strong> con 0 hs computadas.
+                    </span>
+                  </div>
+                )}
+
+                {(tipoFranco === 'Franco de Obra' || tipoFranco === 'Franco Obra Trabajado') && (
                   <div className="franco-hours-box">
                     <label className="form-label-clean">
-                      Proyecto asignado al Franco de Obra:
+                      Proyecto asignado al Franco de Obra: <strong className="required">*</strong>
                     </label>
                     <select
                       className="form-select form-select-clean"
                       style={{ marginTop: '4px' }}
                       value={proyectoFrancoObra}
                       onChange={(e) => setProyectoFrancoObra(e.target.value)}
+                      required
                     >
                       <option value="">-- Seleccionar proyecto asignado --</option>
                       {serviciosDisponibles.map((srv, idx) => (
@@ -657,10 +694,10 @@ export default function CheckForm({ onRegistroGuardado, onVolver, tema }) {
                   </div>
                 )}
 
-                {tipoFranco === 'Franco Trabajado' && (
-                  <div className="franco-hours-box">
+                {tipoFranco === 'Franco Obra Trabajado' && (
+                  <div className="franco-hours-box" style={{ marginTop: '8px' }}>
                     <label className="form-label-clean">
-                      Horas de Franco Trabajado:
+                      Horas de Franco de Obra Trabajado:
                     </label>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '4px' }}>
                       <input
@@ -677,6 +714,44 @@ export default function CheckForm({ onRegistroGuardado, onVolver, tema }) {
                     </div>
                   </div>
                 )}
+
+                {tipoFranco === 'Franco Ofic Trabajado' && (
+                  <div className="franco-hours-box">
+                    <label className="form-label-clean">
+                      Horas de Franco de Oficina Trabajado:
+                    </label>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '4px' }}>
+                      <input
+                        type="number"
+                        min="1"
+                        max="24"
+                        step="0.5"
+                        className="form-input form-input-clean"
+                        style={{ maxWidth: '120px' }}
+                        value={horasFrancoTrabajado}
+                        onChange={(e) => setHorasFrancoTrabajado(Number(e.target.value) || 0)}
+                      />
+                      <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>hs imputadas</span>
+                    </div>
+
+                    <div style={{ marginTop: '10px' }}>
+                      <label className="form-label-clean">
+                        Proyecto asignado (opcional, por defecto imputa a {areaNombreFinal}):
+                      </label>
+                      <select
+                        className="form-select form-select-clean"
+                        style={{ marginTop: '4px' }}
+                        value={proyectoFrancoOfic}
+                        onChange={(e) => setProyectoFrancoOfic(e.target.value)}
+                      >
+                        <option value="">-- Imputar a Área ({areaNombreFinal}) --</option>
+                        {serviciosDisponibles.map((srv, idx) => (
+                          <option key={idx} value={srv}>{srv}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           ) : esFeriadoTrabajado ? (
@@ -684,8 +759,25 @@ export default function CheckForm({ onRegistroGuardado, onVolver, tema }) {
               <div className="feriado-icon">🎉</div>
               <div className="feriado-body" style={{ width: '100%' }}>
                 <h4>Feriado Trabajado</h4>
-                <p>Registro de feriado trabajado con cómputo de horas laborales.</p>
-                <div className="feriado-hours-box">
+                <p>Registro de feriado trabajado con cómputo de horas laborales e imputación a proyecto.</p>
+
+                <div className="form-group-clean" style={{ marginTop: '10px' }}>
+                  <label className="form-label-clean">Proyecto asignado al Feriado Trabajado: <strong className="required">*</strong></label>
+                  <select
+                    className="form-select form-select-clean"
+                    style={{ marginTop: '4px' }}
+                    value={proyectoFeriado}
+                    onChange={(e) => setProyectoFeriado(e.target.value)}
+                    required
+                  >
+                    <option value="">-- Seleccionar proyecto asignado --</option>
+                    {serviciosDisponibles.map((srv, idx) => (
+                      <option key={idx} value={srv}>{srv}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="feriado-hours-box" style={{ marginTop: '10px' }}>
                   <label className="form-label-clean">Horas de Feriado Trabajado:</label>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '4px' }}>
                     <input

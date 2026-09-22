@@ -3,11 +3,12 @@ import { api } from '../services/apiBridge';
 
 const LUGARES_OPCIONES = [
   'Oficina',
-  'Campaña / Campo',
+  'Campo',
+  'Roster',
   'Franco',
-  'Franco de Oficina',
-  'Franco de Obra',
-  'Franco Trabajado',
+  'Franco Obra',
+  'Franco Ofic Trabajado',
+  'Franco Obra Trabajado',
   'Feriado Trabajado',
   'Vacaciones',
   'Licencia'
@@ -328,28 +329,43 @@ export default function OtherEmployeesHistoryView({ usuario, onVolver, tema, onV
       const hrs = Number(r.horas) || 0;
       const esFer = (r.feriado || '').toUpperCase() === 'SI';
 
-      // 1. Franco trabajado
-      if (srv === 'Franco Trabajado' || (lug === 'Franco' && hrs > 0 && srvLower.includes('trabajado'))) {
+      // 1. Franco trabajado (oficina u obra)
+      if (
+        lug.toLowerCase() === 'franco ofic trabajado' ||
+        lug.toLowerCase() === 'franco obra trabajado' ||
+        srv === 'Franco Trabajado' ||
+        (lug === 'Franco' && hrs > 0 && srvLower.includes('trabajado'))
+      ) {
         fechasFrancoTrabajado.add(f);
       }
       // 2. Feriado trabajado
-      else if (lug === 'Feriado Trabajado' || (esFer && hrs > 0)) {
+      else if (lug.toLowerCase() === 'feriado trabajado' || (esFer && hrs > 0)) {
         fechasFeriadoTrabajado.add(f);
       }
       // 3. Franco de Obra -> Contar como días de Obra
-      else if (srvLower.includes('franco de obra') || (lug === 'Franco' && srvLower.includes('obra'))) {
+      else if (
+        lug.toLowerCase() === 'franco obra' ||
+        lug.toLowerCase() === 'franco de obra' ||
+        srvLower.includes('franco de obra') ||
+        (lug === 'Franco' && srvLower.includes('obra'))
+      ) {
         fechasObra.add(f);
       }
       // 4. Franco normal o de oficina -> Contar como días de Oficina
-      else if (lug === 'Franco' || srvLower.includes('franco de oficina') || srvLower === 'franco') {
+      else if (
+        lug.toLowerCase() === 'franco' ||
+        lug.toLowerCase() === 'franco de oficina' ||
+        srvLower.includes('franco de oficina') ||
+        srvLower === 'franco'
+      ) {
         fechasOficina.add(f);
       }
       // 5. Obra / Campo habitual
-      else if (['Campaña / Campo', 'Campo', 'Obra', 'Roster'].includes(lug)) {
+      else if (['campaña / campo', 'campo', 'obra', 'roster'].includes(lug.toLowerCase())) {
         fechasObra.add(f);
       }
       // 6. Oficina habitual
-      else if (['Oficina', 'Home Office'].includes(lug)) {
+      else if (['oficina', 'home office'].includes(lug.toLowerCase())) {
         fechasOficina.add(f);
       }
     });
@@ -383,20 +399,22 @@ export default function OtherEmployeesHistoryView({ usuario, onVolver, tema, onV
   };
 
   const getBadgeClassLugar = (lugar, servicio = '') => {
-    const l = (lugar || '').toLowerCase();
-    const s = (servicio || '').toLowerCase();
-    if (s === 'franco trabajado' || (l === 'franco' && s.includes('trabajado'))) {
-      return 'badge-modalidad-franco-trabajado';
+    const l = (lugar || '').toLowerCase().trim();
+    const s = (servicio || '').toLowerCase().trim();
+    if (l === 'franco obra' || l === 'franco de obra' || s.includes('franco de obra')) {
+      return 'badge-modalidad-franco-obra';
+    }
+    if (l === 'franco obra trabajado') {
+      return 'badge-modalidad-franco-obra-trabajado';
+    }
+    if (l === 'franco ofic trabajado' || s === 'franco trabajado' || (l === 'franco' && s.includes('trabajado'))) {
+      return 'badge-modalidad-franco-ofic-trabajado';
     }
     if (l === 'feriado trabajado' || l.includes('feriado')) {
       return 'badge-modalidad-feriado-trabajado';
     }
-    if (s.includes('franco de obra') || (l === 'franco' && s.includes('obra'))) {
-      return 'badge-modalidad-campo';
-    }
     if (l.includes('oficina')) return 'badge-modalidad-oficina';
     if (l.includes('campo') || l.includes('campaña') || l.includes('roster') || l.includes('obra')) return 'badge-modalidad-campo';
-    if (l.includes('home')) return 'badge-modalidad-oficina';
     if (l.includes('franco')) return 'badge-modalidad-franco';
     if (l.includes('vacaciones')) return 'badge-modalidad-vacaciones';
     if (l.includes('licencia')) return 'badge-modalidad-licencia';
@@ -754,11 +772,18 @@ export default function OtherEmployeesHistoryView({ usuario, onVolver, tema, onV
                       {celda.registros.slice(0, 3).map((r, idx) => {
                         const lug = r.tipo_ocf || r.lugar || 'Oficina';
                         const badgeClass = getBadgeClassLugar(lug, r.servicio);
-                        const labelText = r.servicio === 'Franco Trabajado' 
-                          ? 'Franco Trab.' 
-                          : (lug === 'Feriado Trabajado' 
-                              ? 'Feriado' 
-                              : (r.servicio?.toLowerCase().includes('franco de obra') ? 'F. Obra' : (lug === 'Campaña / Campo' ? 'Campo' : lug)));
+                        let labelText = lug;
+                        if (lug === 'Franco Obra' || r.servicio?.toLowerCase().includes('franco de obra')) {
+                          labelText = 'F. Obra';
+                        } else if (lug === 'Franco Obra Trabajado') {
+                          labelText = 'F. Obra Trab.';
+                        } else if (lug === 'Franco Ofic Trabajado' || r.servicio === 'Franco Trabajado') {
+                          labelText = 'F. Ofic. Trab.';
+                        } else if (lug === 'Feriado Trabajado') {
+                          labelText = 'Feriado Trab.';
+                        } else if (lug === 'Campaña / Campo' || lug === 'Campo') {
+                          labelText = 'Campo';
+                        }
                         return (
                           <div
                             key={r.id || idx}
@@ -788,9 +813,11 @@ export default function OtherEmployeesHistoryView({ usuario, onVolver, tema, onV
               <div className="legend-items">
                 <span className="legend-item"><span className="legend-color-box badge-modalidad-oficina" /> Oficina</span>
                 <span className="legend-item"><span className="legend-color-box badge-modalidad-campo" /> Obra / Campo</span>
+                <span className="legend-item"><span className="legend-color-box badge-modalidad-franco-obra" /> Franco Obra</span>
                 <span className="legend-item"><span className="legend-color-box badge-modalidad-franco" /> Franco Normal</span>
-                <span className="legend-item"><span className="legend-color-box badge-modalidad-franco-trabajado" /> Franco Trabajado</span>
-                <span className="legend-item"><span className="legend-color-box badge-modalidad-feriado-trabajado" /> Feriado Trabajado</span>
+                <span className="legend-item"><span className="legend-color-box badge-modalidad-franco-ofic-trabajado" /> Franco Ofic. Trab.</span>
+                <span className="legend-item"><span className="legend-color-box badge-modalidad-franco-obra-trabajado" /> Franco Obra Trab.</span>
+                <span className="legend-item"><span className="legend-color-box badge-modalidad-feriado-trabajado" /> Feriado Trab.</span>
                 <span className="legend-item"><span className="legend-color-box badge-modalidad-vacaciones" /> Vacaciones</span>
                 <span className="legend-item"><span className="legend-color-box badge-modalidad-licencia" /> Licencia</span>
               </div>
@@ -1095,14 +1122,16 @@ export default function OtherEmployeesHistoryView({ usuario, onVolver, tema, onV
                     let nuevoServicio = registroEditando.servicio;
                     let nuevasHoras = registroEditando.horas;
 
-                    if (nuevoLugar === 'Franco' || nuevoLugar === 'Franco de Oficina' || nuevoLugar === 'Franco de Obra' || nuevoLugar === 'Vacaciones') {
-                      nuevoServicio = nuevoLugar;
+                    if (nuevoLugar === 'Franco' || nuevoLugar === 'Franco de Oficina' || nuevoLugar === 'Franco Obra' || nuevoLugar === 'Franco de Obra' || nuevoLugar === 'Vacaciones') {
                       nuevasHoras = 0;
-                    } else if (nuevoLugar === 'Franco Trabajado') {
-                      nuevoServicio = 'Franco Trabajado';
+                      if (nuevoLugar === 'Vacaciones') nuevoServicio = 'Vacaciones';
+                      if (nuevoLugar === 'Franco Obra' || nuevoLugar === 'Franco de Obra') nuevoServicio = '';
+                      if (nuevoLugar === 'Franco') nuevoServicio = registroEditando.servicio || 'Área';
+                    } else if (nuevoLugar === 'Franco Ofic Trabajado' || nuevoLugar === 'Franco Trabajado') {
+                      nuevoServicio = 'Tiempo dedicado al Área';
                       nuevasHoras = 8;
-                    } else if (nuevoLugar === 'Feriado Trabajado') {
-                      nuevoServicio = 'Feriado Trabajado';
+                    } else if (nuevoLugar === 'Franco Obra Trabajado' || nuevoLugar === 'Feriado Trabajado') {
+                      nuevoServicio = '';
                       nuevasHoras = 8;
                     } else if (nuevoLugar === 'Licencia') {
                       nuevoServicio = 'Licencia Médica';
@@ -1140,21 +1169,16 @@ export default function OtherEmployeesHistoryView({ usuario, onVolver, tema, onV
                     required
                   />
                 </div>
-              ) : (registroEditando.tipo_ocf === 'Franco de Obra' || registroEditando.lugar === 'Franco de Obra' || ((registroEditando.tipo_ocf === 'Franco' || registroEditando.lugar === 'Franco') && (registroEditando.servicio || '').toLowerCase().includes('franco de obra'))) ? (
+              ) : (['Franco Obra', 'Franco de Obra', 'Franco Obra Trabajado', 'Feriado Trabajado', 'Campo', 'Campaña / Campo', 'Roster'].includes(registroEditando.tipo_ocf || registroEditando.lugar)) ? (
                 <div className="form-group-clean">
-                  <label className="form-label-clean">Proyecto Asignado (Franco de Obra):</label>
+                  <label className="form-label-clean">Proyecto Asignado:</label>
                   <select
                     className="form-select form-select-clean"
-                    value={
-                      (registroEditando.servicio || '').startsWith('Franco de Obra - ')
-                        ? (registroEditando.servicio || '').replace('Franco de Obra - ', '')
-                        : ((registroEditando.servicio || '').toLowerCase() === 'franco de obra' ? '' : registroEditando.servicio)
-                    }
+                    value={registroEditando.servicio || ''}
                     onChange={(e) => {
-                      const proy = e.target.value;
                       setRegistroEditando({
                         ...registroEditando,
-                        servicio: proy ? `Franco de Obra - ${proy}` : 'Franco de Obra'
+                        servicio: e.target.value
                       });
                     }}
                     required
@@ -1165,14 +1189,26 @@ export default function OtherEmployeesHistoryView({ usuario, onVolver, tema, onV
                     ))}
                   </select>
                 </div>
-              ) : (['Franco', 'Franco de Oficina', 'Franco Trabajado', 'Feriado Trabajado', 'Vacaciones'].includes(registroEditando.tipo_ocf || registroEditando.lugar)) ? (
+              ) : (registroEditando.tipo_ocf === 'Franco' || registroEditando.lugar === 'Franco') ? (
+                <div className="form-group-clean">
+                  <label className="form-label-clean">Área / Asignación (Franco):</label>
+                  <input
+                    type="text"
+                    className="form-input form-input-clean"
+                    value={registroEditando.servicio || ''}
+                    onChange={(e) => setRegistroEditando({ ...registroEditando, servicio: e.target.value })}
+                    placeholder="Área del empleado (o proyecto si roster)"
+                    required
+                  />
+                </div>
+              ) : (registroEditando.tipo_ocf === 'Vacaciones' || registroEditando.lugar === 'Vacaciones') ? (
                 <div className="form-group-clean">
                   <label className="form-label-clean">Detalle:</label>
                   <input
                     type="text"
                     className="form-input form-input-clean"
-                    value={registroEditando.servicio}
-                    onChange={(e) => setRegistroEditando({ ...registroEditando, servicio: e.target.value })}
+                    value={registroEditando.servicio || 'Vacaciones'}
+                    disabled
                   />
                 </div>
               ) : (
@@ -1202,7 +1238,7 @@ export default function OtherEmployeesHistoryView({ usuario, onVolver, tema, onV
                   className="form-input form-input-clean"
                   value={registroEditando.horas}
                   onChange={(e) => setRegistroEditando({ ...registroEditando, horas: e.target.value })}
-                  disabled={['Franco', 'Franco de Oficina', 'Franco de Obra', 'Vacaciones', 'Licencia'].includes(registroEditando.tipo_ocf || registroEditando.lugar)}
+                  disabled={['Franco', 'Franco de Oficina', 'Franco Obra', 'Franco de Obra', 'Vacaciones', 'Licencia'].includes(registroEditando.tipo_ocf || registroEditando.lugar)}
                   required
                 />
               </div>

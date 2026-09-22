@@ -654,7 +654,7 @@ def actualizar_registro_asistencia(
     y lo marca como pendiente de sincronizar (sincronizado=0, modificado=1).
     """
     dia_sem = calcular_dia_semana(fecha)
-    fer = es_fecha_feriado(fecha)
+    fer = "SI" if tipo_ocf.strip().lower() == "feriado trabajado" else es_fecha_feriado(fecha)
     jornada_txt = f"{horas} hs" if horas > 0 else "Franco"
 
     with obtener_conexion() as conn:

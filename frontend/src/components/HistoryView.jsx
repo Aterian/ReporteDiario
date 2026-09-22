@@ -1,10 +1,33 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { api } from '../services/apiBridge';
 
+// Iconos vectoriales medievales para garantizar renderizado perfecto sin depender de compatibilidad de emojis
+const QuillIcon = ({ size = 16, color = "#78350f" }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle', flexShrink: 0 }}>
+    <path d="M20.24 12.24a6 6 0 0 0-8.49-8.49L5 10.5V19h8.5z" />
+    <line x1="16" y1="8" x2="2" y2="22" />
+    <line x1="17.5" y1="15" x2="9" y2="15" />
+  </svg>
+);
+
+const CalendarRpgIcon = ({ size = 16, color = "#78350f" }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle', flexShrink: 0 }}>
+    <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+    <line x1="16" y1="2" x2="16" y2="6" />
+    <line x1="8" y1="2" x2="8" y2="6" />
+    <line x1="3" y1="10" x2="21" y2="10" />
+  </svg>
+);
+
 const LUGARES_OPCIONES = [
   'Oficina',
-  'Campaña / Campo',
+  'Campo',
+  'Roster',
   'Franco',
+  'Franco Obra',
+  'Franco Ofic Trabajado',
+  'Franco Obra Trabajado',
+  'Feriado Trabajado',
   'Vacaciones',
   'Licencia'
 ];
@@ -168,19 +191,16 @@ export default function HistoryView({ onVolver, tema, onNuevoReporte, usuario, o
     const ultimoDiaMes = new Date(anio, mes + 1, 0);
     const totalDias = ultimoDiaMes.getDate();
 
-    // En JS getDay() es 0=Domingo, 1=Lunes. Lo convertimos a 0=Lunes, 6=Domingo
     let diaInicioSemana = primerDiaMes.getDay() - 1;
     if (diaInicioSemana === -1) diaInicioSemana = 6;
 
     const celdas = [];
-    // Celdas vacías previas
     for (let i = 0; i < diaInicioSemana; i++) {
       celdas.push({ esVacio: true, id: `prev-${i}` });
     }
 
     const hoyStr = new Date().toISOString().split('T')[0];
 
-    // Celdas de los días del mes
     for (let d = 1; d <= totalDias; d++) {
       const mesStr = String(mes + 1).padStart(2, '0');
       const diaStr = String(d).padStart(2, '0');
@@ -215,11 +235,23 @@ export default function HistoryView({ onVolver, tema, onNuevoReporte, usuario, o
     'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
   ];
 
-  const getBadgeClassLugar = (lugar) => {
-    const l = (lugar || '').toLowerCase();
+  const getBadgeClassLugar = (lugar, servicio = '') => {
+    const l = (lugar || '').toLowerCase().trim();
+    const s = (servicio || '').toLowerCase().trim();
+    if (l === 'franco obra' || l === 'franco de obra' || s.includes('franco de obra')) {
+      return 'badge-modalidad-franco-obra';
+    }
+    if (l === 'franco obra trabajado') {
+      return 'badge-modalidad-franco-obra-trabajado';
+    }
+    if (l === 'franco ofic trabajado' || s === 'franco trabajado' || (l === 'franco' && s.includes('trabajado'))) {
+      return 'badge-modalidad-franco-ofic-trabajado';
+    }
+    if (l === 'feriado trabajado' || l.includes('feriado')) {
+      return 'badge-modalidad-feriado-trabajado';
+    }
     if (l.includes('oficina')) return 'badge-modalidad-oficina';
-    if (l.includes('campo') || l.includes('campaña') || l.includes('roster')) return 'badge-modalidad-campo';
-    if (l.includes('home')) return 'badge-modalidad-home';
+    if (l.includes('campo') || l.includes('campaña') || l.includes('roster') || l.includes('obra')) return 'badge-modalidad-campo';
     if (l.includes('franco')) return 'badge-modalidad-franco';
     if (l.includes('vacaciones')) return 'badge-modalidad-vacaciones';
     if (l.includes('licencia')) return 'badge-modalidad-licencia';
@@ -228,37 +260,39 @@ export default function HistoryView({ onVolver, tema, onNuevoReporte, usuario, o
 
   const pendientesCount = registros.filter((r) => r.sincronizado === 0).length;
 
-  return (
-    <div className={`view-content history-split-viewport ${isRpg ? 'rpg-board-viewport' : ''}`}>
-      {/* Barra superior de navegación */}
-      <div className="view-header-bar history-header-bar">
+  // Renderizado interior de la vista dividida
+  const contenidoPrincipal = (
+    <>
+      {/* Barra superior de navegación / acciones */}
+      <div className={`view-header-bar ${isRpg ? 'rpg-nav-toolbar' : 'history-header-bar'}`}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           {onVolver && (
-            <button type="button" className="btn-back" onClick={onVolver}>
+            <button
+              type="button"
+              className={isRpg ? 'rpg-wood-btn' : 'btn-back'}
+              onClick={onVolver}
+              title={isRpg ? 'Regresar a la Taberna' : 'Volver al Inicio'}
+            >
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                 <polyline points="15 18 9 12 15 6" />
               </svg>
-              <span>Inicio</span>
+              <span>{isRpg ? 'Taberna' : 'Inicio'}</span>
             </button>
           )}
 
-          <div className="history-title-block">
-            <span className="history-main-title">
-              {isRpg ? '📖 Tomo de Crónicas Históricas' : 'Historial de Registros'}
-            </span>
-            <span className="history-sub-title">
-              {isRpg
-                ? 'Anales de misiones selladas • Registro cromático del reino'
-                : 'Pantalla dividida con vista de lista y calendario mensual'}
-            </span>
-          </div>
+          {!isRpg && (
+            <div className="history-title-block">
+              <span className="history-main-title">Historial de Registros</span>
+              <span className="history-sub-title">Pantalla dividida con vista de lista y calendario mensual</span>
+            </div>
+          )}
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
           {esRRHH && onHistorialOtrosEmpleados && (
             <button
               type="button"
-              className="btn-action-ghost"
+              className={isRpg ? 'rpg-wood-btn' : 'btn-action-ghost'}
               onClick={onHistorialOtrosEmpleados}
               title="Ver registros que has cargado para otros empleados"
             >
@@ -268,28 +302,28 @@ export default function HistoryView({ onVolver, tema, onNuevoReporte, usuario, o
                 <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
                 <path d="M16 3.13a4 4 0 0 1 0 7.75" />
               </svg>
-              <span>Historial Otros Empleados</span>
+              <span>{isRpg ? 'Crónicas de Colegas' : 'Historial Otros Empleados'}</span>
             </button>
           )}
 
           {onNuevoReporte && (
             <button
               type="button"
-              className="btn-action-primary"
+              className={isRpg ? 'rpg-wood-btn rpg-wood-btn-primary' : 'btn-action-primary'}
               onClick={onNuevoReporte}
             >
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                 <line x1="12" y1="5" x2="12" y2="19" />
                 <line x1="5" y1="12" x2="19" y2="12" />
               </svg>
-              <span>Nuevo Check</span>
+              <span>{isRpg ? 'Sellar Nueva Misión' : 'Nuevo Check'}</span>
             </button>
           )}
 
           {pendientesCount > 0 && (
             <button
               type="button"
-              className="btn-sync"
+              className={isRpg ? 'rpg-wood-btn' : 'btn-sync'}
               onClick={ejecutarSincronizacion}
               disabled={sincronizando}
               title="Sincronizar reportes pendientes con Google Sheets"
@@ -305,7 +339,7 @@ export default function HistoryView({ onVolver, tema, onNuevoReporte, usuario, o
 
           <button
             type="button"
-            className="btn-refresh"
+            className={isRpg ? 'rpg-wood-btn' : 'btn-refresh'}
             onClick={cargarHistorial}
             disabled={cargando || sincronizando}
             title="Actualizar lista"
@@ -338,10 +372,26 @@ export default function HistoryView({ onVolver, tema, onNuevoReporte, usuario, o
       )}
 
       {/* DISPOSICIÓN DIVIDIDA: LISTADO IZQUIERDA | CALENDARIO DERECHA */}
-      <div className="history-split-grid">
+      <div className={`history-split-grid ${isRpg ? 'rpg-history-split-grid' : ''}`}>
         
         {/* PANEL IZQUIERDO: LISTADO DE REGISTROS */}
-        <div className="history-list-panel">
+        <div className={`history-list-panel ${isRpg ? 'history-rpg-parchment rpg-pinned-parchment' : ''}`}>
+          {isRpg && (
+            <>
+              <div className="rpg-tack tack-tl" />
+              <div className="rpg-tack tack-tr" />
+              <div className="rpg-tack tack-bl" />
+              <div className="rpg-tack tack-br" />
+              <div className="parchment-header-row" style={{ padding: '8px 14px 4px 14px', marginBottom: 0 }}>
+                <div className="parchment-title-group">
+                  <QuillIcon size={16} color="#78350f" />
+                  <h3 className="parchment-title">ANALES DE MISIONES</h3>
+                </div>
+                <span className="parchment-date">{registrosFiltrados.length} Registros</span>
+              </div>
+            </>
+          )}
+
           <div className="history-panel-toolbar">
             <div className="history-search-box">
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
@@ -350,7 +400,7 @@ export default function HistoryView({ onVolver, tema, onNuevoReporte, usuario, o
               </svg>
               <input
                 type="text"
-                placeholder="Buscar por proyecto o fecha..."
+                placeholder={isRpg ? "Buscar crónica por proyecto o fecha..." : "Buscar por proyecto o fecha..."}
                 value={busquedaTexto}
                 onChange={(e) => setBusquedaTexto(e.target.value)}
                 className="form-input form-input-sm search-field"
@@ -408,7 +458,7 @@ export default function HistoryView({ onVolver, tema, onNuevoReporte, usuario, o
                 {registrosFiltrados.map((item) => {
                   const horasDisplay = item.horas > 0 ? `${item.horas} hs` : (item.jornada || '0 hs');
                   const lugarDisplay = item.tipo_ocf || item.lugar || 'Oficina';
-                  const badgeClass = getBadgeClassLugar(lugarDisplay);
+                  const badgeClass = getBadgeClassLugar(lugarDisplay, item.servicio);
                   const estaSincronizado = item.sincronizado === 1;
 
                   return (
@@ -470,7 +520,23 @@ export default function HistoryView({ onVolver, tema, onNuevoReporte, usuario, o
         </div>
 
         {/* PANEL DERECHO: CALENDARIO MENSUAL CROMÁTICO */}
-        <div className="history-calendar-panel">
+        <div className={`history-calendar-panel ${isRpg ? 'history-rpg-parchment rpg-pinned-parchment' : ''}`}>
+          {isRpg && (
+            <>
+              <div className="rpg-tack tack-tl" />
+              <div className="rpg-tack tack-tr" />
+              <div className="rpg-tack tack-bl" />
+              <div className="rpg-tack tack-br" />
+              <div className="parchment-header-row" style={{ padding: '4px 8px 4px 8px', marginBottom: '8px' }}>
+                <div className="parchment-title-group">
+                  <CalendarRpgIcon size={16} color="#78350f" />
+                  <h3 className="parchment-title">CRÓNICA MENSUAL</h3>
+                </div>
+                <span className="parchment-date">Registro del Reino</span>
+              </div>
+            </>
+          )}
+
           <div className="calendar-panel-header">
             <div className="calendar-month-controls">
               <button
@@ -496,7 +562,7 @@ export default function HistoryView({ onVolver, tema, onNuevoReporte, usuario, o
 
             <button
               type="button"
-              className="calendar-today-btn"
+              className={isRpg ? 'rpg-wood-btn' : 'calendar-today-btn'}
               onClick={irAHoy}
             >
               Hoy
@@ -529,7 +595,6 @@ export default function HistoryView({ onVolver, tema, onNuevoReporte, usuario, o
                   key={celda.id}
                   className={`calendar-cell ${celda.esHoy ? 'cell-today' : ''} ${estaSeleccionado ? 'cell-selected' : ''} ${tieneRegistros ? 'cell-has-data' : ''}`}
                   onClick={() => {
-                    // Alternar selección de día
                     if (diaSeleccionado === celda.fechaIso) {
                       setDiaSeleccionado(null);
                     } else {
@@ -547,7 +612,20 @@ export default function HistoryView({ onVolver, tema, onNuevoReporte, usuario, o
                   <div className="cell-events-container">
                     {celda.registros.slice(0, 3).map((r, idx) => {
                       const lug = r.tipo_ocf || r.lugar || 'Oficina';
-                      const badgeClass = getBadgeClassLugar(lug);
+                      const badgeClass = getBadgeClassLugar(lug, r.servicio);
+                      let labelText = lug;
+                      if (lug === 'Franco Obra' || r.servicio?.toLowerCase().includes('franco de obra')) {
+                        labelText = 'F. Obra';
+                      } else if (lug === 'Franco Obra Trabajado') {
+                        labelText = 'F. Obra Trab.';
+                      } else if (lug === 'Franco Ofic Trabajado' || r.servicio === 'Franco Trabajado') {
+                        labelText = 'F. Ofic. Trab.';
+                      } else if (lug === 'Feriado Trabajado') {
+                        labelText = 'Feriado Trab.';
+                      } else if (lug === 'Campaña / Campo' || lug === 'Campo') {
+                        labelText = 'Campo';
+                      }
+
                       return (
                         <div
                           key={r.id || idx}
@@ -559,9 +637,7 @@ export default function HistoryView({ onVolver, tema, onNuevoReporte, usuario, o
                           style={{ cursor: 'pointer' }}
                           title={`${lug} - ${r.servicio} (${r.horas} hs) • Clic para modificar`}
                         >
-                          <span className="cell-event-label">
-                            {lug === 'Campaña / Campo' ? 'Campo' : lug}
-                          </span>
+                          <span className="cell-event-label">{labelText}</span>
                         </div>
                       );
                     })}
@@ -582,13 +658,22 @@ export default function HistoryView({ onVolver, tema, onNuevoReporte, usuario, o
                 <span className="legend-color-box dot-oficina" /> Oficina
               </span>
               <span className="legend-item">
-                <span className="legend-color-box dot-campo" /> Campo / Roster
+                <span className="legend-color-box dot-campo" /> Obra / Campo
               </span>
               <span className="legend-item">
-                <span className="legend-color-box dot-home" /> Home Office
+                <span className="legend-color-box dot-franco-obra" /> Franco Obra
               </span>
               <span className="legend-item">
                 <span className="legend-color-box dot-franco" /> Franco
+              </span>
+              <span className="legend-item">
+                <span className="legend-color-box dot-franco-ofic-trabajado" /> Franco Ofic. Trab.
+              </span>
+              <span className="legend-item">
+                <span className="legend-color-box dot-franco-obra-trabajado" /> Franco Obra Trab.
+              </span>
+              <span className="legend-item">
+                <span className="legend-color-box dot-feriado-trabajado" /> Feriado Trab.
               </span>
               <span className="legend-item">
                 <span className="legend-color-box dot-vacaciones" /> Vacaciones
@@ -605,9 +690,11 @@ export default function HistoryView({ onVolver, tema, onNuevoReporte, usuario, o
       {/* Modal de Modificación de Registro */}
       {registroEditando && (
         <div className="modal-backdrop">
-          <div className="modal-box">
+          <div className={`modal-box ${isRpg ? 'rpg-modal-box' : ''}`}>
             <div className="modal-header">
-              <span className="modal-title">Modificar Registro</span>
+              <span className="modal-title">
+                {isRpg ? '📜 Modificar Crónica' : 'Modificar Registro'}
+              </span>
               <button
                 type="button"
                 className="modal-close"
@@ -639,9 +726,17 @@ export default function HistoryView({ onVolver, tema, onNuevoReporte, usuario, o
                     let nuevoServicio = registroEditando.servicio;
                     let nuevasHoras = registroEditando.horas;
 
-                    if (nuevoLugar === 'Franco' || nuevoLugar === 'Vacaciones') {
-                      nuevoServicio = nuevoLugar;
+                    if (nuevoLugar === 'Franco' || nuevoLugar === 'Franco Obra' || nuevoLugar === 'Franco de Obra' || nuevoLugar === 'Vacaciones') {
                       nuevasHoras = 0;
+                      if (nuevoLugar === 'Vacaciones') nuevoServicio = 'Vacaciones';
+                      if (nuevoLugar === 'Franco Obra' || nuevoLugar === 'Franco de Obra') nuevoServicio = '';
+                      if (nuevoLugar === 'Franco') nuevoServicio = registroEditando.servicio || 'Área';
+                    } else if (nuevoLugar === 'Franco Ofic Trabajado' || nuevoLugar === 'Franco Trabajado') {
+                      nuevoServicio = 'Tiempo dedicado al Área';
+                      nuevasHoras = 8;
+                    } else if (nuevoLugar === 'Franco Obra Trabajado' || nuevoLugar === 'Feriado Trabajado') {
+                      nuevoServicio = '';
+                      nuevasHoras = 8;
                     } else if (nuevoLugar === 'Licencia') {
                       nuevoServicio = 'Licencia Médica';
                       nuevasHoras = 0;
@@ -678,14 +773,45 @@ export default function HistoryView({ onVolver, tema, onNuevoReporte, usuario, o
                     required
                   />
                 </div>
-              ) : (registroEditando.tipo_ocf === 'Franco' || registroEditando.lugar === 'Franco' ||
-                   registroEditando.tipo_ocf === 'Vacaciones' || registroEditando.lugar === 'Vacaciones') ? (
+              ) : (['Franco Obra', 'Franco de Obra', 'Franco Obra Trabajado', 'Feriado Trabajado', 'Campo', 'Campaña / Campo', 'Roster'].includes(registroEditando.tipo_ocf || registroEditando.lugar)) ? (
+                <div className="form-group-clean">
+                  <label className="form-label-clean">Proyecto Asignado:</label>
+                  <select
+                    className="form-select form-select-clean"
+                    value={registroEditando.servicio || ''}
+                    onChange={(e) => {
+                      setRegistroEditando({
+                        ...registroEditando,
+                        servicio: e.target.value
+                      });
+                    }}
+                    required
+                  >
+                    <option value="">-- Seleccionar proyecto asignado --</option>
+                    {serviciosDisponibles.map((srv, idx) => (
+                      <option key={idx} value={srv}>{srv}</option>
+                    ))}
+                  </select>
+                </div>
+              ) : (registroEditando.tipo_ocf === 'Franco' || registroEditando.lugar === 'Franco') ? (
+                <div className="form-group-clean">
+                  <label className="form-label-clean">Área / Asignación (Franco):</label>
+                  <input
+                    type="text"
+                    className="form-input form-input-clean"
+                    value={registroEditando.servicio || ''}
+                    onChange={(e) => setRegistroEditando({ ...registroEditando, servicio: e.target.value })}
+                    placeholder="Área del empleado (o proyecto si roster)"
+                    required
+                  />
+                </div>
+              ) : (registroEditando.tipo_ocf === 'Vacaciones' || registroEditando.lugar === 'Vacaciones') ? (
                 <div className="form-group-clean">
                   <label className="form-label-clean">Detalle:</label>
                   <input
                     type="text"
                     className="form-input form-input-clean"
-                    value={registroEditando.servicio}
+                    value={registroEditando.servicio || 'Vacaciones'}
                     disabled
                   />
                 </div>
@@ -716,7 +842,7 @@ export default function HistoryView({ onVolver, tema, onNuevoReporte, usuario, o
                   className="form-input form-input-clean"
                   value={registroEditando.horas}
                   onChange={(e) => setRegistroEditando({ ...registroEditando, horas: e.target.value })}
-                  disabled={['Franco', 'Vacaciones', 'Licencia'].includes(registroEditando.tipo_ocf || registroEditando.lugar)}
+                  disabled={['Franco', 'Franco Obra', 'Franco de Obra', 'Vacaciones', 'Licencia'].includes(registroEditando.tipo_ocf || registroEditando.lugar)}
                   required
                 />
               </div>
@@ -724,7 +850,7 @@ export default function HistoryView({ onVolver, tema, onNuevoReporte, usuario, o
               <div className="modal-actions">
                 <button
                   type="button"
-                  className="btn-cancel"
+                  className={isRpg ? 'rpg-wood-btn' : 'btn-cancel'}
                   onClick={() => setRegistroEditando(null)}
                   disabled={guardandoEdicion}
                 >
@@ -732,16 +858,53 @@ export default function HistoryView({ onVolver, tema, onNuevoReporte, usuario, o
                 </button>
                 <button
                   type="submit"
-                  className="btn-confirm"
+                  className={isRpg ? 'rpg-wood-btn rpg-wood-btn-primary' : 'btn-confirm'}
                   disabled={guardandoEdicion}
                 >
-                  {guardandoEdicion ? 'Guardando...' : 'Guardar Cambios'}
+                  {guardandoEdicion ? 'Guardando...' : (isRpg ? 'Sellar Cambios' : 'Guardar Cambios')}
                 </button>
               </div>
             </form>
           </div>
         </div>
       )}
+    </>
+  );
+
+  // En modo RPG: envuelto dentro del Tablón de Madera de la Taberna con herrajes y estandarte curvado
+  if (isRpg) {
+    return (
+      <div className="rpg-board-viewport rpg-history-viewport">
+        <div className="rpg-notice-board">
+          {/* Herrajes de hierro forjado en las 4 esquinas */}
+          <div className="rpg-iron-bracket top-left" />
+          <div className="rpg-iron-bracket top-right" />
+          <div className="rpg-iron-bracket bottom-left" />
+          <div className="rpg-iron-bracket bottom-right" />
+
+          {/* Estandarte de Pergamino Curvado */}
+          <div className="rpg-curved-banner">
+            <div className="rpg-banner-scroll-roll left" />
+            <div className="rpg-banner-body">
+              <div className="rpg-banner-heading-wrap">
+                <div className="rpg-illuminated-box">H</div>
+                <h1 className="rpg-banner-main-title">ANALES DE MISIONES Y CRÓNICAS</h1>
+              </div>
+              <span className="rpg-banner-subtitle">LIBRO DE REGISTRO HISTÓRICO • GREMIO INGEAP</span>
+            </div>
+            <div className="rpg-banner-scroll-roll right" />
+          </div>
+
+          {contenidoPrincipal}
+        </div>
+      </div>
+    );
+  }
+
+  // En modo Normal / Corporativo
+  return (
+    <div className="view-content history-split-viewport">
+      {contenidoPrincipal}
     </div>
   );
 }

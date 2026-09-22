@@ -357,38 +357,53 @@ class ApiPuente:
 
         proyectos = datos.get("proyectos")
         lugar_norm = lugar.strip().lower()
-        es_franco = (lugar_norm == "franco")
+        sub_franco = str(datos.get("tipo_franco") or datos.get("sub_franco") or "").strip().lower()
+
+        es_franco_obra = (lugar_norm in ["franco obra", "franco de obra"]) or (lugar_norm == "franco" and "obra" in sub_franco and "trabajado" not in sub_franco)
+        es_franco_obra_trabajado = (lugar_norm in ["franco obra trabajado", "franco de obra trabajado"]) or (lugar_norm == "franco" and "obra" in sub_franco and "trabajado" in sub_franco)
+        es_franco_ofic_trabajado = (lugar_norm in ["franco ofic trabajado", "franco de oficina trabajado"]) or (lugar_norm == "franco" and ("oficina" in sub_franco or "ofic" in sub_franco) and "trabajado" in sub_franco)
+        es_franco_trabajado_gen = (lugar_norm == "franco trabajado") or (lugar_norm == "franco" and sub_franco == "franco trabajado")
+        es_franco_normal = (lugar_norm == "franco" and not (es_franco_obra or es_franco_obra_trabajado or es_franco_ofic_trabajado or es_franco_trabajado_gen)) or (lugar_norm in ["franco de oficina", "franco oficina"])
         es_feriado_trabajado = (lugar_norm == "feriado trabajado")
         es_vacaciones = (lugar_norm == "vacaciones")
         es_licencia = (lugar_norm == "licencia")
 
         for dia_f in fechas_a_cargar:
-            # Caso 1: Franco (Día de descanso o Franco Trabajado)
-            if es_franco:
-                sub_franco = str(datos.get("tipo_franco") or datos.get("sub_franco") or datos.get("servicio") or "Franco").strip()
-                proy_asignado = str(datos.get("proyecto") or "").strip()
-                if "obra" in sub_franco.lower():
-                    if not proy_asignado and " - " in sub_franco:
-                        proy_asignado = sub_franco.split(" - ", 1)[1].strip()
-                    id_proy = str(datos.get("id_proyecto", "")).strip() or (obtener_id_proyecto(proy_asignado) if proy_asignado else "")
-                    sub_franco = f"Franco de Obra - {proy_asignado}" if proy_asignado else "Franco de Obra"
-                    hrs = 0.0
-                elif sub_franco.lower() == "franco trabajado":
-                    try:
-                        hrs = float(datos.get("horas", 8.0))
-                    except Exception:
-                        hrs = 8.0
-                    id_proy = str(datos.get("id_proyecto", "")).strip() or obtener_id_proyecto("Franco Trabajado")
-                else:
-                    hrs = 0.0
-                    id_proy = ""
-
+            # Caso: Franco Obra (0 hs, nro servicio)
+            if es_franco_obra:
+                proy_asignado = str(datos.get("proyecto") or datos.get("servicio") or "").strip()
+                if proy_asignado.lower().startswith("franco de obra - "):
+                    proy_asignado = proy_asignado[17:].strip()
+                id_proy = str(datos.get("id_proyecto", "")).strip() or (obtener_id_proyecto(proy_asignado) if proy_asignado else "")
                 guardar_registro_asistencia(
                     id_asistencia=str(uuid.uuid4()),
                     empleado=empleado,
                     fecha=dia_f,
-                    tipo_ocf="Franco",
-                    servicio=sub_franco,
+                    tipo_ocf="Franco Obra",
+                    servicio=proy_asignado or "Franco Obra",
+                    horas=0.0,
+                    instrumental="",
+                    usuario_mail=usuario_mail,
+                    fecha_hora=fecha_hora,
+                    sincronizado=False,
+                    cargado_por=cargado_por,
+                    id_empleado=id_empleado,
+                    id_proyecto=id_proy
+                )
+            # Caso: Franco Obra Trabajado (computa hs, nro servicio)
+            elif es_franco_obra_trabajado:
+                proy_asignado = str(datos.get("proyecto") or datos.get("servicio") or "").strip()
+                try:
+                    hrs = float(datos.get("horas", 8.0))
+                except Exception:
+                    hrs = 8.0
+                id_proy = str(datos.get("id_proyecto", "")).strip() or (obtener_id_proyecto(proy_asignado) if proy_asignado else "")
+                guardar_registro_asistencia(
+                    id_asistencia=str(uuid.uuid4()),
+                    empleado=empleado,
+                    fecha=dia_f,
+                    tipo_ocf="Franco Obra Trabajado",
+                    servicio=proy_asignado or "Franco Obra Trabajado",
                     horas=hrs,
                     instrumental="",
                     usuario_mail=usuario_mail,
@@ -398,13 +413,74 @@ class ApiPuente:
                     id_empleado=id_empleado,
                     id_proyecto=id_proy
                 )
-            # Caso 1b: Feriado Trabajado
+            # Caso: Franco Ofic Trabajado (computa hs, nro servicio / area)
+            elif es_franco_ofic_trabajado or es_franco_trabajado_gen:
+                srv = str(datos.get("proyecto") or datos.get("servicio") or datos.get("area") or "Franco Ofic Trabajado").strip()
+                try:
+                    hrs = float(datos.get("horas", 8.0))
+                except Exception:
+                    hrs = 8.0
+                id_proy = str(datos.get("id_proyecto", "")).strip() or obtener_id_proyecto(srv)
+                guardar_registro_asistencia(
+                    id_asistencia=str(uuid.uuid4()),
+                    empleado=empleado,
+                    fecha=dia_f,
+                    tipo_ocf="Franco Ofic Trabajado",
+                    servicio=srv,
+                    horas=hrs,
+                    instrumental="",
+                    usuario_mail=usuario_mail,
+                    fecha_hora=fecha_hora,
+                    sincronizado=False,
+                    cargado_por=cargado_por,
+                    id_empleado=id_empleado,
+                    id_proyecto=id_proy
+                )
+            # Caso: Franco normal / de oficina (0 hs, servicio = area para nucleo, rrhh, aplicaciones, vym)
+            elif es_franco_normal:
+                srv_area = str(datos.get("area") or "").strip()
+                if not srv_area and empleado:
+                    usuarios_disp = obtener_usuarios_cache() or []
+                    emp_match = next((u for u in usuarios_disp if u.get("nombre", "").strip().lower() == empleado.lower()), None)
+                    if emp_match:
+                        code = str(emp_match.get("area") or "").strip().upper()
+                        mapa = {
+                            'A': 'Aplicaciones',
+                            'N': 'Núcleo',
+                            'I': 'Ingeniería',
+                            'M': 'Mensura',
+                            'S': 'SIG',
+                            'RRHH': 'RRHH',
+                            'VYM': 'Ventas y Marketing'
+                        }
+                        srv_area = mapa.get(code, code)
+                if not srv_area:
+                    srv_area = str(datos.get("servicio") or "Área").strip()
+                    if srv_area.lower() in ["franco", "franco de oficina"]:
+                        srv_area = "Área"
+
+                guardar_registro_asistencia(
+                    id_asistencia=str(uuid.uuid4()),
+                    empleado=empleado,
+                    fecha=dia_f,
+                    tipo_ocf="Franco",
+                    servicio=srv_area,
+                    horas=0.0,
+                    instrumental="",
+                    usuario_mail=usuario_mail,
+                    fecha_hora=fecha_hora,
+                    sincronizado=False,
+                    cargado_por=cargado_por,
+                    id_empleado=id_empleado,
+                    id_proyecto=""
+                )
+            # Caso: Feriado Trabajado (computa hs, nro servicio)
             elif es_feriado_trabajado:
                 try:
                     hrs = float(datos.get("horas", 8.0))
                 except Exception:
                     hrs = 8.0
-                srv_fer = str(datos.get("servicio") or "Feriado Trabajado").strip()
+                srv_fer = str(datos.get("proyecto") or datos.get("servicio") or "Feriado Trabajado").strip()
                 id_proy = str(datos.get("id_proyecto", "")).strip() or obtener_id_proyecto(srv_fer)
                 guardar_registro_asistencia(
                     id_asistencia=str(uuid.uuid4()),
@@ -422,7 +498,7 @@ class ApiPuente:
                     id_empleado=id_empleado,
                     id_proyecto=id_proy
                 )
-            # Caso 2: Vacaciones
+            # Caso: Vacaciones (0 hs, vacaciones)
             elif es_vacaciones:
                 guardar_registro_asistencia(
                     id_asistencia=str(uuid.uuid4()),
@@ -439,7 +515,7 @@ class ApiPuente:
                     id_empleado=id_empleado,
                     id_proyecto=""
                 )
-            # Caso 3: Licencia (con detalle del tipo de licencia)
+            # Caso: Licencia (0 hs, tipos de licencia)
             elif es_licencia:
                 tipo_lic = str(datos.get("tipo_licencia") or datos.get("servicio") or "Licencia").strip()
                 desc_lic = tipo_lic if tipo_lic.lower().startswith("licencia") else f"Licencia - {tipo_lic}"
@@ -770,9 +846,8 @@ class ApiPuente:
                     conn.commit()
 
             es_campo = (tipo.lower() == "campo")
-            # En lugar de campo/campaña debe decir "Roster"
             tipo_ocf = "Roster" if es_campo else "Franco"
-            servicio = proyecto if es_campo else (f"Franco de Obra - {proyecto}" if proyecto else "Franco de Obra")
+            servicio = proyecto
             horas = 8.0 if es_campo else 0.0
             fecha_hora = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
