@@ -4,7 +4,6 @@ import { api } from '../services/apiBridge';
 const LUGARES_OPCIONES = [
   'Oficina',
   'Campaña / Campo',
-  'Home Office',
   'Franco',
   'Franco de Oficina',
   'Franco de Obra',
@@ -42,6 +41,7 @@ export default function OtherEmployeesHistoryView({ usuario, onVolver, tema, onV
   const [empleadoAuditar, setEmpleadoAuditar] = useState('');
   const [registrosEmpleadoAuditar, setRegistrosEmpleadoAuditar] = useState([]);
   const [cargandoAuditoria, setCargandoAuditoria] = useState(false);
+  const [diaSeleccionadoAuditoria, setDiaSeleccionadoAuditoria] = useState(null);
 
   // Modal de edición
   const [registroEditando, setRegistroEditando] = useState(null);
@@ -50,6 +50,9 @@ export default function OtherEmployeesHistoryView({ usuario, onVolver, tema, onV
   // Modal de eliminación
   const [registroEliminando, setRegistroEliminando] = useState(null);
   const [eliminando, setEliminando] = useState(false);
+
+  // Cantidad manual de Francos Trabajados para la calculadora de liquidación
+  const [diasFrancoManual, setDiasFrancoManual] = useState('');
 
   // Tarifas de Liquidación (guardadas en localStorage)
   const [tarifas, setTarifas] = useState(() => {
@@ -135,6 +138,7 @@ export default function OtherEmployeesHistoryView({ usuario, onVolver, tema, onV
 
   useEffect(() => {
     if (empleadoAuditar) {
+      setDiasFrancoManual('');
       cargarAuditoriaEmpleado(empleadoAuditar, fechaCalendario);
     }
   }, [empleadoAuditar, fechaCalendario]);
@@ -304,6 +308,7 @@ export default function OtherEmployeesHistoryView({ usuario, onVolver, tema, onV
   ];
 
   // Cálculo de conteos para la calculadora de liquidación
+  // Regla de RRHH: Francos normales cuentan como oficina, francos de obra cuentan como obra
   const conteosLiquidacion = useMemo(() => {
     const anio = fechaCalendario.getFullYear();
     const mesStr = String(fechaCalendario.getMonth() + 1).padStart(2, '0');
@@ -319,22 +324,31 @@ export default function OtherEmployeesHistoryView({ usuario, onVolver, tema, onV
       const f = r.fecha.trim();
       const lug = (r.tipo_ocf || r.lugar || '').trim();
       const srv = (r.servicio || '').trim();
+      const srvLower = srv.toLowerCase();
       const hrs = Number(r.horas) || 0;
       const esFer = (r.feriado || '').toUpperCase() === 'SI';
 
       // 1. Franco trabajado
-      if (srv === 'Franco Trabajado' || (lug === 'Franco' && hrs > 0 && srv.toLowerCase().includes('trabajado'))) {
+      if (srv === 'Franco Trabajado' || (lug === 'Franco' && hrs > 0 && srvLower.includes('trabajado'))) {
         fechasFrancoTrabajado.add(f);
       }
       // 2. Feriado trabajado
       else if (lug === 'Feriado Trabajado' || (esFer && hrs > 0)) {
         fechasFeriadoTrabajado.add(f);
       }
-      // 3. Obra / Campo
+      // 3. Franco de Obra -> Contar como días de Obra
+      else if (srvLower.includes('franco de obra') || (lug === 'Franco' && srvLower.includes('obra'))) {
+        fechasObra.add(f);
+      }
+      // 4. Franco normal o de oficina -> Contar como días de Oficina
+      else if (lug === 'Franco' || srvLower.includes('franco de oficina') || srvLower === 'franco') {
+        fechasOficina.add(f);
+      }
+      // 5. Obra / Campo habitual
       else if (['Campaña / Campo', 'Campo', 'Obra', 'Roster'].includes(lug)) {
         fechasObra.add(f);
       }
-      // 4. Oficina / Home Office
+      // 6. Oficina habitual
       else if (['Oficina', 'Home Office'].includes(lug)) {
         fechasOficina.add(f);
       }
@@ -348,9 +362,14 @@ export default function OtherEmployeesHistoryView({ usuario, onVolver, tema, onV
     };
   }, [registrosEmpleadoAuditar, fechaCalendario]);
 
+  // Cantidad efectiva de Francos Trabajados (manual o automática)
+  const cantDiasFrancoTrabajado = (diasFrancoManual !== '' && !isNaN(Number(diasFrancoManual)))
+    ? Math.max(0, Number(diasFrancoManual))
+    : conteosLiquidacion.diasFrancoTrabajado;
+
   const subtotalOficina = conteosLiquidacion.diasOficina * (tarifas.precioOficina || 0);
   const subtotalObra = conteosLiquidacion.diasObra * (tarifas.precioObra || 0);
-  const subtotalFranco = conteosLiquidacion.diasFrancoTrabajado * (tarifas.precioFrancoTrabajado || 0);
+  const subtotalFranco = cantDiasFrancoTrabajado * (tarifas.precioFrancoTrabajado || 0);
   const subtotalFeriado = conteosLiquidacion.diasFeriadoTrabajado * (tarifas.precioFeriadoTrabajado || 0);
   const totalLiquidar = subtotalOficina + subtotalObra + subtotalFranco + subtotalFeriado;
 
@@ -372,9 +391,12 @@ export default function OtherEmployeesHistoryView({ usuario, onVolver, tema, onV
     if (l === 'feriado trabajado' || l.includes('feriado')) {
       return 'badge-modalidad-feriado-trabajado';
     }
+    if (s.includes('franco de obra') || (l === 'franco' && s.includes('obra'))) {
+      return 'badge-modalidad-campo';
+    }
     if (l.includes('oficina')) return 'badge-modalidad-oficina';
     if (l.includes('campo') || l.includes('campaña') || l.includes('roster') || l.includes('obra')) return 'badge-modalidad-campo';
-    if (l.includes('home')) return 'badge-modalidad-home';
+    if (l.includes('home')) return 'badge-modalidad-oficina';
     if (l.includes('franco')) return 'badge-modalidad-franco';
     if (l.includes('vacaciones')) return 'badge-modalidad-vacaciones';
     if (l.includes('licencia')) return 'badge-modalidad-licencia';
@@ -688,7 +710,7 @@ export default function OtherEmployeesHistoryView({ usuario, onVolver, tema, onV
             </div>
           </div>
 
-          {/* Grilla del Calendario Mensual */}
+          {/* Grilla del Calendario Mensual Interactivo */}
           <div className="audit-calendar-wrapper">
             <div className="calendar-weekdays-row">
               <span>Lun</span>
@@ -712,7 +734,16 @@ export default function OtherEmployeesHistoryView({ usuario, onVolver, tema, onV
                   <div
                     key={celda.id}
                     className={`calendar-cell ${celda.esHoy ? 'cell-today' : ''} ${tieneRegistros ? 'cell-has-data' : ''}`}
-                    title={tieneRegistros ? `${celda.registros.length} registro(s) el ${celda.fechaIso}` : celda.fechaIso}
+                    onClick={() => {
+                      if (!tieneRegistros) return;
+                      if (celda.registros.length === 1) {
+                        setRegistroEditando({ ...celda.registros[0] });
+                      } else {
+                        setDiaSeleccionadoAuditoria(celda);
+                      }
+                    }}
+                    style={{ cursor: tieneRegistros ? 'pointer' : 'default' }}
+                    title={tieneRegistros ? `${celda.registros.length} registro(s) el ${celda.fechaIso} (Toca para editar/eliminar)` : celda.fechaIso}
                   >
                     <div className="cell-top-bar">
                       <span className="cell-day-number">{celda.diaNumero}</span>
@@ -727,12 +758,16 @@ export default function OtherEmployeesHistoryView({ usuario, onVolver, tema, onV
                           ? 'Franco Trab.' 
                           : (lug === 'Feriado Trabajado' 
                               ? 'Feriado' 
-                              : (lug === 'Campaña / Campo' ? 'Campo' : lug));
+                              : (r.servicio?.toLowerCase().includes('franco de obra') ? 'F. Obra' : (lug === 'Campaña / Campo' ? 'Campo' : lug)));
                         return (
                           <div
                             key={r.id || idx}
                             className={`cell-event-pill ${badgeClass}`}
-                            title={`${lug} - ${r.servicio} (${r.horas} hs) • Cargado por: ${r.cargado_por || r.empleado}`}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setRegistroEditando({ ...r });
+                            }}
+                            title={`${lug} - ${r.servicio} (${r.horas} hs) • Clic para editar o eliminar`}
                           >
                             <span className="cell-event-label">{labelText}</span>
                           </div>
@@ -753,8 +788,7 @@ export default function OtherEmployeesHistoryView({ usuario, onVolver, tema, onV
               <div className="legend-items">
                 <span className="legend-item"><span className="legend-color-box badge-modalidad-oficina" /> Oficina</span>
                 <span className="legend-item"><span className="legend-color-box badge-modalidad-campo" /> Obra / Campo</span>
-                <span className="legend-item"><span className="legend-color-box badge-modalidad-home" /> Home Office</span>
-                <span className="legend-item"><span className="legend-color-box badge-modalidad-franco" /> Franco</span>
+                <span className="legend-item"><span className="legend-color-box badge-modalidad-franco" /> Franco Normal</span>
                 <span className="legend-item"><span className="legend-color-box badge-modalidad-franco-trabajado" /> Franco Trabajado</span>
                 <span className="legend-item"><span className="legend-color-box badge-modalidad-feriado-trabajado" /> Feriado Trabajado</span>
                 <span className="legend-item"><span className="legend-color-box badge-modalidad-vacaciones" /> Vacaciones</span>
@@ -776,7 +810,7 @@ export default function OtherEmployeesHistoryView({ usuario, onVolver, tema, onV
                 <span>Calculadora de Liquidación • {empleadoAuditar || 'Empleado'} ({nombresMeses[fechaCalendario.getMonth()]} {fechaCalendario.getFullYear()})</span>
               </div>
               <span className="liquidation-help">
-                Ingresa el valor por día o jornada para liquidar los conceptos del período:
+                Francos normales computan como oficina y francos de obra computan como obra. Asigna tarifas y francos trabajados:
               </span>
             </div>
 
@@ -785,7 +819,7 @@ export default function OtherEmployeesHistoryView({ usuario, onVolver, tema, onV
               <div className="liquidation-item">
                 <div className="liq-item-top">
                   <span className="liq-label">Día de Oficina</span>
-                  <span className="liq-count-badge">{conteosLiquidacion.diasOficina} días</span>
+                  <span className="liq-count-badge" title="Incluye oficina y francos normales">{conteosLiquidacion.diasOficina} días</span>
                 </div>
                 <div className="liq-input-row">
                   <span className="liq-currency-symbol">$</span>
@@ -809,7 +843,7 @@ export default function OtherEmployeesHistoryView({ usuario, onVolver, tema, onV
               <div className="liquidation-item">
                 <div className="liq-item-top">
                   <span className="liq-label">Día de Obra / Campo</span>
-                  <span className="liq-count-badge">{conteosLiquidacion.diasObra} días</span>
+                  <span className="liq-count-badge" title="Incluye campo/obra y francos de obra">{conteosLiquidacion.diasObra} días</span>
                 </div>
                 <div className="liq-input-row">
                   <span className="liq-currency-symbol">$</span>
@@ -829,26 +863,54 @@ export default function OtherEmployeesHistoryView({ usuario, onVolver, tema, onV
                 </div>
               </div>
 
-              {/* Tarjeta 3: Franco Trabajado */}
+              {/* Tarjeta 3: Franco Trabajado (con asignación manual o automática) */}
               <div className="liquidation-item">
                 <div className="liq-item-top">
                   <span className="liq-label">Franco Trabajado</span>
-                  <span className="liq-count-badge">{conteosLiquidacion.diasFrancoTrabajado} días</span>
+                  <span className="liq-count-badge" title="Conteo detectado por calendario">{conteosLiquidacion.diasFrancoTrabajado} detectado(s)</span>
                 </div>
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '2px' }}>
+                  <label style={{ fontSize: '11px', color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>
+                    Cant. días:
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="1"
+                    className="form-input form-input-sm"
+                    style={{ width: '65px', height: '28px', padding: '2px 6px', fontWeight: 700 }}
+                    value={diasFrancoManual !== '' ? diasFrancoManual : conteosLiquidacion.diasFrancoTrabajado}
+                    onChange={(e) => setDiasFrancoManual(e.target.value)}
+                    title="Cantidad de francos trabajados (editable manualmente)"
+                  />
+                  {diasFrancoManual !== '' && (
+                    <button
+                      type="button"
+                      className="btn-action-ghost"
+                      style={{ padding: '2px 5px', fontSize: '10px' }}
+                      onClick={() => setDiasFrancoManual('')}
+                      title="Restablecer al conteo automático del calendario"
+                    >
+                      ↺ Auto
+                    </button>
+                  )}
+                </div>
+
                 <div className="liq-input-row">
                   <span className="liq-currency-symbol">$</span>
                   <input
                     type="number"
                     min="0"
                     step="100"
-                    placeholder="Precio día"
+                    placeholder="Precio franco trab."
                     className="form-input form-input-sm liq-input"
                     value={tarifas.precioFrancoTrabajado || ''}
                     onChange={(e) => handleTarifaChange('precioFrancoTrabajado', e.target.value)}
                   />
                 </div>
                 <div className="liq-subtotal-row">
-                  <span>Subtotal:</span>
+                  <span>Subtotal ({cantDiasFrancoTrabajado} d):</span>
                   <strong>{formatMoneda(subtotalFranco)}</strong>
                 </div>
               </div>
@@ -865,7 +927,7 @@ export default function OtherEmployeesHistoryView({ usuario, onVolver, tema, onV
                     type="number"
                     min="0"
                     step="100"
-                    placeholder="Precio día"
+                    placeholder="Precio feriado trab."
                     className="form-input form-input-sm liq-input"
                     value={tarifas.precioFeriadoTrabajado || ''}
                     onChange={(e) => handleTarifaChange('precioFeriadoTrabajado', e.target.value)}
@@ -893,7 +955,94 @@ export default function OtherEmployeesHistoryView({ usuario, onVolver, tema, onV
         </div>
       </div>
 
-      {/* Modal de Modificación */}
+      {/* Modal de Múltiples Registros del Día */}
+      {diaSeleccionadoAuditoria && (
+        <div className="modal-backdrop">
+          <div className="modal-box" style={{ maxWidth: '440px' }}>
+            <div className="modal-header">
+              <span className="modal-title">
+                Registros del {diaSeleccionadoAuditoria.fechaIso}
+              </span>
+              <button
+                type="button"
+                className="modal-close"
+                onClick={() => setDiaSeleccionadoAuditoria(null)}
+              >
+                ✕
+              </button>
+            </div>
+            <div style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: '10px', maxHeight: '360px', overflowY: 'auto' }}>
+              <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
+                Empleado: <strong>{empleadoAuditar}</strong> • Selecciona un registro para modificarlo o eliminarlo:
+              </span>
+              {diaSeleccionadoAuditoria.registros.map((item) => {
+                const lug = item.tipo_ocf || item.lugar || 'Oficina';
+                const badge = getBadgeClassLugar(lug, item.servicio);
+                return (
+                  <div
+                    key={item.id}
+                    style={{
+                      background: 'var(--bg-surface)',
+                      border: '1px solid var(--border-subtle)',
+                      borderRadius: '8px',
+                      padding: '10px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      gap: '8px'
+                    }}
+                  >
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '3px', overflow: 'hidden' }}>
+                      <span className={`modalidad-pill ${badge}`} style={{ width: 'fit-content' }}>{lug}</span>
+                      <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        {item.servicio}
+                      </span>
+                      <span style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>
+                        {item.horas > 0 ? `${item.horas} hs` : '0 hs'}
+                      </span>
+                    </div>
+                    <div style={{ display: 'flex', gap: '4px', flexShrink: 0 }}>
+                      <button
+                        type="button"
+                        className="btn-card-action btn-card-edit"
+                        onClick={() => {
+                          setDiaSeleccionadoAuditoria(null);
+                          setRegistroEditando({ ...item });
+                        }}
+                        title="Modificar este registro"
+                      >
+                        Modificar
+                      </button>
+                      <button
+                        type="button"
+                        className="btn-card-action btn-card-delete"
+                        onClick={() => {
+                          setDiaSeleccionadoAuditoria(null);
+                          setRegistroEliminando(item);
+                        }}
+                        title="Eliminar este registro"
+                      >
+                        Eliminar
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            <div className="modal-actions" style={{ padding: '12px 16px' }}>
+              <button
+                type="button"
+                className="modal-btn-cancel"
+                onClick={() => setDiaSeleccionadoAuditoria(null)}
+              >
+                Cerrar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Modificación (con botón para Eliminar directamente) */}
       {registroEditando && (
         <div className="modal-backdrop">
           <div className="modal-box">
@@ -991,7 +1140,32 @@ export default function OtherEmployeesHistoryView({ usuario, onVolver, tema, onV
                     required
                   />
                 </div>
-              ) : (['Franco', 'Franco de Oficina', 'Franco de Obra', 'Franco Trabajado', 'Feriado Trabajado', 'Vacaciones'].includes(registroEditando.tipo_ocf || registroEditando.lugar)) ? (
+              ) : (registroEditando.tipo_ocf === 'Franco de Obra' || registroEditando.lugar === 'Franco de Obra' || ((registroEditando.tipo_ocf === 'Franco' || registroEditando.lugar === 'Franco') && (registroEditando.servicio || '').toLowerCase().includes('franco de obra'))) ? (
+                <div className="form-group-clean">
+                  <label className="form-label-clean">Proyecto Asignado (Franco de Obra):</label>
+                  <select
+                    className="form-select form-select-clean"
+                    value={
+                      (registroEditando.servicio || '').startsWith('Franco de Obra - ')
+                        ? (registroEditando.servicio || '').replace('Franco de Obra - ', '')
+                        : ((registroEditando.servicio || '').toLowerCase() === 'franco de obra' ? '' : registroEditando.servicio)
+                    }
+                    onChange={(e) => {
+                      const proy = e.target.value;
+                      setRegistroEditando({
+                        ...registroEditando,
+                        servicio: proy ? `Franco de Obra - ${proy}` : 'Franco de Obra'
+                      });
+                    }}
+                    required
+                  >
+                    <option value="">-- Seleccionar proyecto asignado --</option>
+                    {serviciosDisponibles.map((srv, idx) => (
+                      <option key={idx} value={srv}>{srv}</option>
+                    ))}
+                  </select>
+                </div>
+              ) : (['Franco', 'Franco de Oficina', 'Franco Trabajado', 'Feriado Trabajado', 'Vacaciones'].includes(registroEditando.tipo_ocf || registroEditando.lugar)) ? (
                 <div className="form-group-clean">
                   <label className="form-label-clean">Detalle:</label>
                   <input
@@ -1033,22 +1207,42 @@ export default function OtherEmployeesHistoryView({ usuario, onVolver, tema, onV
                 />
               </div>
 
-              <div className="modal-actions">
+              <div className="modal-actions" style={{ justifyContent: 'space-between' }}>
                 <button
                   type="button"
-                  className="modal-btn-cancel"
-                  onClick={() => setRegistroEditando(null)}
-                  disabled={guardandoEdicion}
+                  className="btn-card-action btn-card-delete"
+                  style={{ color: '#dc2626', borderColor: '#fca5a5' }}
+                  onClick={() => {
+                    const reg = { ...registroEditando };
+                    setRegistroEditando(null);
+                    setRegistroEliminando(reg);
+                  }}
+                  title="Eliminar este registro"
                 >
-                  Cancelar
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="3 6 5 6 21 6" />
+                    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                  </svg>
+                  Eliminar Registro
                 </button>
-                <button
-                  type="submit"
-                  className="modal-btn-confirm"
-                  disabled={guardandoEdicion}
-                >
-                  {guardandoEdicion ? 'Guardando...' : 'Guardar Cambios'}
-                </button>
+
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <button
+                    type="button"
+                    className="modal-btn-cancel"
+                    onClick={() => setRegistroEditando(null)}
+                    disabled={guardandoEdicion}
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="submit"
+                    className="modal-btn-confirm"
+                    disabled={guardandoEdicion}
+                  >
+                    {guardandoEdicion ? 'Guardando...' : 'Guardar Cambios'}
+                  </button>
+                </div>
               </div>
             </form>
           </div>

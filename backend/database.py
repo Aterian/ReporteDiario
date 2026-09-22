@@ -564,6 +564,8 @@ def obtener_id_proyecto(denominacion: str) -> str:
     if not denominacion:
         return ""
     val = str(denominacion).strip().lower()
+    if val.startswith("franco de obra - "):
+        val = val[len("franco de obra - "):].strip()
     try:
         with obtener_conexion() as conn:
             cursor = conn.cursor()

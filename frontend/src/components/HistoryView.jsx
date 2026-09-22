@@ -4,7 +4,6 @@ import { api } from '../services/apiBridge';
 const LUGARES_OPCIONES = [
   'Oficina',
   'Campaña / Campo',
-  'Home Office',
   'Franco',
   'Vacaciones',
   'Licencia'
@@ -553,7 +552,12 @@ export default function HistoryView({ onVolver, tema, onNuevoReporte, usuario, o
                         <div
                           key={r.id || idx}
                           className={`cell-event-pill ${badgeClass}`}
-                          title={`${lug} - ${r.servicio} (${r.horas} hs)`}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setRegistroEditando({ ...r });
+                          }}
+                          style={{ cursor: 'pointer' }}
+                          title={`${lug} - ${r.servicio} (${r.horas} hs) • Clic para modificar`}
                         >
                           <span className="cell-event-label">
                             {lug === 'Campaña / Campo' ? 'Campo' : lug}

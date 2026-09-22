@@ -3,7 +3,6 @@ import { api } from '../services/apiBridge';
 
 const LUGARES_BASE = [
   { id: 'Oficina', label: 'Oficina', labelRpg: '🏰 Ciudadela (Oficina)', icon: 'M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z' },
-  { id: 'Home Office', label: 'Home Office', labelRpg: '🧙‍♂️ Torre Arcana (Home Office)', icon: 'M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2' },
   { id: 'Campaña / Campo', label: 'Campaña', labelRpg: '🌲 Expedición (Campaña)', icon: 'M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z' },
   { id: 'Franco', label: 'Franco', labelRpg: '🍺 Taberna & Descanso', icon: 'M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z' }
 ];
@@ -55,6 +54,7 @@ export default function CheckForm({ onRegistroGuardado, onVolver, tema }) {
   const [usarRangoFechas, setUsarRangoFechas] = useState(false);
   const [lugar, setLugar] = useState('Oficina');
   const [tipoFranco, setTipoFranco] = useState('Franco de Oficina');
+  const [proyectoFrancoObra, setProyectoFrancoObra] = useState('');
   const [horasFrancoTrabajado, setHorasFrancoTrabajado] = useState(8);
   const [horasFeriado, setHorasFeriado] = useState(8);
   const [tipoLicencia, setTipoLicencia] = useState('Médica');
@@ -270,6 +270,11 @@ export default function CheckForm({ onRegistroGuardado, onVolver, tema }) {
       return;
     }
 
+    if (esFranco && tipoFranco === 'Franco de Obra' && !proyectoFrancoObra) {
+      setMensajeError('Por favor selecciona el proyecto asignado al Franco de Obra.');
+      return;
+    }
+
     if (!esSinProyectos && modoDivision === 'personalizado') {
       const total = getTotalHoras();
       if (total <= 0) {
@@ -299,8 +304,17 @@ export default function CheckForm({ onRegistroGuardado, onVolver, tema }) {
       if (esFranco) {
         payload.lugar = 'Franco';
         payload.sub_franco = tipoFranco;
-        payload.servicio = tipoFranco;
-        payload.horas = (tipoFranco === 'Franco Trabajado') ? Number(horasFrancoTrabajado || 8) : 0.0;
+        if (tipoFranco === 'Franco de Obra') {
+          payload.servicio = proyectoFrancoObra ? `Franco de Obra - ${proyectoFrancoObra}` : 'Franco de Obra';
+          payload.proyecto = proyectoFrancoObra;
+          payload.horas = 0.0;
+        } else if (tipoFranco === 'Franco Trabajado') {
+          payload.servicio = 'Franco Trabajado';
+          payload.horas = Number(horasFrancoTrabajado || 8);
+        } else {
+          payload.servicio = 'Franco de Oficina';
+          payload.horas = 0.0;
+        }
       } else if (esFeriadoTrabajado) {
         payload.lugar = 'Feriado Trabajado';
         payload.tipo_ocf = 'Feriado Trabajado';
@@ -623,6 +637,25 @@ export default function CheckForm({ onRegistroGuardado, onVolver, tema }) {
                     </button>
                   ))}
                 </div>
+
+                {tipoFranco === 'Franco de Obra' && (
+                  <div className="franco-hours-box">
+                    <label className="form-label-clean">
+                      Proyecto asignado al Franco de Obra:
+                    </label>
+                    <select
+                      className="form-select form-select-clean"
+                      style={{ marginTop: '4px' }}
+                      value={proyectoFrancoObra}
+                      onChange={(e) => setProyectoFrancoObra(e.target.value)}
+                    >
+                      <option value="">-- Seleccionar proyecto asignado --</option>
+                      {serviciosDisponibles.map((srv, idx) => (
+                        <option key={idx} value={srv}>{srv}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
 
                 {tipoFranco === 'Franco Trabajado' && (
                   <div className="franco-hours-box">

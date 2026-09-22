@@ -502,8 +502,21 @@ def sincronizar_desde_sheets_hacia_local(spreadsheet_id: str = "") -> int:
         idx_id_emp = headers.index("id_empleado") if "id_empleado" in headers else -1
         idx_id_proy = headers.index("id_proyecto") if "id_proyecto" in headers else -1
 
+        # Recopilar todos los id_asistencia válidos presentes en Google Sheets
+        uids_en_sheets = {str(f[idx_id_asist]).strip() for f in filas[1:] if len(f) > idx_id_asist and str(f[idx_id_asist]).strip()}
+
         with obtener_conexion() as conn:
             cursor = conn.cursor()
+
+            # 1. Purgar de la base local los registros sincronizados que fueron eliminados en Google Sheets
+            if uids_en_sheets:
+                cursor.execute("SELECT id, id_asistencia FROM historial WHERE sincronizado = 1")
+                locales_sinc = cursor.fetchall()
+                ids_a_borrar = [r["id"] for r in locales_sinc if str(r["id_asistencia"]).strip() not in uids_en_sheets]
+                if ids_a_borrar:
+                    cursor.executemany("DELETE FROM historial WHERE id = ?", [(i,) for i in ids_a_borrar])
+                    print(f"[Sheets] Se purgaron {len(ids_a_borrar)} registros locales eliminados de Google Sheets.")
+
             cursor.execute("SELECT id_asistencia FROM historial WHERE id_asistencia IS NOT NULL AND id_asistencia != ''")
             existentes = {str(r["id_asistencia"]).strip() for r in cursor.fetchall()}
 

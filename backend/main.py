@@ -365,8 +365,15 @@ class ApiPuente:
         for dia_f in fechas_a_cargar:
             # Caso 1: Franco (Día de descanso o Franco Trabajado)
             if es_franco:
-                sub_franco = str(datos.get("tipo_franco") or datos.get("servicio") or "Franco").strip()
-                if sub_franco.lower() == "franco trabajado":
+                sub_franco = str(datos.get("tipo_franco") or datos.get("sub_franco") or datos.get("servicio") or "Franco").strip()
+                proy_asignado = str(datos.get("proyecto") or "").strip()
+                if "obra" in sub_franco.lower():
+                    if not proy_asignado and " - " in sub_franco:
+                        proy_asignado = sub_franco.split(" - ", 1)[1].strip()
+                    id_proy = str(datos.get("id_proyecto", "")).strip() or (obtener_id_proyecto(proy_asignado) if proy_asignado else "")
+                    sub_franco = f"Franco de Obra - {proy_asignado}" if proy_asignado else "Franco de Obra"
+                    hrs = 0.0
+                elif sub_franco.lower() == "franco trabajado":
                     try:
                         hrs = float(datos.get("horas", 8.0))
                     except Exception:
@@ -765,12 +772,12 @@ class ApiPuente:
             es_campo = (tipo.lower() == "campo")
             # En lugar de campo/campaña debe decir "Roster"
             tipo_ocf = "Roster" if es_campo else "Franco"
-            servicio = proyecto if es_campo else "Franco"
+            servicio = proyecto if es_campo else (f"Franco de Obra - {proyecto}" if proyecto else "Franco de Obra")
             horas = 8.0 if es_campo else 0.0
             fecha_hora = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
             emp_id = obtener_id_empleado(empleado)
-            proy_id = obtener_id_proyecto(servicio) if es_campo else ""
+            proy_id = obtener_id_proyecto(proyecto) if proyecto else ""
             cargado_por_rrhh = sesion["nombre"] if sesion else "RRHH"
 
             with obtener_conexion() as conn:
@@ -1009,48 +1016,7 @@ def asegurar_inicio_automatico():
 
 
 def verificar_actualizacion_github():
-    """Consulta la API de GitHub Releases para comprobar si existe una versión más reciente."""
-    try:
-        cfg = cargar_configuracion()
-        repo = cfg.get("github_repo", "")
-        if not repo:
-            return {"actualizacion_disponible": False, "version_actual": APP_VERSION}
-
-        url = f"https://api.github.com/repos/{repo}/releases/latest"
-        req = urllib.request.Request(
-            url,
-            headers={
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) CheckDiarioIngeap-App",
-                "Accept": "application/vnd.github.v3+json"
-            }
-        )
-        import ssl
-        ctx = ssl.create_default_context()
-        with urllib.request.urlopen(req, timeout=8, context=ctx) as response:
-            data = json.loads(response.read().decode("utf-8"))
-            version_remota = data.get("tag_name", "").lstrip("v").strip()
-            assets = data.get("assets", [])
-
-            # Priorizar CheckDiarioIngeap.exe para el reemplazo in-place del ejecutable principal
-            exe_asset = next((a for a in assets if a.get("name", "").strip().lower() == "checkdiarioingeap.exe"), None)
-            if not exe_asset:
-                exe_asset = next((a for a in assets if "instalador" not in a.get("name", "").lower() and a.get("name", "").lower().endswith(".exe")), None)
-            if not exe_asset:
-                exe_asset = next((a for a in assets if a.get("name", "").lower().endswith(".exe")), None)
-
-            url_descarga = exe_asset.get("browser_download_url", "") if exe_asset else ""
-
-            if version_remota and version_remota != APP_VERSION and url_descarga:
-                return {
-                    "actualizacion_disponible": True,
-                    "version_actual": APP_VERSION,
-                    "version_nueva": version_remota,
-                    "notas": data.get("body", "") or "Mejoras y correcciones en esta versión.",
-                    "url_descarga": url_descarga
-                }
-    except Exception as e:
-        print(f"[AutoUpdate] Verificación omitida o sin conexión: {e}")
-
+    """Consulta de actualizaciones automáticas deshabilitada por configuración del usuario."""
     return {"actualizacion_disponible": False, "version_actual": APP_VERSION}
 
 

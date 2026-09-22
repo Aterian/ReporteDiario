@@ -15,8 +15,6 @@ export default function App() {
   const [usuario, setUsuario] = useState(null);
   const [vistaActiva, setVistaActiva] = useState('home'); // 'home' | 'check' | 'historial' | 'historial-otros' | 'roster' | 'historial-roster'
   const [recordatorioPendiente, setRecordatorioPendiente] = useState(null);
-  const [actualizacion, setActualizacion] = useState(null);
-  const [actualizando, setActualizando] = useState(false);
   const [refrescando, setRefrescando] = useState(false);
   const [toastRefresco, setToastRefresco] = useState(null);
   const fileInputRef = useRef(null);
@@ -106,39 +104,7 @@ export default function App() {
     };
   }, []);
 
-  // Comprobar si hay actualizaciones disponibles en segundo plano
-  useEffect(() => {
-    let activo = true;
-    async function comprobarUpdate() {
-      try {
-        const res = await api.verificarActualizacion();
-        if (activo && res && res.actualizacion_disponible) {
-          setActualizacion(res);
-        }
-      } catch (err) {
-        // Silencioso si no hay conexión o no está configurado
-      }
-    }
-    comprobarUpdate();
-    return () => {
-      activo = false;
-    };
-  }, []);
 
-  const handleActualizar = async () => {
-    if (!actualizacion?.url_descarga) return;
-    setActualizando(true);
-    try {
-      const res = await api.aplicarActualizacion(actualizacion.url_descarga);
-      if (res && !res.exito) {
-        alert('No se pudo aplicar la actualización: ' + (res.error || 'Error desconocido'));
-        setActualizando(false);
-      }
-    } catch (err) {
-      alert('Error al actualizar: ' + err.message);
-      setActualizando(false);
-    }
-  };
 
   const handleCerrarSesion = async () => {
     try {
@@ -372,27 +338,7 @@ export default function App() {
         </div>
       )}
 
-      {/* Cartel de Actualización Disponible */}
-      {actualizacion && (
-        <div className="update-banner">
-          <div className="update-content">
-            <div className="update-title">
-              <span>🚀</span> Actualización disponible: v{actualizacion.version_nueva}
-            </div>
-            <div className="update-notes">
-              {actualizacion.notas || 'Nueva versión con mejoras'}
-            </div>
-          </div>
-          <button
-            type="button"
-            className="btn-update"
-            disabled={actualizando}
-            onClick={handleActualizar}
-          >
-            {actualizando ? 'Descargando...' : 'Actualizar'}
-          </button>
-        </div>
-      )}
+
 
       {/* Cartel / Pop-up de Recordatorio de Registro Diario */}
       {recordatorioPendiente && vistaActiva !== 'check' && (
