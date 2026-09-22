@@ -142,6 +142,16 @@ const mockApi = {
     localStorage.setItem('ingeap_historial_mock', JSON.stringify(lista));
     return { exito: true, mensaje: 'Registro eliminado (simulado).' };
   },
+  obtener_todos_registros_empleado: async (empleado, mesAnio = '') => {
+    const raw = localStorage.getItem('ingeap_historial_mock') || '[]';
+    const lista = JSON.parse(raw);
+    return lista.filter(r => {
+      const empMatch = (r.empleado || '').toLowerCase() === (empleado || '').toLowerCase();
+      if (!empMatch) return false;
+      if (mesAnio) return (r.fecha || '').startsWith(mesAnio);
+      return true;
+    });
+  },
   obtener_todos_usuarios: async (area = null) => {
     const mockUsers = [
       { id: 1, nombre: 'Gabriel Juarez', area: 'I', mail: 'gabriel.juarez@ingeap.com' },
@@ -400,6 +410,14 @@ export const api = {
       return await bridge.eliminar_registro_asistencia(idRegistro);
     }
     return { exito: false };
+  },
+
+  async obtenerTodosRegistrosEmpleado(empleado, mesAnio = '') {
+    const bridge = await getApi();
+    if (bridge.obtener_todos_registros_empleado) {
+      return await bridge.obtener_todos_registros_empleado(empleado, mesAnio);
+    }
+    return [];
   }
 };
 

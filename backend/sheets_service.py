@@ -7,6 +7,7 @@ from gspread.utils import ValueInputOption
 from google.oauth2.service_account import Credentials
 from google.auth.exceptions import GoogleAuthError
 from database import (
+    obtener_conexion,
     obtener_pendientes_sincronizacion,
     marcar_como_sincronizados,
     obtener_directorio_datos,
@@ -162,16 +163,18 @@ def obtener_hoja_trabajo(spreadsheet_id: str = "", sheet_name: str = ""):
                 f"Pestañas disponibles: {', '.join(hojas_disponibles)}"
             )
 
-    # Verificar encabezados: si la hoja está vacía, creamos la fila 1 completa
+    # Verificar encabezados: solo en '1_asistencia_informada'
     try:
-        fila_1 = ws.row_values(1)
-        if not fila_1 or len(fila_1) == 0:
-            ws.append_row(COLUMNAS_ESQUEMA, value_input_option=ValueInputOption.user_entered)
-        else:
-            headers_limpios = [str(c).strip().lower() for c in fila_1]
-            if "id_empleado" not in headers_limpios:
-                # Agregar columnas L y M al encabezado existente
-                ws.update(range_name="L1:M1", values=[["id_empleado", "id_proyecto"]], value_input_option=ValueInputOption.user_entered)
+        es_hoja_asistencia = (s_name.strip().lower() == "1_asistencia_informada")
+        if es_hoja_asistencia:
+            fila_1 = ws.row_values(1)
+            if not fila_1 or len(fila_1) == 0:
+                ws.append_row(COLUMNAS_ESQUEMA, value_input_option=ValueInputOption.user_entered)
+            else:
+                headers_limpios = [str(c).strip().lower() for c in fila_1]
+                if "id_empleado" not in headers_limpios:
+                    # Agregar columnas L y M al encabezado existente de la hoja de asistencia
+                    ws.update(range_name="L1:M1", values=[["id_empleado", "id_proyecto"]], value_input_option=ValueInputOption.user_entered)
     except Exception as e:
         print(f"Aviso al verificar encabezados: {e}")
 
@@ -387,12 +390,20 @@ def obtener_proyectos_remotos(spreadsheet_id: str = "") -> list:
     try:
         sh, _ = obtener_hoja_trabajo(spreadsheet_id=spreadsheet_id, sheet_name="0_proyectos")
         ws_p = sh.worksheet("0_proyectos")
-        filas = ws_p.get_all_records()
+        filas = ws_p.get_all_values()
+        if not filas or len(filas) < 2:
+            return []
+
+        headers = [str(h).strip().lower() for h in filas[0]]
+        idx_denom = headers.index("denominacion") if "denominacion" in headers else 1
+        idx_area = headers.index("area") if "area" in headers else 2
+        idx_id = headers.index("id_proyecto") if "id_proyecto" in headers else 0
+
         proyectos = []
-        for f in filas:
-            denom = str(f.get("denominacion", "")).strip()
-            area = str(f.get("area", "")).strip()
-            id_p = str(f.get("id_proyecto", "")).strip()
+        for f in filas[1:]:
+            denom = f[idx_denom].strip() if len(f) > idx_denom else ""
+            area = f[idx_area].strip() if len(f) > idx_area else ""
+            id_p = f[idx_id].strip() if len(f) > idx_id else ""
             if denom:
                 proyectos.append({
                     "id_proyecto": id_p,
@@ -408,20 +419,31 @@ def obtener_proyectos_remotos(spreadsheet_id: str = "") -> list:
 def obtener_usuarios_remotos(spreadsheet_id: str = "") -> list:
     """
     Lee los usuarios autorizados de la pestaña '0_usuarios'.
-    Retorna lista de diccionarios: [{'id_usuario': ..., 'nombre': ..., 'email': ..., 'area': ..., 'dni': ...}, ...]
+    Retorna lista de diccionarios: [{'id_usuario': ..., 'id_origen': ..., 'nombre': ..., 'email': ..., 'area': ..., 'dni': ...}, ...]
     """
     try:
         sh, _ = obtener_hoja_trabajo(spreadsheet_id=spreadsheet_id, sheet_name="0_usuarios")
         ws_u = sh.worksheet("0_usuarios")
-        filas = ws_u.get_all_records()
+        filas = ws_u.get_all_values()
+        if not filas or len(filas) < 2:
+            return []
+
+        headers = [str(h).strip().lower() for h in filas[0]]
+        idx_nombre = headers.index("nombre") if "nombre" in headers else 1
+        idx_dni = headers.index("dni") if "dni" in headers else 4
+        idx_area = headers.index("area") if "area" in headers else 3
+        idx_email = headers.index("email") if "email" in headers else (headers.index("mail") if "mail" in headers else 2)
+        idx_id_u = headers.index("id_usuario") if "id_usuario" in headers else 0
+        idx_id_orig = headers.index("id_origen") if "id_origen" in headers else -1
+
         usuarios = []
-        for f in filas:
-            nom = str(f.get("nombre", "")).strip()
-            dni = str(f.get("dni", "")).strip()
-            area = str(f.get("area", "")).strip()
-            email = str(f.get("email", "")).strip()
-            id_u = str(f.get("id_usuario", "")).strip()
-            id_orig = str(f.get("id_origen", "")).strip()
+        for f in filas[1:]:
+            nom = f[idx_nombre].strip() if len(f) > idx_nombre else ""
+            dni = f[idx_dni].strip() if len(f) > idx_dni else ""
+            area = f[idx_area].strip() if len(f) > idx_area else ""
+            email = f[idx_email].strip() if len(f) > idx_email else ""
+            id_u = f[idx_id_u].strip() if len(f) > idx_id_u else ""
+            id_orig = f[idx_id_orig].strip() if (idx_id_orig >= 0 and len(f) > idx_id_orig) else ""
             if nom and dni:
                 usuarios.append({
                     "id_usuario": id_u,
@@ -451,4 +473,83 @@ def obtener_ids_asistencia_remotos(spreadsheet_id: str = "") -> set:
     except Exception as e:
         print(f"[Sheets] Error al obtener IDs de asistencia remotos: {e}")
         return set()
+
+
+def sincronizar_desde_sheets_hacia_local(spreadsheet_id: str = "") -> int:
+    """
+    Descarga los registros existentes en '1_asistencia_informada' de Google Sheets
+    e inserta en la tabla 'historial' local aquellos que no existan localmente,
+    asegurando que RRHH tenga la visión completa de todos los empleados de la empresa.
+    """
+    try:
+        sh, ws = obtener_hoja_trabajo(spreadsheet_id=spreadsheet_id, sheet_name="1_asistencia_informada")
+        filas = ws.get_all_values()
+        if not filas or len(filas) < 2:
+            return 0
+
+        headers = [str(h).strip().lower() for h in filas[0]]
+        idx_id_asist = headers.index("id_asistencia") if "id_asistencia" in headers else 0
+        idx_emp = headers.index("empleado") if "empleado" in headers else 1
+        idx_fecha = headers.index("fecha") if "fecha" in headers else 2
+        idx_tipo = headers.index("tipo_ocf") if "tipo_ocf" in headers else 3
+        idx_serv = headers.index("servicio") if "servicio" in headers else 4
+        idx_horas = headers.index("horas") if "horas" in headers else 5
+        idx_inst = headers.index("instrumental") if "instrumental" in headers else 6
+        idx_mail = headers.index("usuario_mail") if "usuario_mail" in headers else 7
+        idx_fh = headers.index("fecha_hora") if "fecha_hora" in headers else 8
+        idx_dia = headers.index("dia_semana") if "dia_semana" in headers else 9
+        idx_fer = headers.index("feriado") if "feriado" in headers else 10
+        idx_id_emp = headers.index("id_empleado") if "id_empleado" in headers else -1
+        idx_id_proy = headers.index("id_proyecto") if "id_proyecto" in headers else -1
+
+        with obtener_conexion() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT id_asistencia FROM historial WHERE id_asistencia IS NOT NULL AND id_asistencia != ''")
+            existentes = {str(r["id_asistencia"]).strip() for r in cursor.fetchall()}
+
+            insertados = 0
+            for f in filas[1:]:
+                uid = str(f[idx_id_asist]).strip() if len(f) > idx_id_asist else ""
+                if not uid or uid in existentes:
+                    continue
+
+                emp = str(f[idx_emp]).strip() if len(f) > idx_emp else ""
+                f_str = str(f[idx_fecha]).strip() if len(f) > idx_fecha else ""
+                tipo = str(f[idx_tipo]).strip() if len(f) > idx_tipo else ""
+                serv = str(f[idx_serv]).strip() if len(f) > idx_serv else ""
+                try:
+                    hrs = float(f[idx_horas]) if len(f) > idx_horas and str(f[idx_horas]).strip() else 0.0
+                except Exception:
+                    hrs = 0.0
+                inst = str(f[idx_inst]).strip() if len(f) > idx_inst else ""
+                mail = str(f[idx_mail]).strip() if len(f) > idx_mail else ""
+                fh = str(f[idx_fh]).strip() if len(f) > idx_fh else ""
+                dia_s = str(f[idx_dia]).strip() if len(f) > idx_dia else ""
+                fer = str(f[idx_fer]).strip() if len(f) > idx_fer else ""
+                id_e = str(f[idx_id_emp]).strip() if (idx_id_emp >= 0 and len(f) > idx_id_emp) else ""
+                id_p = str(f[idx_id_proy]).strip() if (idx_id_proy >= 0 and len(f) > idx_id_proy) else ""
+
+                cursor.execute("""
+                    INSERT INTO historial (
+                        id_asistencia, empleado, fecha, tipo_ocf, servicio,
+                        horas, instrumental, usuario_mail, fecha_hora,
+                        lugar, jornada, dia_semana, feriado, modificado, sincronizado,
+                        cargado_por, id_empleado, id_proyecto
+                    )
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 1, '', ?, ?)
+                """, (
+                    uid, emp, f_str, tipo, serv,
+                    hrs, inst, mail, fh,
+                    tipo, f"{hrs} hs" if hrs > 0 else tipo, dia_s, fer,
+                    id_e, id_p
+                ))
+                existentes.add(uid)
+                insertados += 1
+
+            conn.commit()
+            return insertados
+    except Exception as e:
+        print(f"[Sheets] Aviso al sincronizar desde sheets hacia local: {e}")
+        return 0
+
 

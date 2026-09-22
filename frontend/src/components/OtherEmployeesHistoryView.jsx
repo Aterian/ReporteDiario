@@ -6,6 +6,10 @@ const LUGARES_OPCIONES = [
   'Campaña / Campo',
   'Home Office',
   'Franco',
+  'Franco de Oficina',
+  'Franco de Obra',
+  'Franco Trabajado',
+  'Feriado Trabajado',
   'Vacaciones',
   'Licencia'
 ];
@@ -27,10 +31,17 @@ export default function OtherEmployeesHistoryView({ usuario, onVolver, tema, onV
   const [empleados, setEmpleados] = useState([]);
   const [serviciosDisponibles, setServiciosDisponibles] = useState([]);
 
-  // Filtros
-  const [filtroEmpleado, setFiltroEmpleado] = useState('TODOS');
+  // Filtros columna izquierda
   const [filtroTexto, setFiltroTexto] = useState('');
-  const [filtroMes, setFiltroMes] = useState(''); // YYYY-MM opcional
+
+  // Estado del calendario mensual columna derecha
+  const [fechaCalendario, setFechaCalendario] = useState(() => {
+    const hoy = new Date();
+    return new Date(hoy.getFullYear(), hoy.getMonth(), 1);
+  });
+  const [empleadoAuditar, setEmpleadoAuditar] = useState('');
+  const [registrosEmpleadoAuditar, setRegistrosEmpleadoAuditar] = useState([]);
+  const [cargandoAuditoria, setCargandoAuditoria] = useState(false);
 
   // Modal de edición
   const [registroEditando, setRegistroEditando] = useState(null);
@@ -40,17 +51,47 @@ export default function OtherEmployeesHistoryView({ usuario, onVolver, tema, onV
   const [registroEliminando, setRegistroEliminando] = useState(null);
   const [eliminando, setEliminando] = useState(false);
 
+  // Tarifas de Liquidación (guardadas en localStorage)
+  const [tarifas, setTarifas] = useState(() => {
+    try {
+      const guardadas = localStorage.getItem('ingeap_tarifas_rrhh');
+      if (guardadas) return JSON.parse(guardadas);
+    } catch (e) {
+      console.error(e);
+    }
+    return {
+      precioOficina: 0,
+      precioObra: 0,
+      precioFrancoTrabajado: 0,
+      precioFeriadoTrabajado: 0
+    };
+  });
+
+  const handleTarifaChange = (campo, valor) => {
+    const num = parseFloat(valor) || 0;
+    const nuevas = { ...tarifas, [campo]: num };
+    setTarifas(nuevas);
+    try {
+      localStorage.setItem('ingeap_tarifas_rrhh', JSON.stringify(nuevas));
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
   const cargarDatos = async () => {
     setCargando(true);
     try {
       const [dataRegs, dataEmps, dataServs] = await Promise.all([
-        api.obtenerHistorialOtrosEmpleados(filtroEmpleado),
+        api.obtenerHistorialOtrosEmpleados('TODOS'),
         api.obtenerTodosUsuarios(),
         api.obtenerServicios('TODOS')
       ]);
 
       if (Array.isArray(dataRegs)) setRegistros(dataRegs);
-      if (Array.isArray(dataEmps)) setEmpleados(dataEmps);
+      if (Array.isArray(dataEmps) && dataEmps.length > 0) {
+        setEmpleados(dataEmps);
+        setEmpleadoAuditar(prev => prev || dataEmps[0].nombre);
+      }
       if (Array.isArray(dataServs)) setServiciosDisponibles(dataServs);
     } catch (err) {
       console.error('Error al cargar historial de otros empleados:', err);
@@ -59,15 +100,44 @@ export default function OtherEmployeesHistoryView({ usuario, onVolver, tema, onV
     }
   };
 
+  const cargarAuditoriaEmpleado = async (emp, fechaCal) => {
+    if (!emp) return;
+    setCargandoAuditoria(true);
+    try {
+      const anio = fechaCal.getFullYear();
+      const mesStr = String(fechaCal.getMonth() + 1).padStart(2, '0');
+      const mesAnio = `${anio}-${mesStr}`;
+      const data = await api.obtenerTodosRegistrosEmpleado(emp, mesAnio);
+      if (Array.isArray(data)) {
+        setRegistrosEmpleadoAuditar(data);
+      }
+    } catch (err) {
+      console.error('Error al cargar registros del empleado para auditoría:', err);
+    } finally {
+      setCargandoAuditoria(false);
+    }
+  };
+
   useEffect(() => {
     cargarDatos();
 
-    const handleCatalogos = () => cargarDatos();
+    const handleCatalogos = () => {
+      cargarDatos();
+      if (empleadoAuditar) {
+        cargarAuditoriaEmpleado(empleadoAuditar, fechaCalendario);
+      }
+    };
     window.addEventListener('catalogos-actualizados', handleCatalogos);
     return () => {
       window.removeEventListener('catalogos-actualizados', handleCatalogos);
     };
-  }, [filtroEmpleado]);
+  }, []);
+
+  useEffect(() => {
+    if (empleadoAuditar) {
+      cargarAuditoriaEmpleado(empleadoAuditar, fechaCalendario);
+    }
+  }, [empleadoAuditar, fechaCalendario]);
 
   const ejecutarSincronizacion = async () => {
     setSincronizando(true);
@@ -77,6 +147,9 @@ export default function OtherEmployeesHistoryView({ usuario, onVolver, tema, onV
       if (res && res.exito) {
         setMensajeSync({ tipo: 'exito', texto: res.mensaje || 'Sincronizado correctamente con Google Sheets.' });
         await cargarDatos();
+        if (empleadoAuditar) {
+          await cargarAuditoriaEmpleado(empleadoAuditar, fechaCalendario);
+        }
       } else {
         setMensajeSync({ tipo: 'error', texto: res?.error || 'No se pudo sincronizar con Google Sheets.' });
       }
@@ -109,6 +182,9 @@ export default function OtherEmployeesHistoryView({ usuario, onVolver, tema, onV
         setMensajeSync({ tipo: 'exito', texto: 'Registro modificado exitosamente.' });
         setRegistroEditando(null);
         await cargarDatos();
+        if (empleadoAuditar) {
+          await cargarAuditoriaEmpleado(empleadoAuditar, fechaCalendario);
+        }
       } else {
         setMensajeSync({ tipo: 'error', texto: res?.error || 'No se pudo guardar la modificación.' });
       }
@@ -129,6 +205,9 @@ export default function OtherEmployeesHistoryView({ usuario, onVolver, tema, onV
         setMensajeSync({ tipo: 'exito', texto: res.mensaje || 'Registro eliminado correctamente.' });
         setRegistroEliminando(null);
         await cargarDatos();
+        if (empleadoAuditar) {
+          await cargarAuditoriaEmpleado(empleadoAuditar, fechaCalendario);
+        }
       } else {
         setMensajeSync({ tipo: 'error', texto: res?.error || 'No se pudo eliminar el registro.' });
       }
@@ -140,38 +219,161 @@ export default function OtherEmployeesHistoryView({ usuario, onVolver, tema, onV
     }
   };
 
-  // Filtrado en memoria
+  // Filtrado en memoria para la lista de registros de RRHH (lado izquierdo)
   const registrosFiltrados = useMemo(() => {
     return registros.filter(r => {
-      // Filtro texto
       if (filtroTexto) {
         const q = filtroTexto.toLowerCase();
         const emp = (r.empleado || '').toLowerCase();
         const srv = (r.servicio || '').toLowerCase();
         const lug = (r.tipo_ocf || r.lugar || '').toLowerCase();
         const fec = (r.fecha || '').toLowerCase();
-        if (!emp.includes(q) && !srv.includes(q) && !lug.includes(q) && !fec.includes(q)) {
+        const cpor = (r.cargado_por || '').toLowerCase();
+        if (!emp.includes(q) && !srv.includes(q) && !lug.includes(q) && !fec.includes(q) && !cpor.includes(q)) {
           return false;
         }
       }
-
-      // Filtro mes (YYYY-MM)
-      if (filtroMes) {
-        if (!r.fecha || !r.fecha.startsWith(filtroMes)) {
-          return false;
-        }
-      }
-
       return true;
     });
-  }, [registros, filtroTexto, filtroMes]);
+  }, [registros, filtroTexto]);
 
-  const pendientesCount = registros.filter(r => r.sincronizado === 0).length;
+  // Mapa de registros del empleado seleccionado indexados por fecha (YYYY-MM-DD) para el calendario
+  const mapaRegistrosAuditoria = useMemo(() => {
+    const mapa = {};
+    registrosEmpleadoAuditar.forEach(r => {
+      if (!r.fecha) return;
+      const f = r.fecha.trim();
+      if (!mapa[f]) {
+        mapa[f] = [];
+      }
+      mapa[f].push(r);
+    });
+    return mapa;
+  }, [registrosEmpleadoAuditar]);
 
-  const getBadgeClassLugar = (lugar) => {
+  // Generador de días del mes para el calendario del empleado
+  const diasMesCalendario = useMemo(() => {
+    const anio = fechaCalendario.getFullYear();
+    const mes = fechaCalendario.getMonth(); // 0-indexed
+
+    const primerDiaMes = new Date(anio, mes, 1);
+    const ultimoDiaMes = new Date(anio, mes + 1, 0);
+    const totalDias = ultimoDiaMes.getDate();
+
+    let diaInicioSemana = primerDiaMes.getDay() - 1;
+    if (diaInicioSemana === -1) diaInicioSemana = 6;
+
+    const celdas = [];
+    for (let i = 0; i < diaInicioSemana; i++) {
+      celdas.push({ esVacio: true, id: `prev-${i}` });
+    }
+
+    const hoyStr = new Date().toISOString().split('T')[0];
+
+    for (let d = 1; d <= totalDias; d++) {
+      const mesStr = String(mes + 1).padStart(2, '0');
+      const diaStr = String(d).padStart(2, '0');
+      const fechaIso = `${anio}-${mesStr}-${diaStr}`;
+      const regsDia = mapaRegistrosAuditoria[fechaIso] || [];
+
+      celdas.push({
+        esVacio: false,
+        id: fechaIso,
+        diaNumero: d,
+        fechaIso,
+        esHoy: fechaIso === hoyStr,
+        registros: regsDia
+      });
+    }
+
+    return celdas;
+  }, [fechaCalendario, mapaRegistrosAuditoria]);
+
+  const navegarMes = (delta) => {
+    setFechaCalendario(prev => new Date(prev.getFullYear(), prev.getMonth() + delta, 1));
+  };
+
+  const irAHoy = () => {
+    const hoy = new Date();
+    setFechaCalendario(new Date(hoy.getFullYear(), hoy.getMonth(), 1));
+  };
+
+  const nombresMeses = [
+    'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
+    'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
+  ];
+
+  // Cálculo de conteos para la calculadora de liquidación
+  const conteosLiquidacion = useMemo(() => {
+    const anio = fechaCalendario.getFullYear();
+    const mesStr = String(fechaCalendario.getMonth() + 1).padStart(2, '0');
+    const prefijoMes = `${anio}-${mesStr}`;
+
+    const fechasOficina = new Set();
+    const fechasObra = new Set();
+    const fechasFrancoTrabajado = new Set();
+    const fechasFeriadoTrabajado = new Set();
+
+    registrosEmpleadoAuditar.forEach(r => {
+      if (!r.fecha || !r.fecha.startsWith(prefijoMes)) return;
+      const f = r.fecha.trim();
+      const lug = (r.tipo_ocf || r.lugar || '').trim();
+      const srv = (r.servicio || '').trim();
+      const hrs = Number(r.horas) || 0;
+      const esFer = (r.feriado || '').toUpperCase() === 'SI';
+
+      // 1. Franco trabajado
+      if (srv === 'Franco Trabajado' || (lug === 'Franco' && hrs > 0 && srv.toLowerCase().includes('trabajado'))) {
+        fechasFrancoTrabajado.add(f);
+      }
+      // 2. Feriado trabajado
+      else if (lug === 'Feriado Trabajado' || (esFer && hrs > 0)) {
+        fechasFeriadoTrabajado.add(f);
+      }
+      // 3. Obra / Campo
+      else if (['Campaña / Campo', 'Campo', 'Obra', 'Roster'].includes(lug)) {
+        fechasObra.add(f);
+      }
+      // 4. Oficina / Home Office
+      else if (['Oficina', 'Home Office'].includes(lug)) {
+        fechasOficina.add(f);
+      }
+    });
+
+    return {
+      diasOficina: fechasOficina.size,
+      diasObra: fechasObra.size,
+      diasFrancoTrabajado: fechasFrancoTrabajado.size,
+      diasFeriadoTrabajado: fechasFeriadoTrabajado.size
+    };
+  }, [registrosEmpleadoAuditar, fechaCalendario]);
+
+  const subtotalOficina = conteosLiquidacion.diasOficina * (tarifas.precioOficina || 0);
+  const subtotalObra = conteosLiquidacion.diasObra * (tarifas.precioObra || 0);
+  const subtotalFranco = conteosLiquidacion.diasFrancoTrabajado * (tarifas.precioFrancoTrabajado || 0);
+  const subtotalFeriado = conteosLiquidacion.diasFeriadoTrabajado * (tarifas.precioFeriadoTrabajado || 0);
+  const totalLiquidar = subtotalOficina + subtotalObra + subtotalFranco + subtotalFeriado;
+
+  const formatMoneda = (val) => {
+    return new Intl.NumberFormat('es-AR', {
+      style: 'currency',
+      currency: 'ARS',
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    }).format(val || 0);
+  };
+
+  const getBadgeClassLugar = (lugar, servicio = '') => {
     const l = (lugar || '').toLowerCase();
+    const s = (servicio || '').toLowerCase();
+    if (s === 'franco trabajado' || (l === 'franco' && s.includes('trabajado'))) {
+      return 'badge-modalidad-franco-trabajado';
+    }
+    if (l === 'feriado trabajado' || l.includes('feriado')) {
+      return 'badge-modalidad-feriado-trabajado';
+    }
     if (l.includes('oficina')) return 'badge-modalidad-oficina';
-    if (l.includes('campo') || l.includes('campaña') || l.includes('roster')) return 'badge-modalidad-campo';
+    if (l.includes('campo') || l.includes('campaña') || l.includes('roster') || l.includes('obra')) return 'badge-modalidad-campo';
     if (l.includes('home')) return 'badge-modalidad-home';
     if (l.includes('franco')) return 'badge-modalidad-franco';
     if (l.includes('vacaciones')) return 'badge-modalidad-vacaciones';
@@ -186,8 +388,10 @@ export default function OtherEmployeesHistoryView({ usuario, onVolver, tema, onV
     return (partes[0][0] + partes[partes.length - 1][0]).toUpperCase();
   };
 
+  const pendientesCount = registros.filter(r => r.sincronizado === 0).length;
+
   return (
-    <div className="view-content other-history-container">
+    <div className={`view-content other-history-container ${isRpg ? 'rpg-board-viewport' : ''}`}>
       {/* Barra superior de navegación */}
       <div className="view-header-bar other-history-header">
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -211,9 +415,9 @@ export default function OtherEmployeesHistoryView({ usuario, onVolver, tema, onV
           )}
 
           <div className="other-history-title-block">
-            <span className="other-history-title">Historial de Otros Empleados (RRHH)</span>
+            <span className="other-history-title">Panel de Control de Empleados (RRHH)</span>
             <span className="other-history-subtitle">
-              Registros cargados a nombre de otros empleados • Edición y eliminación
+              Auditoría integral de asistencia • Registros de RRHH • Calculadora de Liquidación
             </span>
           </div>
         </div>
@@ -239,9 +443,14 @@ export default function OtherEmployeesHistoryView({ usuario, onVolver, tema, onV
           <button
             type="button"
             className="btn-refresh"
-            onClick={cargarDatos}
+            onClick={async () => {
+              await cargarDatos();
+              if (empleadoAuditar) {
+                await cargarAuditoriaEmpleado(empleadoAuditar, fechaCalendario);
+              }
+            }}
             disabled={cargando || sincronizando}
-            title="Actualizar registros"
+            title="Actualizar registros desde la base y Google Sheets"
           >
             <svg
               width="12"
@@ -270,186 +479,418 @@ export default function OtherEmployeesHistoryView({ usuario, onVolver, tema, onV
         </div>
       )}
 
-      {/* Barra de Filtros */}
-      <div className="filters-card">
-        <div className="filter-item">
-          <label className="filter-label">Empleado asignado:</label>
-          <select
-            className="form-select form-select-sm"
-            value={filtroEmpleado}
-            onChange={(e) => setFiltroEmpleado(e.target.value)}
-          >
-            <option value="TODOS">-- Todos los empleados --</option>
-            {empleados.map(u => (
-              <option key={u.dni || u.nombre} value={u.nombre}>
-                {u.nombre}
-              </option>
-            ))}
-          </select>
-        </div>
+      {/* CONTENEDOR DIVIDIDO: IZQUIERDA REGISTROS RRHH, DERECHA AUDITORÍA Y LIQUIDACIÓN */}
+      <div className="other-history-split-grid">
 
-        <div className="filter-item">
-          <label className="filter-label">Filtrar por mes:</label>
-          <input
-            type="month"
-            className="form-input form-input-sm"
-            value={filtroMes}
-            onChange={(e) => setFiltroMes(e.target.value)}
-          />
-        </div>
+        {/* =========================================================================
+            PANEL IZQUIERDO: Registros cargados por RRHH para otros empleados
+            ========================================================================= */}
+        <div className="other-left-panel">
+          <div className="other-panel-header">
+            <div className="other-panel-title-row">
+              <span className="other-panel-title">Cargados por RRHH</span>
+              <span className="other-count-badge">{registrosFiltrados.length}</span>
+            </div>
 
-        <div className="filter-item filter-search">
-          <label className="filter-label">Búsqueda rápida:</label>
-          <div className="search-input-wrapper">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-              <circle cx="11" cy="11" r="8" />
-              <line x1="21" y1="21" x2="16.65" y2="16.65" />
-            </svg>
-            <input
-              type="text"
-              placeholder="Buscar por empleado, proyecto o fecha..."
-              className="form-input form-input-sm search-field"
-              value={filtroTexto}
-              onChange={(e) => setFiltroTexto(e.target.value)}
-            />
-            {filtroTexto && (
-              <button type="button" className="clear-search-btn" onClick={() => setFiltroTexto('')}>✕</button>
+            <div className="other-left-filters">
+              <div className="search-input-wrapper">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="11" cy="11" r="8" />
+                  <line x1="21" y1="21" x2="16.65" y2="16.65" />
+                </svg>
+                <input
+                  type="text"
+                  placeholder="Buscar por empleado, proyecto o fecha..."
+                  className="form-input form-input-sm search-field"
+                  value={filtroTexto}
+                  onChange={(e) => setFiltroTexto(e.target.value)}
+                />
+                {filtroTexto && (
+                  <button type="button" className="clear-search-btn" onClick={() => setFiltroTexto('')}>✕</button>
+                )}
+              </div>
+            </div>
+          </div>
+
+          <div className="other-cards-scroll">
+            {cargando && registros.length === 0 ? (
+              <div className="empty-state">
+                <div className="spinner" style={{ width: '28px', height: '28px' }} />
+                <span className="empty-text">Cargando registros cargados para otros empleados...</span>
+              </div>
+            ) : registrosFiltrados.length === 0 ? (
+              <div className="empty-state">
+                <svg className="empty-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+                  <circle cx="9" cy="7" r="4" />
+                  <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+                  <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+                </svg>
+                <span className="empty-text">
+                  {registros.length === 0
+                    ? 'No hay registros cargados por RRHH para otros empleados.'
+                    : 'No se encontraron registros con la búsqueda.'}
+                </span>
+              </div>
+            ) : (
+              <div className="other-cards-col">
+                {registrosFiltrados.map((item) => {
+                  const lugarDisplay = item.tipo_ocf || item.lugar || 'Oficina';
+                  const badgeClass = getBadgeClassLugar(lugarDisplay, item.servicio);
+                  const horasDisplay = item.horas > 0 ? `${item.horas} hs` : (item.jornada || '0 hs');
+                  const estaSincronizado = item.sincronizado === 1;
+
+                  return (
+                    <div key={item.id} className="other-record-card">
+                      <div className="other-card-header">
+                        <div className="other-card-user">
+                          <div className="other-user-avatar">
+                            {getIniciales(item.empleado)}
+                          </div>
+                          <div className="other-user-meta">
+                            <span className="other-user-name">{item.empleado || 'Sin empleado'}</span>
+                            {item.cargado_por && (
+                              <span className="other-user-sub">
+                                Cargado por: <strong>{item.cargado_por}</strong>
+                              </span>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="other-card-badges">
+                          <span className={`status-badge ${estaSincronizado ? 'status-synced' : 'status-pending'}`}>
+                            {estaSincronizado ? 'Sincronizado' : 'Pendiente'}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="other-card-content">
+                        <div className="other-meta-row">
+                          <span className="other-meta-date">
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                              <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+                              <line x1="16" y1="2" x2="16" y2="6" />
+                              <line x1="8" y1="2" x2="8" y2="6" />
+                              <line x1="3" y1="10" x2="21" y2="10" />
+                            </svg>
+                            {item.fecha} {item.dia_semana ? `(${item.dia_semana})` : ''}
+                          </span>
+                          {item.feriado === 'SI' && (
+                            <span className="chip-feriado">Feriado</span>
+                          )}
+                          <span className={`modalidad-pill ${badgeClass}`}>
+                            {item.servicio === 'Franco Trabajado' ? 'Franco Trabajado' : lugarDisplay}
+                          </span>
+                        </div>
+
+                        <div className="other-project-row">
+                          <span className="other-project-label">Proyecto / Detalle:</span>
+                          <span className="other-project-name" title={item.servicio}>
+                            {item.servicio || 'Tiempo dedicado al área'}
+                          </span>
+                        </div>
+
+                        <div className="other-hours-row">
+                          <span className="other-hours-label">Jornada:</span>
+                          <span className="other-hours-value">{horasDisplay}</span>
+                        </div>
+                      </div>
+
+                      <div className="other-card-actions">
+                        <button
+                          type="button"
+                          className="btn-card-action btn-card-edit"
+                          onClick={() => setRegistroEditando({ ...item })}
+                          title="Modificar reporte"
+                        >
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                          </svg>
+                          Modificar
+                        </button>
+
+                        <button
+                          type="button"
+                          className="btn-card-action btn-card-delete"
+                          onClick={() => setRegistroEliminando(item)}
+                          title="Eliminar este reporte localmente y de Google Sheets"
+                        >
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                            <polyline points="3 6 5 6 21 6" />
+                            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                          </svg>
+                          Eliminar
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
             )}
           </div>
         </div>
 
-        {(filtroEmpleado !== 'TODOS' || filtroMes || filtroTexto) && (
-          <button
-            type="button"
-            className="btn-clear-filters"
-            onClick={() => {
-              setFiltroEmpleado('TODOS');
-              setFiltroMes('');
-              setFiltroTexto('');
-            }}
-          >
-            Limpiar filtros
-          </button>
-        )}
-      </div>
+        {/* =========================================================================
+            PANEL DERECHO: Calendario de Auditoría y Calculadora de Liquidación
+            ========================================================================= */}
+        <div className="other-right-panel">
+          {/* Header de Auditoría: Selector de empleado y mes */}
+          <div className="audit-panel-header">
+            <div className="audit-employee-select-box">
+              <label className="audit-select-label">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+                  <circle cx="12" cy="7" r="4" />
+                </svg>
+                <span>Auditar empleado:</span>
+              </label>
+              <select
+                className="form-select form-select-clean audit-select-field"
+                value={empleadoAuditar}
+                onChange={(e) => setEmpleadoAuditar(e.target.value)}
+              >
+                {empleados.map(u => (
+                  <option key={u.dni || u.nombre} value={u.nombre}>
+                    {u.nombre} ({u.area || 'Sin área'})
+                  </option>
+                ))}
+              </select>
+            </div>
 
-      {/* Lista / Tabla de Registros */}
-      <div className="other-history-body">
-        {cargando && registros.length === 0 ? (
-          <div className="empty-state">
-            <div className="spinner" style={{ width: '30px', height: '30px' }} />
-            <span className="empty-text">Cargando registros cargados para otros empleados...</span>
+            <div className="calendar-month-controls">
+              <button
+                type="button"
+                className="calendar-nav-btn"
+                onClick={() => navegarMes(-1)}
+                title="Mes anterior"
+              >
+                ◀
+              </button>
+              <span className="calendar-month-title">
+                {nombresMeses[fechaCalendario.getMonth()]} {fechaCalendario.getFullYear()}
+              </span>
+              <button
+                type="button"
+                className="calendar-nav-btn"
+                onClick={() => navegarMes(1)}
+                title="Mes siguiente"
+              >
+                ▶
+              </button>
+              <button
+                type="button"
+                className="calendar-today-btn"
+                onClick={irAHoy}
+              >
+                Hoy
+              </button>
+            </div>
           </div>
-        ) : registrosFiltrados.length === 0 ? (
-          <div className="empty-state">
-            <svg className="empty-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
-              <circle cx="9" cy="7" r="4" />
-              <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
-              <path d="M16 3.13a4 4 0 0 1 0 7.75" />
-            </svg>
-            <span className="empty-text">
-              {registros.length === 0
-                ? 'Aún no se han registrado asistencias para otros empleados.'
-                : 'No se encontraron registros con los filtros seleccionados.'}
-            </span>
-          </div>
-        ) : (
-          <div className="other-cards-grid">
-            {registrosFiltrados.map((item) => {
-              const lugarDisplay = item.tipo_ocf || item.lugar || 'Oficina';
-              const badgeClass = getBadgeClassLugar(lugarDisplay);
-              const horasDisplay = item.horas > 0 ? `${item.horas} hs` : (item.jornada || '0 hs');
-              const estaSincronizado = item.sincronizado === 1;
 
-              return (
-                <div key={item.id} className="other-record-card">
-                  <div className="other-card-header">
-                    <div className="other-card-user">
-                      <div className="other-user-avatar">
-                        {getIniciales(item.empleado)}
-                      </div>
-                      <div className="other-user-meta">
-                        <span className="other-user-name">{item.empleado || 'Sin empleado'}</span>
-                        {item.cargado_por && (
-                          <span className="other-user-sub">
-                            Cargado por: <strong>{item.cargado_por}</strong>
-                          </span>
-                        )}
-                      </div>
+          {/* Grilla del Calendario Mensual */}
+          <div className="audit-calendar-wrapper">
+            <div className="calendar-weekdays-row">
+              <span>Lun</span>
+              <span>Mar</span>
+              <span>Mié</span>
+              <span>Jue</span>
+              <span>Vie</span>
+              <span>Sáb</span>
+              <span>Dom</span>
+            </div>
+
+            <div className="calendar-grid audit-calendar-grid">
+              {diasMesCalendario.map((celda) => {
+                if (celda.esVacio) {
+                  return <div key={celda.id} className="calendar-cell cell-empty" />;
+                }
+
+                const tieneRegistros = celda.registros.length > 0;
+
+                return (
+                  <div
+                    key={celda.id}
+                    className={`calendar-cell ${celda.esHoy ? 'cell-today' : ''} ${tieneRegistros ? 'cell-has-data' : ''}`}
+                    title={tieneRegistros ? `${celda.registros.length} registro(s) el ${celda.fechaIso}` : celda.fechaIso}
+                  >
+                    <div className="cell-top-bar">
+                      <span className="cell-day-number">{celda.diaNumero}</span>
+                      {celda.esHoy && <span className="cell-today-dot" title="Hoy" />}
                     </div>
 
-                    <div className="other-card-badges">
-                      <span className={`status-badge ${estaSincronizado ? 'status-synced' : 'status-pending'}`}>
-                        {estaSincronizado ? 'Sincronizado' : 'Pendiente'}
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className="other-card-content">
-                    <div className="other-meta-row">
-                      <span className="other-meta-date">
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                          <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
-                          <line x1="16" y1="2" x2="16" y2="6" />
-                          <line x1="8" y1="2" x2="8" y2="6" />
-                          <line x1="3" y1="10" x2="21" y2="10" />
-                        </svg>
-                        {item.fecha} {item.dia_semana ? `(${item.dia_semana})` : ''}
-                      </span>
-                      {item.feriado === 'SI' && (
-                        <span className="chip-feriado">Feriado</span>
+                    <div className="cell-events-container">
+                      {celda.registros.slice(0, 3).map((r, idx) => {
+                        const lug = r.tipo_ocf || r.lugar || 'Oficina';
+                        const badgeClass = getBadgeClassLugar(lug, r.servicio);
+                        const labelText = r.servicio === 'Franco Trabajado' 
+                          ? 'Franco Trab.' 
+                          : (lug === 'Feriado Trabajado' 
+                              ? 'Feriado' 
+                              : (lug === 'Campaña / Campo' ? 'Campo' : lug));
+                        return (
+                          <div
+                            key={r.id || idx}
+                            className={`cell-event-pill ${badgeClass}`}
+                            title={`${lug} - ${r.servicio} (${r.horas} hs) • Cargado por: ${r.cargado_por || r.empleado}`}
+                          >
+                            <span className="cell-event-label">{labelText}</span>
+                          </div>
+                        );
+                      })}
+                      {celda.registros.length > 3 && (
+                        <span className="cell-more-badge">+{celda.registros.length - 3}</span>
                       )}
-                      <span className={`modalidad-pill ${badgeClass}`}>
-                        {lugarDisplay}
-                      </span>
-                    </div>
-
-                    <div className="other-project-row">
-                      <span className="other-project-label">Proyecto / Detalle:</span>
-                      <span className="other-project-name" title={item.servicio}>
-                        {item.servicio || 'Tiempo dedicado al área'}
-                      </span>
-                    </div>
-
-                    <div className="other-hours-row">
-                      <span className="other-hours-label">Jornada:</span>
-                      <span className="other-hours-value">{horasDisplay}</span>
                     </div>
                   </div>
+                );
+              })}
+            </div>
 
-                  <div className="other-card-actions">
-                    <button
-                      type="button"
-                      className="btn-card-action btn-card-edit"
-                      onClick={() => setRegistroEditando({ ...item })}
-                      title="Modificar reporte"
-                    >
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
-                        <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
-                      </svg>
-                      Modificar
-                    </button>
-
-                    <button
-                      type="button"
-                      className="btn-card-action btn-card-delete"
-                      onClick={() => setRegistroEliminando(item)}
-                      title="Eliminar este reporte localmente y de Google Sheets"
-                    >
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                        <polyline points="3 6 5 6 21 6" />
-                        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-                      </svg>
-                      Eliminar
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
+            {/* Referencias cromáticas */}
+            <div className="calendar-legend-bar">
+              <span className="legend-title">Referencias:</span>
+              <div className="legend-items">
+                <span className="legend-item"><span className="legend-color-box badge-modalidad-oficina" /> Oficina</span>
+                <span className="legend-item"><span className="legend-color-box badge-modalidad-campo" /> Obra / Campo</span>
+                <span className="legend-item"><span className="legend-color-box badge-modalidad-home" /> Home Office</span>
+                <span className="legend-item"><span className="legend-color-box badge-modalidad-franco" /> Franco</span>
+                <span className="legend-item"><span className="legend-color-box badge-modalidad-franco-trabajado" /> Franco Trabajado</span>
+                <span className="legend-item"><span className="legend-color-box badge-modalidad-feriado-trabajado" /> Feriado Trabajado</span>
+                <span className="legend-item"><span className="legend-color-box badge-modalidad-vacaciones" /> Vacaciones</span>
+                <span className="legend-item"><span className="legend-color-box badge-modalidad-licencia" /> Licencia</span>
+              </div>
+            </div>
           </div>
-        )}
+
+          {/* =========================================================================
+              CALCULADORA DE LIQUIDACIÓN DEBAJO DEL CALENDARIO
+              ========================================================================= */}
+          <div className="liquidation-card">
+            <div className="liquidation-card-header">
+              <div className="liquidation-card-title">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="2" y="4" width="20" height="16" rx="2" />
+                  <line x1="2" y1="10" x2="22" y2="10" />
+                </svg>
+                <span>Calculadora de Liquidación • {empleadoAuditar || 'Empleado'} ({nombresMeses[fechaCalendario.getMonth()]} {fechaCalendario.getFullYear()})</span>
+              </div>
+              <span className="liquidation-help">
+                Ingresa el valor por día o jornada para liquidar los conceptos del período:
+              </span>
+            </div>
+
+            <div className="liquidation-grid">
+              {/* Tarjeta 1: Oficina */}
+              <div className="liquidation-item">
+                <div className="liq-item-top">
+                  <span className="liq-label">Día de Oficina</span>
+                  <span className="liq-count-badge">{conteosLiquidacion.diasOficina} días</span>
+                </div>
+                <div className="liq-input-row">
+                  <span className="liq-currency-symbol">$</span>
+                  <input
+                    type="number"
+                    min="0"
+                    step="100"
+                    placeholder="Precio día"
+                    className="form-input form-input-sm liq-input"
+                    value={tarifas.precioOficina || ''}
+                    onChange={(e) => handleTarifaChange('precioOficina', e.target.value)}
+                  />
+                </div>
+                <div className="liq-subtotal-row">
+                  <span>Subtotal:</span>
+                  <strong>{formatMoneda(subtotalOficina)}</strong>
+                </div>
+              </div>
+
+              {/* Tarjeta 2: Obra */}
+              <div className="liquidation-item">
+                <div className="liq-item-top">
+                  <span className="liq-label">Día de Obra / Campo</span>
+                  <span className="liq-count-badge">{conteosLiquidacion.diasObra} días</span>
+                </div>
+                <div className="liq-input-row">
+                  <span className="liq-currency-symbol">$</span>
+                  <input
+                    type="number"
+                    min="0"
+                    step="100"
+                    placeholder="Precio día"
+                    className="form-input form-input-sm liq-input"
+                    value={tarifas.precioObra || ''}
+                    onChange={(e) => handleTarifaChange('precioObra', e.target.value)}
+                  />
+                </div>
+                <div className="liq-subtotal-row">
+                  <span>Subtotal:</span>
+                  <strong>{formatMoneda(subtotalObra)}</strong>
+                </div>
+              </div>
+
+              {/* Tarjeta 3: Franco Trabajado */}
+              <div className="liquidation-item">
+                <div className="liq-item-top">
+                  <span className="liq-label">Franco Trabajado</span>
+                  <span className="liq-count-badge">{conteosLiquidacion.diasFrancoTrabajado} días</span>
+                </div>
+                <div className="liq-input-row">
+                  <span className="liq-currency-symbol">$</span>
+                  <input
+                    type="number"
+                    min="0"
+                    step="100"
+                    placeholder="Precio día"
+                    className="form-input form-input-sm liq-input"
+                    value={tarifas.precioFrancoTrabajado || ''}
+                    onChange={(e) => handleTarifaChange('precioFrancoTrabajado', e.target.value)}
+                  />
+                </div>
+                <div className="liq-subtotal-row">
+                  <span>Subtotal:</span>
+                  <strong>{formatMoneda(subtotalFranco)}</strong>
+                </div>
+              </div>
+
+              {/* Tarjeta 4: Feriado Trabajado */}
+              <div className="liquidation-item">
+                <div className="liq-item-top">
+                  <span className="liq-label">Feriado Trabajado</span>
+                  <span className="liq-count-badge">{conteosLiquidacion.diasFeriadoTrabajado} días</span>
+                </div>
+                <div className="liq-input-row">
+                  <span className="liq-currency-symbol">$</span>
+                  <input
+                    type="number"
+                    min="0"
+                    step="100"
+                    placeholder="Precio día"
+                    className="form-input form-input-sm liq-input"
+                    value={tarifas.precioFeriadoTrabajado || ''}
+                    onChange={(e) => handleTarifaChange('precioFeriadoTrabajado', e.target.value)}
+                  />
+                </div>
+                <div className="liq-subtotal-row">
+                  <span>Subtotal:</span>
+                  <strong>{formatMoneda(subtotalFeriado)}</strong>
+                </div>
+              </div>
+            </div>
+
+            {/* Total Liquidación Banner */}
+            <div className="liquidation-total-banner">
+              <div className="liq-total-info">
+                <span className="liq-total-subtitle">Liquidación total correspondiente a {empleadoAuditar || 'empleado'}:</span>
+                <span className="liq-total-period">{nombresMeses[fechaCalendario.getMonth()]} {fechaCalendario.getFullYear()}</span>
+              </div>
+              <div className="liq-total-amount-box">
+                <span className="liq-total-amount-label">TOTAL A LIQUIDAR</span>
+                <span className="liq-total-amount-value">{formatMoneda(totalLiquidar)}</span>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* Modal de Modificación */}
@@ -505,9 +946,15 @@ export default function OtherEmployeesHistoryView({ usuario, onVolver, tema, onV
                     let nuevoServicio = registroEditando.servicio;
                     let nuevasHoras = registroEditando.horas;
 
-                    if (nuevoLugar === 'Franco' || nuevoLugar === 'Vacaciones') {
+                    if (nuevoLugar === 'Franco' || nuevoLugar === 'Franco de Oficina' || nuevoLugar === 'Franco de Obra' || nuevoLugar === 'Vacaciones') {
                       nuevoServicio = nuevoLugar;
                       nuevasHoras = 0;
+                    } else if (nuevoLugar === 'Franco Trabajado') {
+                      nuevoServicio = 'Franco Trabajado';
+                      nuevasHoras = 8;
+                    } else if (nuevoLugar === 'Feriado Trabajado') {
+                      nuevoServicio = 'Feriado Trabajado';
+                      nuevasHoras = 8;
                     } else if (nuevoLugar === 'Licencia') {
                       nuevoServicio = 'Licencia Médica';
                       nuevasHoras = 0;
@@ -544,15 +991,14 @@ export default function OtherEmployeesHistoryView({ usuario, onVolver, tema, onV
                     required
                   />
                 </div>
-              ) : (registroEditando.tipo_ocf === 'Franco' || registroEditando.lugar === 'Franco' ||
-                   registroEditando.tipo_ocf === 'Vacaciones' || registroEditando.lugar === 'Vacaciones') ? (
+              ) : (['Franco', 'Franco de Oficina', 'Franco de Obra', 'Franco Trabajado', 'Feriado Trabajado', 'Vacaciones'].includes(registroEditando.tipo_ocf || registroEditando.lugar)) ? (
                 <div className="form-group-clean">
                   <label className="form-label-clean">Detalle:</label>
                   <input
                     type="text"
                     className="form-input form-input-clean"
                     value={registroEditando.servicio}
-                    disabled
+                    onChange={(e) => setRegistroEditando({ ...registroEditando, servicio: e.target.value })}
                   />
                 </div>
               ) : (
@@ -582,7 +1028,7 @@ export default function OtherEmployeesHistoryView({ usuario, onVolver, tema, onV
                   className="form-input form-input-clean"
                   value={registroEditando.horas}
                   onChange={(e) => setRegistroEditando({ ...registroEditando, horas: e.target.value })}
-                  disabled={['Franco', 'Vacaciones', 'Licencia'].includes(registroEditando.tipo_ocf || registroEditando.lugar)}
+                  disabled={['Franco', 'Franco de Oficina', 'Franco de Obra', 'Vacaciones', 'Licencia'].includes(registroEditando.tipo_ocf || registroEditando.lugar)}
                   required
                 />
               </div>
@@ -590,7 +1036,7 @@ export default function OtherEmployeesHistoryView({ usuario, onVolver, tema, onV
               <div className="modal-actions">
                 <button
                   type="button"
-                  className="btn-cancel"
+                  className="modal-btn-cancel"
                   onClick={() => setRegistroEditando(null)}
                   disabled={guardandoEdicion}
                 >
@@ -598,7 +1044,7 @@ export default function OtherEmployeesHistoryView({ usuario, onVolver, tema, onV
                 </button>
                 <button
                   type="submit"
-                  className="btn-confirm"
+                  className="modal-btn-confirm"
                   disabled={guardandoEdicion}
                 >
                   {guardandoEdicion ? 'Guardando...' : 'Guardar Cambios'}
@@ -626,25 +1072,25 @@ export default function OtherEmployeesHistoryView({ usuario, onVolver, tema, onV
               </button>
             </div>
 
-            <div className="modal-body-text">
+            <div className="modal-body-text" style={{ padding: '18px' }}>
               <p>
                 ¿Estás seguro de que deseas eliminar este registro de <strong>{registroEliminando.empleado}</strong>?
               </p>
-              <div className="delete-details-card">
+              <div className="delete-details-card" style={{ background: 'var(--bg-surface)', padding: '12px', borderRadius: '8px', fontSize: '13px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
                 <div><strong>Fecha:</strong> {registroEliminando.fecha}</div>
                 <div><strong>Modalidad:</strong> {registroEliminando.tipo_ocf || registroEliminando.lugar}</div>
                 <div><strong>Proyecto:</strong> {registroEliminando.servicio}</div>
                 <div><strong>Horas:</strong> {registroEliminando.horas} hs</div>
               </div>
-              <p style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '8px' }}>
+              <p style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '10px' }}>
                 Esta acción eliminará el registro de la base local y también borrará la fila correspondiente en la hoja de Google Sheets en segundo plano.
               </p>
             </div>
 
-            <div className="modal-actions">
+            <div className="modal-actions" style={{ padding: '0 18px 18px 18px' }}>
               <button
                 type="button"
-                className="btn-cancel"
+                className="modal-btn-cancel"
                 onClick={() => setRegistroEliminando(null)}
                 disabled={eliminando}
               >
@@ -652,7 +1098,7 @@ export default function OtherEmployeesHistoryView({ usuario, onVolver, tema, onV
               </button>
               <button
                 type="button"
-                className="btn-danger"
+                className="modal-btn-delete"
                 onClick={handleConfirmarEliminacion}
                 disabled={eliminando}
               >

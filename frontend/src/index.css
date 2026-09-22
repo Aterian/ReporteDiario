@@ -7266,3 +7266,456 @@ html, body {
   background: #2e1065;
   color: #c4b5fd;
 }
+
+/* =========================================================================
+   7. FRANCO SUB-TIPOS & FERIADO TRABAJADO
+   ========================================================================= */
+.franco-subtypes-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.franco-sub-btn {
+  background: var(--bg-surface);
+  border: 1.5px solid var(--border-subtle);
+  border-radius: var(--radius-md, 8px);
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.franco-sub-btn:hover {
+  border-color: var(--accent-emerald, #059669);
+  background: var(--bg-surface-hover);
+}
+
+.franco-sub-btn.active {
+  background: rgba(5, 150, 105, 0.12);
+  border-color: #059669;
+  box-shadow: 0 1px 4px rgba(5, 150, 105, 0.2);
+}
+
+.franco-sub-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.franco-sub-btn.active .franco-sub-title {
+  color: #059669;
+}
+
+.franco-sub-desc {
+  font-size: 10px;
+  color: var(--text-muted);
+}
+
+.franco-hours-box,
+.feriado-hours-box {
+  margin-top: 12px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md, 8px);
+  padding: 10px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.feriado-trabajado-card {
+  background: #fff1f2;
+  border: 1px solid #fecdd3;
+  border-radius: var(--radius-lg, 10px);
+  padding: 16px;
+  margin-top: 12px;
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+}
+
+[data-theme='dark'] .feriado-trabajado-card {
+  background: rgba(225, 29, 72, 0.15);
+  border-color: #be123c;
+}
+
+.feriado-trabajado-card .feriado-icon {
+  font-size: 24px;
+  line-height: 1;
+}
+
+.feriado-trabajado-card h4 {
+  margin: 0 0 4px 0;
+  font-size: 14px;
+  font-weight: 700;
+  color: #9f1239;
+}
+
+[data-theme='dark'] .feriado-trabajado-card h4 {
+  color: #fda4af;
+}
+
+.feriado-trabajado-card p {
+  margin: 0;
+  font-size: 12px;
+  color: #881337;
+  line-height: 1.4;
+}
+
+[data-theme='dark'] .feriado-trabajado-card p {
+  color: #fecdd3;
+}
+
+.seg-btn.seg-feriado {
+  background: #ffe4e6;
+  color: #be123c;
+  border-color: #e11d48;
+  font-weight: 700;
+}
+
+[data-theme='dark'] .seg-btn.seg-feriado {
+  background: rgba(225, 29, 72, 0.25);
+  color: #fda4af;
+  border-color: #e11d48;
+}
+
+/* Badges cromáticos para Franco Trabajado y Feriado Trabajado */
+.badge-modalidad-franco-trabajado {
+  background: #fef08a !important;
+  color: #854d0e !important;
+  border: 1px solid #facc15 !important;
+}
+
+[data-theme='dark'] .badge-modalidad-franco-trabajado {
+  background: rgba(234, 179, 8, 0.25) !important;
+  color: #fef08a !important;
+  border-color: #ca8a04 !important;
+}
+
+.badge-modalidad-feriado-trabajado {
+  background: #ffe4e6 !important;
+  color: #be123c !important;
+  border: 1px solid #fda4af !important;
+}
+
+[data-theme='dark'] .badge-modalidad-feriado-trabajado {
+  background: rgba(225, 29, 72, 0.25) !important;
+  color: #fecdd3 !important;
+  border-color: #e11d48 !important;
+}
+
+/* =========================================================================
+   8. VISTA DIVIDIDA HISTORIAL DE EMPLEADOS & LIQUIDACIÓN (RRHH)
+   ========================================================================= */
+.other-history-split-grid {
+  display: grid;
+  grid-template-columns: 380px 1fr;
+  gap: 16px;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+@media (max-width: 1100px) {
+  .other-history-split-grid {
+    grid-template-columns: 1fr;
+    overflow-y: auto;
+  }
+}
+
+.other-left-panel {
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg, 12px);
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;
+  min-height: 0;
+}
+
+.other-panel-header {
+  padding: 12px 14px;
+  background: var(--bg-surface);
+  border-bottom: 1px solid var(--border-subtle);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.other-panel-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.other-panel-title {
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.other-count-badge {
+  background: var(--primary-subtle);
+  color: var(--primary);
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 9999px;
+}
+
+.other-cards-scroll {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px;
+}
+
+.other-cards-col {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.other-right-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.audit-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg, 12px);
+  padding: 10px 14px;
+  gap: 12px;
+  flex-wrap: wrap;
+  box-shadow: var(--shadow-sm);
+}
+
+.audit-employee-select-box {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 260px;
+}
+
+.audit-select-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.audit-select-field {
+  flex: 1;
+  height: 34px !important;
+  padding: 4px 10px !important;
+  font-size: 12.5px !important;
+  font-weight: 600;
+  border-color: var(--border-input);
+}
+
+.audit-calendar-wrapper {
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg, 12px);
+  padding: 14px;
+  box-shadow: var(--shadow-sm);
+  display: flex;
+  flex-direction: column;
+}
+
+.audit-calendar-grid {
+  min-height: 220px;
+}
+
+/* =========================================================================
+   9. CALCULADORA DE LIQUIDACIÓN
+   ========================================================================= */
+.liquidation-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg, 12px);
+  padding: 16px;
+  box-shadow: var(--shadow-sm);
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.liquidation-card-header {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  border-bottom: 1px solid var(--border-subtle);
+  padding-bottom: 10px;
+}
+
+.liquidation-card-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--text-primary);
+}
+
+.liquidation-help {
+  font-size: 11.5px;
+  color: var(--text-muted);
+}
+
+.liquidation-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+}
+
+@media (max-width: 1200px) {
+  .liquidation-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+.liquidation-item {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md, 8px);
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  transition: all 0.15s ease;
+}
+
+.liquidation-item:hover {
+  border-color: var(--border-input);
+  box-shadow: var(--shadow-sm);
+}
+
+.liq-item-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.liq-label {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-secondary);
+}
+
+.liq-count-badge {
+  background: var(--primary-subtle);
+  color: var(--primary);
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 4px;
+  white-space: nowrap;
+}
+
+.liq-input-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.liq-currency-symbol {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-muted);
+}
+
+.liq-input {
+  width: 100%;
+  height: 32px !important;
+  padding: 4px 8px !important;
+  font-size: 12.5px !important;
+  font-weight: 600;
+}
+
+.liq-subtotal-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 11.5px;
+  color: var(--text-secondary);
+  border-top: 1px dashed var(--border-subtle);
+  padding-top: 6px;
+  margin-top: 2px;
+}
+
+.liq-subtotal-row strong {
+  color: var(--text-primary);
+  font-size: 12.5px;
+}
+
+.liquidation-total-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: linear-gradient(135deg, rgba(200, 30, 43, 0.08) 0%, rgba(200, 30, 43, 0.18) 100%);
+  border: 1.5px solid var(--primary);
+  border-radius: var(--radius-lg, 10px);
+  padding: 14px 18px;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+[data-theme='dark'] .liquidation-total-banner {
+  background: linear-gradient(135deg, rgba(200, 30, 43, 0.18) 0%, rgba(200, 30, 43, 0.3) 100%);
+}
+
+.liq-total-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.liq-total-subtitle {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.liq-total-period {
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--text-primary);
+}
+
+.liq-total-amount-box {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+
+.liq-total-amount-label {
+  font-size: 10.5px;
+  font-weight: 800;
+  color: var(--primary);
+  letter-spacing: 0.5px;
+}
+
+.liq-total-amount-value {
+  font-size: 22px;
+  font-weight: 900;
+  color: var(--primary);
+}

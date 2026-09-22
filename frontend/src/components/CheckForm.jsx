@@ -9,6 +9,7 @@ const LUGARES_BASE = [
 ];
 
 const LUGARES_RRHH = [
+  { id: 'Feriado Trabajado', label: 'Feriado Trabajado', labelRpg: '🎉 Feriado Trabajado', icon: 'M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z' },
   { id: 'Vacaciones', label: 'Vacaciones', labelRpg: '🏖️ Vacaciones', icon: 'M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41' },
   { id: 'Licencia', label: 'Licencia', labelRpg: '📜 Licencia', icon: 'M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z M14 2v6h6' }
 ];
@@ -53,6 +54,9 @@ export default function CheckForm({ onRegistroGuardado, onVolver, tema }) {
   const [fechaFin, setFechaFin] = useState(getFechaHoy());
   const [usarRangoFechas, setUsarRangoFechas] = useState(false);
   const [lugar, setLugar] = useState('Oficina');
+  const [tipoFranco, setTipoFranco] = useState('Franco de Oficina');
+  const [horasFrancoTrabajado, setHorasFrancoTrabajado] = useState(8);
+  const [horasFeriado, setHorasFeriado] = useState(8);
   const [tipoLicencia, setTipoLicencia] = useState('Médica');
   const [detalleLicencia, setDetalleLicencia] = useState('');
 
@@ -90,9 +94,10 @@ export default function CheckForm({ onRegistroGuardado, onVolver, tema }) {
   const esUsuarioAreaEspecial = ['N', 'RRHH', 'A'].includes(areaActiva);
   const esCampañaOCampo = lugar === 'Campaña / Campo';
   const esFranco = lugar === 'Franco';
+  const esFeriadoTrabajado = lugar === 'Feriado Trabajado';
   const esVacaciones = lugar === 'Vacaciones';
   const esLicencia = lugar === 'Licencia';
-  const esSinProyectos = esFranco || esVacaciones || esLicencia;
+  const esSinProyectos = (esFranco && tipoFranco !== 'Franco Trabajado') || esVacaciones || esLicencia || esFeriadoTrabajado;
   const permitirRango = esCampañaOCampo || esRRHH;
 
   // 1. Cargar sesión de usuario
@@ -293,8 +298,15 @@ export default function CheckForm({ onRegistroGuardado, onVolver, tema }) {
 
       if (esFranco) {
         payload.lugar = 'Franco';
-        payload.servicio = 'Franco';
-        payload.horas = 0.0;
+        payload.sub_franco = tipoFranco;
+        payload.servicio = tipoFranco;
+        payload.horas = (tipoFranco === 'Franco Trabajado') ? Number(horasFrancoTrabajado || 8) : 0.0;
+      } else if (esFeriadoTrabajado) {
+        payload.lugar = 'Feriado Trabajado';
+        payload.tipo_ocf = 'Feriado Trabajado';
+        payload.servicio = 'Feriado Trabajado';
+        payload.feriado = 'SI';
+        payload.horas = Number(horasFeriado || 8);
       } else if (esVacaciones) {
         payload.lugar = 'Vacaciones';
         payload.servicio = 'Vacaciones';
@@ -552,6 +564,7 @@ export default function CheckForm({ onRegistroGuardado, onVolver, tema }) {
                   const isFrancoItem = item.id === 'Franco';
                   const isVacacionesItem = item.id === 'Vacaciones';
                   const isLicenciaItem = item.id === 'Licencia';
+                  const isFeriadoItem = item.id === 'Feriado Trabajado';
                   const labelText = isRpg ? item.labelRpg : item.label;
                   return (
                     <button
@@ -559,7 +572,7 @@ export default function CheckForm({ onRegistroGuardado, onVolver, tema }) {
                       key={item.id}
                       className={`seg-btn ${
                         isSelected 
-                          ? (isFrancoItem ? 'seg-franco' : isVacacionesItem ? 'seg-vacaciones' : isLicenciaItem ? 'seg-licencia' : 'seg-active') 
+                          ? (isFrancoItem ? 'seg-franco' : isVacacionesItem ? 'seg-vacaciones' : isLicenciaItem ? 'seg-licencia' : isFeriadoItem ? 'seg-feriado' : 'seg-active') 
                           : ''
                       }`}
                       onClick={() => {
@@ -580,17 +593,81 @@ export default function CheckForm({ onRegistroGuardado, onVolver, tema }) {
             </div>
           </div>
 
-          {/* SI ES FRANCO, VACACIONES O LICENCIA */}
+          {/* SI ES FRANCO, FERIADO TRABAJADO, VACACIONES O LICENCIA */}
           {esFranco ? (
             <div className="franco-serene-card">
               <div className="franco-serene-icon">☕</div>
-              <div className="franco-serene-body">
+              <div className="franco-serene-body" style={{ width: '100%' }}>
                 <h4>{isRpg ? 'Campamento en la Taberna del Reino' : 'Día de Descanso / Franco'}</h4>
                 <p>
                   {isRpg
-                    ? 'Has hecho una parada en la taberna a descansar y recuperar tus puntos de Maná y Salud. No se requiere asignar hazañas ni computar horas hoy.'
-                    : 'No se requiere imputar proyectos ni cómputo de horas para este día.'}
+                    ? 'Define la modalidad del franco a registrar:'
+                    : 'Selecciona la categoría de franco a registrar:'}
                 </p>
+
+                {/* Sub-selector de Franco */}
+                <div className="franco-subtypes-grid">
+                  {[
+                    { id: 'Franco de Oficina', label: 'Franco de oficina', desc: '0 hs computadas' },
+                    { id: 'Franco de Obra', label: 'Franco de obra', desc: '0 hs computadas' },
+                    { id: 'Franco Trabajado', label: 'Franco trabajado', desc: 'Computa jornada' }
+                  ].map((sub) => (
+                    <button
+                      key={sub.id}
+                      type="button"
+                      className={`franco-sub-btn ${tipoFranco === sub.id ? 'active' : ''}`}
+                      onClick={() => setTipoFranco(sub.id)}
+                    >
+                      <span className="franco-sub-title">{sub.label}</span>
+                      <span className="franco-sub-desc">{sub.desc}</span>
+                    </button>
+                  ))}
+                </div>
+
+                {tipoFranco === 'Franco Trabajado' && (
+                  <div className="franco-hours-box">
+                    <label className="form-label-clean">
+                      Horas de Franco Trabajado:
+                    </label>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '4px' }}>
+                      <input
+                        type="number"
+                        min="1"
+                        max="24"
+                        step="0.5"
+                        className="form-input form-input-clean"
+                        style={{ maxWidth: '120px' }}
+                        value={horasFrancoTrabajado}
+                        onChange={(e) => setHorasFrancoTrabajado(Number(e.target.value) || 0)}
+                      />
+                      <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>hs imputadas</span>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          ) : esFeriadoTrabajado ? (
+            <div className="feriado-trabajado-card">
+              <div className="feriado-icon">🎉</div>
+              <div className="feriado-body" style={{ width: '100%' }}>
+                <h4>Feriado Trabajado</h4>
+                <p>Registro de feriado trabajado con cómputo de horas laborales.</p>
+                <div className="feriado-hours-box">
+                  <label className="form-label-clean">Horas de Feriado Trabajado:</label>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '4px' }}>
+                    <input
+                      type="number"
+                      min="1"
+                      max="24"
+                      step="0.5"
+                      className="form-input form-input-clean"
+                      style={{ maxWidth: '120px' }}
+                      value={horasFeriado}
+                      onChange={(e) => setHorasFeriado(Number(e.target.value) || 0)}
+                    />
+                    <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>hs imputadas</span>
+                  </div>
+                </div>
               </div>
             </div>
           ) : esVacaciones ? (

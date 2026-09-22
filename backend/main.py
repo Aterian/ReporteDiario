@@ -35,7 +35,8 @@ from database import (
     obtener_id_empleado,
     obtener_id_proyecto,
     eliminar_registro_asistencia,
-    obtener_historial_otros_empleados
+    obtener_historial_otros_empleados,
+    obtener_todos_registros_empleado
 )
 from roster_export import generar_excel_roster_mes
 from sheets_service import (
@@ -48,7 +49,8 @@ from sheets_service import (
     obtener_usuarios_remotos,
     obtener_no_laborales_remotos,
     obtener_ids_asistencia_remotos,
-    eliminar_registro_remoto
+    eliminar_registro_remoto,
+    sincronizar_desde_sheets_hacia_local
 )
 
 
@@ -286,6 +288,9 @@ class ApiPuente:
             if nl_remotos:
                 guardar_no_laborales_cache(nl_remotos)
 
+            # Sincronizar en segundo plano el historial general de Sheets hacia SQLite
+            threading.Thread(target=sincronizar_desde_sheets_hacia_local, daemon=True).start()
+
             cant_p = len(p_remotos) if p_remotos else 0
             cant_u = len(u_remotos) if u_remotos else 0
             return {
@@ -353,26 +358,62 @@ class ApiPuente:
         proyectos = datos.get("proyectos")
         lugar_norm = lugar.strip().lower()
         es_franco = (lugar_norm == "franco")
+        es_feriado_trabajado = (lugar_norm == "feriado trabajado")
         es_vacaciones = (lugar_norm == "vacaciones")
         es_licencia = (lugar_norm == "licencia")
 
         for dia_f in fechas_a_cargar:
-            # Caso 1: Franco (Día de descanso)
+            # Caso 1: Franco (Día de descanso o Franco Trabajado)
             if es_franco:
+                sub_franco = str(datos.get("tipo_franco") or datos.get("servicio") or "Franco").strip()
+                if sub_franco.lower() == "franco trabajado":
+                    try:
+                        hrs = float(datos.get("horas", 8.0))
+                    except Exception:
+                        hrs = 8.0
+                    id_proy = str(datos.get("id_proyecto", "")).strip() or obtener_id_proyecto("Franco Trabajado")
+                else:
+                    hrs = 0.0
+                    id_proy = ""
+
                 guardar_registro_asistencia(
                     id_asistencia=str(uuid.uuid4()),
                     empleado=empleado,
                     fecha=dia_f,
                     tipo_ocf="Franco",
-                    servicio="Franco",
-                    horas=0.0,
+                    servicio=sub_franco,
+                    horas=hrs,
                     instrumental="",
                     usuario_mail=usuario_mail,
                     fecha_hora=fecha_hora,
                     sincronizado=False,
                     cargado_por=cargado_por,
                     id_empleado=id_empleado,
-                    id_proyecto=""
+                    id_proyecto=id_proy
+                )
+            # Caso 1b: Feriado Trabajado
+            elif es_feriado_trabajado:
+                try:
+                    hrs = float(datos.get("horas", 8.0))
+                except Exception:
+                    hrs = 8.0
+                srv_fer = str(datos.get("servicio") or "Feriado Trabajado").strip()
+                id_proy = str(datos.get("id_proyecto", "")).strip() or obtener_id_proyecto(srv_fer)
+                guardar_registro_asistencia(
+                    id_asistencia=str(uuid.uuid4()),
+                    empleado=empleado,
+                    fecha=dia_f,
+                    tipo_ocf="Feriado Trabajado",
+                    servicio=srv_fer,
+                    horas=hrs,
+                    instrumental="",
+                    usuario_mail=usuario_mail,
+                    fecha_hora=fecha_hora,
+                    feriado="SI",
+                    sincronizado=False,
+                    cargado_por=cargado_por,
+                    id_empleado=id_empleado,
+                    id_proyecto=id_proy
                 )
             # Caso 2: Vacaciones
             elif es_vacaciones:
@@ -514,6 +555,10 @@ class ApiPuente:
         sesion = obtener_sesion_activa()
         usuario_rrhh = sesion.get("nombre", "") if sesion else ""
         return obtener_historial_otros_empleados(usuario_rrhh=usuario_rrhh, filtro_empleado=filtro_empleado)
+
+    def obtener_todos_registros_empleado(self, empleado: str, mes_anio: str = ""):
+        """Retorna todos los registros de asistencia de un empleado específico para auditar en RRHH."""
+        return obtener_todos_registros_empleado(empleado=empleado, mes_anio=mes_anio)
 
     def eliminar_registro_asistencia(self, id_registro: int):
         """Elimina un reporte de asistencia localmente y dispara el borrado en Google Sheets."""

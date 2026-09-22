@@ -254,7 +254,7 @@ def obtener_area_por_dni(dni: str) -> str:
 
 def guardar_usuarios_cache(usuarios: list):
     """Actualiza la lista de usuarios autorizados en la base local."""
-    if not usuarios:
+    if usuarios is None:
         return
     with obtener_conexion() as conn:
         cursor = conn.cursor()
@@ -753,6 +753,52 @@ def obtener_historial_otros_empleados(usuario_rrhh: str = "", filtro_empleado: s
         cursor.execute(query, params)
         filas = cursor.fetchall()
         return [dict(f) for f in filas]
+
+def obtener_todos_registros_empleado(empleado: str, mes_anio: str = "") -> list:
+    """
+    Retorna todos los registros de asistencia de un empleado específico en la tabla historial,
+    independientemente de si fueron cargados por él mismo o por RRHH.
+    Opcionalmente filtra por mes (formato 'YYYY-MM').
+    """
+    if not empleado:
+        return []
+    with obtener_conexion() as conn:
+        cursor = conn.cursor()
+        emp_clean = empleado.strip().lower()
+        query = """
+            SELECT 
+                id,
+                COALESCE(id_asistencia, '') as id_asistencia,
+                COALESCE(empleado, '') as empleado,
+                fecha,
+                COALESCE(tipo_ocf, lugar) as tipo_ocf,
+                servicio,
+                COALESCE(horas, 0) as horas,
+                COALESCE(instrumental, '') as instrumental,
+                COALESCE(usuario_mail, '') as usuario_mail,
+                COALESCE(fecha_hora, creado_en) as fecha_hora,
+                COALESCE(lugar, tipo_ocf) as lugar,
+                COALESCE(jornada, '') as jornada,
+                COALESCE(dia_semana, '') as dia_semana,
+                COALESCE(feriado, '') as feriado,
+                COALESCE(cargado_por, '') as cargado_por,
+                COALESCE(id_empleado, '') as id_empleado,
+                COALESCE(id_proyecto, '') as id_proyecto,
+                sincronizado,
+                creado_en
+            FROM historial
+            WHERE LOWER(empleado) = ?
+        """
+        params = [emp_clean]
+
+        if mes_anio and mes_anio.strip():
+            mes_clean = mes_anio.strip()
+            query += " AND fecha LIKE ?"
+            params.append(f"{mes_clean}%")
+
+        query += " ORDER BY fecha ASC, id ASC"
+        cursor.execute(query, params)
+        return [dict(f) for f in cursor.fetchall()]
 
 def obtener_pendientes_sincronizacion():
     """Retorna todas las filas de historial que aún no han sido sincronizadas con Google Sheets."""
