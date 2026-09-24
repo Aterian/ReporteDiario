@@ -314,8 +314,8 @@ export default function CheckForm({ onRegistroGuardado, onVolver, tema }) {
       if (esFranco) {
         payload.sub_franco = tipoFranco;
         if (tipoFranco === 'Franco de Obra') {
-          payload.lugar = 'Franco Obra';
-          payload.tipo_ocf = 'Franco Obra';
+          payload.lugar = 'Franco';
+          payload.tipo_ocf = 'Franco';
           payload.servicio = proyectoFrancoObra;
           payload.proyecto = proyectoFrancoObra;
           payload.horas = 0.0;

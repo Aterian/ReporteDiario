@@ -8273,3 +8273,74 @@ html, body {
 }
 
 
+
+/* ==========================================================================
+   Badges y banner de autoría de carga (Cargado por mí vs Cargado por RRHH)
+   ========================================================================== */
+.badge-autor {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 2px 7px;
+  border-radius: 9999px;
+  line-height: 1.2;
+}
+
+.badge-autor-propia {
+  background: #ecfdf5;
+  color: #047857;
+  border: 1px solid #a7f3d0;
+}
+
+[data-theme='dark'] .badge-autor-propia {
+  background: rgba(16, 185, 129, 0.18);
+  color: #6ee7b7;
+  border-color: #059669;
+}
+
+.badge-autor-rrhh {
+  background: #f5f3ff;
+  color: #6d28d9;
+  border: 1px solid #ddd6fe;
+}
+
+[data-theme='dark'] .badge-autor-rrhh {
+  background: rgba(139, 92, 246, 0.18);
+  color: #c4b5fd;
+  border-color: #7c3aed;
+}
+
+.cell-event-rrhh-indicator {
+  font-size: 0.65rem;
+  font-weight: 700;
+  color: #6d28d9;
+  background: #ede9fe;
+  padding: 0 4px;
+  border-radius: 3px;
+  margin-left: 3px;
+  display: inline-block;
+  vertical-align: middle;
+}
+
+[data-theme='dark'] .cell-event-rrhh-indicator {
+  color: #ddd6fe;
+  background: rgba(109, 40, 217, 0.4);
+}
+
+.autor-info-banner {
+  background: var(--bg-card, #f8fafc);
+  border: 1px solid var(--border-color, #e2e8f0);
+  border-radius: 8px;
+  padding: 10px 14px;
+  margin-bottom: 14px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+[data-theme='dark'] .autor-info-banner {
+  background: #1e293b;
+  border-color: #334155;
+}

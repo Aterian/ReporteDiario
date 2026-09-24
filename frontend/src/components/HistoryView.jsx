@@ -19,6 +19,32 @@ const CalendarRpgIcon = ({ size = 16, color = "#78350f" }) => (
   </svg>
 );
 
+
+export const getTagAutorInfo = (item, usuario) => {
+  const cargadoPor = (item?.cargado_por || '').trim();
+  const nombreUsuario = (usuario?.nombre || '').trim().toLowerCase();
+  const nombreEmpleado = (item?.empleado || '').trim().toLowerCase();
+
+  const esPropio = !cargadoPor || 
+                   (nombreUsuario && cargadoPor.toLowerCase() === nombreUsuario) ||
+                   (nombreEmpleado && cargadoPor.toLowerCase() === nombreEmpleado);
+
+  if (esPropio) {
+    return {
+      tipo: 'propia',
+      label: 'Cargado por mí',
+      badgeClass: 'badge-autor-propia'
+    };
+  }
+
+  const esRRHH = cargadoPor.toLowerCase().includes('rrhh');
+  return {
+    tipo: 'rrhh',
+    label: esRRHH ? 'Cargado por RRHH' : `Cargado por ${cargadoPor}`,
+    badgeClass: 'badge-autor-rrhh'
+  };
+};
+
 const LUGARES_OPCIONES = [
   'Oficina',
   'Campo',
@@ -50,6 +76,7 @@ export default function HistoryView({ onVolver, tema, onNuevoReporte, usuario, o
   // Filtro de día seleccionado en el calendario
   const [diaSeleccionado, setDiaSeleccionado] = useState(null); // 'YYYY-MM-DD' o null
   const [busquedaTexto, setBusquedaTexto] = useState('');
+  const [filtroOrigen, setFiltroOrigen] = useState('todos'); // 'todos' | 'propios' | 'rrhh'
 
   // Estado del calendario mensual
   const [fechaCalendario, setFechaCalendario] = useState(() => {
@@ -169,18 +196,24 @@ export default function HistoryView({ onVolver, tema, onNuevoReporte, usuario, o
       if (diaSeleccionado && item.fecha !== diaSeleccionado) {
         return false;
       }
+      if (filtroOrigen && filtroOrigen !== 'todos') {
+        const tag = getTagAutorInfo(item, usuario);
+        if (filtroOrigen === 'propios' && tag.tipo !== 'propia') return false;
+        if (filtroOrigen === 'rrhh' && tag.tipo !== 'rrhh') return false;
+      }
       if (busquedaTexto) {
         const q = busquedaTexto.toLowerCase();
         const srv = (item.servicio || '').toLowerCase();
         const lug = (item.tipo_ocf || item.lugar || '').toLowerCase();
         const fec = (item.fecha || '').toLowerCase();
-        if (!srv.includes(q) && !lug.includes(q) && !fec.includes(q)) {
+        const cpor = (item.cargado_por || '').toLowerCase();
+        if (!srv.includes(q) && !lug.includes(q) && !fec.includes(q) && !cpor.includes(q)) {
           return false;
         }
       }
       return true;
     });
-  }, [registros, diaSeleccionado, busquedaTexto]);
+  }, [registros, diaSeleccionado, busquedaTexto, filtroOrigen, usuario]);
 
   // Generador de días del mes para el calendario
   const diasMesCalendario = useMemo(() => {
@@ -393,7 +426,8 @@ export default function HistoryView({ onVolver, tema, onNuevoReporte, usuario, o
           )}
 
           <div className="history-panel-toolbar">
-            <div className="history-search-box">
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', width: '100%' }}>
+              <div className="history-search-box" style={{ flex: 1 }}>
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                 <circle cx="11" cy="11" r="8" />
                 <line x1="21" y1="21" x2="16.65" y2="16.65" />
@@ -409,6 +443,19 @@ export default function HistoryView({ onVolver, tema, onNuevoReporte, usuario, o
                 <button type="button" className="clear-search-btn" onClick={() => setBusquedaTexto('')}>✕</button>
               )}
             </div>
+
+            <select
+              className="form-select form-select-sm origen-select"
+              value={filtroOrigen}
+              onChange={(e) => setFiltroOrigen(e.target.value)}
+              style={{ width: 'auto', minWidth: '135px', height: '32px', fontSize: '0.78rem', padding: '2px 8px', borderRadius: '6px' }}
+              title="Filtrar por autor de la carga"
+            >
+              <option value="todos">Todos los orígenes</option>
+              <option value="propios">✓ Cargados por mí</option>
+              <option value="rrhh">🏢 Cargados por RRHH</option>
+            </select>
+          </div>
 
             {diaSeleccionado && (
               <div className="active-day-filter-chip">
@@ -492,6 +539,14 @@ export default function HistoryView({ onVolver, tema, onNuevoReporte, usuario, o
                         <div className="item-card-row">
                           <span className={`modalidad-pill ${badgeClass}`}>{lugarDisplay}</span>
                           <span className="item-hours-pill">{horasDisplay}</span>
+                          {(() => {
+                            const tagAutor = getTagAutorInfo(item, usuario);
+                            return (
+                              <span className={`badge-autor ${tagAutor.badgeClass}`} title={tagAutor.label}>
+                                {tagAutor.tipo === 'propia' ? '✓ Cargado por mí' : '🏢 ' + tagAutor.label}
+                              </span>
+                            );
+                          })()}
                         </div>
                         <div className="item-card-task" title={item.servicio}>
                           {item.servicio || 'Tiempo dedicado al área'}
@@ -626,6 +681,7 @@ export default function HistoryView({ onVolver, tema, onNuevoReporte, usuario, o
                         labelText = 'Campo';
                       }
 
+                      const tagCell = getTagAutorInfo(r, usuario);
                       return (
                         <div
                           key={r.id || idx}
@@ -635,9 +691,12 @@ export default function HistoryView({ onVolver, tema, onNuevoReporte, usuario, o
                             setRegistroEditando({ ...r });
                           }}
                           style={{ cursor: 'pointer' }}
-                          title={`${lug} - ${r.servicio} (${r.horas} hs) • Clic para modificar`}
+                          title={`${lug} - ${r.servicio} (${r.horas} hs) • ${tagCell.label} • Clic para modificar`}
                         >
                           <span className="cell-event-label">{labelText}</span>
+                          {tagCell.tipo === 'rrhh' && (
+                            <span className="cell-event-rrhh-indicator" title={tagCell.label}>• RRHH</span>
+                          )}
                         </div>
                       );
                     })}
@@ -681,6 +740,10 @@ export default function HistoryView({ onVolver, tema, onNuevoReporte, usuario, o
               <span className="legend-item">
                 <span className="legend-color-box dot-licencia" /> Licencia
               </span>
+              <span className="legend-item">
+                <span className="cell-event-rrhh-indicator" style={{ display: 'inline-block', marginRight: '4px' }}>• RRHH</span>
+                Cargado por RRHH
+              </span>
             </div>
           </div>
         </div>
@@ -705,6 +768,30 @@ export default function HistoryView({ onVolver, tema, onNuevoReporte, usuario, o
             </div>
 
             <form onSubmit={handleGuardarModificacion} className="modal-form">
+              {(() => {
+                const tagModal = getTagAutorInfo(registroEditando, usuario);
+                return (
+                  <div className="autor-info-banner">
+                    <div style={{ fontSize: '1.4rem' }}>{tagModal.tipo === 'propia' ? '👤' : '🏢'}</div>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: '0.72rem', textTransform: 'uppercase', letterSpacing: '0.5px', color: 'var(--text-muted, #64748b)', fontWeight: 600 }}>
+                        Origen de la carga
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '3px', flexWrap: 'wrap' }}>
+                        <span className={`badge-autor ${tagModal.badgeClass}`}>
+                          {tagModal.tipo === 'propia' ? '✓ Cargado por mí' : '🏢 ' + tagModal.label}
+                        </span>
+                        {registroEditando.fecha_hora && (
+                          <span style={{ fontSize: '0.75rem', color: 'var(--text-muted, #64748b)' }}>
+                            Registrado el {registroEditando.fecha_hora}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
+
               <div className="form-group-clean">
                 <label className="form-label-clean">Fecha:</label>
                 <input

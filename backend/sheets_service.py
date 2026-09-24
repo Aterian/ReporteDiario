@@ -40,7 +40,8 @@ COLUMNAS_ESQUEMA = [
     "dia_semana",
     "feriado",
     "id_empleado",
-    "id_proyecto"
+    "id_proyecto",
+    "cargado_por"
 ]
 
 def cargar_configuracion():
@@ -177,6 +178,8 @@ def obtener_hoja_trabajo(spreadsheet_id: str = "", sheet_name: str = ""):
                 if "id_empleado" not in headers_limpios:
                     # Agregar columnas L y M al encabezado existente de la hoja de asistencia
                     ws.update(range_name="L1:M1", values=[["id_empleado", "id_proyecto"]], value_input_option=ValueInputOption.user_entered)
+                if "cargado_por" not in headers_limpios:
+                    ws.update(range_name="N1", values=[["cargado_por"]], value_input_option=ValueInputOption.user_entered)
     except Exception as e:
         print(f"Aviso al verificar encabezados: {e}")
 
@@ -328,6 +331,7 @@ def sincronizar_pendientes() -> dict:
             dia_sem = p.get("dia_semana") or calcular_dia_semana(f_str)
             fer = p.get("feriado") or es_fecha_feriado(f_str, fechas_feriados)
 
+            carg_por = str(p.get("cargado_por") or emp).strip()
             fila = [
                 str(p.get("id_asistencia", "")),
                 emp,
@@ -341,7 +345,8 @@ def sincronizar_pendientes() -> dict:
                 dia_sem,
                 fer,
                 str(p.get("id_empleado", "")),
-                str(p.get("id_proyecto", ""))
+                str(p.get("id_proyecto", "")),
+                carg_por
             ]
 
             uid = p.get("id_asistencia")
@@ -352,7 +357,7 @@ def sincronizar_pendientes() -> dict:
 
             if row_existente:
                 try:
-                    ws.update(range_name=f"A{row_existente}:M{row_existente}", values=[fila], value_input_option=ValueInputOption.user_entered)
+                    ws.update(range_name=f"A{row_existente}:N{row_existente}", values=[fila], value_input_option=ValueInputOption.user_entered)
                     ids_sincronizados.append(uid)
                     mapa_ids_remotos[uid] = row_existente
                     mapa_emp_fecha[clave_ef] = row_existente
@@ -532,6 +537,7 @@ def sincronizar_desde_sheets_hacia_local(spreadsheet_id: str = "") -> dict:
         idx_fer = headers.index("feriado") if "feriado" in headers else 10
         idx_id_emp = headers.index("id_empleado") if "id_empleado" in headers else -1
         idx_id_proy = headers.index("id_proyecto") if "id_proyecto" in headers else -1
+        idx_cargado_por = headers.index("cargado_por") if "cargado_por" in headers else -1
 
         # Recopilar todos los id_asistencia válidos presentes en Google Sheets
         uids_en_sheets = {str(f[idx_id_asist]).strip() for f in filas[1:] if len(f) > idx_id_asist and str(f[idx_id_asist]).strip()}
@@ -577,6 +583,9 @@ def sincronizar_desde_sheets_hacia_local(spreadsheet_id: str = "") -> dict:
                 fer = str(f[idx_fer]).strip() if len(f) > idx_fer else ""
                 id_e = str(f[idx_id_emp]).strip() if (idx_id_emp >= 0 and len(f) > idx_id_emp) else ""
                 id_p = str(f[idx_id_proy]).strip() if (idx_id_proy >= 0 and len(f) > idx_id_proy) else ""
+                carg_por = str(f[idx_cargado_por]).strip() if (idx_cargado_por >= 0 and len(f) > idx_cargado_por) else ""
+                if not carg_por:
+                    carg_por = emp
 
                 if uid in existentes:
                     cursor.execute("""
@@ -584,13 +593,14 @@ def sincronizar_desde_sheets_hacia_local(spreadsheet_id: str = "") -> dict:
                             empleado = ?, fecha = ?, tipo_ocf = ?, servicio = ?,
                             horas = ?, instrumental = ?, usuario_mail = ?, fecha_hora = ?,
                             lugar = ?, jornada = ?, dia_semana = ?, feriado = ?,
-                            modificado = 0, sincronizado = 1, id_empleado = ?, id_proyecto = ?
+                            modificado = 0, sincronizado = 1, id_empleado = ?, id_proyecto = ?,
+                            cargado_por = ?
                         WHERE id_asistencia = ?
                     """, (
                         emp, f_str, tipo, serv,
                         hrs, inst, mail, fh,
                         tipo, f"{hrs} hs" if hrs > 0 else tipo, dia_s, fer,
-                        id_e, id_p, uid
+                        id_e, id_p, carg_por, uid
                     ))
                     actualizados += 1
                 else:
@@ -601,12 +611,12 @@ def sincronizar_desde_sheets_hacia_local(spreadsheet_id: str = "") -> dict:
                             lugar, jornada, dia_semana, feriado, modificado, sincronizado,
                             cargado_por, id_empleado, id_proyecto
                         )
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 1, '', ?, ?)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 1, ?, ?, ?)
                     """, (
                         uid, emp, f_str, tipo, serv,
                         hrs, inst, mail, fh,
                         tipo, f"{hrs} hs" if hrs > 0 else tipo, dia_s, fer,
-                        id_e, id_p
+                        carg_por, id_e, id_p
                     ))
                     existentes.add(uid)
                     insertados += 1

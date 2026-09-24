@@ -458,8 +458,8 @@ class ApiPuente:
                     id_asistencia=str(uuid.uuid4()),
                     empleado=empleado,
                     fecha=dia_f,
-                    tipo_ocf="Franco Obra",
-                    servicio=proy_asignado or "Franco Obra",
+                    tipo_ocf="Franco",
+                    servicio=proy_asignado or "Franco",
                     horas=0.0,
                     instrumental="",
                     usuario_mail=usuario_mail,
@@ -1134,7 +1134,7 @@ def obtener_icono_tray():
     return crear_icono_calendario(64)
 
 
-APP_VERSION = "1.3.2"
+APP_VERSION = "1.3.4"
 
 _mutex_instancia = None
 

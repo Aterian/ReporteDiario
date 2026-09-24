@@ -647,6 +647,7 @@ def guardar_registro_asistencia(
 
     emp_id = id_empleado or obtener_id_empleado(empleado)
     proy_id = id_proyecto or obtener_id_proyecto(servicio)
+    carg_por = (cargado_por or empleado or "").strip()
 
     with obtener_conexion() as conn:
         cursor = conn.cursor()
@@ -674,7 +675,7 @@ def guardar_registro_asistencia(
             fer,
             0,
             1 if sincronizado else 0,
-            cargado_por,
+            carg_por,
             emp_id,
             proy_id
         ))

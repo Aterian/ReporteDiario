@@ -4,6 +4,27 @@ Historial cronológico de cambios, nuevas características y mejoras aplicadas a
 
 ---
 
+## [1.3.4] - 2026-09-24
+
+### 👤 Trazabilidad, Auditoría y Control Multi-PC (Columna N `cargado_por`)
+- **Columna N en Google Sheets (`1_asistencia_informada`)**:
+  - Incorporación oficial de la columna 14 (`cargado_por`) en la hoja remota de Google Sheets.
+  - Sincronización bidireccional completa: sube el autor real del registro (`A:N`) y al descargar registros en cualquier otra PC recupera fehacientemente quién dio de alta la fila.
+  - Manejo defensivo y retrocompatible para registros históricos sin autor: se asigna automáticamente al titular de la jornada sin romper estados.
+- **Identificadores Visuales en el Historial del Empleado**:
+  - **Vista Unificada**: El empleado mantiene la visualización del 100% de su mes en una sola pantalla sin necesidad de cambiar de pestañas ni fragmentar su información.
+  - **Badges de Autoría**: Cada jornada cuenta con un distintivo cromático claro:
+    - 🟢 `✓ Cargado por mí`: cuando el registro fue cargado por el propio empleado.
+    - 🟣 `🏢 Cargado por RRHH` (o el nombre de quien lo cargó): cuando fue cargado por otra persona (ej. turnos de Roster).
+  - **Indicador en Celdas del Calendario**: Pequeño chip `• RRHH` visible directamente en la celda del calendario mensual para identificar al instante qué turnos fueron planificados por RRHH.
+  - **Banner en Modal de Detalle/Edición**: Muestra de forma destacada el origen de la carga con icono, autor y fecha/hora exacta de registración.
+  - **Filtro de Origen Rápido**: Selector en la barra de herramientas para filtrar fácilmente entre *Todos los orígenes*, *Cargados por mí* y *Cargados por RRHH*.
+
+### 🏗️ Normalización de Franco de Obra
+- Cuando un usuario selecciona *"Franco de obra"*, en la columna `tipo_ocf` se guarda como **`"Franco"`** (con 0 hs), asignando el proyecto seleccionado en la columna `servicio` y `id_proyecto`.
+
+---
+
 ## [1.3.3] - 2026-09-24
 
 ### 🛡️ Corrección Crítica de Sincronización y Purga de Registros
