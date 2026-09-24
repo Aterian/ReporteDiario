@@ -41,7 +41,8 @@ from database import (
     guardar_version_instalada,
     reconciliar_rosters_con_historial,
     purgar_rosters_huerfanos,
-    vaciar_rosters_locales
+    vaciar_rosters_locales,
+    reconstruir_rosters_desde_historial
 )
 from roster_export import generar_excel_roster_mes
 from sheets_service import (
@@ -357,6 +358,12 @@ class ApiPuente:
             cant_del = res_asist.get("eliminados", 0) if isinstance(res_asist, dict) else 0
             cant_ins = res_asist.get("insertados", 0) if isinstance(res_asist, dict) else 0
             cant_act = res_asist.get("actualizados", 0) if isinstance(res_asist, dict) else 0
+
+            # 5.1 Reconstruir en la tabla local rosters todos los turnos que hayan venido de Google Sheets
+            try:
+                reconstruir_rosters_desde_historial()
+            except Exception as e_rec_h:
+                print(f"[Refrescar] Aviso al reconstruir rosters: {e_rec_h}")
 
             # 6. Purgar también cualquier registro de la tabla rosters cuyos días ya no existan en historial
             cant_rosters_del = purgar_rosters_huerfanos()

@@ -1162,6 +1162,136 @@ def purgar_rosters_huerfanos() -> int:
         print(f"[BD] Error al purgar rosters huérfanos: {e}")
     return 0
 
+def reconstruir_rosters_desde_historial() -> int:
+    """
+    Examina la tabla historial y reconstruye automáticamente en la tabla local 'rosters'
+    los bloques de planificación de Roster y Franco de obra que hayan sido sincronizados
+    desde Google Sheets (o cargados en otra computadora).
+    Preserva registros y tarifas existentes sin duplicar.
+    Retorna la cantidad de bloques de roster incorporados a la tabla rosters.
+    """
+    try:
+        with obtener_conexion() as conn:
+            cursor = conn.cursor()
+
+            # 1. Mapa de DNIs por empleado desde usuarios_cache
+            cursor.execute("SELECT nombre, dni FROM usuarios_cache")
+            mapa_dni = {r["nombre"].strip().lower(): r["dni"].strip() for r in cursor.fetchall()}
+
+            # 2. Mapa de tarifas conocidas por proyecto (para heredar inteligentemente)
+            cursor.execute("SELECT proyecto, precio_dia, precio_domingo FROM rosters WHERE precio_dia > 0")
+            mapa_tarifas_proy = {}
+            for r in cursor.fetchall():
+                proy_k = (r["proyecto"] or "").strip().lower()
+                if proy_k and proy_k not in mapa_tarifas_proy:
+                    mapa_tarifas_proy[proy_k] = (float(r["precio_dia"] or 0), float(r["precio_domingo"] or 0))
+
+            # 3. Obtener registros existentes en rosters para no duplicar
+            cursor.execute("SELECT empleado, proyecto, tipo, fecha_inicio, fecha_fin FROM rosters")
+            existentes = {
+                (
+                    r["empleado"].strip().lower(),
+                    r["proyecto"].strip().lower(),
+                    r["tipo"].strip().lower(),
+                    r["fecha_inicio"].strip(),
+                    r["fecha_fin"].strip()
+                )
+                for r in cursor.fetchall()
+            }
+
+            # 4. Leer jornadas de historial que califiquen como Roster o Franco de obra
+            cursor.execute("""
+                SELECT empleado, servicio, fecha, tipo_ocf
+                FROM historial
+                WHERE tipo_ocf = 'Roster' 
+                   OR (tipo_ocf = 'Franco' AND servicio != '' AND servicio NOT IN ('Oficina', 'Administración', 'Área'))
+                ORDER BY LOWER(empleado), LOWER(servicio), fecha ASC
+            """)
+            filas = cursor.fetchall()
+
+            if not filas:
+                return 0
+
+            # 5. Agrupar en secuencias contiguas del mismo (empleado, servicio, tipo)
+            bloques = []
+            current = None
+
+            for f in filas:
+                emp = f["empleado"].strip()
+                srv = f["servicio"].strip()
+                tipo_bd = "Campo" if f["tipo_ocf"].strip().lower() == "roster" else "Franco"
+                fec = datetime.strptime(f["fecha"].strip(), "%Y-%m-%d").date()
+
+                if current is None:
+                    current = {
+                        "empleado": emp,
+                        "servicio": srv,
+                        "tipo": tipo_bd,
+                        "inicio": fec,
+                        "fin": fec
+                    }
+                else:
+                    mismo_grupo = (
+                        current["empleado"].lower() == emp.lower() and
+                        current["servicio"].lower() == srv.lower() and
+                        current["tipo"] == tipo_bd
+                    )
+                    es_consecutivo = ((fec - current["fin"]).days == 1)
+
+                    if mismo_grupo and es_consecutivo:
+                        current["fin"] = fec
+                    else:
+                        bloques.append(current)
+                        current = {
+                            "empleado": emp,
+                            "servicio": srv,
+                            "tipo": tipo_bd,
+                            "inicio": fec,
+                            "fin": fec
+                        }
+
+            if current:
+                bloques.append(current)
+
+            # 6. Insertar en rosters los bloques que falten
+            incorporados = 0
+            for b in bloques:
+                emp_nom = b["empleado"]
+                srv_nom = b["servicio"]
+                tipo_nom = b["tipo"]
+                f_ini = b["inicio"].strftime("%Y-%m-%d")
+                f_fin = b["fin"].strftime("%Y-%m-%d")
+
+                clave = (emp_nom.lower(), srv_nom.lower(), tipo_nom.lower(), f_ini, f_fin)
+                if clave in existentes:
+                    continue
+
+                dni_emp = mapa_dni.get(emp_nom.lower(), "")
+                p_dia, p_dom = mapa_tarifas_proy.get(srv_nom.lower(), (0.0, 0.0))
+                uid_roster = str(uuid.uuid4())
+
+                cursor.execute("""
+                    INSERT INTO rosters (
+                        id, empleado, dni, fecha_inicio, fecha_fin,
+                        tipo, proyecto, precio_dia, precio_domingo, creado_en
+                    )
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+                """, (
+                    uid_roster, emp_nom, dni_emp, f_ini, f_fin,
+                    tipo_nom, srv_nom, p_dia, p_dom
+                ))
+                existentes.add(clave)
+                incorporados += 1
+
+            if incorporados > 0:
+                conn.commit()
+                print(f"[BD] Se reconstruyeron e incorporaron {incorporados} bloque(s) de roster desde el historial.")
+
+            return incorporados
+    except Exception as e:
+        print(f"[BD] Error en reconstruir_rosters_desde_historial: {e}")
+        return 0
+
 def vaciar_rosters_locales() -> int:
     """Elimina todos los registros de la tabla rosters para una limpieza forzada."""
     try:
@@ -1176,6 +1306,7 @@ def vaciar_rosters_locales() -> int:
 
 def obtener_rosters(fecha_desde: str | None = None, fecha_hasta: str | None = None) -> list:
     """Retorna registros de roster vigentes superpuestos con el rango, purgando previamente los registros huérfanos."""
+    reconstruir_rosters_desde_historial()
     purgar_rosters_huerfanos()
     with obtener_conexion() as conn:
         cursor = conn.cursor()

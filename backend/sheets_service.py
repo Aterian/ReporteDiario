@@ -10,6 +10,7 @@ from google.oauth2.service_account import Credentials
 from google.auth.exceptions import GoogleAuthError
 from database import (
     obtener_conexion,
+    reconstruir_rosters_desde_historial,
     obtener_pendientes_sincronizacion,
     marcar_como_sincronizados,
     obtener_directorio_datos,
@@ -622,6 +623,10 @@ def sincronizar_desde_sheets_hacia_local(spreadsheet_id: str = "") -> dict:
                     insertados += 1
 
             conn.commit()
+            try:
+                reconstruir_rosters_desde_historial()
+            except Exception:
+                pass
             print(f"[Sheets] Sincronización completa: {insertados} insertados, {actualizados} actualizados, {len(ids_a_borrar)} purgados.")
             return {
                 "exito": True,
