@@ -805,46 +805,66 @@ export default function HistoryView({ onVolver, tema, onNuevoReporte, usuario, o
 
               <div className="form-group-clean">
                 <label className="form-label-clean">Modalidad / Lugar:</label>
-                <select
-                  className="form-select form-select-clean"
-                  value={registroEditando.tipo_ocf || registroEditando.lugar || 'Oficina'}
-                  onChange={(e) => {
-                    const nuevoLugar = e.target.value;
-                    let nuevoServicio = registroEditando.servicio;
-                    let nuevasHoras = registroEditando.horas;
+                {(() => {
+                  const esSoloOficinaEditando = (
+                    usuario?.area === 'M' ||
+                    (usuario?.nombre || '').toLowerCase().includes('camila llovio') ||
+                    (usuario?.nombre || '').toLowerCase().includes('llovio') ||
+                    (registroEditando?.empleado || '').toLowerCase().includes('camila llovio') ||
+                    (registroEditando?.empleado || '').toLowerCase().includes('llovio') ||
+                    registroEditando?.area === 'M'
+                  );
+                  const opcionesModal = esSoloOficinaEditando
+                    ? ['Oficina', 'Franco']
+                    : LUGARES_OPCIONES;
 
-                    if (nuevoLugar === 'Franco' || nuevoLugar === 'Franco Obra' || nuevoLugar === 'Franco de Obra' || nuevoLugar === 'Vacaciones') {
-                      nuevasHoras = 0;
-                      if (nuevoLugar === 'Vacaciones') nuevoServicio = 'Vacaciones';
-                      if (nuevoLugar === 'Franco Obra' || nuevoLugar === 'Franco de Obra') nuevoServicio = '';
-                      if (nuevoLugar === 'Franco') nuevoServicio = registroEditando.servicio || 'Área';
-                    } else if (nuevoLugar === 'Franco Ofic Trabajado' || nuevoLugar === 'Franco Trabajado') {
-                      nuevoServicio = 'Tiempo dedicado al Área';
-                      nuevasHoras = 8;
-                    } else if (nuevoLugar === 'Franco Obra Trabajado' || nuevoLugar === 'Feriado Trabajado') {
-                      nuevoServicio = '';
-                      nuevasHoras = 8;
-                    } else if (nuevoLugar === 'Licencia') {
-                      nuevoServicio = 'Licencia Médica';
-                      nuevasHoras = 0;
-                    } else if (nuevasHoras === 0) {
-                      nuevasHoras = 8;
-                    }
+                  return (
+                    <select
+                      className="form-select form-select-clean"
+                      value={registroEditando.tipo_ocf || registroEditando.lugar || 'Oficina'}
+                      onChange={(e) => {
+                        const nuevoLugar = e.target.value;
+                        let nuevoServicio = registroEditando.servicio;
+                        let nuevasHoras = registroEditando.horas;
 
-                    setRegistroEditando({
-                      ...registroEditando,
-                      tipo_ocf: nuevoLugar,
-                      lugar: nuevoLugar,
-                      servicio: nuevoServicio,
-                      horas: nuevasHoras
-                    });
-                  }}
-                  required
-                >
-                  {LUGARES_OPCIONES.map(op => (
-                    <option key={op} value={op}>{op}</option>
-                  ))}
-                </select>
+                        if (nuevoLugar === 'Franco' || nuevoLugar === 'Franco Obra' || nuevoLugar === 'Franco de Obra' || nuevoLugar === 'Vacaciones') {
+                          nuevasHoras = 0;
+                          if (nuevoLugar === 'Vacaciones') nuevoServicio = 'Vacaciones';
+                          if (nuevoLugar === 'Franco Obra' || nuevoLugar === 'Franco de Obra') nuevoServicio = '';
+                          if (nuevoLugar === 'Franco') {
+                            nuevoServicio = esSoloOficinaEditando
+                              ? ((registroEditando?.empleado || '').toLowerCase().includes('llovio') || (usuario?.nombre || '').toLowerCase().includes('llovio') ? 'Ingeniería' : 'Mensura')
+                              : (registroEditando.servicio || 'Área');
+                          }
+                        } else if (nuevoLugar === 'Franco Ofic Trabajado' || nuevoLugar === 'Franco Trabajado') {
+                          nuevoServicio = 'Tiempo dedicado al Área';
+                          nuevasHoras = 8;
+                        } else if (nuevoLugar === 'Franco Obra Trabajado' || nuevoLugar === 'Feriado Trabajado') {
+                          nuevoServicio = '';
+                          nuevasHoras = 8;
+                        } else if (nuevoLugar === 'Licencia') {
+                          nuevoServicio = 'Licencia Médica';
+                          nuevasHoras = 0;
+                        } else if (nuevasHoras === 0) {
+                          nuevasHoras = 8;
+                        }
+
+                        setRegistroEditando({
+                          ...registroEditando,
+                          tipo_ocf: nuevoLugar,
+                          lugar: nuevoLugar,
+                          servicio: nuevoServicio,
+                          horas: nuevasHoras
+                        });
+                      }}
+                      required
+                    >
+                      {opcionesModal.map(op => (
+                        <option key={op} value={op}>{op}</option>
+                      ))}
+                    </select>
+                  );
+                })()}
               </div>
 
               {/* Si es Licencia, detalle */}

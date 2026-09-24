@@ -90,9 +90,19 @@ export default function CheckForm({ onRegistroGuardado, onVolver, tema }) {
   // VARIABLES DERIVADAS (Declaradas aquí para evitar errores TDZ antes de los hooks)
   // =========================================================================
   const esRRHH = (sesionUsuario?.area || '').toUpperCase() === 'RRHH';
+  const empleadoActivoNombre = ((cargarParaOtro && usuarioSeleccionado)
+    ? (usuarioSeleccionado.nombre || '')
+    : (sesionUsuario?.nombre || '')).trim();
   const areaActiva = ((cargarParaOtro && usuarioSeleccionado)
     ? (usuarioSeleccionado.area || '')
     : (sesionUsuario?.area || '')).trim().toUpperCase();
+
+  // Empleados exclusivos de oficina: Todo Mensura (M) y Camila Llovio (Ingeniería)
+  const esSoloOficina = areaActiva === 'M' ||
+    areaActiva === 'MENSURA' ||
+    empleadoActivoNombre.toLowerCase().includes('camila llovio') ||
+    empleadoActivoNombre.toLowerCase().includes('llovio');
+
   const esUsuarioAreaEspecial = ['N', 'RRHH', 'A'].includes(areaActiva);
   const areaNombreFinal = (esUsuarioAreaEspecial && areaElegida)
     ? areaElegida
@@ -103,7 +113,7 @@ export default function CheckForm({ onRegistroGuardado, onVolver, tema }) {
   const esVacaciones = lugar === 'Vacaciones';
   const esLicencia = lugar === 'Licencia';
   const esSinProyectos = esFranco || esVacaciones || esLicencia || esFeriadoTrabajado;
-  const permitirRango = esCampañaOCampo || esRRHH;
+  const permitirRango = esSoloOficina ? false : (esCampañaOCampo || esRRHH);
 
   // 1. Cargar sesión de usuario
   useEffect(() => {
@@ -126,6 +136,21 @@ export default function CheckForm({ onRegistroGuardado, onVolver, tema }) {
     }
     cargarSesion();
   }, []);
+
+  // Mantener consistencia para empleados de Mensura y Camila Llovio (solo Oficina y Franco de Oficina)
+  useEffect(() => {
+    if (esSoloOficina) {
+      if (lugar !== 'Oficina' && lugar !== 'Franco') {
+        setLugar('Oficina');
+      }
+      if (tipoFranco !== 'Franco de Oficina') {
+        setTipoFranco('Franco de Oficina');
+      }
+      if (usarRangoFechas) {
+        setUsarRangoFechas(false);
+      }
+    }
+  }, [esSoloOficina, lugar, tipoFranco, usarRangoFechas]);
 
   // Si RRHH activa la opción de cargar para otro, refrescar lista fresca de empleados
   useEffect(() => {
@@ -600,7 +625,10 @@ export default function CheckForm({ onRegistroGuardado, onVolver, tema }) {
               </label>
 
               <div className="segmented-modalidad-grid">
-                {(esRRHH ? [...LUGARES_BASE, ...LUGARES_RRHH] : LUGARES_BASE).map((item) => {
+                {(esSoloOficina
+                  ? LUGARES_BASE.filter((i) => i.id === 'Oficina' || i.id === 'Franco')
+                  : (esRRHH ? [...LUGARES_BASE, ...LUGARES_RRHH] : LUGARES_BASE)
+                ).map((item) => {
                   const isSelected = lugar === item.id;
                   const isFrancoItem = item.id === 'Franco';
                   const isVacacionesItem = item.id === 'Vacaciones';
@@ -641,13 +669,15 @@ export default function CheckForm({ onRegistroGuardado, onVolver, tema }) {
               <div className="franco-serene-body" style={{ width: '100%' }}>
                 <h4>{isRpg ? 'Campamento en la Taberna del Reino' : 'Día de Descanso / Franco'}</h4>
                 <p>
-                  {isRpg
-                    ? 'Define la modalidad del franco a registrar:'
-                    : 'Selecciona la categoría de franco a registrar:'}
+                  {esSoloOficina
+                    ? (isRpg ? 'Descanso de la Orden en la Ciudadela (0 hs imputadas al área).' : 'Franco de oficina (0 hs imputadas al área de adscripción).')
+                    : (isRpg ? 'Define la modalidad del franco a registrar:' : 'Selecciona la categoría de franco a registrar:')
+                  }
                 </p>
 
-                {/* Sub-selector de Franco */}
-                <div className="franco-subtypes-grid">
+                {/* Sub-selector de Franco (Oculto para empleados exclusivos de oficina: Mensura y Camila Llovio) */}
+                {!esSoloOficina && (
+                  <div className="franco-subtypes-grid">
                   {[
                     { id: 'Franco de Oficina', label: 'Franco de oficina', desc: '0 hs • Imputa al área' },
                     { id: 'Franco de Obra', label: 'Franco de obra', desc: '0 hs • Imputa al proyecto' },
@@ -664,7 +694,8 @@ export default function CheckForm({ onRegistroGuardado, onVolver, tema }) {
                       <span className="franco-sub-desc">{sub.desc}</span>
                     </button>
                   ))}
-                </div>
+                  </div>
+                )}
 
                 {tipoFranco === 'Franco de Oficina' && (
                   <div className="franco-hours-box" style={{ background: 'var(--bg-surface)', padding: '10px 14px', borderRadius: '8px', border: '1px solid var(--border-subtle)', marginTop: '8px' }}>
