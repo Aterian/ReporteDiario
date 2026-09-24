@@ -84,6 +84,105 @@ export default function HistoryView({ onVolver, tema, onNuevoReporte, usuario, o
     return new Date(hoy.getFullYear(), hoy.getMonth(), 1);
   });
 
+  // Estado para la carga asistida de fines de semana (RRHH y Aplicaciones)
+  const [modalFinesDeSemanaOpen, setModalFinesDeSemanaOpen] = useState(false);
+  const [cargandoFinesDeSemana, setCargandoFinesDeSemana] = useState(false);
+  const [finesDeSemanaPendientes, setFinesDeSemanaPendientes] = useState([]);
+  const [finesDeSemanaTotalMes, setFinesDeSemanaTotalMes] = useState(0);
+  const [nombreMesFinesDeSemana, setNombreMesFinesDeSemana] = useState('');
+
+  const areaUsuarioUpper = (usuario?.area || '').toUpperCase().trim();
+  const esRRHHoAplicaciones = areaUsuarioUpper === 'RRHH' || areaUsuarioUpper === 'A' || areaUsuarioUpper === 'APLICACIONES';
+
+  const handleAbrirModalFinesDeSemana = () => {
+    const hoy = new Date();
+    const anioActual = hoy.getFullYear();
+    const mesActual = hoy.getMonth();
+
+    const nombresMeses = [
+      'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
+      'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
+    ];
+    const nombreMes = nombresMeses[mesActual];
+    setNombreMesFinesDeSemana(`${nombreMes} ${anioActual}`);
+
+    const diasEnMes = new Date(anioActual, mesActual + 1, 0).getDate();
+    const todosFDS = [];
+
+    for (let d = 1; d <= diasEnMes; d++) {
+      const f = new Date(anioActual, mesActual, d);
+      const dow = f.getDay(); // 0 = Domingo, 6 = Sábado
+      if (dow === 0 || dow === 6) {
+        const mStr = String(mesActual + 1).padStart(2, '0');
+        const dStr = String(d).padStart(2, '0');
+        const fechaIso = `${anioActual}-${mStr}-${dStr}`;
+        const nombreDia = dow === 6 ? 'Sábado' : 'Domingo';
+        todosFDS.push({
+          fecha: fechaIso,
+          dia: d,
+          nombreDia: nombreDia,
+          label: `${nombreDia} ${dStr}/${mStr}`
+        });
+      }
+    }
+
+    setFinesDeSemanaTotalMes(todosFDS.length);
+
+    // Fechas que ya tienen registro en el historial
+    const fechasRegistradas = new Set(registros.map((r) => r.fecha));
+    const pendientes = todosFDS.filter((fds) => !fechasRegistradas.has(fds.fecha));
+
+    if (pendientes.length === 0) {
+      alert(`¡Excelente! Todos los fines de semana de ${nombreMes} ${anioActual} (${todosFDS.length} días) ya están registrados.`);
+      return;
+    }
+
+    setFinesDeSemanaPendientes(pendientes);
+    setModalFinesDeSemanaOpen(true);
+  };
+
+  const handleConfirmarFinesDeSemana = async () => {
+    if (finesDeSemanaPendientes.length === 0) return;
+    setCargandoFinesDeSemana(true);
+
+    try {
+      const areaDestino = areaUsuarioUpper === 'RRHH' ? 'RRHH' : 'Aplicaciones';
+      const fechasArray = finesDeSemanaPendientes.map((f) => f.fecha);
+
+      const payload = {
+        fecha: fechasArray[0],
+        lugar: 'Franco',
+        tipo_ocf: 'Franco',
+        tipo_franco: 'Franco de Oficina',
+        sub_franco: 'Franco de Oficina',
+        area: areaDestino,
+        servicio: areaDestino,
+        horas: 0.0,
+        fechas: fechasArray,
+        empleado: usuario?.nombre || '',
+        usuario_mail: usuario?.email || usuario?.mail || '',
+        id_empleado: usuario?.id_origen || usuario?.id_usuario || ''
+      };
+
+      const res = await api.guardarCheckDiario(payload);
+      if (res && res.exito) {
+        setModalFinesDeSemanaOpen(false);
+        setMensajeSync({
+          tipo: 'exito',
+          texto: `✓ Se registraron exitosamente ${fechasArray.length} fines de semana como Franco.`
+        });
+        await cargarHistorial();
+      } else {
+        alert(res?.error || 'No se pudieron registrar los fines de semana.');
+      }
+    } catch (err) {
+      console.error('Error al registrar fines de semana:', err);
+      alert('Error de conexión al registrar los fines de semana.');
+    } finally {
+      setCargandoFinesDeSemana(false);
+    }
+  };
+
   // Estado para la edición de registros
   const [registroEditando, setRegistroEditando] = useState(null);
   const [guardandoEdicion, setGuardandoEdicion] = useState(false);
@@ -336,6 +435,24 @@ export default function HistoryView({ onVolver, tema, onNuevoReporte, usuario, o
                 <path d="M16 3.13a4 4 0 0 1 0 7.75" />
               </svg>
               <span>{isRpg ? 'Crónicas de Colegas' : 'Historial Otros Empleados'}</span>
+            </button>
+          )}
+
+          {esRRHHoAplicaciones && (
+            <button
+              type="button"
+              className={isRpg ? 'rpg-wood-btn' : 'btn-action-ghost'}
+              onClick={handleAbrirModalFinesDeSemana}
+              title="Cargar automáticamente los sábados y domingos del mes actual como Franco"
+              style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+            >
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+                <line x1="16" y1="2" x2="16" y2="6" />
+                <line x1="8" y1="2" x2="8" y2="6" />
+                <line x1="3" y1="10" x2="21" y2="10" />
+              </svg>
+              <span>{isRpg ? 'Descanso Fines de Semana' : 'Fines de Semana a Franco'}</span>
             </button>
           )}
 
@@ -806,7 +923,8 @@ export default function HistoryView({ onVolver, tema, onNuevoReporte, usuario, o
               <div className="form-group-clean">
                 <label className="form-label-clean">Modalidad / Lugar:</label>
                 {(() => {
-                  const esSoloOficinaEditando = (
+                  const esRRHHUsuario = (usuario?.area || '').toUpperCase() === 'RRHH';
+                  const esSoloOficinaEditando = !esRRHHUsuario && (
                     usuario?.area === 'M' ||
                     (usuario?.nombre || '').toLowerCase().includes('camila llovio') ||
                     (usuario?.nombre || '').toLowerCase().includes('llovio') ||
@@ -972,6 +1090,67 @@ export default function HistoryView({ onVolver, tema, onNuevoReporte, usuario, o
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Asistido: Cargar Fines de Semana del Mes */}
+      {modalFinesDeSemanaOpen && (
+        <div className="modal-backdrop">
+          <div className={`modal-box ${isRpg ? 'rpg-modal-box' : ''}`} style={{ maxWidth: '480px' }}>
+            <div className="modal-header">
+              <span className="modal-title">
+                {isRpg ? '📜 Decretar Descanso de Fines de Semana' : '📅 Cargar Fines de Semana a Franco'}
+              </span>
+              <button
+                type="button"
+                className="modal-close"
+                onClick={() => !cargandoFinesDeSemana && setModalFinesDeSemanaOpen(false)}
+                disabled={cargandoFinesDeSemana}
+              >
+                ✕
+              </button>
+            </div>
+
+            <div style={{ padding: '6px 0 16px 0' }}>
+              <p style={{ fontSize: '0.9rem', color: 'var(--text-secondary, #94a3b8)', margin: '0 0 12px 0', lineHeight: 1.5 }}>
+                Se registrarán como <strong>Franco</strong> (0 hs imputadas a <strong>{areaUsuarioUpper === 'RRHH' ? 'RRHH' : 'Aplicaciones'}</strong>) los siguientes <strong>{finesDeSemanaPendientes.length}</strong> días de fin de semana que aún no poseen registro en <strong>{nombreMesFinesDeSemana}</strong>:
+              </p>
+
+              <div className="weekend-pills-container">
+                {finesDeSemanaPendientes.map((f) => (
+                  <span key={f.fecha} className="weekend-pill">
+                    ☕ {f.label}
+                  </span>
+                ))}
+              </div>
+
+              {finesDeSemanaTotalMes > finesDeSemanaPendientes.length && (
+                <div style={{ marginTop: '10px', fontSize: '0.8rem', color: 'var(--text-muted, #64748b)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <span>ℹ️</span>
+                  <span>{finesDeSemanaTotalMes - finesDeSemanaPendientes.length} fin(es) de semana ya tenían registros previos y se mantendrán sin cambios.</span>
+                </div>
+              )}
+            </div>
+
+            <div className="modal-actions" style={{ justifyContent: 'flex-end', gap: '10px' }}>
+              <button
+                type="button"
+                className={isRpg ? 'rpg-wood-btn' : 'btn-cancel'}
+                onClick={() => setModalFinesDeSemanaOpen(false)}
+                disabled={cargandoFinesDeSemana}
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                className={isRpg ? 'rpg-wood-btn rpg-wood-btn-primary' : 'btn-confirm'}
+                onClick={handleConfirmarFinesDeSemana}
+                disabled={cargandoFinesDeSemana}
+              >
+                {cargandoFinesDeSemana ? 'Registrando...' : (isRpg ? `Sellar ${finesDeSemanaPendientes.length} Francos` : `✓ Cargar ${finesDeSemanaPendientes.length} Francos`)}
+              </button>
+            </div>
           </div>
         </div>
       )}

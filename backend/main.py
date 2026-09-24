@@ -399,7 +399,7 @@ class ApiPuente:
         if not isinstance(datos, dict):
             return {"exito": False, "error": "Formato de datos inválido."}
 
-        fecha = datos.get("fecha")
+        fecha = datos.get("fecha") or (datos.get("fechas")[0] if isinstance(datos.get("fechas"), list) and len(datos.get("fechas")) > 0 else None)
         lugar = datos.get("lugar") or datos.get("tipo_ocf")
 
         if not (isinstance(fecha, str) and isinstance(lugar, str)):
