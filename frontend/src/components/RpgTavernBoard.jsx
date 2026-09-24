@@ -204,7 +204,7 @@ export default function RpgTavernBoard({ usuario, onNuevoReporte, onVerHistorial
               </li>
               <li>
                 <span className="quest-bullet">[ ]</span>
-                <span className="quest-text"><b>Puesto de Misión:</b> Declarar Oficina, Home Office o Campaña.</span>
+                <span className="quest-text"><b>Puesto de Misión:</b> Declarar Oficina, Home Office o Campo.</span>
               </li>
             </ul>
 

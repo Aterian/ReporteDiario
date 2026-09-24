@@ -1705,6 +1705,119 @@ html, body {
 }
 
 /* ==========================================================================
+   ORGANIZACIÓN RESPONSIVA DE HOME (DOS BLOQUES EN PANTALLA COMPLETA)
+   ========================================================================== */
+.home-sections-container {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  width: 100%;
+}
+
+.home-section-column {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.home-profile-main {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+
+.home-action-card.card-roster {
+  border-left: 4px solid #dc2626;
+}
+.home-action-card.card-roster:hover {
+  border-left-color: #ef4444;
+}
+
+.home-action-card.card-roster-hist {
+  border-left: 4px solid #2563eb;
+}
+.home-action-card.card-roster-hist:hover {
+  border-left-color: #3b82f6;
+}
+
+.home-action-card.card-other-hist {
+  border-left: 4px solid #7c3aed;
+}
+.home-action-card.card-other-hist:hover {
+  border-left-color: #8b5cf6;
+}
+
+.action-card-icon-box.roster-icon {
+  background: rgba(220, 38, 38, 0.1);
+  color: #dc2626;
+}
+.action-card-icon-box.roster-hist-icon {
+  background: rgba(37, 99, 235, 0.1);
+  color: #2563eb;
+}
+.action-card-icon-box.other-hist-icon {
+  background: rgba(124, 58, 237, 0.1);
+  color: #7c3aed;
+}
+
+@media (min-width: 768px) {
+  .home-container {
+    max-width: 1040px !important;
+    padding: 16px 20px 20px;
+    gap: 16px;
+  }
+
+  .home-profile-card {
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 22px;
+    text-align: left;
+    gap: 16px;
+  }
+
+  .home-profile-main {
+    flex-direction: row;
+    align-items: center;
+    text-align: left;
+    gap: 16px;
+  }
+
+  .home-profile-details {
+    align-items: flex-start;
+  }
+
+  .home-employee-mail {
+    justify-content: flex-start;
+  }
+
+  /* Vista en pantalla completa: dos bloques verticales paralelos */
+  .home-sections-container.has-rrhh {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+    align-items: start;
+  }
+
+  .home-column-propio {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .home-column-rrhh {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .home-action-card {
+    padding: 12px 14px;
+  }
+}
+
+/* ==========================================================================
    RECORDATORIOS Y ALERTAS
    ========================================================================== */
 .reminder-banner {
@@ -4784,6 +4897,31 @@ html, body {
   background: var(--primary-subtle);
   border-color: var(--primary);
   color: var(--primary);
+}
+
+/* Botón Refrescar en Roster */
+.btn-roster-refresh {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  background: var(--bg-surface-elevated);
+  border: 1px solid var(--border-input);
+  border-radius: var(--radius-sm);
+  padding: 7px 14px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: var(--transition);
+}
+.btn-roster-refresh:hover:not(:disabled) {
+  border-color: var(--primary);
+  color: var(--primary);
+  transform: translateY(-1px);
+}
+.btn-roster-refresh:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 .btn-go-new-roster {
@@ -8068,4 +8206,70 @@ html, body {
   border-color: #c9aa6d !important;
   color: #2b1d0c !important;
 }
+
+/* ==========================================================================
+   ORGANIZACIÓN RESPONSIVA PANTALLA COMPLETA - DOS BLOQUES VERTICALES
+   ========================================================================== */
+@media (min-width: 640px) {
+  .home-container {
+    max-width: 1040px !important;
+    padding: 16px 20px 20px !important;
+    gap: 16px !important;
+  }
+
+  .home-profile-card {
+    flex-direction: row !important;
+    justify-content: space-between !important;
+    align-items: center !important;
+    padding: 12px 22px !important;
+    text-align: left !important;
+    gap: 16px !important;
+  }
+
+  .home-profile-main {
+    flex-direction: row !important;
+    align-items: center !important;
+    text-align: left !important;
+    gap: 16px !important;
+  }
+
+  .home-profile-details {
+    align-items: flex-start !important;
+  }
+
+  .home-employee-mail {
+    justify-content: flex-start !important;
+  }
+
+  .home-sections-container.has-rrhh {
+    display: grid !important;
+    grid-template-columns: 1fr 1fr !important;
+    gap: 20px !important;
+    align-items: start !important;
+    width: 100% !important;
+  }
+
+  .home-column-propio {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 10px !important;
+  }
+
+  .home-column-rrhh {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 10px !important;
+  }
+
+  .home-column-rrhh .rrhh-title-divider {
+    margin-top: 0 !important;
+    padding-top: 0 !important;
+    border-top: none !important;
+  }
+
+  .home-action-card {
+    padding: 12px 14px !important;
+  }
+}
+
 

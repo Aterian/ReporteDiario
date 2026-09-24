@@ -2,6 +2,8 @@ import os
 import sys
 import json
 import re
+import threading
+_sync_lock = threading.Lock()
 import gspread
 from gspread.utils import ValueInputOption
 from google.oauth2.service_account import Credentials
@@ -171,7 +173,7 @@ def obtener_hoja_trabajo(spreadsheet_id: str = "", sheet_name: str = ""):
             if not fila_1 or len(fila_1) == 0:
                 ws.append_row(COLUMNAS_ESQUEMA, value_input_option=ValueInputOption.user_entered)
             else:
-                headers_limpios = [str(c).strip().lower() for c in fila_1]
+                headers_limpios = [c.strip().lower() for c in fila_1]
                 if "id_empleado" not in headers_limpios:
                     # Agregar columnas L y M al encabezado existente de la hoja de asistencia
                     ws.update(range_name="L1:M1", values=[["id_empleado", "id_proyecto"]], value_input_option=ValueInputOption.user_entered)
@@ -261,26 +263,33 @@ def obtener_no_laborales_remotos(spreadsheet_id: str = "") -> list:
 def sincronizar_pendientes() -> dict:
     """
     Lee los registros con sincronizado=0 de la base local y los sube/actualiza
-    en la hoja '1_asistencia_informada' con las 11 columnas completas.
+    en la hoja '1_asistencia_informada' con las 13 columnas completas.
+    Utiliza un bloqueo seguro para impedir concurrencia de hilos y valida si la fila
+    ya existe por id_asistencia o por (empleado, fecha) para evitar duplicados en Google Sheets.
     """
-    config = cargar_configuracion()
-    sp_id = config.get("spreadsheet_id", "").strip()
-
-    if not sp_id:
+    if not _sync_lock.acquire(blocking=True, timeout=45):
         return {
             "exito": False,
-            "error": "No se ha configurado el ID del Google Sheet para la sincronización."
+            "error": "Ya existe una sincronización en curso. Por favor espere unos segundos."
         }
-
-    pendientes = obtener_pendientes_sincronizacion()
-    if not pendientes:
-        return {
-            "exito": True,
-            "cantidad": 0,
-            "mensaje": "No hay reportes pendientes de sincronización."
-        }
-
     try:
+        config = cargar_configuracion()
+        sp_id = config.get("spreadsheet_id", "").strip()
+
+        if not sp_id:
+            return {
+                "exito": False,
+                "error": "No se ha configurado el ID del Google Sheet para la sincronización."
+            }
+
+        pendientes = obtener_pendientes_sincronizacion()
+        if not pendientes:
+            return {
+                "exito": True,
+                "cantidad": 0,
+                "mensaje": "No hay reportes pendientes de sincronización."
+            }
+
         # Refrescar caché de días no laborales
         fechas_feriados = set()
         try:
@@ -291,29 +300,37 @@ def sincronizar_pendientes() -> dict:
 
         _, ws = obtener_hoja_trabajo()
 
+        # Obtener todas las filas remotas existentes para mapear por ID y por (empleado, fecha)
+        todas_filas = ws.get_all_values()
+        headers = [h.strip().lower() for h in todas_filas[0]] if todas_filas else []
+        idx_id = headers.index("id_asistencia") if "id_asistencia" in headers else 0
+        idx_emp = headers.index("empleado") if "empleado" in headers else 1
+        idx_fecha = headers.index("fecha") if "fecha" in headers else 2
+
+        mapa_ids_remotos = {}
+        mapa_emp_fecha = {}
+        for r_idx, f in enumerate(todas_filas[1:], start=2):
+            uid_val = f[idx_id].strip() if len(f) > idx_id else ""
+            emp_val = f[idx_emp].strip().lower() if len(f) > idx_emp else ""
+            fec_val = f[idx_fecha].strip() if len(f) > idx_fecha else ""
+            if uid_val and uid_val != "id_asistencia":
+                mapa_ids_remotos[uid_val] = r_idx
+            if emp_val and fec_val:
+                mapa_emp_fecha[(emp_val, fec_val)] = r_idx
+
         filas_a_insertar = []
         ids_sincronizados = []
-
-        # Si hay registros modificados, mapear columna A para actualización in-place
-        hay_modificados = any(p.get("modificado") == 1 for p in pendientes)
-        mapa_filas_remotas = {}
-        if hay_modificados:
-            try:
-                col_ids = ws.col_values(1)
-                for idx, val in enumerate(col_ids, start=1):
-                    if val and val != "id_asistencia":
-                        mapa_filas_remotas[str(val).strip()] = idx
-            except Exception as e:
-                print(f"Aviso al leer col_ids para actualización: {e}")
+        next_row_num = len(todas_filas) + 1
 
         for p in pendientes:
-            f_str = str(p.get("fecha", ""))
+            emp = str(p.get("empleado", "")).strip()
+            f_str = str(p.get("fecha", "")).strip()
             dia_sem = p.get("dia_semana") or calcular_dia_semana(f_str)
             fer = p.get("feriado") or es_fecha_feriado(f_str, fechas_feriados)
 
             fila = [
                 str(p.get("id_asistencia", "")),
-                str(p.get("empleado", "")),
+                emp,
                 f_str,
                 str(p.get("tipo_ocf", "")),
                 str(p.get("servicio", "")),
@@ -328,23 +345,33 @@ def sincronizar_pendientes() -> dict:
             ]
 
             uid = p.get("id_asistencia")
-            es_modificado = (p.get("modificado") == 1)
+            clave_ef = (emp.lower(), f_str)
 
-            if es_modificado and uid in mapa_filas_remotas:
-                # Actualizar la fila existente en Google Sheets (columnas A a M)
-                row_num = mapa_filas_remotas[uid]
-                ws.update(range_name=f"A{row_num}:M{row_num}", values=[fila], value_input_option=ValueInputOption.user_entered)
-                ids_sincronizados.append(uid)
+            # Si ya existe en Google Sheets por ID o por (empleado, fecha), actualizar in-place
+            row_existente = mapa_ids_remotos.get(uid) or mapa_emp_fecha.get(clave_ef)
+
+            if row_existente:
+                try:
+                    ws.update(range_name=f"A{row_existente}:M{row_existente}", values=[fila], value_input_option=ValueInputOption.user_entered)
+                    ids_sincronizados.append(uid)
+                    mapa_ids_remotos[uid] = row_existente
+                    mapa_emp_fecha[clave_ef] = row_existente
+                except Exception as e_up:
+                    print(f"[Sheets] Error al actualizar fila {row_existente}: {e_up}")
             else:
                 filas_a_insertar.append(fila)
                 ids_sincronizados.append(uid)
+                mapa_ids_remotos[uid] = next_row_num
+                mapa_emp_fecha[clave_ef] = next_row_num
+                next_row_num += 1
 
-        # Inserción en lote en Google Sheets de filas nuevas
+        # Inserción en lote en Google Sheets de filas verdaderamente nuevas
         if filas_a_insertar:
             ws.append_rows(filas_a_insertar, value_input_option=ValueInputOption.user_entered)
 
         # Marcar en la base local como sincronizados
-        marcar_como_sincronizados(ids_sincronizados)
+        if ids_sincronizados:
+            marcar_como_sincronizados(ids_sincronizados)
 
         total = len(ids_sincronizados)
         return {
@@ -359,6 +386,9 @@ def sincronizar_pendientes() -> dict:
             "exito": False,
             "error": str(e)
         }
+    finally:
+        _sync_lock.release()
+
 
 def eliminar_registro_remoto(id_asistencia: str) -> bool:
     """
@@ -370,7 +400,7 @@ def eliminar_registro_remoto(id_asistencia: str) -> bool:
     try:
         _, ws = obtener_hoja_trabajo()
         col_ids = ws.col_values(1)
-        target = str(id_asistencia).strip()
+        target = id_asistencia.strip()
         for idx, val in enumerate(col_ids, start=1):
             if val and str(val).strip() == target:
                 ws.delete_rows(idx)
@@ -475,17 +505,18 @@ def obtener_ids_asistencia_remotos(spreadsheet_id: str = "") -> set:
         return set()
 
 
-def sincronizar_desde_sheets_hacia_local(spreadsheet_id: str = "") -> int:
+def sincronizar_desde_sheets_hacia_local(spreadsheet_id: str = "") -> dict:
     """
-    Descarga los registros existentes en '1_asistencia_informada' de Google Sheets
-    e inserta en la tabla 'historial' local aquellos que no existan localmente,
-    asegurando que RRHH tenga la visión completa de todos los empleados de la empresa.
+    Descarga los registros existentes en '1_asistencia_informada' de Google Sheets,
+    purga de la tabla local 'historial' cualquier registro que ya no exista en la hoja,
+    e inserta o actualiza los registros vigentes para asegurar que la base local refleje
+    fielmente la fuente de verdad de Google Sheets sin incongruencias ni registros fantasma.
     """
     try:
         sh, ws = obtener_hoja_trabajo(spreadsheet_id=spreadsheet_id, sheet_name="1_asistencia_informada")
         filas = ws.get_all_values()
         if not filas or len(filas) < 2:
-            return 0
+            return {"exito": True, "insertados": 0, "actualizados": 0, "eliminados": 0, "total": 0}
 
         headers = [str(h).strip().lower() for h in filas[0]]
         idx_id_asist = headers.index("id_asistencia") if "id_asistencia" in headers else 0
@@ -508,22 +539,27 @@ def sincronizar_desde_sheets_hacia_local(spreadsheet_id: str = "") -> int:
         with obtener_conexion() as conn:
             cursor = conn.cursor()
 
-            # 1. Purgar de la base local los registros sincronizados que fueron eliminados en Google Sheets
+            # 1. Purgar de la base local los registros que no existen en Google Sheets
+            ids_a_borrar = []
             if uids_en_sheets:
-                cursor.execute("SELECT id, id_asistencia FROM historial WHERE sincronizado = 1")
-                locales_sinc = cursor.fetchall()
-                ids_a_borrar = [r["id"] for r in locales_sinc if str(r["id_asistencia"]).strip() not in uids_en_sheets]
+                cursor.execute("SELECT id, id_asistencia FROM historial WHERE sincronizado = 1 AND id_asistencia IS NOT NULL AND id_asistencia != ''")
+                locales = cursor.fetchall()
+                ids_a_borrar = [
+                    r["id"] for r in locales 
+                    if not r["id_asistencia"] or str(r["id_asistencia"]).strip() not in uids_en_sheets
+                ]
                 if ids_a_borrar:
                     cursor.executemany("DELETE FROM historial WHERE id = ?", [(i,) for i in ids_a_borrar])
-                    print(f"[Sheets] Se purgaron {len(ids_a_borrar)} registros locales eliminados de Google Sheets.")
+                    print(f"[Sheets] Se purgaron {len(ids_a_borrar)} registros locales eliminados o ausentes en Google Sheets.")
 
             cursor.execute("SELECT id_asistencia FROM historial WHERE id_asistencia IS NOT NULL AND id_asistencia != ''")
             existentes = {str(r["id_asistencia"]).strip() for r in cursor.fetchall()}
 
             insertados = 0
+            actualizados = 0
             for f in filas[1:]:
                 uid = str(f[idx_id_asist]).strip() if len(f) > idx_id_asist else ""
-                if not uid or uid in existentes:
+                if not uid:
                     continue
 
                 emp = str(f[idx_emp]).strip() if len(f) > idx_emp else ""
@@ -542,27 +578,111 @@ def sincronizar_desde_sheets_hacia_local(spreadsheet_id: str = "") -> int:
                 id_e = str(f[idx_id_emp]).strip() if (idx_id_emp >= 0 and len(f) > idx_id_emp) else ""
                 id_p = str(f[idx_id_proy]).strip() if (idx_id_proy >= 0 and len(f) > idx_id_proy) else ""
 
-                cursor.execute("""
-                    INSERT INTO historial (
-                        id_asistencia, empleado, fecha, tipo_ocf, servicio,
-                        horas, instrumental, usuario_mail, fecha_hora,
-                        lugar, jornada, dia_semana, feriado, modificado, sincronizado,
-                        cargado_por, id_empleado, id_proyecto
-                    )
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 1, '', ?, ?)
-                """, (
-                    uid, emp, f_str, tipo, serv,
-                    hrs, inst, mail, fh,
-                    tipo, f"{hrs} hs" if hrs > 0 else tipo, dia_s, fer,
-                    id_e, id_p
-                ))
-                existentes.add(uid)
-                insertados += 1
+                if uid in existentes:
+                    cursor.execute("""
+                        UPDATE historial SET
+                            empleado = ?, fecha = ?, tipo_ocf = ?, servicio = ?,
+                            horas = ?, instrumental = ?, usuario_mail = ?, fecha_hora = ?,
+                            lugar = ?, jornada = ?, dia_semana = ?, feriado = ?,
+                            modificado = 0, sincronizado = 1, id_empleado = ?, id_proyecto = ?
+                        WHERE id_asistencia = ?
+                    """, (
+                        emp, f_str, tipo, serv,
+                        hrs, inst, mail, fh,
+                        tipo, f"{hrs} hs" if hrs > 0 else tipo, dia_s, fer,
+                        id_e, id_p, uid
+                    ))
+                    actualizados += 1
+                else:
+                    cursor.execute("""
+                        INSERT INTO historial (
+                            id_asistencia, empleado, fecha, tipo_ocf, servicio,
+                            horas, instrumental, usuario_mail, fecha_hora,
+                            lugar, jornada, dia_semana, feriado, modificado, sincronizado,
+                            cargado_por, id_empleado, id_proyecto
+                        )
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 1, '', ?, ?)
+                    """, (
+                        uid, emp, f_str, tipo, serv,
+                        hrs, inst, mail, fh,
+                        tipo, f"{hrs} hs" if hrs > 0 else tipo, dia_s, fer,
+                        id_e, id_p
+                    ))
+                    existentes.add(uid)
+                    insertados += 1
 
             conn.commit()
-            return insertados
+            print(f"[Sheets] Sincronización completa: {insertados} insertados, {actualizados} actualizados, {len(ids_a_borrar)} purgados.")
+            return {
+                "exito": True,
+                "insertados": insertados,
+                "actualizados": actualizados,
+                "eliminados": len(ids_a_borrar),
+                "total": len(uids_en_sheets)
+            }
     except Exception as e:
         print(f"[Sheets] Aviso al sincronizar desde sheets hacia local: {e}")
-        return 0
+        return {"exito": False, "error": str(e), "insertados": 0, "actualizados": 0, "eliminados": 0}
 
 
+
+
+def deduplicar_hoja_remota(spreadsheet_id: str = "") -> dict:
+    """
+    Audita la pestaña '1_asistencia_informada' en Google Sheets y elimina filas duplicadas,
+    conservando únicamente la primera aparición de cada registro (por id_asistencia o par empleado-fecha).
+    Retorna la cantidad de filas duplicadas eliminadas.
+    """
+    if not _sync_lock.acquire(blocking=True, timeout=60):
+        return {"exito": False, "error": "Sincronización en curso. Reintente en unos momentos."}
+    try:
+        sh, ws = obtener_hoja_trabajo(spreadsheet_id=spreadsheet_id, sheet_name="1_asistencia_informada")
+        filas = ws.get_all_values()
+        if not filas or len(filas) < 2:
+            return {"exito": True, "eliminados": 0, "mensaje": "No hay registros para deduplicar."}
+
+        headers = [h.strip().lower() for h in filas[0]]
+        idx_id = headers.index("id_asistencia") if "id_asistencia" in headers else 0
+        idx_emp = headers.index("empleado") if "empleado" in headers else 1
+        idx_fecha = headers.index("fecha") if "fecha" in headers else 2
+
+        vistos_id = set()
+        vistos_emp_fecha = set()
+        filas_a_borrar = []
+
+        # Recorremos de arriba a abajo para marcar duplicados (conservando la primera aparición)
+        for r_idx, f in enumerate(filas[1:], start=2):
+            uid = f[idx_id].strip() if len(f) > idx_id else ""
+            emp = f[idx_emp].strip().lower() if len(f) > idx_emp else ""
+            fec = f[idx_fecha].strip() if len(f) > idx_fecha else ""
+
+            es_duplicado = False
+            if uid and uid in vistos_id:
+                es_duplicado = True
+            elif emp and fec and (emp, fec) in vistos_emp_fecha:
+                es_duplicado = True
+
+            if es_duplicado:
+                filas_a_borrar.append(r_idx)
+            else:
+                if uid:
+                    vistos_id.add(uid)
+                if emp and fec:
+                    vistos_emp_fecha.add((emp, fec))
+
+        # Borramos de abajo hacia arriba para no alterar los índices de las filas superiores
+        eliminados = 0
+        for r_num in reversed(filas_a_borrar):
+            try:
+                ws.delete_rows(r_num)
+                eliminados += 1
+            except Exception as e_del:
+                print(f"[Sheets] Error al borrar fila duplicada {r_num}: {e_del}")
+
+        print(f"[Sheets] Deduplicación finalizada: {eliminados} fila(s) duplicada(s) eliminada(s).")
+        return {"exito": True, "eliminados": eliminados, "mensaje": f"Se eliminaron {eliminados} filas duplicadas de Google Sheets."}
+    except Exception as e:
+        print(f"[Sheets] Error en deduplicar_hoja_remota: {e}")
+        return {"exito": False, "error": str(e)}
+    finally:
+        _sync_lock.release()

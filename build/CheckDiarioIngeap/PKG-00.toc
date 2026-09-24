@@ -1,0 +1,772 @@
+('D:\\Proyectos Ingeap\\Ingeap\\Reporte '
+ 'diario\\build\\CheckDiarioIngeap\\CheckDiarioIngeap.pkg',
+ {'BINARY': True,
+  'DATA': True,
+  'EXECUTABLE': True,
+  'EXTENSION': True,
+  'PYMODULE': True,
+  'PYSOURCE': True,
+  'PYZ': False,
+  'SPLASH': True,
+  'SYMLINK': False},
+ [('pyi-contents-directory _internal', '', 'OPTION'),
+  ('PYZ-00.pyz',
+   'D:\\Proyectos Ingeap\\Ingeap\\Reporte '
+   'diario\\build\\CheckDiarioIngeap\\PYZ-00.pyz',
+   'PYZ'),
+  ('struct',
+   'D:\\Proyectos Ingeap\\Ingeap\\Reporte '
+   'diario\\build\\CheckDiarioIngeap\\localpycs\\struct.pyc',
+   'PYMODULE'),
+  ('pyimod01_archive',
+   'D:\\Proyectos Ingeap\\Ingeap\\Reporte '
+   'diario\\build\\CheckDiarioIngeap\\localpycs\\pyimod01_archive.pyc',
+   'PYMODULE'),
+  ('pyimod02_importers',
+   'D:\\Proyectos Ingeap\\Ingeap\\Reporte '
+   'diario\\build\\CheckDiarioIngeap\\localpycs\\pyimod02_importers.pyc',
+   'PYMODULE'),
+  ('pyimod03_ctypes',
+   'D:\\Proyectos Ingeap\\Ingeap\\Reporte '
+   'diario\\build\\CheckDiarioIngeap\\localpycs\\pyimod03_ctypes.pyc',
+   'PYMODULE'),
+  ('pyimod04_pywin32',
+   'D:\\Proyectos Ingeap\\Ingeap\\Reporte '
+   'diario\\build\\CheckDiarioIngeap\\localpycs\\pyimod04_pywin32.pyc',
+   'PYMODULE'),
+  ('pyiboot01_bootstrap',
+   'D:\\Proyectos Ingeap\\Ingeap\\Reporte '
+   'diario\\backend\\venv\\Lib\\site-packages\\PyInstaller\\loader\\pyiboot01_bootstrap.py',
+   'PYSOURCE'),
+  ('pyi_rth_inspect',
+   'D:\\Proyectos Ingeap\\Ingeap\\Reporte '
+   'diario\\backend\\venv\\Lib\\site-packages\\PyInstaller\\hooks\\rthooks\\pyi_rth_inspect.py',
+   'PYSOURCE'),
+  ('pyi_rth_pkgutil',
+   'D:\\Proyectos Ingeap\\Ingeap\\Reporte '
+   'diario\\backend\\venv\\Lib\\site-packages\\PyInstaller\\hooks\\rthooks\\pyi_rth_pkgutil.py',
+   'PYSOURCE'),
+  ('pyi_rth_cryptography_openssl',
+   'D:\\Proyectos Ingeap\\Ingeap\\Reporte '
+   'diario\\backend\\venv\\Lib\\site-packages\\_pyinstaller_hooks_contrib\\rthooks\\pyi_rth_cryptography_openssl.py',
+   'PYSOURCE'),
+  ('pyi_rth_setuptools',
+   'D:\\Proyectos Ingeap\\Ingeap\\Reporte '
+   'diario\\backend\\venv\\Lib\\site-packages\\PyInstaller\\hooks\\rthooks\\pyi_rth_setuptools.py',
+   'PYSOURCE'),
+  ('pyi_rth_pkgres',
+   'D:\\Proyectos Ingeap\\Ingeap\\Reporte '
+   'diario\\backend\\venv\\Lib\\site-packages\\PyInstaller\\hooks\\rthooks\\pyi_rth_pkgres.py',
+   'PYSOURCE'),
+  ('pyi_rth_multiprocessing',
+   'D:\\Proyectos Ingeap\\Ingeap\\Reporte '
+   'diario\\backend\\venv\\Lib\\site-packages\\PyInstaller\\hooks\\rthooks\\pyi_rth_multiprocessing.py',
+   'PYSOURCE'),
+  ('main',
+   'D:\\Proyectos Ingeap\\Ingeap\\Reporte diario\\backend\\main.py',
+   'PYSOURCE'),
+  ('pythonnet\\runtime\\Python.Runtime.dll',
+   'D:\\Proyectos Ingeap\\Ingeap\\Reporte '
+   'diario\\backend\\venv\\Lib\\site-packages\\pythonnet\\runtime\\Python.Runtime.dll',
+   'BINARY'),
+  ('pythonnet\\runtime\\System.Security.Cryptography.Primitives.dll',
+   'D:\\Proyectos Ingeap\\Ingeap\\Reporte '
+   'diario\\backend\\venv\\Lib\\site-packages\\pythonnet\\runtime\\System.Security.Cryptography.Primitives.dll',
+   'BINARY'),
+  ('pythonnet\\runtime\\System.Xml.ReaderWriter.dll',
+   'D:\\Proyectos Ingeap\\Ingeap\\Reporte '
+   'diario\\backend\\venv\\Lib\\site-packages\\pythonnet\\runtime\\System.Xml.ReaderWriter.dll',
+   'BINARY'),
+  ('pythonnet\\runtime\\System.IO.MemoryMappedFiles.dll',
+   'D:\\Proyectos Ingeap\\Ingeap\\Reporte '
+   'diario\\backend\\venv\\Lib\\site-packages\\pythonnet\\runtime\\System.IO.MemoryMappedFiles.dll',
+   'BINARY'),
+  ('pythonnet\\runtime\\System.IO.FileSystem.Watcher.dll',
+   'D:\\Proyectos Ingeap\\Ingeap\\Reporte '
+   'diario\\backend\\venv\\Lib\\site-packages\\pythonnet\\runtime\\System.IO.FileSystem.Watcher.dll',
+   'BINARY'),
+  ('pythonnet\\runtime\\System.ComponentModel.Primitives.dll',
+   'D:\\Proyectos Ingeap\\Ingeap\\Reporte '
+   'diario\\backend\\venv\\Lib\\site-packages\\pythonnet\\runtime\\System.ComponentModel.Primitives.dll',
+   'BINARY'),
+  ('pythonnet\\runtime\\System.Linq.Parallel.dll',
+   'D:\\Proyectos Ingeap\\Ingeap\\Reporte '
+   'diario\\backend\\venv\\Lib\\site-packages\\pythonnet\\runtime\\System.Linq.Parallel.dll',
+   'BINARY'),
+  ('pythonnet\\runtime\\System.Net.Security.dll',
+   'D:\\Proyectos Ingeap\\Ingeap\\Reporte '
+   'diario\\backend\\venv\\Lib\\site-packages\\pythonnet\\runtime\\System.Net.Security.dll',
+   'BINARY'),
+  ('pythonnet\\runtime\\System.Diagnostics.TraceSource.dll',
+   'D:\\Proyectos Ingeap\\Ingeap\\Reporte '
+   'diario\\backend\\venv\\Lib\\site-packages\\pythonnet\\runtime\\System.Diagnostics.TraceSource.dll',
+   'BINARY'),
+  ('pythonnet\\runtime\\System.Reflection.dll',
+   'D:\\Proyectos Ingeap\\Ingeap\\Reporte '
+   'diario\\backend\\venv\\Lib\\site-packages\\pythonnet\\runtime\\System.Reflection.dll',
+   'BINARY'),
+  ('pythonnet\\runtime\\System.IO.UnmanagedMemoryStream.dll',
+   'D:\\Proyectos Ingeap\\Ingeap\\Reporte '
+   'diario\\backend\\venv\\Lib\\site-packages\\pythonnet\\runtime\\System.IO.UnmanagedMemoryStream.dll',
+   'BINARY'),
+  ('pythonnet\\runtime\\System.ComponentModel.TypeConverter.dll',
+   'D:\\Proyectos Ingeap\\Ingeap\\Reporte '
+   'diario\\backend\\venv\\Lib\\site-packages\\pythonnet\\runtime\\System.ComponentModel.TypeConverter.dll',
+   'BINARY'),
+  ('pythonnet\\runtime\\System.ObjectModel.dll',
+   'D:\\Proyectos Ingeap\\Ingeap\\Reporte '
+   'diario\\backend\\venv\\Lib\\site-packages\\pythonnet\\runtime\\System.ObjectModel.dll',
+   'BINARY'),
+  ('pythonnet\\runtime\\System.Net.Sockets.dll',
+   'D:\\Proyectos Ingeap\\Ingeap\\Reporte '
+   'diario\\backend\\venv\\Lib\\site-packages\\pythonnet\\runtime\\System.Net.Sockets.dll',
+   'BINARY'),
+  ('pythonnet\\runtime\\System.Text.Encoding.dll',
+   'D:\\Proyectos Ingeap\\Ingeap\\Reporte '
+   'diario\\backend\\venv\\Lib\\site-packages\\pythonnet\\runtime\\System.Text.Encoding.dll',
+   'BINARY'),
+  ('pythonnet\\runtime\\System.Net.Primitives.dll',
+   'D:\\Proyectos Ingeap\\Ingeap\\Reporte '
+   'diario\\backend\\venv\\Lib\\site-packages\\pythonnet\\runtime\\System.Net.Primitives.dll',
+   'BINARY'),
+  ('pythonnet\\runtime\\System.Xml.XmlDocument.dll',
+   'D:\\Proyectos Ingeap\\Ingeap\\Reporte '
+   'diario\\backend\\venv\\Lib\\site-packages\\pythonnet\\runtime\\System.Xml.XmlDocument.dll',
+   'BINARY'),
+  ('pythonnet\\runtime\\System.Reflection.Primitives.dll',
+   'D:\\Proyectos Ingeap\\Ingeap\\Reporte '
+   'diario\\backend\\venv\\Lib\\site-packages\\pythonnet\\runtime\\System.Reflection.Primitives.dll',
+   'BINARY'),
+  ('pythonnet\\runtime\\System.Diagnostics.Tools.dll',
+   'D:\\Proyectos Ingeap\\Ingeap\\Reporte '
+   'diario\\backend\\venv\\Lib\\site-packages\\pythonnet\\runtime\\System.Diagnostics.Tools.dll',
+   'BINARY'),
+  ('pythonnet\\runtime\\System.Runtime.Extensions.dll',
+   'D:\\Proyectos Ingeap\\Ingeap\\Reporte '
+   'diario\\backend\\venv\\Lib\\site-packages\\pythonnet\\runtime\\System.Runtime.Extensions.dll',
+   'BINARY'),
+  ('pythonnet\\runtime\\System.Resources.Writer.dll',
+   'D:\\Proyectos Ingeap\\Ingeap\\Reporte '
+   'diario\\backend\\venv\\Lib\\site-packages\\pythonnet\\runtime\\System.Resources.Writer.dll',
+   'BINARY'),
+  ('pythonnet\\runtime\\System.Reflection.Extensions.dll',
+   'D:\\Proyectos Ingeap\\Ingeap\\Reporte '
+   'diario\\backend\\venv\\Lib\\site-packages\\pythonnet\\runtime\\System.Reflection.Extensions.dll',
+   'BINARY'),
+  ('pythonnet\\runtime\\System.IO.FileSystem.dll',
+   'D:\\Proyectos Ingeap\\Ingeap\\Reporte '
+   'diario\\backend\\venv\\Lib\\site-packages\\pythonnet\\runtime\\System.IO.FileSystem.dll',
+   'BINARY'),
+  ('pythonnet\\runtime\\System.Runtime.dll',
+   'D:\\Proyectos Ingeap\\Ingeap\\Reporte '
+   'diario\\backend\\venv\\Lib\\site-packages\\pythonnet\\runtime\\System.Runtime.dll',
+   'BINARY'),
+  ('pythonnet\\runtime\\System.IO.Compression.ZipFile.dll',
+   'D:\\Proyectos Ingeap\\Ingeap\\Reporte '
+   'diario\\backend\\venv\\Lib\\site-packages\\pythonnet\\runtime\\System.IO.Compression.ZipFile.dll',
+   'BINARY'),
+  ('pythonnet\\runtime\\System.Globalization.Extensions.dll',
+   'D:\\Proyectos Ingeap\\Ingeap\\Reporte '
+   'diario\\backend\\venv\\Lib\\site-packages\\pythonnet\\runtime\\System.Globalization.Extensions.dll',
+   'BINARY'),
+  ('pythonnet\\runtime\\System.Resources.ResourceManager.dll',
+   'D:\\Proyectos Ingeap\\Ingeap\\Reporte '
+   'diario\\backend\\venv\\Lib\\site-packages\\pythonnet\\runtime\\System.Resources.ResourceManager.dll',
+   'BINARY'),
+  ('pythonnet\\runtime\\System.Drawing.Primitives.dll',
+   'D:\\Proyectos Ingeap\\Ingeap\\Reporte '
+   'diario\\backend\\venv\\Lib\\site-packages\\pythonnet\\runtime\\System.Drawing.Primitives.dll',
+   'BINARY'),
+  ('pythonnet\\runtime\\System.Net.WebSockets.dll',
+   'D:\\Proyectos Ingeap\\Ingeap\\Reporte '
+   'diario\\backend\\venv\\Lib\\site-packages\\pythonnet\\runtime\\System.Net.WebSockets.dll',
+   'BINARY'),
+  ('pythonnet\\runtime\\System.ComponentModel.EventBasedAsync.dll',
+   'D:\\Proyectos Ingeap\\Ingeap\\Reporte '
+   'diario\\backend\\venv\\Lib\\site-packages\\pythonnet\\runtime\\System.ComponentModel.EventBasedAsync.dll',
+   'BINARY'),
+  ('pythonnet\\runtime\\System.Runtime.Serialization.Formatters.dll',
+   'D:\\Proyectos Ingeap\\Ingeap\\Reporte '
+   'diario\\backend\\venv\\Lib\\site-packages\\pythonnet\\runtime\\System.Runtime.Serialization.Formatters.dll',
+   'BINARY'),
+  ('pythonnet\\runtime\\System.Resources.Reader.dll',
+   'D:\\Proyectos Ingeap\\Ingeap\\Reporte '
+   'diario\\backend\\venv\\Lib\\site-packages\\pythonnet\\runtime\\System.Resources.Reader.dll',
+   'BINARY'),
+  ('pythonnet\\runtime\\netstandard.dll',
+   'D:\\Proyectos Ingeap\\Ingeap\\Reporte '
+   'diario\\backend\\venv\\Lib\\site-packages\\pythonnet\\runtime\\netstandard.dll',
+   'BINARY'),
+  ('pythonnet\\runtime\\System.Globalization.dll',
+   'D:\\Proyectos Ingeap\\Ingeap\\Reporte '
+   'diario\\backend\\venv\\Lib\\site-packages\\pythonnet\\runtime\\System.Globalization.dll',
+   'BINARY'),
+  ('pythonnet\\runtime\\System.Runtime.Serialization.Xml.dll',
+   'D:\\Proyectos Ingeap\\Ingeap\\Reporte '
+   'diario\\backend\\venv\\Lib\\site-packages\\pythonnet\\runtime\\System.Runtime.Serialization.Xml.dll',
+   'BINARY'),
+  ('pythonnet\\runtime\\System.Runtime.Serialization.Json.dll',
+   'D:\\Proyectos Ingeap\\Ingeap\\Reporte '
+   'diario\\backend\\venv\\Lib\\site-packages\\pythonnet\\runtime\\System.Runtime.Serialization.Json.dll',
+   'BINARY'),
+  ('pythonnet\\runtime\\System.Security.Cryptography.Encoding.dll',
+   'D:\\Proyectos Ingeap\\Ingeap\\Reporte '
+   'diario\\backend\\venv\\Lib\\site-packages\\pythonnet\\runtime\\System.Security.Cryptography.Encoding.dll',
+   'BINARY'),
+  ('pythonnet\\runtime\\System.Security.Claims.dll',
+   'D:\\Proyectos Ingeap\\Ingeap\\Reporte '
+   'diario\\backend\\venv\\Lib\\site-packages\\pythonnet\\runtime\\System.Security.Claims.dll',
+   'BINARY'),
+  ('pythonnet\\runtime\\System.Security.Principal.dll',
+   'D:\\Proyectos Ingeap\\Ingeap\\Reporte '
+   'diario\\backend\\venv\\Lib\\site-packages\\pythonnet\\runtime\\System.Security.Principal.dll',
+   'BINARY'),
+  ('pythonnet\\runtime\\System.Diagnostics.TextWriterTraceListener.dll',
+   'D:\\Proyectos Ingeap\\Ingeap\\Reporte '
+   'diario\\backend\\venv\\Lib\\site-packages\\pythonnet\\runtime\\System.Diagnostics.TextWriterTraceListener.dll',
+   'BINARY'),
+  ('pythonnet\\runtime\\System.Diagnostics.Process.dll',
+   'D:\\Proyectos Ingeap\\Ingeap\\Reporte '
+   'diario\\backend\\venv\\Lib\\site-packages\\pythonnet\\runtime\\System.Diagnostics.Process.dll',
+   'BINARY'),
+  ('pythonnet\\runtime\\System.Runtime.InteropServices.dll',
+   'D:\\Proyectos Ingeap\\Ingeap\\Reporte '
+   'diario\\backend\\venv\\Lib\\site-packages\\pythonnet\\runtime\\System.Runtime.InteropServices.dll',
+   'BINARY'),
+  ('pythonnet\\runtime\\System.Runtime.Handles.dll',
+   'D:\\Proyectos Ingeap\\Ingeap\\Reporte '
+   'diario\\backend\\venv\\Lib\\site-packages\\pythonnet\\runtime\\System.Runtime.Handles.dll',
+   'BINARY'),
+  ('pythonnet\\runtime\\System.Runtime.CompilerServices.VisualC.dll',
+   'D:\\Proyectos Ingeap\\Ingeap\\Reporte '
+   'diario\\backend\\venv\\Lib\\site-packages\\pythonnet\\runtime\\System.Runtime.CompilerServices.VisualC.dll',
+   'BINARY'),
+  ('pythonnet\\runtime\\System.Xml.XPath.dll',
+   'D:\\Proyectos Ingeap\\Ingeap\\Reporte '
+   'diario\\backend\\venv\\Lib\\site-packages\\pythonnet\\runtime\\System.Xml.XPath.dll',
+   'BINARY'),
+  ('pythonnet\\runtime\\System.Net.NetworkInformation.dll',
+   'D:\\Proyectos Ingeap\\Ingeap\\Reporte '
+   'diario\\backend\\venv\\Lib\\site-packages\\pythonnet\\runtime\\System.Net.NetworkInformation.dll',
+   'BINARY'),
+  ('pythonnet\\runtime\\System.IO.FileSystem.DriveInfo.dll',
+   'D:\\Proyectos Ingeap\\Ingeap\\Reporte '
+   'diario\\backend\\venv\\Lib\\site-packages\\pythonnet\\runtime\\System.IO.FileSystem.DriveInfo.dll',
+   'BINARY'),
+  ('pythonnet\\runtime\\System.Runtime.InteropServices.RuntimeInformation.dll',
+   'D:\\Proyectos Ingeap\\Ingeap\\Reporte '
+   'diario\\backend\\venv\\Lib\\site-packages\\pythonnet\\runtime\\System.Runtime.InteropServices.RuntimeInformation.dll',
+   'BINARY'),
+  ('pythonnet\\runtime\\System.Runtime.Numerics.dll',
+   'D:\\Proyectos Ingeap\\Ingeap\\Reporte '
+   'diario\\backend\\venv\\Lib\\site-packages\\pythonnet\\runtime\\System.Runtime.Numerics.dll',
+   'BINARY'),
+  ('pythonnet\\runtime\\System.Xml.XPath.XDocument.dll',
+   'D:\\Proyectos Ingeap\\Ingeap\\Reporte '
+   'diario\\backend\\venv\\Lib\\site-packages\\pythonnet\\runtime\\System.Xml.XPath.XDocument.dll',
+   'BINARY'),
+  ('pythonnet\\runtime\\System.Net.NameResolution.dll',
+   'D:\\Proyectos Ingeap\\Ingeap\\Reporte '
+   'diario\\backend\\venv\\Lib\\site-packages\\pythonnet\\runtime\\System.Net.NameResolution.dll',
+   'BINARY'),
+  ('pythonnet\\runtime\\System.Threading.dll',
+   'D:\\Proyectos Ingeap\\Ingeap\\Reporte '
+   'diario\\backend\\venv\\Lib\\site-packages\\pythonnet\\runtime\\System.Threading.dll',
+   'BINARY'),
+  ('pythonnet\\runtime\\System.Threading.ThreadPool.dll',
+   'D:\\Proyectos Ingeap\\Ingeap\\Reporte '
+   'diario\\backend\\venv\\Lib\\site-packages\\pythonnet\\runtime\\System.Threading.ThreadPool.dll',
+   'BINARY'),
+  ('pythonnet\\runtime\\System.Net.WebHeaderCollection.dll',
+   'D:\\Proyectos Ingeap\\Ingeap\\Reporte '
+   'diario\\backend\\venv\\Lib\\site-packages\\pythonnet\\runtime\\System.Net.WebHeaderCollection.dll',
+   'BINARY'),
+  ('pythonnet\\runtime\\System.Diagnostics.Tracing.dll',
+   'D:\\Proyectos Ingeap\\Ingeap\\Reporte '
+   'diario\\backend\\venv\\Lib\\site-packages\\pythonnet\\runtime\\System.Diagnostics.Tracing.dll',
+   'BINARY'),
+  ('pythonnet\\runtime\\System.Threading.Tasks.Parallel.dll',
+   'D:\\Proyectos Ingeap\\Ingeap\\Reporte '
+   'diario\\backend\\venv\\Lib\\site-packages\\pythonnet\\runtime\\System.Threading.Tasks.Parallel.dll',
+   'BINARY'),
+  ('pythonnet\\runtime\\System.Net.Ping.dll',
+   'D:\\Proyectos Ingeap\\Ingeap\\Reporte '
+   'diario\\backend\\venv\\Lib\\site-packages\\pythonnet\\runtime\\System.Net.Ping.dll',
+   'BINARY'),
+  ('pythonnet\\runtime\\System.ValueTuple.dll',
+   'D:\\Proyectos Ingeap\\Ingeap\\Reporte '
+   'diario\\backend\\venv\\Lib\\site-packages\\pythonnet\\runtime\\System.ValueTuple.dll',
+   'BINARY'),
+  ('pythonnet\\runtime\\System.Net.Http.dll',
+   'D:\\Proyectos Ingeap\\Ingeap\\Reporte '
+   'diario\\backend\\venv\\Lib\\site-packages\\pythonnet\\runtime\\System.Net.Http.dll',
+   'BINARY'),
+  ('pythonnet\\runtime\\System.Data.Common.dll',
+   'D:\\Proyectos Ingeap\\Ingeap\\Reporte '
+   'diario\\backend\\venv\\Lib\\site-packages\\pythonnet\\runtime\\System.Data.Common.dll',
+   'BINARY'),
+  ('pythonnet\\runtime\\System.Security.Cryptography.X509Certificates.dll',
+   'D:\\Proyectos Ingeap\\Ingeap\\Reporte '
+   'diario\\backend\\venv\\Lib\\site-packages\\pythonnet\\runtime\\System.Security.Cryptography.X509Certificates.dll',
+   'BINARY'),
+  ('pythonnet\\runtime\\System.Globalization.Calendars.dll',
+   'D:\\Proyectos Ingeap\\Ingeap\\Reporte '
+   'diario\\backend\\venv\\Lib\\site-packages\\pythonnet\\runtime\\System.Globalization.Calendars.dll',
+   'BINARY'),
+  ('pythonnet\\runtime\\System.Security.Cryptography.Csp.dll',
+   'D:\\Proyectos Ingeap\\Ingeap\\Reporte '
+   'diario\\backend\\venv\\Lib\\site-packages\\pythonnet\\runtime\\System.Security.Cryptography.Csp.dll',
+   'BINARY'),
+  ('pythonnet\\runtime\\System.Linq.dll',
+   'D:\\Proyectos Ingeap\\Ingeap\\Reporte '
+   'diario\\backend\\venv\\Lib\\site-packages\\pythonnet\\runtime\\System.Linq.dll',
+   'BINARY'),
+  ('pythonnet\\runtime\\System.Threading.Thread.dll',
+   'D:\\Proyectos Ingeap\\Ingeap\\Reporte '
+   'diario\\backend\\venv\\Lib\\site-packages\\pythonnet\\runtime\\System.Threading.Thread.dll',
+   'BINARY'),
+  ('pythonnet\\runtime\\System.Threading.Overlapped.dll',
+   'D:\\Proyectos Ingeap\\Ingeap\\Reporte '
+   'diario\\backend\\venv\\Lib\\site-packages\\pythonnet\\runtime\\System.Threading.Overlapped.dll',
+   'BINARY'),
+  ('pythonnet\\runtime\\System.IO.FileSystem.Primitives.dll',
+   'D:\\Proyectos Ingeap\\Ingeap\\Reporte '
+   'diario\\backend\\venv\\Lib\\site-packages\\pythonnet\\runtime\\System.IO.FileSystem.Primitives.dll',
+   'BINARY'),
+  ('pythonnet\\runtime\\System.Text.Encoding.Extensions.dll',
+   'D:\\Proyectos Ingeap\\Ingeap\\Reporte '
+   'diario\\backend\\venv\\Lib\\site-packages\\pythonnet\\runtime\\System.Text.Encoding.Extensions.dll',
+   'BINARY'),
+  ('pythonnet\\runtime\\System.IO.Pipes.dll',
+   'D:\\Proyectos Ingeap\\Ingeap\\Reporte '
+   'diario\\backend\\venv\\Lib\\site-packages\\pythonnet\\runtime\\System.IO.Pipes.dll',
+   'BINARY'),
+  ('pythonnet\\runtime\\System.Diagnostics.FileVersionInfo.dll',
+   'D:\\Proyectos Ingeap\\Ingeap\\Reporte '
+   'diario\\backend\\venv\\Lib\\site-packages\\pythonnet\\runtime\\System.Diagnostics.FileVersionInfo.dll',
+   'BINARY'),
+  ('pythonnet\\runtime\\System.Diagnostics.Contracts.dll',
+   'D:\\Proyectos Ingeap\\Ingeap\\Reporte '
+   'diario\\backend\\venv\\Lib\\site-packages\\pythonnet\\runtime\\System.Diagnostics.Contracts.dll',
+   'BINARY'),
+  ('pythonnet\\runtime\\System.Collections.NonGeneric.dll',
+   'D:\\Proyectos Ingeap\\Ingeap\\Reporte '
+   'diario\\backend\\venv\\Lib\\site-packages\\pythonnet\\runtime\\System.Collections.NonGeneric.dll',
+   'BINARY'),
+  ('pythonnet\\runtime\\System.Collections.dll',
+   'D:\\Proyectos Ingeap\\Ingeap\\Reporte '
+   'diario\\backend\\venv\\Lib\\site-packages\\pythonnet\\runtime\\System.Collections.dll',
+   'BINARY'),
+  ('pythonnet\\runtime\\System.Net.Requests.dll',
+   'D:\\Proyectos Ingeap\\Ingeap\\Reporte '
+   'diario\\backend\\venv\\Lib\\site-packages\\pythonnet\\runtime\\System.Net.Requests.dll',
+   'BINARY'),
+  ('pythonnet\\runtime\\System.Diagnostics.StackTrace.dll',
+   'D:\\Proyectos Ingeap\\Ingeap\\Reporte '
+   'diario\\backend\\venv\\Lib\\site-packages\\pythonnet\\runtime\\System.Diagnostics.StackTrace.dll',
+   'BINARY'),
+  ('pythonnet\\runtime\\System.Diagnostics.Debug.dll',
+   'D:\\Proyectos Ingeap\\Ingeap\\Reporte '
+   'diario\\backend\\venv\\Lib\\site-packages\\pythonnet\\runtime\\System.Diagnostics.Debug.dll',
+   'BINARY'),
+  ('pythonnet\\runtime\\System.Security.Cryptography.Algorithms.dll',
+   'D:\\Proyectos Ingeap\\Ingeap\\Reporte '
+   'diario\\backend\\venv\\Lib\\site-packages\\pythonnet\\runtime\\System.Security.Cryptography.Algorithms.dll',
+   'BINARY'),
+  ('pythonnet\\runtime\\System.Console.dll',
+   'D:\\Proyectos Ingeap\\Ingeap\\Reporte '
+   'diario\\backend\\venv\\Lib\\site-packages\\pythonnet\\runtime\\System.Console.dll',
+   'BINARY'),
+  ('pythonnet\\runtime\\System.Xml.XDocument.dll',
+   'D:\\Proyectos Ingeap\\Ingeap\\Reporte '
+   'diario\\backend\\venv\\Lib\\site-packages\\pythonnet\\runtime\\System.Xml.XDocument.dll',
+   'BINARY'),
+  ('pythonnet\\runtime\\System.Threading.Timer.dll',
+   'D:\\Proyectos Ingeap\\Ingeap\\Reporte '
+   'diario\\backend\\venv\\Lib\\site-packages\\pythonnet\\runtime\\System.Threading.Timer.dll',
+   'BINARY'),
+  ('pythonnet\\runtime\\System.IO.IsolatedStorage.dll',
+   'D:\\Proyectos Ingeap\\Ingeap\\Reporte '
+   'diario\\backend\\venv\\Lib\\site-packages\\pythonnet\\runtime\\System.IO.IsolatedStorage.dll',
+   'BINARY'),
+  ('pythonnet\\runtime\\System.Collections.Concurrent.dll',
+   'D:\\Proyectos Ingeap\\Ingeap\\Reporte '
+   'diario\\backend\\venv\\Lib\\site-packages\\pythonnet\\runtime\\System.Collections.Concurrent.dll',
+   'BINARY'),
+  ('pythonnet\\runtime\\System.Runtime.Serialization.Primitives.dll',
+   'D:\\Proyectos Ingeap\\Ingeap\\Reporte '
+   'diario\\backend\\venv\\Lib\\site-packages\\pythonnet\\runtime\\System.Runtime.Serialization.Primitives.dll',
+   'BINARY'),
+  ('pythonnet\\runtime\\System.Xml.XmlSerializer.dll',
+   'D:\\Proyectos Ingeap\\Ingeap\\Reporte '
+   'diario\\backend\\venv\\Lib\\site-packages\\pythonnet\\runtime\\System.Xml.XmlSerializer.dll',
+   'BINARY'),
+  ('pythonnet\\runtime\\System.IO.dll',
+   'D:\\Proyectos Ingeap\\Ingeap\\Reporte '
+   'diario\\backend\\venv\\Lib\\site-packages\\pythonnet\\runtime\\System.IO.dll',
+   'BINARY'),
+  ('pythonnet\\runtime\\System.Linq.Queryable.dll',
+   'D:\\Proyectos Ingeap\\Ingeap\\Reporte '
+   'diario\\backend\\venv\\Lib\\site-packages\\pythonnet\\runtime\\System.Linq.Queryable.dll',
+   'BINARY'),
+  ('pythonnet\\runtime\\System.Text.RegularExpressions.dll',
+   'D:\\Proyectos Ingeap\\Ingeap\\Reporte '
+   'diario\\backend\\venv\\Lib\\site-packages\\pythonnet\\runtime\\System.Text.RegularExpressions.dll',
+   'BINARY'),
+  ('pythonnet\\runtime\\System.Security.SecureString.dll',
+   'D:\\Proyectos Ingeap\\Ingeap\\Reporte '
+   'diario\\backend\\venv\\Lib\\site-packages\\pythonnet\\runtime\\System.Security.SecureString.dll',
+   'BINARY'),
+  ('pythonnet\\runtime\\System.Threading.Tasks.dll',
+   'D:\\Proyectos Ingeap\\Ingeap\\Reporte '
+   'diario\\backend\\venv\\Lib\\site-packages\\pythonnet\\runtime\\System.Threading.Tasks.dll',
+   'BINARY'),
+  ('pythonnet\\runtime\\System.Net.WebSockets.Client.dll',
+   'D:\\Proyectos Ingeap\\Ingeap\\Reporte '
+   'diario\\backend\\venv\\Lib\\site-packages\\pythonnet\\runtime\\System.Net.WebSockets.Client.dll',
+   'BINARY'),
+  ('pythonnet\\runtime\\System.Linq.Expressions.dll',
+   'D:\\Proyectos Ingeap\\Ingeap\\Reporte '
+   'diario\\backend\\venv\\Lib\\site-packages\\pythonnet\\runtime\\System.Linq.Expressions.dll',
+   'BINARY'),
+  ('pythonnet\\runtime\\System.Dynamic.Runtime.dll',
+   'D:\\Proyectos Ingeap\\Ingeap\\Reporte '
+   'diario\\backend\\venv\\Lib\\site-packages\\pythonnet\\runtime\\System.Dynamic.Runtime.dll',
+   'BINARY'),
+  ('pythonnet\\runtime\\Microsoft.Win32.Primitives.dll',
+   'D:\\Proyectos Ingeap\\Ingeap\\Reporte '
+   'diario\\backend\\venv\\Lib\\site-packages\\pythonnet\\runtime\\Microsoft.Win32.Primitives.dll',
+   'BINARY'),
+  ('pythonnet\\runtime\\System.ComponentModel.dll',
+   'D:\\Proyectos Ingeap\\Ingeap\\Reporte '
+   'diario\\backend\\venv\\Lib\\site-packages\\pythonnet\\runtime\\System.ComponentModel.dll',
+   'BINARY'),
+  ('pythonnet\\runtime\\System.Collections.Specialized.dll',
+   'D:\\Proyectos Ingeap\\Ingeap\\Reporte '
+   'diario\\backend\\venv\\Lib\\site-packages\\pythonnet\\runtime\\System.Collections.Specialized.dll',
+   'BINARY'),
+  ('pythonnet\\runtime\\System.AppContext.dll',
+   'D:\\Proyectos Ingeap\\Ingeap\\Reporte '
+   'diario\\backend\\venv\\Lib\\site-packages\\pythonnet\\runtime\\System.AppContext.dll',
+   'BINARY'),
+  ('pythonnet\\runtime\\System.IO.Compression.dll',
+   'D:\\Proyectos Ingeap\\Ingeap\\Reporte '
+   'diario\\backend\\venv\\Lib\\site-packages\\pythonnet\\runtime\\System.IO.Compression.dll',
+   'BINARY'),
+  ('webview\\lib\\WebBrowserInterop.x86.dll',
+   'D:\\Proyectos Ingeap\\Ingeap\\Reporte '
+   'diario\\backend\\venv\\Lib\\site-packages\\webview\\lib\\WebBrowserInterop.x86.dll',
+   'BINARY'),
+  ('webview\\lib\\WebBrowserInterop.x64.dll',
+   'D:\\Proyectos Ingeap\\Ingeap\\Reporte '
+   'diario\\backend\\venv\\Lib\\site-packages\\webview\\lib\\WebBrowserInterop.x64.dll',
+   'BINARY'),
+  ('webview\\lib\\runtimes\\win-x86\\native\\WebView2Loader.dll',
+   'D:\\Proyectos Ingeap\\Ingeap\\Reporte '
+   'diario\\backend\\venv\\Lib\\site-packages\\webview\\lib\\runtimes\\win-x86\\native\\WebView2Loader.dll',
+   'BINARY'),
+  ('webview\\lib\\Microsoft.Web.WebView2.Core.dll',
+   'D:\\Proyectos Ingeap\\Ingeap\\Reporte '
+   'diario\\backend\\venv\\Lib\\site-packages\\webview\\lib\\Microsoft.Web.WebView2.Core.dll',
+   'BINARY'),
+  ('webview\\lib\\runtimes\\win-arm64\\native\\WebView2Loader.dll',
+   'D:\\Proyectos Ingeap\\Ingeap\\Reporte '
+   'diario\\backend\\venv\\Lib\\site-packages\\webview\\lib\\runtimes\\win-arm64\\native\\WebView2Loader.dll',
+   'BINARY'),
+  ('webview\\lib\\runtimes\\win-x64\\native\\WebView2Loader.dll',
+   'D:\\Proyectos Ingeap\\Ingeap\\Reporte '
+   'diario\\backend\\venv\\Lib\\site-packages\\webview\\lib\\runtimes\\win-x64\\native\\WebView2Loader.dll',
+   'BINARY'),
+  ('webview\\lib\\Microsoft.Web.WebView2.WinForms.dll',
+   'D:\\Proyectos Ingeap\\Ingeap\\Reporte '
+   'diario\\backend\\venv\\Lib\\site-packages\\webview\\lib\\Microsoft.Web.WebView2.WinForms.dll',
+   'BINARY'),
+  ('python311.dll',
+   'C:\\Users\\ivaan\\AppData\\Local\\Programs\\Python\\Python311\\python311.dll',
+   'BINARY'),
+  ('clr_loader\\ffi\\dlls\\amd64\\ClrLoader.dll',
+   'D:\\Proyectos Ingeap\\Ingeap\\Reporte '
+   'diario\\backend\\venv\\Lib\\site-packages\\clr_loader\\ffi\\dlls\\amd64\\ClrLoader.dll',
+   'BINARY'),
+  ('clr_loader\\ffi\\dlls\\x86\\ClrLoader.dll',
+   'D:\\Proyectos Ingeap\\Ingeap\\Reporte '
+   'diario\\backend\\venv\\Lib\\site-packages\\clr_loader\\ffi\\dlls\\x86\\ClrLoader.dll',
+   'BINARY'),
+  ('_multiprocessing.pyd',
+   'C:\\Users\\ivaan\\AppData\\Local\\Programs\\Python\\Python311\\DLLs\\_multiprocessing.pyd',
+   'EXTENSION'),
+  ('pyexpat.pyd',
+   'C:\\Users\\ivaan\\AppData\\Local\\Programs\\Python\\Python311\\DLLs\\pyexpat.pyd',
+   'EXTENSION'),
+  ('unicodedata.pyd',
+   'C:\\Users\\ivaan\\AppData\\Local\\Programs\\Python\\Python311\\DLLs\\unicodedata.pyd',
+   'EXTENSION'),
+  ('_hashlib.pyd',
+   'C:\\Users\\ivaan\\AppData\\Local\\Programs\\Python\\Python311\\DLLs\\_hashlib.pyd',
+   'EXTENSION'),
+  ('_decimal.pyd',
+   'C:\\Users\\ivaan\\AppData\\Local\\Programs\\Python\\Python311\\DLLs\\_decimal.pyd',
+   'EXTENSION'),
+  ('_socket.pyd',
+   'C:\\Users\\ivaan\\AppData\\Local\\Programs\\Python\\Python311\\DLLs\\_socket.pyd',
+   'EXTENSION'),
+  ('select.pyd',
+   'C:\\Users\\ivaan\\AppData\\Local\\Programs\\Python\\Python311\\DLLs\\select.pyd',
+   'EXTENSION'),
+  ('_lzma.pyd',
+   'C:\\Users\\ivaan\\AppData\\Local\\Programs\\Python\\Python311\\DLLs\\_lzma.pyd',
+   'EXTENSION'),
+  ('_bz2.pyd',
+   'C:\\Users\\ivaan\\AppData\\Local\\Programs\\Python\\Python311\\DLLs\\_bz2.pyd',
+   'EXTENSION'),
+  ('_queue.pyd',
+   'C:\\Users\\ivaan\\AppData\\Local\\Programs\\Python\\Python311\\DLLs\\_queue.pyd',
+   'EXTENSION'),
+  ('_overlapped.pyd',
+   'C:\\Users\\ivaan\\AppData\\Local\\Programs\\Python\\Python311\\DLLs\\_overlapped.pyd',
+   'EXTENSION'),
+  ('_asyncio.pyd',
+   'C:\\Users\\ivaan\\AppData\\Local\\Programs\\Python\\Python311\\DLLs\\_asyncio.pyd',
+   'EXTENSION'),
+  ('_elementtree.pyd',
+   'C:\\Users\\ivaan\\AppData\\Local\\Programs\\Python\\Python311\\DLLs\\_elementtree.pyd',
+   'EXTENSION'),
+  ('_sqlite3.pyd',
+   'C:\\Users\\ivaan\\AppData\\Local\\Programs\\Python\\Python311\\DLLs\\_sqlite3.pyd',
+   'EXTENSION'),
+  ('cryptography\\hazmat\\bindings\\_rust.pyd',
+   'D:\\Proyectos Ingeap\\Ingeap\\Reporte '
+   'diario\\backend\\venv\\Lib\\site-packages\\cryptography\\hazmat\\bindings\\_rust.pyd',
+   'EXTENSION'),
+  ('_cffi_backend.cp311-win_amd64.pyd',
+   'D:\\Proyectos Ingeap\\Ingeap\\Reporte '
+   'diario\\backend\\venv\\Lib\\site-packages\\_cffi_backend.cp311-win_amd64.pyd',
+   'EXTENSION'),
+  ('charset_normalizer\\cd.cp311-win_amd64.pyd',
+   'D:\\Proyectos Ingeap\\Ingeap\\Reporte '
+   'diario\\backend\\venv\\Lib\\site-packages\\charset_normalizer\\cd.cp311-win_amd64.pyd',
+   'EXTENSION'),
+  ('charset_normalizer\\md.cp311-win_amd64.pyd',
+   'D:\\Proyectos Ingeap\\Ingeap\\Reporte '
+   'diario\\backend\\venv\\Lib\\site-packages\\charset_normalizer\\md.cp311-win_amd64.pyd',
+   'EXTENSION'),
+  ('_ctypes.pyd',
+   'C:\\Users\\ivaan\\AppData\\Local\\Programs\\Python\\Python311\\DLLs\\_ctypes.pyd',
+   'EXTENSION'),
+  ('_ssl.pyd',
+   'C:\\Users\\ivaan\\AppData\\Local\\Programs\\Python\\Python311\\DLLs\\_ssl.pyd',
+   'EXTENSION'),
+  ('PIL\\_imagingft.cp311-win_amd64.pyd',
+   'D:\\Proyectos Ingeap\\Ingeap\\Reporte '
+   'diario\\backend\\venv\\Lib\\site-packages\\PIL\\_imagingft.cp311-win_amd64.pyd',
+   'EXTENSION'),
+  ('PIL\\_imaging.cp311-win_amd64.pyd',
+   'D:\\Proyectos Ingeap\\Ingeap\\Reporte '
+   'diario\\backend\\venv\\Lib\\site-packages\\PIL\\_imaging.cp311-win_amd64.pyd',
+   'EXTENSION'),
+  ('PIL\\_webp.cp311-win_amd64.pyd',
+   'D:\\Proyectos Ingeap\\Ingeap\\Reporte '
+   'diario\\backend\\venv\\Lib\\site-packages\\PIL\\_webp.cp311-win_amd64.pyd',
+   'EXTENSION'),
+  ('PIL\\_imagingtk.cp311-win_amd64.pyd',
+   'D:\\Proyectos Ingeap\\Ingeap\\Reporte '
+   'diario\\backend\\venv\\Lib\\site-packages\\PIL\\_imagingtk.cp311-win_amd64.pyd',
+   'EXTENSION'),
+  ('PIL\\_avif.cp311-win_amd64.pyd',
+   'D:\\Proyectos Ingeap\\Ingeap\\Reporte '
+   'diario\\backend\\venv\\Lib\\site-packages\\PIL\\_avif.cp311-win_amd64.pyd',
+   'EXTENSION'),
+  ('PIL\\_imagingcms.cp311-win_amd64.pyd',
+   'D:\\Proyectos Ingeap\\Ingeap\\Reporte '
+   'diario\\backend\\venv\\Lib\\site-packages\\PIL\\_imagingcms.cp311-win_amd64.pyd',
+   'EXTENSION'),
+  ('PIL\\_imagingmath.cp311-win_amd64.pyd',
+   'D:\\Proyectos Ingeap\\Ingeap\\Reporte '
+   'diario\\backend\\venv\\Lib\\site-packages\\PIL\\_imagingmath.cp311-win_amd64.pyd',
+   'EXTENSION'),
+  ('_uuid.pyd',
+   'C:\\Users\\ivaan\\AppData\\Local\\Programs\\Python\\Python311\\DLLs\\_uuid.pyd',
+   'EXTENSION'),
+  ('VCRUNTIME140.dll',
+   'C:\\Users\\ivaan\\AppData\\Local\\Programs\\Python\\Python311\\VCRUNTIME140.dll',
+   'BINARY'),
+  ('libcrypto-1_1.dll',
+   'C:\\Users\\ivaan\\AppData\\Local\\Programs\\Python\\Python311\\DLLs\\libcrypto-1_1.dll',
+   'BINARY'),
+  ('sqlite3.dll',
+   'C:\\Users\\ivaan\\AppData\\Local\\Programs\\Python\\Python311\\DLLs\\sqlite3.dll',
+   'BINARY'),
+  ('python3.dll',
+   'C:\\Users\\ivaan\\AppData\\Local\\Programs\\Python\\Python311\\python3.dll',
+   'BINARY'),
+  ('libffi-8.dll',
+   'C:\\Users\\ivaan\\AppData\\Local\\Programs\\Python\\Python311\\DLLs\\libffi-8.dll',
+   'BINARY'),
+  ('libssl-1_1.dll',
+   'C:\\Users\\ivaan\\AppData\\Local\\Programs\\Python\\Python311\\DLLs\\libssl-1_1.dll',
+   'BINARY'),
+  ('app-xrbnwyhr6nmuvnylmuutjr43be-4baae45ec6b2.json',
+   'D:\\Proyectos Ingeap\\Ingeap\\Reporte '
+   'diario\\backend\\app-xrbnwyhr6nmuvnylmuutjr43be-4baae45ec6b2.json',
+   'DATA'),
+  ('assets\\Logo_Ingeap1.png',
+   'D:\\Proyectos Ingeap\\Ingeap\\Reporte '
+   'diario\\backend\\assets\\Logo_Ingeap1.png',
+   'DATA'),
+  ('assets\\app.ico',
+   'D:\\Proyectos Ingeap\\Ingeap\\Reporte diario\\backend\\assets\\app.ico',
+   'DATA'),
+  ('assets\\icon.ico',
+   'D:\\Proyectos Ingeap\\Ingeap\\Reporte diario\\backend\\assets\\icon.ico',
+   'DATA'),
+  ('assets\\icon.png',
+   'D:\\Proyectos Ingeap\\Ingeap\\Reporte diario\\backend\\assets\\icon.png',
+   'DATA'),
+  ('config.json',
+   'D:\\Proyectos Ingeap\\Ingeap\\Reporte diario\\backend\\config.json',
+   'DATA'),
+  ('dist\\assets\\Logo_Ingeap1-DtyT7ECM.png',
+   'D:\\Proyectos Ingeap\\Ingeap\\Reporte '
+   'diario\\backend\\dist\\assets\\Logo_Ingeap1-DtyT7ECM.png',
+   'DATA'),
+  ('dist\\assets\\index-CmPnDcYR.js',
+   'D:\\Proyectos Ingeap\\Ingeap\\Reporte '
+   'diario\\backend\\dist\\assets\\index-CmPnDcYR.js',
+   'DATA'),
+  ('dist\\assets\\index-D_-4zq_X.css',
+   'D:\\Proyectos Ingeap\\Ingeap\\Reporte '
+   'diario\\backend\\dist\\assets\\index-D_-4zq_X.css',
+   'DATA'),
+  ('dist\\favicon.svg',
+   'D:\\Proyectos Ingeap\\Ingeap\\Reporte diario\\backend\\dist\\favicon.svg',
+   'DATA'),
+  ('dist\\icons.svg',
+   'D:\\Proyectos Ingeap\\Ingeap\\Reporte diario\\backend\\dist\\icons.svg',
+   'DATA'),
+  ('dist\\index.html',
+   'D:\\Proyectos Ingeap\\Ingeap\\Reporte diario\\backend\\dist\\index.html',
+   'DATA'),
+  ('certifi\\cacert.pem',
+   'D:\\Proyectos Ingeap\\Ingeap\\Reporte '
+   'diario\\backend\\venv\\Lib\\site-packages\\certifi\\cacert.pem',
+   'DATA'),
+  ('certifi\\py.typed',
+   'D:\\Proyectos Ingeap\\Ingeap\\Reporte '
+   'diario\\backend\\venv\\Lib\\site-packages\\certifi\\py.typed',
+   'DATA'),
+  ('cryptography-50.0.1.dist-info\\licenses\\LICENSE',
+   'D:\\Proyectos Ingeap\\Ingeap\\Reporte '
+   'diario\\backend\\venv\\Lib\\site-packages\\cryptography-50.0.1.dist-info\\licenses\\LICENSE',
+   'DATA'),
+  ('cryptography-50.0.1.dist-info\\sboms\\cryptography-rust.cyclonedx.json',
+   'D:\\Proyectos Ingeap\\Ingeap\\Reporte '
+   'diario\\backend\\venv\\Lib\\site-packages\\cryptography-50.0.1.dist-info\\sboms\\cryptography-rust.cyclonedx.json',
+   'DATA'),
+  ('cryptography-50.0.1.dist-info\\licenses\\LICENSE.BSD',
+   'D:\\Proyectos Ingeap\\Ingeap\\Reporte '
+   'diario\\backend\\venv\\Lib\\site-packages\\cryptography-50.0.1.dist-info\\licenses\\LICENSE.BSD',
+   'DATA'),
+  ('cryptography-50.0.1.dist-info\\WHEEL',
+   'D:\\Proyectos Ingeap\\Ingeap\\Reporte '
+   'diario\\backend\\venv\\Lib\\site-packages\\cryptography-50.0.1.dist-info\\WHEEL',
+   'DATA'),
+  ('cryptography-50.0.1.dist-info\\licenses\\LICENSE.APACHE',
+   'D:\\Proyectos Ingeap\\Ingeap\\Reporte '
+   'diario\\backend\\venv\\Lib\\site-packages\\cryptography-50.0.1.dist-info\\licenses\\LICENSE.APACHE',
+   'DATA'),
+  ('cryptography-50.0.1.dist-info\\sboms\\sbom.json',
+   'D:\\Proyectos Ingeap\\Ingeap\\Reporte '
+   'diario\\backend\\venv\\Lib\\site-packages\\cryptography-50.0.1.dist-info\\sboms\\sbom.json',
+   'DATA'),
+  ('cryptography-50.0.1.dist-info\\INSTALLER',
+   'D:\\Proyectos Ingeap\\Ingeap\\Reporte '
+   'diario\\backend\\venv\\Lib\\site-packages\\cryptography-50.0.1.dist-info\\INSTALLER',
+   'DATA'),
+  ('cryptography-50.0.1.dist-info\\METADATA',
+   'D:\\Proyectos Ingeap\\Ingeap\\Reporte '
+   'diario\\backend\\venv\\Lib\\site-packages\\cryptography-50.0.1.dist-info\\METADATA',
+   'DATA'),
+  ('cryptography-50.0.1.dist-info\\RECORD',
+   'D:\\Proyectos Ingeap\\Ingeap\\Reporte '
+   'diario\\backend\\venv\\Lib\\site-packages\\cryptography-50.0.1.dist-info\\RECORD',
+   'DATA'),
+  ('pythonnet\\runtime\\Python.Runtime.deps.json',
+   'D:\\Proyectos Ingeap\\Ingeap\\Reporte '
+   'diario\\backend\\venv\\Lib\\site-packages\\pythonnet\\runtime\\Python.Runtime.deps.json',
+   'DATA'),
+  ('pythonnet\\runtime\\Python.Runtime.xml',
+   'D:\\Proyectos Ingeap\\Ingeap\\Reporte '
+   'diario\\backend\\venv\\Lib\\site-packages\\pythonnet\\runtime\\Python.Runtime.xml',
+   'DATA'),
+  ('webview\\js\\lib\\polyfill.js',
+   'D:\\Proyectos Ingeap\\Ingeap\\Reporte '
+   'diario\\backend\\venv\\Lib\\site-packages\\webview\\js\\lib\\polyfill.js',
+   'DATA'),
+  ('webview\\js\\finish.js',
+   'D:\\Proyectos Ingeap\\Ingeap\\Reporte '
+   'diario\\backend\\venv\\Lib\\site-packages\\webview\\js\\finish.js',
+   'DATA'),
+  ('webview\\js\\state.js',
+   'D:\\Proyectos Ingeap\\Ingeap\\Reporte '
+   'diario\\backend\\venv\\Lib\\site-packages\\webview\\js\\state.js',
+   'DATA'),
+  ('webview\\js\\api.js',
+   'D:\\Proyectos Ingeap\\Ingeap\\Reporte '
+   'diario\\backend\\venv\\Lib\\site-packages\\webview\\js\\api.js',
+   'DATA'),
+  ('webview\\lib\\pywebview-android.jar',
+   'D:\\Proyectos Ingeap\\Ingeap\\Reporte '
+   'diario\\backend\\venv\\Lib\\site-packages\\webview\\lib\\pywebview-android.jar',
+   'DATA'),
+  ('webview\\js\\customize.js',
+   'D:\\Proyectos Ingeap\\Ingeap\\Reporte '
+   'diario\\backend\\venv\\Lib\\site-packages\\webview\\js\\customize.js',
+   'DATA'),
+  ('webview\\js\\lib\\dom_json.js',
+   'D:\\Proyectos Ingeap\\Ingeap\\Reporte '
+   'diario\\backend\\venv\\Lib\\site-packages\\webview\\js\\lib\\dom_json.js',
+   'DATA'),
+  ('setuptools-65.5.0.dist-info\\top_level.txt',
+   'D:\\Proyectos Ingeap\\Ingeap\\Reporte '
+   'diario\\backend\\venv\\Lib\\site-packages\\setuptools-65.5.0.dist-info\\top_level.txt',
+   'DATA'),
+  ('setuptools-65.5.0.dist-info\\RECORD',
+   'D:\\Proyectos Ingeap\\Ingeap\\Reporte '
+   'diario\\backend\\venv\\Lib\\site-packages\\setuptools-65.5.0.dist-info\\RECORD',
+   'DATA'),
+  ('setuptools-65.5.0.dist-info\\METADATA',
+   'D:\\Proyectos Ingeap\\Ingeap\\Reporte '
+   'diario\\backend\\venv\\Lib\\site-packages\\setuptools-65.5.0.dist-info\\METADATA',
+   'DATA'),
+  ('setuptools-65.5.0.dist-info\\INSTALLER',
+   'D:\\Proyectos Ingeap\\Ingeap\\Reporte '
+   'diario\\backend\\venv\\Lib\\site-packages\\setuptools-65.5.0.dist-info\\INSTALLER',
+   'DATA'),
+  ('setuptools-65.5.0.dist-info\\entry_points.txt',
+   'D:\\Proyectos Ingeap\\Ingeap\\Reporte '
+   'diario\\backend\\venv\\Lib\\site-packages\\setuptools-65.5.0.dist-info\\entry_points.txt',
+   'DATA'),
+  ('setuptools-65.5.0.dist-info\\LICENSE',
+   'D:\\Proyectos Ingeap\\Ingeap\\Reporte '
+   'diario\\backend\\venv\\Lib\\site-packages\\setuptools-65.5.0.dist-info\\LICENSE',
+   'DATA'),
+  ('setuptools-65.5.0.dist-info\\WHEEL',
+   'D:\\Proyectos Ingeap\\Ingeap\\Reporte '
+   'diario\\backend\\venv\\Lib\\site-packages\\setuptools-65.5.0.dist-info\\WHEEL',
+   'DATA'),
+  ('setuptools-65.5.0.dist-info\\REQUESTED',
+   'D:\\Proyectos Ingeap\\Ingeap\\Reporte '
+   'diario\\backend\\venv\\Lib\\site-packages\\setuptools-65.5.0.dist-info\\REQUESTED',
+   'DATA'),
+  ('base_library.zip',
+   'D:\\Proyectos Ingeap\\Ingeap\\Reporte '
+   'diario\\build\\CheckDiarioIngeap\\base_library.zip',
+   'DATA')],
+ 'python311.dll',
+ False,
+ False,
+ False,
+ [],
+ None,
+ None,
+ None)

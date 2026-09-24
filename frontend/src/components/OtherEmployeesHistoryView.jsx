@@ -484,13 +484,20 @@ export default function OtherEmployeesHistoryView({ usuario, onVolver, tema, onV
             type="button"
             className="btn-refresh"
             onClick={async () => {
+              setCargando(true);
+              try {
+                await api.refrescarCatalogos();
+              } catch (e) {
+                console.error('Error al refrescar catálogos:', e);
+              }
               await cargarDatos();
               if (empleadoAuditar) {
                 await cargarAuditoriaEmpleado(empleadoAuditar, fechaCalendario);
               }
+              setCargando(false);
             }}
             disabled={cargando || sincronizando}
-            title="Actualizar registros desde la base y Google Sheets"
+            title="Actualizar registros desde Google Sheets y base local"
           >
             <svg
               width="12"

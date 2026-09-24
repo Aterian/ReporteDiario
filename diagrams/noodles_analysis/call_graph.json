@@ -1,0 +1,2745 @@
+{
+  "nodes": [
+    {
+      "id": "backend\\crear_icono.py::crear_icono_calendario",
+      "type": "end_point",
+      "line": 4,
+      "callers": [
+        "backend\\crear_icono.py::generar_ico"
+      ],
+      "callees": []
+    },
+    {
+      "id": "backend\\crear_icono.py::generar_ico",
+      "type": "start_point",
+      "line": 79,
+      "callers": [],
+      "callees": [
+        "backend\\crear_icono.py::crear_icono_calendario"
+      ]
+    },
+    {
+      "id": "backend\\database.py::actualizar_avatar_sesion",
+      "type": "start_point",
+      "line": 558,
+      "callers": [],
+      "callees": [
+        "backend\\database.py::guardar_avatar_empleado",
+        "backend\\database.py::obtener_conexion",
+        "backend\\database.py::obtener_sesion_activa"
+      ]
+    },
+    {
+      "id": "backend\\database.py::actualizar_registro_asistencia",
+      "type": "start_point",
+      "line": 684,
+      "callers": [],
+      "callees": [
+        "backend\\database.py::calcular_dia_semana",
+        "backend\\database.py::es_fecha_feriado",
+        "backend\\database.py::obtener_conexion",
+        "backend\\database.py::obtener_id_empleado",
+        "backend\\database.py::obtener_id_proyecto"
+      ]
+    },
+    {
+      "id": "backend\\database.py::borrar_sesion",
+      "type": "start_point",
+      "line": 574,
+      "callers": [],
+      "callees": [
+        "backend\\database.py::obtener_conexion"
+      ]
+    },
+    {
+      "id": "backend\\database.py::calcular_dia_semana",
+      "type": "process",
+      "line": 349,
+      "callers": [
+        "backend\\database.py::actualizar_registro_asistencia",
+        "backend\\database.py::guardar_registro_asistencia",
+        "backend\\database.py::reconciliar_rosters_con_historial"
+      ],
+      "callees": [
+        "backend\\database.py::normalizar_fecha_iso"
+      ]
+    },
+    {
+      "id": "backend\\database.py::depurar_registros_eliminados",
+      "type": "start_point",
+      "line": 398,
+      "callers": [],
+      "callees": [
+        "backend\\database.py::obtener_conexion"
+      ]
+    },
+    {
+      "id": "backend\\database.py::eliminar_registro_asistencia",
+      "type": "start_point",
+      "line": 742,
+      "callers": [],
+      "callees": [
+        "backend\\database.py::obtener_conexion"
+      ]
+    },
+    {
+      "id": "backend\\database.py::eliminar_registro_roster",
+      "type": "start_point",
+      "line": 1198,
+      "callers": [],
+      "callees": [
+        "backend\\database.py::obtener_conexion"
+      ]
+    },
+    {
+      "id": "backend\\database.py::es_fecha_feriado",
+      "type": "process",
+      "line": 384,
+      "callers": [
+        "backend\\database.py::actualizar_registro_asistencia",
+        "backend\\database.py::guardar_registro_asistencia",
+        "backend\\database.py::reconciliar_rosters_con_historial"
+      ],
+      "callees": [
+        "backend\\database.py::normalizar_fecha_iso",
+        "backend\\database.py::obtener_no_laborales_cache"
+      ]
+    },
+    {
+      "id": "backend\\database.py::guardar_avatar_empleado",
+      "type": "process",
+      "line": 231,
+      "callers": [
+        "backend\\database.py::actualizar_avatar_sesion"
+      ],
+      "callees": [
+        "backend\\database.py::obtener_conexion"
+      ]
+    },
+    {
+      "id": "backend\\database.py::guardar_no_laborales_cache",
+      "type": "start_point",
+      "line": 360,
+      "callers": [],
+      "callees": [
+        "backend\\database.py::obtener_conexion"
+      ]
+    },
+    {
+      "id": "backend\\database.py::guardar_proyectos_cache",
+      "type": "start_point",
+      "line": 294,
+      "callers": [],
+      "callees": [
+        "backend\\database.py::obtener_conexion"
+      ]
+    },
+    {
+      "id": "backend\\database.py::guardar_registro_asistencia",
+      "type": "process",
+      "line": 621,
+      "callers": [
+        "backend\\database.py::guardar_registro_historial"
+      ],
+      "callees": [
+        "backend\\database.py::calcular_dia_semana",
+        "backend\\database.py::es_fecha_feriado",
+        "backend\\database.py::obtener_conexion",
+        "backend\\database.py::obtener_id_empleado",
+        "backend\\database.py::obtener_id_proyecto"
+      ]
+    },
+    {
+      "id": "backend\\database.py::guardar_registro_historial",
+      "type": "start_point",
+      "line": 891,
+      "callers": [],
+      "callees": [
+        "backend\\database.py::guardar_registro_asistencia",
+        "backend\\database.py::obtener_sesion_activa"
+      ]
+    },
+    {
+      "id": "backend\\database.py::guardar_registro_roster",
+      "type": "start_point",
+      "line": 1001,
+      "callers": [],
+      "callees": [
+        "backend\\database.py::obtener_conexion"
+      ]
+    },
+    {
+      "id": "backend\\database.py::guardar_sesion_activa",
+      "type": "start_point",
+      "line": 509,
+      "callers": [],
+      "callees": [
+        "backend\\database.py::obtener_area_por_dni",
+        "backend\\database.py::obtener_avatar_por_dni",
+        "backend\\database.py::obtener_conexion"
+      ]
+    },
+    {
+      "id": "backend\\database.py::guardar_usuarios_cache",
+      "type": "start_point",
+      "line": 264,
+      "callers": [],
+      "callees": [
+        "backend\\database.py::obtener_conexion"
+      ]
+    },
+    {
+      "id": "backend\\database.py::guardar_version_instalada",
+      "type": "start_point",
+      "line": 441,
+      "callers": [],
+      "callees": [
+        "backend\\database.py::obtener_conexion"
+      ]
+    },
+    {
+      "id": "backend\\database.py::inicializar_bd",
+      "type": "start_point",
+      "line": 47,
+      "callers": [],
+      "callees": [
+        "backend\\database.py::obtener_conexion"
+      ]
+    },
+    {
+      "id": "backend\\database.py::marcar_como_sincronizados",
+      "type": "start_point",
+      "line": 877,
+      "callers": [],
+      "callees": [
+        "backend\\database.py::obtener_conexion"
+      ]
+    },
+    {
+      "id": "backend\\database.py::normalizar_fecha_iso",
+      "type": "end_point",
+      "line": 329,
+      "callers": [
+        "backend\\database.py::calcular_dia_semana",
+        "backend\\database.py::es_fecha_feriado"
+      ],
+      "callees": []
+    },
+    {
+      "id": "backend\\database.py::obtener_area_por_dni",
+      "type": "process",
+      "line": 247,
+      "callers": [
+        "backend\\database.py::guardar_sesion_activa",
+        "backend\\database.py::obtener_sesion_activa"
+      ],
+      "callees": [
+        "backend\\database.py::obtener_conexion"
+      ]
+    },
+    {
+      "id": "backend\\database.py::obtener_avatar_por_dni",
+      "type": "process",
+      "line": 219,
+      "callers": [
+        "backend\\database.py::guardar_sesion_activa",
+        "backend\\database.py::obtener_sesion_activa"
+      ],
+      "callees": [
+        "backend\\database.py::obtener_conexion"
+      ]
+    },
+    {
+      "id": "backend\\database.py::obtener_conexion",
+      "type": "end_point",
+      "line": 41,
+      "callers": [
+        "backend\\database.py::actualizar_avatar_sesion",
+        "backend\\database.py::actualizar_registro_asistencia",
+        "backend\\database.py::borrar_sesion",
+        "backend\\database.py::depurar_registros_eliminados",
+        "backend\\database.py::eliminar_registro_asistencia",
+        "backend\\database.py::eliminar_registro_roster",
+        "backend\\database.py::guardar_avatar_empleado",
+        "backend\\database.py::guardar_no_laborales_cache",
+        "backend\\database.py::guardar_proyectos_cache",
+        "backend\\database.py::guardar_registro_asistencia",
+        "backend\\database.py::guardar_registro_roster",
+        "backend\\database.py::guardar_sesion_activa",
+        "backend\\database.py::guardar_usuarios_cache",
+        "backend\\database.py::guardar_version_instalada",
+        "backend\\database.py::inicializar_bd",
+        "backend\\database.py::marcar_como_sincronizados",
+        "backend\\database.py::obtener_area_por_dni",
+        "backend\\database.py::obtener_avatar_por_dni",
+        "backend\\database.py::obtener_historial_otros_empleados",
+        "backend\\database.py::obtener_id_empleado",
+        "backend\\database.py::obtener_id_proyecto",
+        "backend\\database.py::obtener_no_laborales_cache",
+        "backend\\database.py::obtener_pendientes_sincronizacion",
+        "backend\\database.py::obtener_proyectos_cache",
+        "backend\\database.py::obtener_rosters",
+        "backend\\database.py::obtener_sesion_activa",
+        "backend\\database.py::obtener_todos_registros_empleado",
+        "backend\\database.py::obtener_ultimos_registros",
+        "backend\\database.py::obtener_usuarios_cache",
+        "backend\\database.py::obtener_version_instalada",
+        "backend\\database.py::purgar_rosters_huerfanos",
+        "backend\\database.py::reconciliar_rosters_con_historial",
+        "backend\\database.py::usuario_registro_hoy",
+        "backend\\database.py::vaciar_rosters_locales"
+      ],
+      "callees": []
+    },
+    {
+      "id": "backend\\database.py::obtener_directorio_datos",
+      "type": "orphan",
+      "line": 9,
+      "callers": [],
+      "callees": []
+    },
+    {
+      "id": "backend\\database.py::obtener_historial_otros_empleados",
+      "type": "start_point",
+      "line": 755,
+      "callers": [],
+      "callees": [
+        "backend\\database.py::obtener_conexion"
+      ]
+    },
+    {
+      "id": "backend\\database.py::obtener_id_empleado",
+      "type": "process",
+      "line": 586,
+      "callers": [
+        "backend\\database.py::actualizar_registro_asistencia",
+        "backend\\database.py::guardar_registro_asistencia",
+        "backend\\database.py::reconciliar_rosters_con_historial"
+      ],
+      "callees": [
+        "backend\\database.py::obtener_conexion"
+      ]
+    },
+    {
+      "id": "backend\\database.py::obtener_id_proyecto",
+      "type": "process",
+      "line": 605,
+      "callers": [
+        "backend\\database.py::actualizar_registro_asistencia",
+        "backend\\database.py::guardar_registro_asistencia",
+        "backend\\database.py::reconciliar_rosters_con_historial"
+      ],
+      "callees": [
+        "backend\\database.py::obtener_conexion"
+      ]
+    },
+    {
+      "id": "backend\\database.py::obtener_no_laborales_cache",
+      "type": "process",
+      "line": 377,
+      "callers": [
+        "backend\\database.py::es_fecha_feriado"
+      ],
+      "callees": [
+        "backend\\database.py::obtener_conexion"
+      ]
+    },
+    {
+      "id": "backend\\database.py::obtener_pendientes_sincronizacion",
+      "type": "start_point",
+      "line": 848,
+      "callers": [],
+      "callees": [
+        "backend\\database.py::obtener_conexion"
+      ]
+    },
+    {
+      "id": "backend\\database.py::obtener_proyectos_cache",
+      "type": "start_point",
+      "line": 312,
+      "callers": [],
+      "callees": [
+        "backend\\database.py::obtener_conexion"
+      ]
+    },
+    {
+      "id": "backend\\database.py::obtener_rosters",
+      "type": "start_point",
+      "line": 1176,
+      "callers": [],
+      "callees": [
+        "backend\\database.py::obtener_conexion",
+        "backend\\database.py::purgar_rosters_huerfanos"
+      ]
+    },
+    {
+      "id": "backend\\database.py::obtener_sesion_activa",
+      "type": "process",
+      "line": 457,
+      "callers": [
+        "backend\\database.py::actualizar_avatar_sesion",
+        "backend\\database.py::guardar_registro_historial"
+      ],
+      "callees": [
+        "backend\\database.py::obtener_area_por_dni",
+        "backend\\database.py::obtener_avatar_por_dni",
+        "backend\\database.py::obtener_conexion"
+      ]
+    },
+    {
+      "id": "backend\\database.py::obtener_todos_registros_empleado",
+      "type": "start_point",
+      "line": 802,
+      "callers": [],
+      "callees": [
+        "backend\\database.py::obtener_conexion"
+      ]
+    },
+    {
+      "id": "backend\\database.py::obtener_ultimos_registros",
+      "type": "start_point",
+      "line": 913,
+      "callers": [],
+      "callees": [
+        "backend\\database.py::obtener_conexion"
+      ]
+    },
+    {
+      "id": "backend\\database.py::obtener_usuarios_cache",
+      "type": "process",
+      "line": 287,
+      "callers": [
+        "backend\\database.py::reconciliar_rosters_con_historial"
+      ],
+      "callees": [
+        "backend\\database.py::obtener_conexion"
+      ]
+    },
+    {
+      "id": "backend\\database.py::obtener_version_instalada",
+      "type": "start_point",
+      "line": 427,
+      "callers": [],
+      "callees": [
+        "backend\\database.py::obtener_conexion"
+      ]
+    },
+    {
+      "id": "backend\\database.py::purgar_rosters_huerfanos",
+      "type": "process",
+      "line": 1129,
+      "callers": [
+        "backend\\database.py::obtener_rosters"
+      ],
+      "callees": [
+        "backend\\database.py::obtener_conexion"
+      ]
+    },
+    {
+      "id": "backend\\database.py::reconciliar_rosters_con_historial",
+      "type": "start_point",
+      "line": 1043,
+      "callers": [],
+      "callees": [
+        "backend\\database.py::calcular_dia_semana",
+        "backend\\database.py::es_fecha_feriado",
+        "backend\\database.py::obtener_conexion",
+        "backend\\database.py::obtener_id_empleado",
+        "backend\\database.py::obtener_id_proyecto",
+        "backend\\database.py::obtener_usuarios_cache"
+      ]
+    },
+    {
+      "id": "backend\\database.py::usuario_registro_hoy",
+      "type": "start_point",
+      "line": 977,
+      "callers": [],
+      "callees": [
+        "backend\\database.py::obtener_conexion"
+      ]
+    },
+    {
+      "id": "backend\\database.py::vaciar_rosters_locales",
+      "type": "start_point",
+      "line": 1164,
+      "callers": [],
+      "callees": [
+        "backend\\database.py::obtener_conexion"
+      ]
+    },
+    {
+      "id": "backend\\installer_app.py::main",
+      "type": "start_point",
+      "line": 14,
+      "callers": [],
+      "callees": [
+        "backend\\installer_app.py::resource_path"
+      ]
+    },
+    {
+      "id": "backend\\installer_app.py::resource_path",
+      "type": "end_point",
+      "line": 9,
+      "callers": [
+        "backend\\installer_app.py::main"
+      ],
+      "callees": []
+    },
+    {
+      "id": "backend\\main.py::ApiPuente.__init__",
+      "type": "orphan",
+      "line": 173,
+      "callers": [],
+      "callees": []
+    },
+    {
+      "id": "backend\\main.py::ApiPuente._guardar_roster_interno",
+      "type": "end_point",
+      "line": 846,
+      "callers": [
+        "backend\\main.py::ApiPuente.guardar_roster",
+        "backend\\main.py::ApiPuente.guardar_roster_multiple"
+      ],
+      "callees": []
+    },
+    {
+      "id": "backend\\main.py::ApiPuente.aplicar_actualizacion",
+      "type": "start_point",
+      "line": 794,
+      "callers": [],
+      "callees": [
+        "backend\\main.py::ejecutar_descarga_y_reinicio"
+      ]
+    },
+    {
+      "id": "backend\\main.py::ApiPuente.cerrar_sesion",
+      "type": "orphan",
+      "line": 256,
+      "callers": [],
+      "callees": []
+    },
+    {
+      "id": "backend\\main.py::ApiPuente.deduplicar_sheets",
+      "type": "orphan",
+      "line": 1000,
+      "callers": [],
+      "callees": []
+    },
+    {
+      "id": "backend\\main.py::ApiPuente.eliminar_registro_asistencia",
+      "type": "orphan",
+      "line": 725,
+      "callers": [],
+      "callees": []
+    },
+    {
+      "id": "backend\\main.py::ApiPuente.eliminar_roster",
+      "type": "orphan",
+      "line": 1022,
+      "callers": [],
+      "callees": []
+    },
+    {
+      "id": "backend\\main.py::ApiPuente.exportar_roster_excel",
+      "type": "orphan",
+      "line": 1067,
+      "callers": [],
+      "callees": []
+    },
+    {
+      "id": "backend\\main.py::ApiPuente.guardar_avatar",
+      "type": "orphan",
+      "line": 251,
+      "callers": [],
+      "callees": []
+    },
+    {
+      "id": "backend\\main.py::ApiPuente.guardar_check_diario",
+      "type": "orphan",
+      "line": 385,
+      "callers": [],
+      "callees": []
+    },
+    {
+      "id": "backend\\main.py::ApiPuente.guardar_config_sheets",
+      "type": "orphan",
+      "line": 810,
+      "callers": [],
+      "callees": []
+    },
+    {
+      "id": "backend\\main.py::ApiPuente.guardar_roster",
+      "type": "start_point",
+      "line": 977,
+      "callers": [],
+      "callees": [
+        "backend\\main.py::ApiPuente._guardar_roster_interno"
+      ]
+    },
+    {
+      "id": "backend\\main.py::ApiPuente.guardar_roster_multiple",
+      "type": "start_point",
+      "line": 981,
+      "callers": [],
+      "callees": [
+        "backend\\main.py::ApiPuente._guardar_roster_interno"
+      ]
+    },
+    {
+      "id": "backend\\main.py::ApiPuente.iniciar_sesion",
+      "type": "orphan",
+      "line": 190,
+      "callers": [],
+      "callees": []
+    },
+    {
+      "id": "backend\\main.py::ApiPuente.maximizar_ventana",
+      "type": "orphan",
+      "line": 827,
+      "callers": [],
+      "callees": []
+    },
+    {
+      "id": "backend\\main.py::ApiPuente.minimizar_a_bandeja",
+      "type": "orphan",
+      "line": 179,
+      "callers": [],
+      "callees": []
+    },
+    {
+      "id": "backend\\main.py::ApiPuente.modificar_registro",
+      "type": "orphan",
+      "line": 676,
+      "callers": [],
+      "callees": []
+    },
+    {
+      "id": "backend\\main.py::ApiPuente.obtener_config_sheets",
+      "type": "orphan",
+      "line": 806,
+      "callers": [],
+      "callees": []
+    },
+    {
+      "id": "backend\\main.py::ApiPuente.obtener_estado_sesion",
+      "type": "orphan",
+      "line": 185,
+      "callers": [],
+      "callees": []
+    },
+    {
+      "id": "backend\\main.py::ApiPuente.obtener_historial",
+      "type": "orphan",
+      "line": 757,
+      "callers": [],
+      "callees": []
+    },
+    {
+      "id": "backend\\main.py::ApiPuente.obtener_historial_otros_empleados",
+      "type": "orphan",
+      "line": 715,
+      "callers": [],
+      "callees": []
+    },
+    {
+      "id": "backend\\main.py::ApiPuente.obtener_rosters",
+      "type": "orphan",
+      "line": 1005,
+      "callers": [],
+      "callees": []
+    },
+    {
+      "id": "backend\\main.py::ApiPuente.obtener_servicios",
+      "type": "orphan",
+      "line": 261,
+      "callers": [],
+      "callees": []
+    },
+    {
+      "id": "backend\\main.py::ApiPuente.obtener_todos_registros_empleado",
+      "type": "orphan",
+      "line": 721,
+      "callers": [],
+      "callees": []
+    },
+    {
+      "id": "backend\\main.py::ApiPuente.obtener_todos_usuarios",
+      "type": "orphan",
+      "line": 738,
+      "callers": [],
+      "callees": []
+    },
+    {
+      "id": "backend\\main.py::ApiPuente.probar_conexion_sheets",
+      "type": "orphan",
+      "line": 802,
+      "callers": [],
+      "callees": []
+    },
+    {
+      "id": "backend\\main.py::ApiPuente.purgar_rosters_locales",
+      "type": "orphan",
+      "line": 1014,
+      "callers": [],
+      "callees": []
+    },
+    {
+      "id": "backend\\main.py::ApiPuente.redimensionar_ventana",
+      "type": "orphan",
+      "line": 818,
+      "callers": [],
+      "callees": []
+    },
+    {
+      "id": "backend\\main.py::ApiPuente.refrescar_catalogos_sheets",
+      "type": "orphan",
+      "line": 309,
+      "callers": [],
+      "callees": []
+    },
+    {
+      "id": "backend\\main.py::ApiPuente.restaurar_ventana",
+      "type": "orphan",
+      "line": 836,
+      "callers": [],
+      "callees": []
+    },
+    {
+      "id": "backend\\main.py::ApiPuente.set_ventana",
+      "type": "end_point",
+      "line": 176,
+      "callers": [
+        "backend\\main.py::main"
+      ],
+      "callees": []
+    },
+    {
+      "id": "backend\\main.py::ApiPuente.sincronizar_sheets",
+      "type": "orphan",
+      "line": 798,
+      "callers": [],
+      "callees": []
+    },
+    {
+      "id": "backend\\main.py::ApiPuente.verificar_actualizacion",
+      "type": "start_point",
+      "line": 790,
+      "callers": [],
+      "callees": [
+        "backend\\main.py::verificar_actualizacion_github"
+      ]
+    },
+    {
+      "id": "backend\\main.py::ApiPuente.verificar_registro_hoy",
+      "type": "orphan",
+      "line": 783,
+      "callers": [],
+      "callees": []
+    },
+    {
+      "id": "backend\\main.py::al_cerrar",
+      "type": "orphan",
+      "line": 1468,
+      "callers": [],
+      "callees": []
+    },
+    {
+      "id": "backend\\main.py::al_minimizar",
+      "type": "orphan",
+      "line": 1464,
+      "callers": [],
+      "callees": []
+    },
+    {
+      "id": "backend\\main.py::asegurar_inicio_automatico",
+      "type": "end_point",
+      "line": 1175,
+      "callers": [
+        "backend\\main.py::main"
+      ],
+      "callees": []
+    },
+    {
+      "id": "backend\\main.py::asegurar_instancia_unica",
+      "type": "orphan",
+      "line": 1142,
+      "callers": [],
+      "callees": []
+    },
+    {
+      "id": "backend\\main.py::demonio_recordatorios",
+      "type": "orphan",
+      "line": 1325,
+      "callers": [],
+      "callees": []
+    },
+    {
+      "id": "backend\\main.py::ejecutar_descarga_y_reinicio",
+      "type": "end_point",
+      "line": 1220,
+      "callers": [
+        "backend\\main.py::ApiPuente.aplicar_actualizacion"
+      ],
+      "callees": []
+    },
+    {
+      "id": "backend\\main.py::main",
+      "type": "start_point",
+      "line": 1388,
+      "callers": [],
+      "callees": [
+        "backend\\main.py::ApiPuente.set_ventana",
+        "backend\\main.py::asegurar_inicio_automatico",
+        "backend\\main.py::obtener_icono_tray",
+        "backend\\main.py::recurso_path"
+      ]
+    },
+    {
+      "id": "backend\\main.py::mostrar_ventana",
+      "type": "orphan",
+      "line": 1434,
+      "callers": [],
+      "callees": []
+    },
+    {
+      "id": "backend\\main.py::obtener_icono_tray",
+      "type": "process",
+      "line": 1116,
+      "callers": [
+        "backend\\main.py::main"
+      ],
+      "callees": [
+        "backend\\main.py::recurso_path"
+      ]
+    },
+    {
+      "id": "backend\\main.py::ocultar_ventana",
+      "type": "orphan",
+      "line": 1438,
+      "callers": [],
+      "callees": []
+    },
+    {
+      "id": "backend\\main.py::recurso_path",
+      "type": "end_point",
+      "line": 1110,
+      "callers": [
+        "backend\\main.py::main",
+        "backend\\main.py::obtener_icono_tray"
+      ],
+      "callees": []
+    },
+    {
+      "id": "backend\\main.py::salir_programa",
+      "type": "orphan",
+      "line": 1442,
+      "callers": [],
+      "callees": []
+    },
+    {
+      "id": "backend\\main.py::sincronizar_catalogos_sheets",
+      "type": "orphan",
+      "line": 87,
+      "callers": [],
+      "callees": []
+    },
+    {
+      "id": "backend\\main.py::sincronizar_todo_desde_sheets",
+      "type": "end_point",
+      "line": 121,
+      "callers": [
+        "backend\\main.py::tarea_post_instalacion"
+      ],
+      "callees": []
+    },
+    {
+      "id": "backend\\main.py::tarea_post_instalacion",
+      "type": "start_point",
+      "line": 1401,
+      "callers": [],
+      "callees": [
+        "backend\\main.py::sincronizar_todo_desde_sheets"
+      ]
+    },
+    {
+      "id": "backend\\main.py::verificar_actualizacion_github",
+      "type": "end_point",
+      "line": 1215,
+      "callers": [
+        "backend\\main.py::ApiPuente.verificar_actualizacion"
+      ],
+      "callees": []
+    },
+    {
+      "id": "backend\\roster_export.py::_aplicar_borde",
+      "type": "end_point",
+      "line": 21,
+      "callers": [
+        "backend\\roster_export.py::generar_excel_roster_mes"
+      ],
+      "callees": []
+    },
+    {
+      "id": "backend\\roster_export.py::generar_excel_roster_mes",
+      "type": "start_point",
+      "line": 30,
+      "callers": [],
+      "callees": [
+        "backend\\roster_export.py::_aplicar_borde"
+      ]
+    },
+    {
+      "id": "backend\\sheets_service.py::buscar_archivo_credenciales",
+      "type": "process",
+      "line": 88,
+      "callers": [
+        "backend\\sheets_service.py::obtener_cliente"
+      ],
+      "callees": [
+        "backend\\sheets_service.py::recurso_path"
+      ]
+    },
+    {
+      "id": "backend\\sheets_service.py::cargar_configuracion",
+      "type": "end_point",
+      "line": 46,
+      "callers": [
+        "backend\\sheets_service.py::obtener_cliente",
+        "backend\\sheets_service.py::obtener_hoja_trabajo",
+        "backend\\sheets_service.py::obtener_no_laborales_remotos",
+        "backend\\sheets_service.py::probar_conexion",
+        "backend\\sheets_service.py::sincronizar_pendientes"
+      ],
+      "callees": []
+    },
+    {
+      "id": "backend\\sheets_service.py::deduplicar_hoja_remota",
+      "type": "start_point",
+      "line": 630,
+      "callers": [],
+      "callees": [
+        "backend\\sheets_service.py::obtener_hoja_trabajo"
+      ]
+    },
+    {
+      "id": "backend\\sheets_service.py::eliminar_registro_remoto",
+      "type": "start_point",
+      "line": 393,
+      "callers": [],
+      "callees": [
+        "backend\\sheets_service.py::obtener_hoja_trabajo"
+      ]
+    },
+    {
+      "id": "backend\\sheets_service.py::extraer_spreadsheet_id",
+      "type": "end_point",
+      "line": 78,
+      "callers": [
+        "backend\\sheets_service.py::obtener_hoja_trabajo",
+        "backend\\sheets_service.py::obtener_no_laborales_remotos",
+        "backend\\sheets_service.py::probar_conexion"
+      ],
+      "callees": []
+    },
+    {
+      "id": "backend\\sheets_service.py::guardar_configuracion",
+      "type": "orphan",
+      "line": 70,
+      "callers": [],
+      "callees": []
+    },
+    {
+      "id": "backend\\sheets_service.py::obtener_cliente",
+      "type": "process",
+      "line": 112,
+      "callers": [
+        "backend\\sheets_service.py::obtener_hoja_trabajo",
+        "backend\\sheets_service.py::obtener_no_laborales_remotos"
+      ],
+      "callees": [
+        "backend\\sheets_service.py::buscar_archivo_credenciales",
+        "backend\\sheets_service.py::cargar_configuracion"
+      ]
+    },
+    {
+      "id": "backend\\sheets_service.py::obtener_hoja_trabajo",
+      "type": "process",
+      "line": 128,
+      "callers": [
+        "backend\\sheets_service.py::deduplicar_hoja_remota",
+        "backend\\sheets_service.py::eliminar_registro_remoto",
+        "backend\\sheets_service.py::obtener_ids_asistencia_remotos",
+        "backend\\sheets_service.py::obtener_proyectos_remotos",
+        "backend\\sheets_service.py::obtener_usuarios_remotos",
+        "backend\\sheets_service.py::probar_conexion",
+        "backend\\sheets_service.py::sincronizar_desde_sheets_hacia_local",
+        "backend\\sheets_service.py::sincronizar_pendientes"
+      ],
+      "callees": [
+        "backend\\sheets_service.py::cargar_configuracion",
+        "backend\\sheets_service.py::extraer_spreadsheet_id",
+        "backend\\sheets_service.py::obtener_cliente"
+      ]
+    },
+    {
+      "id": "backend\\sheets_service.py::obtener_ids_asistencia_remotos",
+      "type": "start_point",
+      "line": 492,
+      "callers": [],
+      "callees": [
+        "backend\\sheets_service.py::obtener_hoja_trabajo"
+      ]
+    },
+    {
+      "id": "backend\\sheets_service.py::obtener_no_laborales_remotos",
+      "type": "process",
+      "line": 213,
+      "callers": [
+        "backend\\sheets_service.py::sincronizar_pendientes"
+      ],
+      "callees": [
+        "backend\\sheets_service.py::cargar_configuracion",
+        "backend\\sheets_service.py::extraer_spreadsheet_id",
+        "backend\\sheets_service.py::obtener_cliente"
+      ]
+    },
+    {
+      "id": "backend\\sheets_service.py::obtener_proyectos_remotos",
+      "type": "start_point",
+      "line": 415,
+      "callers": [],
+      "callees": [
+        "backend\\sheets_service.py::obtener_hoja_trabajo"
+      ]
+    },
+    {
+      "id": "backend\\sheets_service.py::obtener_usuarios_remotos",
+      "type": "start_point",
+      "line": 449,
+      "callers": [],
+      "callees": [
+        "backend\\sheets_service.py::obtener_hoja_trabajo"
+      ]
+    },
+    {
+      "id": "backend\\sheets_service.py::probar_conexion",
+      "type": "start_point",
+      "line": 185,
+      "callers": [],
+      "callees": [
+        "backend\\sheets_service.py::cargar_configuracion",
+        "backend\\sheets_service.py::extraer_spreadsheet_id",
+        "backend\\sheets_service.py::obtener_hoja_trabajo"
+      ]
+    },
+    {
+      "id": "backend\\sheets_service.py::recurso_path",
+      "type": "end_point",
+      "line": 22,
+      "callers": [
+        "backend\\sheets_service.py::buscar_archivo_credenciales"
+      ],
+      "callees": []
+    },
+    {
+      "id": "backend\\sheets_service.py::sincronizar_desde_sheets_hacia_local",
+      "type": "start_point",
+      "line": 508,
+      "callers": [],
+      "callees": [
+        "backend\\sheets_service.py::obtener_hoja_trabajo"
+      ]
+    },
+    {
+      "id": "backend\\sheets_service.py::sincronizar_pendientes",
+      "type": "start_point",
+      "line": 263,
+      "callers": [],
+      "callees": [
+        "backend\\sheets_service.py::cargar_configuracion",
+        "backend\\sheets_service.py::obtener_hoja_trabajo",
+        "backend\\sheets_service.py::obtener_no_laborales_remotos"
+      ]
+    },
+    {
+      "id": "frontend\\src\\App.jsx::App",
+      "type": "start_point",
+      "line": 13,
+      "callers": [],
+      "callees": [
+        "frontend\\src\\App.jsx::getIniciales",
+        "frontend\\src\\components\\CheckForm.jsx::CheckForm",
+        "frontend\\src\\components\\HistoryView.jsx::HistoryView",
+        "frontend\\src\\components\\HomeView.jsx::HomeView",
+        "frontend\\src\\components\\LoginView.jsx::LoginView",
+        "frontend\\src\\components\\OtherEmployeesHistoryView.jsx::OtherEmployeesHistoryView",
+        "frontend\\src\\components\\RosterHistoryView.jsx::RosterHistoryView",
+        "frontend\\src\\components\\RosterView.jsx::RosterView"
+      ]
+    },
+    {
+      "id": "frontend\\src\\App.jsx::chequearRegistroHoy",
+      "type": "orphan",
+      "line": 75,
+      "callers": [],
+      "callees": []
+    },
+    {
+      "id": "frontend\\src\\App.jsx::getIniciales",
+      "type": "end_point",
+      "line": 184,
+      "callers": [
+        "frontend\\src\\App.jsx::App"
+      ],
+      "callees": []
+    },
+    {
+      "id": "frontend\\src\\App.jsx::handleAvatarFileSelected",
+      "type": "orphan",
+      "line": 156,
+      "callers": [],
+      "callees": []
+    },
+    {
+      "id": "frontend\\src\\App.jsx::handleCerrarSesion",
+      "type": "orphan",
+      "line": 109,
+      "callers": [],
+      "callees": []
+    },
+    {
+      "id": "frontend\\src\\App.jsx::handleMinimizar",
+      "type": "orphan",
+      "line": 121,
+      "callers": [],
+      "callees": []
+    },
+    {
+      "id": "frontend\\src\\App.jsx::handleRefrescarCatalogos",
+      "type": "orphan",
+      "line": 129,
+      "callers": [],
+      "callees": []
+    },
+    {
+      "id": "frontend\\src\\App.jsx::handleTriggerAvatar",
+      "type": "orphan",
+      "line": 150,
+      "callers": [],
+      "callees": []
+    },
+    {
+      "id": "frontend\\src\\App.jsx::toggleTema",
+      "type": "orphan",
+      "line": 39,
+      "callers": [],
+      "callees": []
+    },
+    {
+      "id": "frontend\\src\\App.jsx::verificarSesion",
+      "type": "orphan",
+      "line": 53,
+      "callers": [],
+      "callees": []
+    },
+    {
+      "id": "frontend\\src\\components\\CheckForm.jsx::CheckForm",
+      "type": "process",
+      "line": 41,
+      "callers": [
+        "frontend\\src\\App.jsx::App"
+      ],
+      "callees": [
+        "frontend\\src\\components\\CheckForm.jsx::getFechaHoy",
+        "frontend\\src\\components\\CheckForm.jsx::getTotalHoras"
+      ]
+    },
+    {
+      "id": "frontend\\src\\components\\CheckForm.jsx::cargarServicios",
+      "type": "orphan",
+      "line": 144,
+      "callers": [],
+      "callees": []
+    },
+    {
+      "id": "frontend\\src\\components\\CheckForm.jsx::cargarSesion",
+      "type": "orphan",
+      "line": 110,
+      "callers": [],
+      "callees": []
+    },
+    {
+      "id": "frontend\\src\\components\\CheckForm.jsx::getFechaHoy",
+      "type": "end_point",
+      "line": 44,
+      "callers": [
+        "frontend\\src\\components\\CheckForm.jsx::CheckForm"
+      ],
+      "callees": []
+    },
+    {
+      "id": "frontend\\src\\components\\CheckForm.jsx::getHorasEquitativas",
+      "type": "end_point",
+      "line": 228,
+      "callers": [
+        "frontend\\src\\components\\CheckForm.jsx::handleSubmit"
+      ],
+      "callees": []
+    },
+    {
+      "id": "frontend\\src\\components\\CheckForm.jsx::getTotalHoras",
+      "type": "end_point",
+      "line": 233,
+      "callers": [
+        "frontend\\src\\components\\CheckForm.jsx::CheckForm",
+        "frontend\\src\\components\\CheckForm.jsx::handleSubmit"
+      ],
+      "callees": []
+    },
+    {
+      "id": "frontend\\src\\components\\CheckForm.jsx::handleAgregarAreaDirecta",
+      "type": "orphan",
+      "line": 199,
+      "callers": [],
+      "callees": []
+    },
+    {
+      "id": "frontend\\src\\components\\CheckForm.jsx::handleAgregarProyecto",
+      "type": "orphan",
+      "line": 165,
+      "callers": [],
+      "callees": []
+    },
+    {
+      "id": "frontend\\src\\components\\CheckForm.jsx::handleCambiarHoras",
+      "type": "orphan",
+      "line": 240,
+      "callers": [],
+      "callees": []
+    },
+    {
+      "id": "frontend\\src\\components\\CheckForm.jsx::handleCambiarHorasArea",
+      "type": "orphan",
+      "line": 258,
+      "callers": [],
+      "callees": []
+    },
+    {
+      "id": "frontend\\src\\components\\CheckForm.jsx::handleInputHoras",
+      "type": "orphan",
+      "line": 248,
+      "callers": [],
+      "callees": []
+    },
+    {
+      "id": "frontend\\src\\components\\CheckForm.jsx::handleRemoverProyecto",
+      "type": "orphan",
+      "line": 217,
+      "callers": [],
+      "callees": []
+    },
+    {
+      "id": "frontend\\src\\components\\CheckForm.jsx::handleSubmit",
+      "type": "start_point",
+      "line": 263,
+      "callers": [],
+      "callees": [
+        "frontend\\src\\components\\CheckForm.jsx::getHorasEquitativas",
+        "frontend\\src\\components\\CheckForm.jsx::getTotalHoras"
+      ]
+    },
+    {
+      "id": "frontend\\src\\components\\ErrorBoundary.jsx::ErrorBoundary.componentDidCatch",
+      "type": "orphan",
+      "line": 13,
+      "callers": [],
+      "callees": []
+    },
+    {
+      "id": "frontend\\src\\components\\ErrorBoundary.jsx::ErrorBoundary.constructor",
+      "type": "orphan",
+      "line": 4,
+      "callers": [],
+      "callees": []
+    },
+    {
+      "id": "frontend\\src\\components\\ErrorBoundary.jsx::ErrorBoundary.getDerivedStateFromError",
+      "type": "orphan",
+      "line": 9,
+      "callers": [],
+      "callees": []
+    },
+    {
+      "id": "frontend\\src\\components\\ErrorBoundary.jsx::ErrorBoundary.render",
+      "type": "orphan",
+      "line": 29,
+      "callers": [],
+      "callees": []
+    },
+    {
+      "id": "frontend\\src\\components\\HistoryView.jsx::CalendarRpgIcon",
+      "type": "end_point",
+      "line": 13,
+      "callers": [
+        "frontend\\src\\components\\HistoryView.jsx::HistoryView"
+      ],
+      "callees": []
+    },
+    {
+      "id": "frontend\\src\\components\\HistoryView.jsx::HistoryView",
+      "type": "process",
+      "line": 35,
+      "callers": [
+        "frontend\\src\\App.jsx::App"
+      ],
+      "callees": [
+        "frontend\\src\\components\\HistoryView.jsx::CalendarRpgIcon",
+        "frontend\\src\\components\\HistoryView.jsx::QuillIcon"
+      ]
+    },
+    {
+      "id": "frontend\\src\\components\\HistoryView.jsx::QuillIcon",
+      "type": "end_point",
+      "line": 5,
+      "callers": [
+        "frontend\\src\\components\\HistoryView.jsx::HistoryView"
+      ],
+      "callees": []
+    },
+    {
+      "id": "frontend\\src\\components\\HistoryView.jsx::cargarHistorial",
+      "type": "end_point",
+      "line": 65,
+      "callers": [
+        "frontend\\src\\components\\HistoryView.jsx::ejecutarSincronizacion",
+        "frontend\\src\\components\\HistoryView.jsx::handleCatalogos",
+        "frontend\\src\\components\\HistoryView.jsx::handleGuardarModificacion"
+      ],
+      "callees": []
+    },
+    {
+      "id": "frontend\\src\\components\\HistoryView.jsx::cargarServicios",
+      "type": "end_point",
+      "line": 100,
+      "callers": [
+        "frontend\\src\\components\\HistoryView.jsx::handleCatalogos"
+      ],
+      "callees": []
+    },
+    {
+      "id": "frontend\\src\\components\\HistoryView.jsx::ejecutarSincronizacion",
+      "type": "start_point",
+      "line": 79,
+      "callers": [],
+      "callees": [
+        "frontend\\src\\components\\HistoryView.jsx::cargarHistorial"
+      ]
+    },
+    {
+      "id": "frontend\\src\\components\\HistoryView.jsx::getBadgeClassLugar",
+      "type": "orphan",
+      "line": 238,
+      "callers": [],
+      "callees": []
+    },
+    {
+      "id": "frontend\\src\\components\\HistoryView.jsx::handleCatalogos",
+      "type": "start_point",
+      "line": 110,
+      "callers": [],
+      "callees": [
+        "frontend\\src\\components\\HistoryView.jsx::cargarHistorial",
+        "frontend\\src\\components\\HistoryView.jsx::cargarServicios"
+      ]
+    },
+    {
+      "id": "frontend\\src\\components\\HistoryView.jsx::handleGuardarModificacion",
+      "type": "start_point",
+      "line": 120,
+      "callers": [],
+      "callees": [
+        "frontend\\src\\components\\HistoryView.jsx::cargarHistorial"
+      ]
+    },
+    {
+      "id": "frontend\\src\\components\\HistoryView.jsx::irAHoy",
+      "type": "orphan",
+      "line": 227,
+      "callers": [],
+      "callees": []
+    },
+    {
+      "id": "frontend\\src\\components\\HistoryView.jsx::navegarMes",
+      "type": "orphan",
+      "line": 223,
+      "callers": [],
+      "callees": []
+    },
+    {
+      "id": "frontend\\src\\components\\HomeView.jsx::HomeView",
+      "type": "process",
+      "line": 5,
+      "callers": [
+        "frontend\\src\\App.jsx::App"
+      ],
+      "callees": [
+        "frontend\\src\\components\\HomeView.jsx::getFechaFormateada",
+        "frontend\\src\\components\\HomeView.jsx::getIniciales",
+        "frontend\\src\\components\\HomeView.jsx::getNombreArea",
+        "frontend\\src\\components\\RpgTavernBoard.jsx::RpgTavernBoard",
+        "frontend\\src\\utils\\rpgTitles.js::getTituloRpg"
+      ]
+    },
+    {
+      "id": "frontend\\src\\components\\HomeView.jsx::getFechaFormateada",
+      "type": "end_point",
+      "line": 30,
+      "callers": [
+        "frontend\\src\\components\\HomeView.jsx::HomeView"
+      ],
+      "callees": []
+    },
+    {
+      "id": "frontend\\src\\components\\HomeView.jsx::getIniciales",
+      "type": "end_point",
+      "line": 37,
+      "callers": [
+        "frontend\\src\\components\\HomeView.jsx::HomeView"
+      ],
+      "callees": []
+    },
+    {
+      "id": "frontend\\src\\components\\HomeView.jsx::getNombreArea",
+      "type": "end_point",
+      "line": 44,
+      "callers": [
+        "frontend\\src\\components\\HomeView.jsx::HomeView"
+      ],
+      "callees": []
+    },
+    {
+      "id": "frontend\\src\\components\\LoginView.jsx::LoginView",
+      "type": "end_point",
+      "line": 5,
+      "callers": [
+        "frontend\\src\\App.jsx::App"
+      ],
+      "callees": []
+    },
+    {
+      "id": "frontend\\src\\components\\LoginView.jsx::handleSubmit",
+      "type": "orphan",
+      "line": 11,
+      "callers": [],
+      "callees": []
+    },
+    {
+      "id": "frontend\\src\\components\\OtherEmployeesHistoryView.jsx::OtherEmployeesHistoryView",
+      "type": "process",
+      "line": 17,
+      "callers": [
+        "frontend\\src\\App.jsx::App"
+      ],
+      "callees": [
+        "frontend\\src\\components\\OtherEmployeesHistoryView.jsx::formatMoneda"
+      ]
+    },
+    {
+      "id": "frontend\\src\\components\\OtherEmployeesHistoryView.jsx::cargarAuditoriaEmpleado",
+      "type": "end_point",
+      "line": 107,
+      "callers": [
+        "frontend\\src\\components\\OtherEmployeesHistoryView.jsx::ejecutarSincronizacion",
+        "frontend\\src\\components\\OtherEmployeesHistoryView.jsx::handleCatalogos",
+        "frontend\\src\\components\\OtherEmployeesHistoryView.jsx::handleConfirmarEliminacion",
+        "frontend\\src\\components\\OtherEmployeesHistoryView.jsx::handleGuardarModificacion"
+      ],
+      "callees": []
+    },
+    {
+      "id": "frontend\\src\\components\\OtherEmployeesHistoryView.jsx::cargarDatos",
+      "type": "end_point",
+      "line": 85,
+      "callers": [
+        "frontend\\src\\components\\OtherEmployeesHistoryView.jsx::ejecutarSincronizacion",
+        "frontend\\src\\components\\OtherEmployeesHistoryView.jsx::handleCatalogos",
+        "frontend\\src\\components\\OtherEmployeesHistoryView.jsx::handleConfirmarEliminacion",
+        "frontend\\src\\components\\OtherEmployeesHistoryView.jsx::handleGuardarModificacion"
+      ],
+      "callees": []
+    },
+    {
+      "id": "frontend\\src\\components\\OtherEmployeesHistoryView.jsx::ejecutarSincronizacion",
+      "type": "start_point",
+      "line": 147,
+      "callers": [],
+      "callees": [
+        "frontend\\src\\components\\OtherEmployeesHistoryView.jsx::cargarAuditoriaEmpleado",
+        "frontend\\src\\components\\OtherEmployeesHistoryView.jsx::cargarDatos"
+      ]
+    },
+    {
+      "id": "frontend\\src\\components\\OtherEmployeesHistoryView.jsx::formatMoneda",
+      "type": "end_point",
+      "line": 392,
+      "callers": [
+        "frontend\\src\\components\\OtherEmployeesHistoryView.jsx::OtherEmployeesHistoryView"
+      ],
+      "callees": []
+    },
+    {
+      "id": "frontend\\src\\components\\OtherEmployeesHistoryView.jsx::getBadgeClassLugar",
+      "type": "orphan",
+      "line": 401,
+      "callers": [],
+      "callees": []
+    },
+    {
+      "id": "frontend\\src\\components\\OtherEmployeesHistoryView.jsx::getIniciales",
+      "type": "orphan",
+      "line": 424,
+      "callers": [],
+      "callees": []
+    },
+    {
+      "id": "frontend\\src\\components\\OtherEmployeesHistoryView.jsx::handleCatalogos",
+      "type": "start_point",
+      "line": 128,
+      "callers": [],
+      "callees": [
+        "frontend\\src\\components\\OtherEmployeesHistoryView.jsx::cargarAuditoriaEmpleado",
+        "frontend\\src\\components\\OtherEmployeesHistoryView.jsx::cargarDatos"
+      ]
+    },
+    {
+      "id": "frontend\\src\\components\\OtherEmployeesHistoryView.jsx::handleConfirmarEliminacion",
+      "type": "start_point",
+      "line": 204,
+      "callers": [],
+      "callees": [
+        "frontend\\src\\components\\OtherEmployeesHistoryView.jsx::cargarAuditoriaEmpleado",
+        "frontend\\src\\components\\OtherEmployeesHistoryView.jsx::cargarDatos"
+      ]
+    },
+    {
+      "id": "frontend\\src\\components\\OtherEmployeesHistoryView.jsx::handleGuardarModificacion",
+      "type": "start_point",
+      "line": 169,
+      "callers": [],
+      "callees": [
+        "frontend\\src\\components\\OtherEmployeesHistoryView.jsx::cargarAuditoriaEmpleado",
+        "frontend\\src\\components\\OtherEmployeesHistoryView.jsx::cargarDatos"
+      ]
+    },
+    {
+      "id": "frontend\\src\\components\\OtherEmployeesHistoryView.jsx::handleTarifaChange",
+      "type": "orphan",
+      "line": 74,
+      "callers": [],
+      "callees": []
+    },
+    {
+      "id": "frontend\\src\\components\\OtherEmployeesHistoryView.jsx::irAHoy",
+      "type": "orphan",
+      "line": 301,
+      "callers": [],
+      "callees": []
+    },
+    {
+      "id": "frontend\\src\\components\\OtherEmployeesHistoryView.jsx::navegarMes",
+      "type": "orphan",
+      "line": 297,
+      "callers": [],
+      "callees": []
+    },
+    {
+      "id": "frontend\\src\\components\\RosterHistoryView.jsx::RosterHistoryView",
+      "type": "end_point",
+      "line": 4,
+      "callers": [
+        "frontend\\src\\App.jsx::App"
+      ],
+      "callees": []
+    },
+    {
+      "id": "frontend\\src\\components\\RosterHistoryView.jsx::cargarCatalogos",
+      "type": "orphan",
+      "line": 45,
+      "callers": [],
+      "callees": []
+    },
+    {
+      "id": "frontend\\src\\components\\RosterHistoryView.jsx::cargarRegistrosMes",
+      "type": "end_point",
+      "line": 68,
+      "callers": [
+        "frontend\\src\\components\\RosterHistoryView.jsx::handleCatalogosActualizados",
+        "frontend\\src\\components\\RosterHistoryView.jsx::handleEliminarRegistro",
+        "frontend\\src\\components\\RosterHistoryView.jsx::handleGuardarEdicion",
+        "frontend\\src\\components\\RosterHistoryView.jsx::handleRefrescar"
+      ],
+      "callees": []
+    },
+    {
+      "id": "frontend\\src\\components\\RosterHistoryView.jsx::handleAbrirEditar",
+      "type": "orphan",
+      "line": 114,
+      "callers": [],
+      "callees": []
+    },
+    {
+      "id": "frontend\\src\\components\\RosterHistoryView.jsx::handleCatalogosActualizados",
+      "type": "start_point",
+      "line": 92,
+      "callers": [],
+      "callees": [
+        "frontend\\src\\components\\RosterHistoryView.jsx::cargarRegistrosMes"
+      ]
+    },
+    {
+      "id": "frontend\\src\\components\\RosterHistoryView.jsx::handleEliminarRegistro",
+      "type": "start_point",
+      "line": 201,
+      "callers": [],
+      "callees": [
+        "frontend\\src\\components\\RosterHistoryView.jsx::cargarRegistrosMes"
+      ]
+    },
+    {
+      "id": "frontend\\src\\components\\RosterHistoryView.jsx::handleExportarExcel",
+      "type": "orphan",
+      "line": 171,
+      "callers": [],
+      "callees": []
+    },
+    {
+      "id": "frontend\\src\\components\\RosterHistoryView.jsx::handleGuardarEdicion",
+      "type": "start_point",
+      "line": 126,
+      "callers": [],
+      "callees": [
+        "frontend\\src\\components\\RosterHistoryView.jsx::cargarRegistrosMes"
+      ]
+    },
+    {
+      "id": "frontend\\src\\components\\RosterHistoryView.jsx::handleRefrescar",
+      "type": "start_point",
+      "line": 101,
+      "callers": [],
+      "callees": [
+        "frontend\\src\\components\\RosterHistoryView.jsx::cargarRegistrosMes"
+      ]
+    },
+    {
+      "id": "frontend\\src\\components\\RosterView.jsx::RosterView",
+      "type": "process",
+      "line": 4,
+      "callers": [
+        "frontend\\src\\App.jsx::App"
+      ],
+      "callees": [
+        "frontend\\src\\components\\RosterView.jsx::getFechaHoy"
+      ]
+    },
+    {
+      "id": "frontend\\src\\components\\RosterView.jsx::abrirModalExportar",
+      "type": "orphan",
+      "line": 292,
+      "callers": [],
+      "callees": []
+    },
+    {
+      "id": "frontend\\src\\components\\RosterView.jsx::cambiarMes",
+      "type": "orphan",
+      "line": 277,
+      "callers": [],
+      "callees": []
+    },
+    {
+      "id": "frontend\\src\\components\\RosterView.jsx::cargarCatalogos",
+      "type": "orphan",
+      "line": 194,
+      "callers": [],
+      "callees": []
+    },
+    {
+      "id": "frontend\\src\\components\\RosterView.jsx::cargarRostersMes",
+      "type": "end_point",
+      "line": 230,
+      "callers": [
+        "frontend\\src\\components\\RosterView.jsx::handleCatalogosActualizados",
+        "frontend\\src\\components\\RosterView.jsx::handleGuardarEdicionGantt",
+        "frontend\\src\\components\\RosterView.jsx::handleGuardarRoster",
+        "frontend\\src\\components\\RosterView.jsx::handleRefrescar"
+      ],
+      "callees": []
+    },
+    {
+      "id": "frontend\\src\\components\\RosterView.jsx::deseleccionarTodosEmpleados",
+      "type": "orphan",
+      "line": 55,
+      "callers": [],
+      "callees": []
+    },
+    {
+      "id": "frontend\\src\\components\\RosterView.jsx::getFechaHoy",
+      "type": "end_point",
+      "line": 26,
+      "callers": [
+        "frontend\\src\\components\\RosterView.jsx::RosterView"
+      ],
+      "callees": []
+    },
+    {
+      "id": "frontend\\src\\components\\RosterView.jsx::handleAbrirEditarGantt",
+      "type": "orphan",
+      "line": 71,
+      "callers": [],
+      "callees": []
+    },
+    {
+      "id": "frontend\\src\\components\\RosterView.jsx::handleCatalogosActualizados",
+      "type": "start_point",
+      "line": 253,
+      "callers": [],
+      "callees": [
+        "frontend\\src\\components\\RosterView.jsx::cargarRostersMes"
+      ]
+    },
+    {
+      "id": "frontend\\src\\components\\RosterView.jsx::handleExportarExcelDirecto",
+      "type": "orphan",
+      "line": 304,
+      "callers": [],
+      "callees": []
+    },
+    {
+      "id": "frontend\\src\\components\\RosterView.jsx::handleGuardarEdicionGantt",
+      "type": "start_point",
+      "line": 84,
+      "callers": [],
+      "callees": [
+        "frontend\\src\\components\\RosterView.jsx::cargarRostersMes"
+      ]
+    },
+    {
+      "id": "frontend\\src\\components\\RosterView.jsx::handleGuardarRoster",
+      "type": "start_point",
+      "line": 334,
+      "callers": [],
+      "callees": [
+        "frontend\\src\\components\\RosterView.jsx::cargarRostersMes"
+      ]
+    },
+    {
+      "id": "frontend\\src\\components\\RosterView.jsx::handleMouseDownResize",
+      "type": "orphan",
+      "line": 153,
+      "callers": [],
+      "callees": []
+    },
+    {
+      "id": "frontend\\src\\components\\RosterView.jsx::handleMouseMove",
+      "type": "orphan",
+      "line": 161,
+      "callers": [],
+      "callees": []
+    },
+    {
+      "id": "frontend\\src\\components\\RosterView.jsx::handleMouseUp",
+      "type": "orphan",
+      "line": 178,
+      "callers": [],
+      "callees": []
+    },
+    {
+      "id": "frontend\\src\\components\\RosterView.jsx::handleRefrescar",
+      "type": "start_point",
+      "line": 263,
+      "callers": [],
+      "callees": [
+        "frontend\\src\\components\\RosterView.jsx::cargarRostersMes"
+      ]
+    },
+    {
+      "id": "frontend\\src\\components\\RosterView.jsx::seleccionarTodosEmpleados",
+      "type": "orphan",
+      "line": 51,
+      "callers": [],
+      "callees": []
+    },
+    {
+      "id": "frontend\\src\\components\\RosterView.jsx::toggleSeleccionEmpleado",
+      "type": "orphan",
+      "line": 45,
+      "callers": [],
+      "callees": []
+    },
+    {
+      "id": "frontend\\src\\components\\RpgTavernBoard.jsx::AxesIcon",
+      "type": "end_point",
+      "line": 14,
+      "callers": [
+        "frontend\\src\\components\\RpgTavernBoard.jsx::RpgTavernBoard"
+      ],
+      "callees": []
+    },
+    {
+      "id": "frontend\\src\\components\\RpgTavernBoard.jsx::CalendarRpgIcon",
+      "type": "end_point",
+      "line": 35,
+      "callers": [
+        "frontend\\src\\components\\RpgTavernBoard.jsx::RpgTavernBoard"
+      ],
+      "callees": []
+    },
+    {
+      "id": "frontend\\src\\components\\RpgTavernBoard.jsx::CoinPouchIcon",
+      "type": "end_point",
+      "line": 27,
+      "callers": [
+        "frontend\\src\\components\\RpgTavernBoard.jsx::RpgTavernBoard"
+      ],
+      "callees": []
+    },
+    {
+      "id": "frontend\\src\\components\\RpgTavernBoard.jsx::QuillIcon",
+      "type": "end_point",
+      "line": 6,
+      "callers": [
+        "frontend\\src\\components\\RpgTavernBoard.jsx::RpgTavernBoard"
+      ],
+      "callees": []
+    },
+    {
+      "id": "frontend\\src\\components\\RpgTavernBoard.jsx::RpgTavernBoard",
+      "type": "process",
+      "line": 50,
+      "callers": [
+        "frontend\\src\\components\\HomeView.jsx::HomeView"
+      ],
+      "callees": [
+        "frontend\\src\\components\\RpgTavernBoard.jsx::AxesIcon",
+        "frontend\\src\\components\\RpgTavernBoard.jsx::CalendarRpgIcon",
+        "frontend\\src\\components\\RpgTavernBoard.jsx::CoinPouchIcon",
+        "frontend\\src\\components\\RpgTavernBoard.jsx::QuillIcon",
+        "frontend\\src\\components\\RpgTavernBoard.jsx::ShieldIcon",
+        "frontend\\src\\components\\RpgTavernBoard.jsx::getFechaMedieval",
+        "frontend\\src\\components\\RpgTavernBoard.jsx::getIniciales",
+        "frontend\\src\\utils\\rpgTitles.js::getTituloRpg"
+      ]
+    },
+    {
+      "id": "frontend\\src\\components\\RpgTavernBoard.jsx::ShieldIcon",
+      "type": "end_point",
+      "line": 44,
+      "callers": [
+        "frontend\\src\\components\\RpgTavernBoard.jsx::RpgTavernBoard"
+      ],
+      "callees": []
+    },
+    {
+      "id": "frontend\\src\\components\\RpgTavernBoard.jsx::cargarDiasDelMes",
+      "type": "orphan",
+      "line": 67,
+      "callers": [],
+      "callees": []
+    },
+    {
+      "id": "frontend\\src\\components\\RpgTavernBoard.jsx::getFechaMedieval",
+      "type": "end_point",
+      "line": 122,
+      "callers": [
+        "frontend\\src\\components\\RpgTavernBoard.jsx::RpgTavernBoard"
+      ],
+      "callees": []
+    },
+    {
+      "id": "frontend\\src\\components\\RpgTavernBoard.jsx::getIniciales",
+      "type": "end_point",
+      "line": 132,
+      "callers": [
+        "frontend\\src\\components\\RpgTavernBoard.jsx::RpgTavernBoard"
+      ],
+      "callees": []
+    },
+    {
+      "id": "frontend\\src\\services\\apiBridge.js::getApi",
+      "type": "orphan",
+      "line": 77,
+      "callers": [],
+      "callees": []
+    },
+    {
+      "id": "frontend\\src\\services\\apiBridge.js::handleReady",
+      "type": "orphan",
+      "line": 88,
+      "callers": [],
+      "callees": []
+    },
+    {
+      "id": "frontend\\src\\utils\\rpgTitles.js::getTituloRpg",
+      "type": "end_point",
+      "line": 4,
+      "callers": [
+        "frontend\\src\\components\\HomeView.jsx::HomeView",
+        "frontend\\src\\components\\RpgTavernBoard.jsx::RpgTavernBoard"
+      ],
+      "callees": []
+    }
+  ],
+  "edges": [
+    {
+      "from": "backend\\crear_icono.py::generar_ico",
+      "to": "backend\\crear_icono.py::crear_icono_calendario",
+      "is_returned": true,
+      "index": 0
+    },
+    {
+      "from": "backend\\database.py::actualizar_avatar_sesion",
+      "to": "backend\\database.py::obtener_sesion_activa",
+      "is_returned": true,
+      "index": 0
+    },
+    {
+      "from": "backend\\database.py::actualizar_avatar_sesion",
+      "to": "backend\\database.py::guardar_avatar_empleado",
+      "is_returned": true,
+      "index": 1
+    },
+    {
+      "from": "backend\\database.py::actualizar_avatar_sesion",
+      "to": "backend\\database.py::obtener_conexion",
+      "is_returned": true,
+      "index": 2
+    },
+    {
+      "from": "backend\\database.py::actualizar_registro_asistencia",
+      "to": "backend\\database.py::calcular_dia_semana",
+      "is_returned": true,
+      "index": 0
+    },
+    {
+      "from": "backend\\database.py::actualizar_registro_asistencia",
+      "to": "backend\\database.py::es_fecha_feriado",
+      "is_returned": true,
+      "index": 1
+    },
+    {
+      "from": "backend\\database.py::actualizar_registro_asistencia",
+      "to": "backend\\database.py::obtener_conexion",
+      "is_returned": true,
+      "index": 2
+    },
+    {
+      "from": "backend\\database.py::actualizar_registro_asistencia",
+      "to": "backend\\database.py::obtener_id_empleado",
+      "is_returned": true,
+      "index": 3
+    },
+    {
+      "from": "backend\\database.py::actualizar_registro_asistencia",
+      "to": "backend\\database.py::obtener_id_proyecto",
+      "is_returned": true,
+      "index": 4
+    },
+    {
+      "from": "backend\\database.py::borrar_sesion",
+      "to": "backend\\database.py::obtener_conexion",
+      "is_returned": true,
+      "index": 0
+    },
+    {
+      "from": "backend\\database.py::calcular_dia_semana",
+      "to": "backend\\database.py::normalizar_fecha_iso",
+      "is_returned": true,
+      "index": 0
+    },
+    {
+      "from": "backend\\database.py::depurar_registros_eliminados",
+      "to": "backend\\database.py::obtener_conexion",
+      "is_returned": true,
+      "index": 0
+    },
+    {
+      "from": "backend\\database.py::eliminar_registro_asistencia",
+      "to": "backend\\database.py::obtener_conexion",
+      "is_returned": true,
+      "index": 0
+    },
+    {
+      "from": "backend\\database.py::eliminar_registro_roster",
+      "to": "backend\\database.py::obtener_conexion",
+      "is_returned": true,
+      "index": 0
+    },
+    {
+      "from": "backend\\database.py::es_fecha_feriado",
+      "to": "backend\\database.py::normalizar_fecha_iso",
+      "is_returned": true,
+      "index": 0
+    },
+    {
+      "from": "backend\\database.py::es_fecha_feriado",
+      "to": "backend\\database.py::obtener_no_laborales_cache",
+      "is_returned": true,
+      "index": 1
+    },
+    {
+      "from": "backend\\database.py::guardar_avatar_empleado",
+      "to": "backend\\database.py::obtener_conexion",
+      "is_returned": true,
+      "index": 0
+    },
+    {
+      "from": "backend\\database.py::guardar_no_laborales_cache",
+      "to": "backend\\database.py::obtener_conexion",
+      "is_returned": true,
+      "index": 0
+    },
+    {
+      "from": "backend\\database.py::guardar_proyectos_cache",
+      "to": "backend\\database.py::obtener_conexion",
+      "is_returned": true,
+      "index": 0
+    },
+    {
+      "from": "backend\\database.py::guardar_registro_asistencia",
+      "to": "backend\\database.py::calcular_dia_semana",
+      "is_returned": true,
+      "index": 0
+    },
+    {
+      "from": "backend\\database.py::guardar_registro_asistencia",
+      "to": "backend\\database.py::es_fecha_feriado",
+      "is_returned": true,
+      "index": 1
+    },
+    {
+      "from": "backend\\database.py::guardar_registro_asistencia",
+      "to": "backend\\database.py::obtener_id_empleado",
+      "is_returned": true,
+      "index": 2
+    },
+    {
+      "from": "backend\\database.py::guardar_registro_asistencia",
+      "to": "backend\\database.py::obtener_id_proyecto",
+      "is_returned": true,
+      "index": 3
+    },
+    {
+      "from": "backend\\database.py::guardar_registro_asistencia",
+      "to": "backend\\database.py::obtener_conexion",
+      "is_returned": true,
+      "index": 4
+    },
+    {
+      "from": "backend\\database.py::guardar_registro_historial",
+      "to": "backend\\database.py::obtener_sesion_activa",
+      "is_returned": true,
+      "index": 0
+    },
+    {
+      "from": "backend\\database.py::guardar_registro_historial",
+      "to": "backend\\database.py::guardar_registro_asistencia",
+      "is_returned": true,
+      "index": 1
+    },
+    {
+      "from": "backend\\database.py::guardar_registro_roster",
+      "to": "backend\\database.py::obtener_conexion",
+      "is_returned": true,
+      "index": 0
+    },
+    {
+      "from": "backend\\database.py::guardar_sesion_activa",
+      "to": "backend\\database.py::obtener_avatar_por_dni",
+      "is_returned": true,
+      "index": 0
+    },
+    {
+      "from": "backend\\database.py::guardar_sesion_activa",
+      "to": "backend\\database.py::obtener_area_por_dni",
+      "is_returned": true,
+      "index": 1
+    },
+    {
+      "from": "backend\\database.py::guardar_sesion_activa",
+      "to": "backend\\database.py::obtener_conexion",
+      "is_returned": true,
+      "index": 2
+    },
+    {
+      "from": "backend\\database.py::guardar_usuarios_cache",
+      "to": "backend\\database.py::obtener_conexion",
+      "is_returned": true,
+      "index": 0
+    },
+    {
+      "from": "backend\\database.py::guardar_version_instalada",
+      "to": "backend\\database.py::obtener_conexion",
+      "is_returned": true,
+      "index": 0
+    },
+    {
+      "from": "backend\\database.py::inicializar_bd",
+      "to": "backend\\database.py::obtener_conexion",
+      "is_returned": true,
+      "index": 0
+    },
+    {
+      "from": "backend\\database.py::marcar_como_sincronizados",
+      "to": "backend\\database.py::obtener_conexion",
+      "is_returned": true,
+      "index": 0
+    },
+    {
+      "from": "backend\\database.py::obtener_area_por_dni",
+      "to": "backend\\database.py::obtener_conexion",
+      "is_returned": true,
+      "index": 0
+    },
+    {
+      "from": "backend\\database.py::obtener_avatar_por_dni",
+      "to": "backend\\database.py::obtener_conexion",
+      "is_returned": true,
+      "index": 0
+    },
+    {
+      "from": "backend\\database.py::obtener_historial_otros_empleados",
+      "to": "backend\\database.py::obtener_conexion",
+      "is_returned": true,
+      "index": 0
+    },
+    {
+      "from": "backend\\database.py::obtener_id_empleado",
+      "to": "backend\\database.py::obtener_conexion",
+      "is_returned": true,
+      "index": 0
+    },
+    {
+      "from": "backend\\database.py::obtener_id_proyecto",
+      "to": "backend\\database.py::obtener_conexion",
+      "is_returned": true,
+      "index": 0
+    },
+    {
+      "from": "backend\\database.py::obtener_no_laborales_cache",
+      "to": "backend\\database.py::obtener_conexion",
+      "is_returned": true,
+      "index": 0
+    },
+    {
+      "from": "backend\\database.py::obtener_pendientes_sincronizacion",
+      "to": "backend\\database.py::obtener_conexion",
+      "is_returned": true,
+      "index": 0
+    },
+    {
+      "from": "backend\\database.py::obtener_proyectos_cache",
+      "to": "backend\\database.py::obtener_conexion",
+      "is_returned": true,
+      "index": 0
+    },
+    {
+      "from": "backend\\database.py::obtener_rosters",
+      "to": "backend\\database.py::purgar_rosters_huerfanos",
+      "is_returned": true,
+      "index": 0
+    },
+    {
+      "from": "backend\\database.py::obtener_rosters",
+      "to": "backend\\database.py::obtener_conexion",
+      "is_returned": true,
+      "index": 1
+    },
+    {
+      "from": "backend\\database.py::obtener_sesion_activa",
+      "to": "backend\\database.py::obtener_conexion",
+      "is_returned": true,
+      "index": 0
+    },
+    {
+      "from": "backend\\database.py::obtener_sesion_activa",
+      "to": "backend\\database.py::obtener_avatar_por_dni",
+      "is_returned": true,
+      "index": 1
+    },
+    {
+      "from": "backend\\database.py::obtener_sesion_activa",
+      "to": "backend\\database.py::obtener_area_por_dni",
+      "is_returned": true,
+      "index": 2
+    },
+    {
+      "from": "backend\\database.py::obtener_todos_registros_empleado",
+      "to": "backend\\database.py::obtener_conexion",
+      "is_returned": true,
+      "index": 0
+    },
+    {
+      "from": "backend\\database.py::obtener_ultimos_registros",
+      "to": "backend\\database.py::obtener_conexion",
+      "is_returned": true,
+      "index": 0
+    },
+    {
+      "from": "backend\\database.py::obtener_usuarios_cache",
+      "to": "backend\\database.py::obtener_conexion",
+      "is_returned": true,
+      "index": 0
+    },
+    {
+      "from": "backend\\database.py::obtener_version_instalada",
+      "to": "backend\\database.py::obtener_conexion",
+      "is_returned": true,
+      "index": 0
+    },
+    {
+      "from": "backend\\database.py::purgar_rosters_huerfanos",
+      "to": "backend\\database.py::obtener_conexion",
+      "is_returned": true,
+      "index": 0
+    },
+    {
+      "from": "backend\\database.py::reconciliar_rosters_con_historial",
+      "to": "backend\\database.py::obtener_conexion",
+      "is_returned": true,
+      "index": 0
+    },
+    {
+      "from": "backend\\database.py::reconciliar_rosters_con_historial",
+      "to": "backend\\database.py::obtener_usuarios_cache",
+      "is_returned": true,
+      "index": 1
+    },
+    {
+      "from": "backend\\database.py::reconciliar_rosters_con_historial",
+      "to": "backend\\database.py::obtener_id_empleado",
+      "is_returned": true,
+      "index": 2
+    },
+    {
+      "from": "backend\\database.py::reconciliar_rosters_con_historial",
+      "to": "backend\\database.py::obtener_id_proyecto",
+      "is_returned": true,
+      "index": 3
+    },
+    {
+      "from": "backend\\database.py::reconciliar_rosters_con_historial",
+      "to": "backend\\database.py::calcular_dia_semana",
+      "is_returned": true,
+      "index": 4
+    },
+    {
+      "from": "backend\\database.py::reconciliar_rosters_con_historial",
+      "to": "backend\\database.py::es_fecha_feriado",
+      "is_returned": true,
+      "index": 5
+    },
+    {
+      "from": "backend\\database.py::usuario_registro_hoy",
+      "to": "backend\\database.py::obtener_conexion",
+      "is_returned": true,
+      "index": 0
+    },
+    {
+      "from": "backend\\database.py::vaciar_rosters_locales",
+      "to": "backend\\database.py::obtener_conexion",
+      "is_returned": true,
+      "index": 0
+    },
+    {
+      "from": "backend\\installer_app.py::main",
+      "to": "backend\\installer_app.py::resource_path",
+      "is_returned": true,
+      "index": 0
+    },
+    {
+      "from": "backend\\main.py::ApiPuente.aplicar_actualizacion",
+      "to": "backend\\main.py::ejecutar_descarga_y_reinicio",
+      "is_returned": true,
+      "index": 0
+    },
+    {
+      "from": "backend\\main.py::ApiPuente.guardar_roster",
+      "to": "backend\\main.py::ApiPuente._guardar_roster_interno",
+      "is_returned": true,
+      "index": 0
+    },
+    {
+      "from": "backend\\main.py::ApiPuente.guardar_roster_multiple",
+      "to": "backend\\main.py::ApiPuente._guardar_roster_interno",
+      "is_returned": true,
+      "index": 0
+    },
+    {
+      "from": "backend\\main.py::ApiPuente.verificar_actualizacion",
+      "to": "backend\\main.py::verificar_actualizacion_github",
+      "is_returned": true,
+      "index": 0
+    },
+    {
+      "from": "backend\\main.py::main",
+      "to": "backend\\main.py::asegurar_inicio_automatico",
+      "is_returned": true,
+      "index": 0
+    },
+    {
+      "from": "backend\\main.py::main",
+      "to": "backend\\main.py::recurso_path",
+      "is_returned": true,
+      "index": 1
+    },
+    {
+      "from": "backend\\main.py::main",
+      "to": "backend\\main.py::ApiPuente.set_ventana",
+      "is_returned": true,
+      "index": 2
+    },
+    {
+      "from": "backend\\main.py::main",
+      "to": "backend\\main.py::obtener_icono_tray",
+      "is_returned": true,
+      "index": 3
+    },
+    {
+      "from": "backend\\main.py::obtener_icono_tray",
+      "to": "backend\\main.py::recurso_path",
+      "is_returned": true,
+      "index": 0
+    },
+    {
+      "from": "backend\\main.py::tarea_post_instalacion",
+      "to": "backend\\main.py::sincronizar_todo_desde_sheets",
+      "is_returned": true,
+      "index": 0
+    },
+    {
+      "from": "backend\\roster_export.py::generar_excel_roster_mes",
+      "to": "backend\\roster_export.py::_aplicar_borde",
+      "is_returned": true,
+      "index": 0
+    },
+    {
+      "from": "backend\\sheets_service.py::buscar_archivo_credenciales",
+      "to": "backend\\sheets_service.py::recurso_path",
+      "is_returned": true,
+      "index": 0
+    },
+    {
+      "from": "backend\\sheets_service.py::deduplicar_hoja_remota",
+      "to": "backend\\sheets_service.py::obtener_hoja_trabajo",
+      "is_returned": true,
+      "index": 0
+    },
+    {
+      "from": "backend\\sheets_service.py::eliminar_registro_remoto",
+      "to": "backend\\sheets_service.py::obtener_hoja_trabajo",
+      "is_returned": true,
+      "index": 0
+    },
+    {
+      "from": "backend\\sheets_service.py::obtener_cliente",
+      "to": "backend\\sheets_service.py::cargar_configuracion",
+      "is_returned": true,
+      "index": 0
+    },
+    {
+      "from": "backend\\sheets_service.py::obtener_cliente",
+      "to": "backend\\sheets_service.py::buscar_archivo_credenciales",
+      "is_returned": true,
+      "index": 1
+    },
+    {
+      "from": "backend\\sheets_service.py::obtener_hoja_trabajo",
+      "to": "backend\\sheets_service.py::cargar_configuracion",
+      "is_returned": true,
+      "index": 0
+    },
+    {
+      "from": "backend\\sheets_service.py::obtener_hoja_trabajo",
+      "to": "backend\\sheets_service.py::extraer_spreadsheet_id",
+      "is_returned": true,
+      "index": 1
+    },
+    {
+      "from": "backend\\sheets_service.py::obtener_hoja_trabajo",
+      "to": "backend\\sheets_service.py::obtener_cliente",
+      "is_returned": true,
+      "index": 2
+    },
+    {
+      "from": "backend\\sheets_service.py::obtener_ids_asistencia_remotos",
+      "to": "backend\\sheets_service.py::obtener_hoja_trabajo",
+      "is_returned": true,
+      "index": 0
+    },
+    {
+      "from": "backend\\sheets_service.py::obtener_no_laborales_remotos",
+      "to": "backend\\sheets_service.py::cargar_configuracion",
+      "is_returned": true,
+      "index": 0
+    },
+    {
+      "from": "backend\\sheets_service.py::obtener_no_laborales_remotos",
+      "to": "backend\\sheets_service.py::extraer_spreadsheet_id",
+      "is_returned": true,
+      "index": 1
+    },
+    {
+      "from": "backend\\sheets_service.py::obtener_no_laborales_remotos",
+      "to": "backend\\sheets_service.py::obtener_cliente",
+      "is_returned": true,
+      "index": 2
+    },
+    {
+      "from": "backend\\sheets_service.py::obtener_proyectos_remotos",
+      "to": "backend\\sheets_service.py::obtener_hoja_trabajo",
+      "is_returned": true,
+      "index": 0
+    },
+    {
+      "from": "backend\\sheets_service.py::obtener_usuarios_remotos",
+      "to": "backend\\sheets_service.py::obtener_hoja_trabajo",
+      "is_returned": true,
+      "index": 0
+    },
+    {
+      "from": "backend\\sheets_service.py::probar_conexion",
+      "to": "backend\\sheets_service.py::cargar_configuracion",
+      "is_returned": true,
+      "index": 0
+    },
+    {
+      "from": "backend\\sheets_service.py::probar_conexion",
+      "to": "backend\\sheets_service.py::extraer_spreadsheet_id",
+      "is_returned": true,
+      "index": 1
+    },
+    {
+      "from": "backend\\sheets_service.py::probar_conexion",
+      "to": "backend\\sheets_service.py::obtener_hoja_trabajo",
+      "is_returned": true,
+      "index": 2
+    },
+    {
+      "from": "backend\\sheets_service.py::sincronizar_desde_sheets_hacia_local",
+      "to": "backend\\sheets_service.py::obtener_hoja_trabajo",
+      "is_returned": true,
+      "index": 0
+    },
+    {
+      "from": "backend\\sheets_service.py::sincronizar_pendientes",
+      "to": "backend\\sheets_service.py::cargar_configuracion",
+      "is_returned": true,
+      "index": 0
+    },
+    {
+      "from": "backend\\sheets_service.py::sincronizar_pendientes",
+      "to": "backend\\sheets_service.py::obtener_no_laborales_remotos",
+      "is_returned": true,
+      "index": 1
+    },
+    {
+      "from": "backend\\sheets_service.py::sincronizar_pendientes",
+      "to": "backend\\sheets_service.py::obtener_hoja_trabajo",
+      "is_returned": true,
+      "index": 2
+    },
+    {
+      "from": "frontend\\src\\App.jsx::App",
+      "to": "frontend\\src\\components\\LoginView.jsx::LoginView",
+      "is_returned": true,
+      "index": 0
+    },
+    {
+      "from": "frontend\\src\\App.jsx::App",
+      "to": "frontend\\src\\App.jsx::getIniciales",
+      "is_returned": true,
+      "index": 1
+    },
+    {
+      "from": "frontend\\src\\App.jsx::App",
+      "to": "frontend\\src\\components\\HomeView.jsx::HomeView",
+      "is_returned": true,
+      "index": 2
+    },
+    {
+      "from": "frontend\\src\\App.jsx::App",
+      "to": "frontend\\src\\components\\CheckForm.jsx::CheckForm",
+      "is_returned": true,
+      "index": 3
+    },
+    {
+      "from": "frontend\\src\\App.jsx::App",
+      "to": "frontend\\src\\components\\HistoryView.jsx::HistoryView",
+      "is_returned": true,
+      "index": 4
+    },
+    {
+      "from": "frontend\\src\\App.jsx::App",
+      "to": "frontend\\src\\components\\OtherEmployeesHistoryView.jsx::OtherEmployeesHistoryView",
+      "is_returned": true,
+      "index": 5
+    },
+    {
+      "from": "frontend\\src\\App.jsx::App",
+      "to": "frontend\\src\\components\\RosterView.jsx::RosterView",
+      "is_returned": true,
+      "index": 6
+    },
+    {
+      "from": "frontend\\src\\App.jsx::App",
+      "to": "frontend\\src\\components\\RosterHistoryView.jsx::RosterHistoryView",
+      "is_returned": true,
+      "index": 7
+    },
+    {
+      "from": "frontend\\src\\components\\CheckForm.jsx::CheckForm",
+      "to": "frontend\\src\\components\\CheckForm.jsx::getFechaHoy",
+      "is_returned": true,
+      "index": 0
+    },
+    {
+      "from": "frontend\\src\\components\\CheckForm.jsx::CheckForm",
+      "to": "frontend\\src\\components\\CheckForm.jsx::getTotalHoras",
+      "is_returned": true,
+      "index": 1
+    },
+    {
+      "from": "frontend\\src\\components\\CheckForm.jsx::handleSubmit",
+      "to": "frontend\\src\\components\\CheckForm.jsx::getTotalHoras",
+      "is_returned": true,
+      "index": 0
+    },
+    {
+      "from": "frontend\\src\\components\\CheckForm.jsx::handleSubmit",
+      "to": "frontend\\src\\components\\CheckForm.jsx::getHorasEquitativas",
+      "is_returned": true,
+      "index": 1
+    },
+    {
+      "from": "frontend\\src\\components\\HistoryView.jsx::HistoryView",
+      "to": "frontend\\src\\components\\HistoryView.jsx::QuillIcon",
+      "is_returned": true,
+      "index": 0
+    },
+    {
+      "from": "frontend\\src\\components\\HistoryView.jsx::HistoryView",
+      "to": "frontend\\src\\components\\HistoryView.jsx::CalendarRpgIcon",
+      "is_returned": true,
+      "index": 1
+    },
+    {
+      "from": "frontend\\src\\components\\HistoryView.jsx::ejecutarSincronizacion",
+      "to": "frontend\\src\\components\\HistoryView.jsx::cargarHistorial",
+      "is_returned": true,
+      "index": 0
+    },
+    {
+      "from": "frontend\\src\\components\\HistoryView.jsx::handleCatalogos",
+      "to": "frontend\\src\\components\\HistoryView.jsx::cargarHistorial",
+      "is_returned": false,
+      "index": 0
+    },
+    {
+      "from": "frontend\\src\\components\\HistoryView.jsx::handleCatalogos",
+      "to": "frontend\\src\\components\\HistoryView.jsx::cargarServicios",
+      "is_returned": false,
+      "index": 1
+    },
+    {
+      "from": "frontend\\src\\components\\HistoryView.jsx::handleGuardarModificacion",
+      "to": "frontend\\src\\components\\HistoryView.jsx::cargarHistorial",
+      "is_returned": true,
+      "index": 0
+    },
+    {
+      "from": "frontend\\src\\components\\HomeView.jsx::HomeView",
+      "to": "frontend\\src\\components\\RpgTavernBoard.jsx::RpgTavernBoard",
+      "is_returned": true,
+      "index": 0
+    },
+    {
+      "from": "frontend\\src\\components\\HomeView.jsx::HomeView",
+      "to": "frontend\\src\\components\\HomeView.jsx::getIniciales",
+      "is_returned": true,
+      "index": 1
+    },
+    {
+      "from": "frontend\\src\\components\\HomeView.jsx::HomeView",
+      "to": "frontend\\src\\components\\HomeView.jsx::getNombreArea",
+      "is_returned": true,
+      "index": 2
+    },
+    {
+      "from": "frontend\\src\\components\\HomeView.jsx::HomeView",
+      "to": "frontend\\src\\utils\\rpgTitles.js::getTituloRpg",
+      "is_returned": true,
+      "index": 3
+    },
+    {
+      "from": "frontend\\src\\components\\HomeView.jsx::HomeView",
+      "to": "frontend\\src\\components\\HomeView.jsx::getFechaFormateada",
+      "is_returned": true,
+      "index": 4
+    },
+    {
+      "from": "frontend\\src\\components\\OtherEmployeesHistoryView.jsx::OtherEmployeesHistoryView",
+      "to": "frontend\\src\\components\\OtherEmployeesHistoryView.jsx::formatMoneda",
+      "is_returned": true,
+      "index": 0
+    },
+    {
+      "from": "frontend\\src\\components\\OtherEmployeesHistoryView.jsx::ejecutarSincronizacion",
+      "to": "frontend\\src\\components\\OtherEmployeesHistoryView.jsx::cargarDatos",
+      "is_returned": true,
+      "index": 0
+    },
+    {
+      "from": "frontend\\src\\components\\OtherEmployeesHistoryView.jsx::ejecutarSincronizacion",
+      "to": "frontend\\src\\components\\OtherEmployeesHistoryView.jsx::cargarAuditoriaEmpleado",
+      "is_returned": true,
+      "index": 1
+    },
+    {
+      "from": "frontend\\src\\components\\OtherEmployeesHistoryView.jsx::handleCatalogos",
+      "to": "frontend\\src\\components\\OtherEmployeesHistoryView.jsx::cargarDatos",
+      "is_returned": false,
+      "index": 0
+    },
+    {
+      "from": "frontend\\src\\components\\OtherEmployeesHistoryView.jsx::handleCatalogos",
+      "to": "frontend\\src\\components\\OtherEmployeesHistoryView.jsx::cargarAuditoriaEmpleado",
+      "is_returned": false,
+      "index": 1
+    },
+    {
+      "from": "frontend\\src\\components\\OtherEmployeesHistoryView.jsx::handleConfirmarEliminacion",
+      "to": "frontend\\src\\components\\OtherEmployeesHistoryView.jsx::cargarDatos",
+      "is_returned": true,
+      "index": 0
+    },
+    {
+      "from": "frontend\\src\\components\\OtherEmployeesHistoryView.jsx::handleConfirmarEliminacion",
+      "to": "frontend\\src\\components\\OtherEmployeesHistoryView.jsx::cargarAuditoriaEmpleado",
+      "is_returned": true,
+      "index": 1
+    },
+    {
+      "from": "frontend\\src\\components\\OtherEmployeesHistoryView.jsx::handleGuardarModificacion",
+      "to": "frontend\\src\\components\\OtherEmployeesHistoryView.jsx::cargarDatos",
+      "is_returned": true,
+      "index": 0
+    },
+    {
+      "from": "frontend\\src\\components\\OtherEmployeesHistoryView.jsx::handleGuardarModificacion",
+      "to": "frontend\\src\\components\\OtherEmployeesHistoryView.jsx::cargarAuditoriaEmpleado",
+      "is_returned": true,
+      "index": 1
+    },
+    {
+      "from": "frontend\\src\\components\\RosterHistoryView.jsx::handleCatalogosActualizados",
+      "to": "frontend\\src\\components\\RosterHistoryView.jsx::cargarRegistrosMes",
+      "is_returned": false,
+      "index": 0
+    },
+    {
+      "from": "frontend\\src\\components\\RosterHistoryView.jsx::handleEliminarRegistro",
+      "to": "frontend\\src\\components\\RosterHistoryView.jsx::cargarRegistrosMes",
+      "is_returned": true,
+      "index": 0
+    },
+    {
+      "from": "frontend\\src\\components\\RosterHistoryView.jsx::handleGuardarEdicion",
+      "to": "frontend\\src\\components\\RosterHistoryView.jsx::cargarRegistrosMes",
+      "is_returned": true,
+      "index": 0
+    },
+    {
+      "from": "frontend\\src\\components\\RosterHistoryView.jsx::handleRefrescar",
+      "to": "frontend\\src\\components\\RosterHistoryView.jsx::cargarRegistrosMes",
+      "is_returned": true,
+      "index": 0
+    },
+    {
+      "from": "frontend\\src\\components\\RosterView.jsx::RosterView",
+      "to": "frontend\\src\\components\\RosterView.jsx::getFechaHoy",
+      "is_returned": true,
+      "index": 0
+    },
+    {
+      "from": "frontend\\src\\components\\RosterView.jsx::handleCatalogosActualizados",
+      "to": "frontend\\src\\components\\RosterView.jsx::cargarRostersMes",
+      "is_returned": false,
+      "index": 0
+    },
+    {
+      "from": "frontend\\src\\components\\RosterView.jsx::handleGuardarEdicionGantt",
+      "to": "frontend\\src\\components\\RosterView.jsx::cargarRostersMes",
+      "is_returned": true,
+      "index": 0
+    },
+    {
+      "from": "frontend\\src\\components\\RosterView.jsx::handleGuardarRoster",
+      "to": "frontend\\src\\components\\RosterView.jsx::cargarRostersMes",
+      "is_returned": true,
+      "index": 0
+    },
+    {
+      "from": "frontend\\src\\components\\RosterView.jsx::handleRefrescar",
+      "to": "frontend\\src\\components\\RosterView.jsx::cargarRostersMes",
+      "is_returned": true,
+      "index": 0
+    },
+    {
+      "from": "frontend\\src\\components\\RpgTavernBoard.jsx::RpgTavernBoard",
+      "to": "frontend\\src\\components\\RpgTavernBoard.jsx::QuillIcon",
+      "is_returned": true,
+      "index": 0
+    },
+    {
+      "from": "frontend\\src\\components\\RpgTavernBoard.jsx::RpgTavernBoard",
+      "to": "frontend\\src\\components\\RpgTavernBoard.jsx::getFechaMedieval",
+      "is_returned": true,
+      "index": 1
+    },
+    {
+      "from": "frontend\\src\\components\\RpgTavernBoard.jsx::RpgTavernBoard",
+      "to": "frontend\\src\\components\\RpgTavernBoard.jsx::getIniciales",
+      "is_returned": true,
+      "index": 2
+    },
+    {
+      "from": "frontend\\src\\components\\RpgTavernBoard.jsx::RpgTavernBoard",
+      "to": "frontend\\src\\utils\\rpgTitles.js::getTituloRpg",
+      "is_returned": true,
+      "index": 3
+    },
+    {
+      "from": "frontend\\src\\components\\RpgTavernBoard.jsx::RpgTavernBoard",
+      "to": "frontend\\src\\components\\RpgTavernBoard.jsx::AxesIcon",
+      "is_returned": true,
+      "index": 4
+    },
+    {
+      "from": "frontend\\src\\components\\RpgTavernBoard.jsx::RpgTavernBoard",
+      "to": "frontend\\src\\components\\RpgTavernBoard.jsx::CalendarRpgIcon",
+      "is_returned": true,
+      "index": 5
+    },
+    {
+      "from": "frontend\\src\\components\\RpgTavernBoard.jsx::RpgTavernBoard",
+      "to": "frontend\\src\\components\\RpgTavernBoard.jsx::ShieldIcon",
+      "is_returned": true,
+      "index": 6
+    },
+    {
+      "from": "frontend\\src\\components\\RpgTavernBoard.jsx::RpgTavernBoard",
+      "to": "frontend\\src\\components\\RpgTavernBoard.jsx::CoinPouchIcon",
+      "is_returned": true,
+      "index": 7
+    }
+  ]
+}

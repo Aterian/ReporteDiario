@@ -205,6 +205,15 @@ def inicializar_bd():
             )
         """)
 
+        # Tabla de metadatos del sistema (versión instalada, estado de sincronización)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS meta_app (
+                clave TEXT PRIMARY KEY,
+                valor TEXT,
+                actualizado_en TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+
         conn.commit()
 
 def obtener_avatar_por_dni(dni: str) -> str:
@@ -386,10 +395,11 @@ def es_fecha_feriado(fecha_str: str, fechas_feriados: set | None = None) -> str:
         return "NO"
 
 
-def depurar_registros_eliminados(ids_remotos: set) -> int:
+def depurar_registros_eliminados(ids_remotos: set, purgar_todo: bool = False) -> int:
     """
-    Elimina de la base local los reportes con sincronizado=1 cuyo id_asistencia ya no existe
-    en Google Sheets. Conserva los pendientes de sincronización (sincronizado=0).
+    Elimina de la base local los reportes ya sincronizados (sincronizado=1)
+    cuyo id_asistencia ya no existe en Google Sheets (fueron borrados en la hoja remota).
+    NUNCA purga registros pendientes de sincronización (sincronizado=0).
     """
     if not ids_remotos:
         return 0
@@ -403,13 +413,46 @@ def depurar_registros_eliminados(ids_remotos: set) -> int:
               AND id_asistencia != ''
         """)
         filas = cursor.fetchall()
-        ids_borrar = [f["id"] for f in filas if f["id_asistencia"] not in ids_remotos]
+        ids_borrar = [
+            f["id"] for f in filas 
+            if str(f["id_asistencia"]).strip() not in ids_remotos
+        ]
         if ids_borrar:
             placeholders = ",".join(["?"] * len(ids_borrar))
             cursor.execute(f"DELETE FROM historial WHERE id IN ({placeholders})", ids_borrar)
             conn.commit()
             return len(ids_borrar)
     return 0
+
+def obtener_version_instalada() -> str:
+    """Retorna la última versión registrada en la base local (meta_app)."""
+    try:
+        with obtener_conexion() as conn:
+            cursor = conn.cursor()
+            cursor.execute("CREATE TABLE IF NOT EXISTS meta_app (clave TEXT PRIMARY KEY, valor TEXT, actualizado_en TIMESTAMP DEFAULT CURRENT_TIMESTAMP)")
+            cursor.execute("SELECT valor FROM meta_app WHERE clave = 'version_instalada'")
+            row = cursor.fetchone()
+            return str(row["valor"]).strip() if row else ""
+    except Exception as e:
+        print(f"[BD] Error al leer versión instalada: {e}")
+        return ""
+
+
+def guardar_version_instalada(version: str):
+    """Guarda la versión de la aplicación confirmada tras inicialización o actualización."""
+    try:
+        with obtener_conexion() as conn:
+            cursor = conn.cursor()
+            cursor.execute("CREATE TABLE IF NOT EXISTS meta_app (clave TEXT PRIMARY KEY, valor TEXT, actualizado_en TIMESTAMP DEFAULT CURRENT_TIMESTAMP)")
+            cursor.execute("""
+                INSERT INTO meta_app (clave, valor, actualizado_en)
+                VALUES ('version_instalada', ?, CURRENT_TIMESTAMP)
+                ON CONFLICT(clave) DO UPDATE SET valor = excluded.valor, actualizado_en = CURRENT_TIMESTAMP
+            """, (version.strip(),))
+            conn.commit()
+    except Exception as e:
+        print(f"[BD] Error al guardar versión instalada: {e}")
+
 
 def obtener_sesion_activa():
     """Devuelve los datos del empleado activo restaurando su avatar y área persistentes si están disponibles."""
@@ -544,7 +587,7 @@ def obtener_id_empleado(nombre_o_dni: str) -> str:
     """Busca el id_origen (o id_usuario como fallback) asociado al nombre o DNI en la tabla usuarios_cache."""
     if not nombre_o_dni:
         return ""
-    val = str(nombre_o_dni).strip().lower()
+    val = nombre_o_dni.strip().lower()
     try:
         with obtener_conexion() as conn:
             cursor = conn.cursor()
@@ -563,7 +606,7 @@ def obtener_id_proyecto(denominacion: str) -> str:
     """Busca el id_proyecto asociado a la denominación en la tabla proyectos_cache."""
     if not denominacion:
         return ""
-    val = str(denominacion).strip().lower()
+    val = denominacion.strip().lower()
     if val.startswith("franco de obra - "):
         val = val[len("franco de obra - "):].strip()
     try:
@@ -996,8 +1039,143 @@ def guardar_registro_roster(datos: dict) -> dict:
         conn.commit()
     return {"exito": True, "id": id_roster}
 
+
+def reconciliar_rosters_con_historial() -> int:
+    """
+    Verifica que cada turno registrado en la tabla rosters tenga todas sus jornadas
+    individuales cargadas en la tabla historial.
+    Si algún día del rango no existe en historial (por ejemplo, si fue purgado por error
+    o pendiente de sincronización), lo regenera con sincronizado=0 para que se suba
+    a Google Sheets y aparezca inmediatamente en el calendario personal de asistencia.
+    Retorna la cantidad de días restaurados.
+    """
+    from datetime import datetime as dt, timedelta
+    recuperados = 0
+    try:
+        with obtener_conexion() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT * FROM rosters")
+            rosters = cursor.fetchall()
+            
+            usuarios_cache = obtener_usuarios_cache() or []
+            mapa_mails = {}
+            for u in usuarios_cache:
+                nom = (u.get("nombre") or "").strip().lower()
+                m = (u.get("mail") or u.get("email") or "").strip()
+                if nom and m:
+                    mapa_mails[nom] = m
+
+            for r in rosters:
+                emp = str(r["empleado"] or "").strip()
+                f_ini = str(r["fecha_inicio"] or "").strip()
+                f_fin = str(r["fecha_fin"] or "").strip()
+                tipo = str(r["tipo"] or "Campo").strip()
+                proy = str(r["proyecto"] or "").strip()
+                
+                if not emp or not f_ini:
+                    continue
+
+                dias_rango = []
+                try:
+                    di = dt.strptime(f_ini, "%Y-%m-%d")
+                    df = dt.strptime(f_fin, "%Y-%m-%d") if f_fin else di
+                    if di > df:
+                        di, df = df, di
+                    curr = di
+                    while curr <= df:
+                        dias_rango.append(curr.strftime("%Y-%m-%d"))
+                        curr += timedelta(days=1)
+                except Exception:
+                    dias_rango = [f_ini]
+
+                es_campo = (tipo.lower() == "campo")
+                tipo_ocf = "Roster" if es_campo else "Franco"
+                horas = 8.0 if es_campo else 0.0
+                jornada_txt = f"{horas} hs" if horas > 0 else "Franco"
+                emp_id = obtener_id_empleado(emp)
+                proy_id = obtener_id_proyecto(proy) if proy else ""
+                mail = mapa_mails.get(emp.lower(), "")
+                ts_now = dt.now().strftime("%Y-%m-%d %H:%M:%S")
+
+                for d_str in dias_rango:
+                    cursor.execute("SELECT id FROM historial WHERE LOWER(empleado) = ? AND fecha = ?", (emp.lower(), d_str))
+                    row_h = cursor.fetchone()
+                    if not row_h:
+                        uid_asist = str(uuid.uuid4())
+                        dia_sem = calcular_dia_semana(d_str)
+                        fer = es_fecha_feriado(d_str)
+                        cursor.execute("""
+                            INSERT INTO historial (
+                                id_asistencia, empleado, fecha, tipo_ocf, servicio,
+                                horas, instrumental, usuario_mail, fecha_hora,
+                                lugar, jornada, dia_semana, feriado, modificado, sincronizado,
+                                cargado_por, id_empleado, id_proyecto
+                            )
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, 'RRHH', ?, ?)
+                        """, (
+                            uid_asist, emp, d_str, tipo_ocf, proy,
+                            horas, "", mail, ts_now,
+                            tipo_ocf, jornada_txt, dia_sem, fer,
+                            emp_id, proy_id
+                        ))
+                        recuperados += 1
+            if recuperados > 0:
+                conn.commit()
+                print(f"[BD] Se reconciliaron y recuperaron {recuperados} jornada(s) de Roster en historial.")
+    except Exception as e:
+        print(f"[BD] Error en reconciliar_rosters_con_historial: {e}")
+    return recuperados
+
+def purgar_rosters_huerfanos() -> int:
+    """
+    Elimina de la tabla rosters cualquier registro cuyos días ya no existan en historial.
+    Esto garantiza que si se eliminaron filas de asistencia en Google Sheets (y por tanto
+    se purgaron de historial), el registro de roster desaparezca automáticamente.
+    """
+    try:
+        with obtener_conexion() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT id, empleado, fecha_inicio, fecha_fin FROM rosters")
+            filas = cursor.fetchall()
+            ids_borrar = []
+            for f in filas:
+                cursor.execute(
+                    """
+                    SELECT count(*) FROM historial 
+                    WHERE empleado = ? 
+                      AND fecha >= ? 
+                      AND fecha <= ? 
+                      AND tipo_ocf IN ('Roster', 'Franco')
+                    """,
+                    (f["empleado"], f["fecha_inicio"], f["fecha_fin"])
+                )
+                cnt = cursor.fetchone()[0]
+                if cnt == 0:
+                    ids_borrar.append(f["id"])
+            if ids_borrar:
+                placeholders = ",".join(["?"] * len(ids_borrar))
+                cursor.execute(f"DELETE FROM rosters WHERE id IN ({placeholders})", ids_borrar)
+                conn.commit()
+                return len(ids_borrar)
+    except Exception as e:
+        print(f"[BD] Error al purgar rosters huérfanos: {e}")
+    return 0
+
+def vaciar_rosters_locales() -> int:
+    """Elimina todos los registros de la tabla rosters para una limpieza forzada."""
+    try:
+        with obtener_conexion() as conn:
+            cursor = conn.cursor()
+            cursor.execute("DELETE FROM rosters")
+            conn.commit()
+            return cursor.rowcount
+    except Exception as e:
+        print(f"[BD] Error al vaciar rosters locales: {e}")
+        return 0
+
 def obtener_rosters(fecha_desde: str | None = None, fecha_hasta: str | None = None) -> list:
-    """Retorna registros de roster que se superpongan con el rango especificado o todos."""
+    """Retorna registros de roster vigentes superpuestos con el rango, purgando previamente los registros huérfanos."""
+    purgar_rosters_huerfanos()
     with obtener_conexion() as conn:
         cursor = conn.cursor()
         if fecha_desde and fecha_hasta:

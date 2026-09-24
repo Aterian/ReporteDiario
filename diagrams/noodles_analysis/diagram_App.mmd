@@ -1,0 +1,36 @@
+graph LR
+    classDef start fill:none,stroke:#4db6ac,color:#00695c
+    classDef process fill:none,stroke:#64b5f6,color:#1565c0
+    classDef endpoint fill:none,stroke:#e57373,color:#c62828
+    classDef updated fill:#fff9c4,stroke:#f9a825,color:#f57f17
+    classDef new fill:#c8e6c9,stroke:#66bb6a,color:#2e7d32
+    frontend_src_App_jsx_App{{"frontend\src\App:App"}}:::start
+    frontend_src_App_jsx_getIniciales(["frontend\src\App:getIniciales"]):::endpoint
+    frontend_src_components_CheckForm_jsx_CheckForm["frontend\src\components\CheckForm:CheckForm"]:::process
+    frontend_src_components_CheckForm_jsx_getFechaHoy(["frontend\src\components\CheckForm:getFechaHoy"]):::endpoint
+    frontend_src_components_CheckForm_jsx_getTotalHoras(["frontend\src\components\CheckForm:getTotalHoras"]):::endpoint
+    frontend_src_components_HistoryView_jsx_CalendarRpgIcon(["frontend\src\components\HistoryView:CalendarRpgIcon"]):::endpoint
+    frontend_src_components_HistoryView_jsx_HistoryView["frontend\src\components\HistoryView:HistoryView"]:::process
+    frontend_src_components_HistoryView_jsx_QuillIcon(["frontend\src\components\HistoryView:QuillIcon"]):::endpoint
+    frontend_src_components_HomeView_jsx_HomeView["frontend\src\components\HomeView:HomeView [+]"]:::process
+    frontend_src_components_LoginView_jsx_LoginView(["frontend\src\components\LoginView:LoginView"]):::endpoint
+    frontend_src_components_OtherEmployeesHistoryView_jsx_OtherEmployeesHistoryView["frontend\src\components\OtherEmployeesHistoryView:OtherEmployeesHistoryView"]:::process
+    frontend_src_components_OtherEmployeesHistoryView_jsx_formatMoneda(["frontend\src\components\OtherEmployeesHistoryView:formatMoneda"]):::endpoint
+    frontend_src_components_RosterHistoryView_jsx_RosterHistoryView(["frontend\src\components\RosterHistoryView:RosterHistoryView"]):::endpoint
+    frontend_src_components_RosterView_jsx_RosterView["frontend\src\components\RosterView:RosterView"]:::process
+    frontend_src_components_RosterView_jsx_getFechaHoy(["frontend\src\components\RosterView:getFechaHoy"]):::endpoint
+    style frontend_src_components_HomeView_jsx_HomeView stroke-width:6px
+    frontend_src_App_jsx_App -.-> frontend_src_components_LoginView_jsx_LoginView
+    frontend_src_App_jsx_App -.-> frontend_src_App_jsx_getIniciales
+    frontend_src_App_jsx_App -.-> frontend_src_components_HomeView_jsx_HomeView
+    frontend_src_App_jsx_App -.-> frontend_src_components_CheckForm_jsx_CheckForm
+    frontend_src_App_jsx_App -.-> frontend_src_components_HistoryView_jsx_HistoryView
+    frontend_src_App_jsx_App -.-> frontend_src_components_OtherEmployeesHistoryView_jsx_OtherEmployeesHistoryView
+    frontend_src_App_jsx_App -.-> frontend_src_components_RosterView_jsx_RosterView
+    frontend_src_App_jsx_App -.-> frontend_src_components_RosterHistoryView_jsx_RosterHistoryView
+    frontend_src_components_CheckForm_jsx_CheckForm -.-> frontend_src_components_CheckForm_jsx_getFechaHoy
+    frontend_src_components_CheckForm_jsx_CheckForm -.-> frontend_src_components_CheckForm_jsx_getTotalHoras
+    frontend_src_components_HistoryView_jsx_HistoryView -.-> frontend_src_components_HistoryView_jsx_QuillIcon
+    frontend_src_components_HistoryView_jsx_HistoryView -.-> frontend_src_components_HistoryView_jsx_CalendarRpgIcon
+    frontend_src_components_OtherEmployeesHistoryView_jsx_OtherEmployeesHistoryView -.-> frontend_src_components_OtherEmployeesHistoryView_jsx_formatMoneda
+    frontend_src_components_RosterView_jsx_RosterView -.-> frontend_src_components_RosterView_jsx_getFechaHoy

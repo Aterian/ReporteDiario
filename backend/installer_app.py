@@ -8,10 +8,7 @@ import winreg
 
 def resource_path(relative_path):
     """Obtiene la ruta absoluta al recurso embebido en PyInstaller."""
-    try:
-        base_path = sys._MEIPASS
-    except Exception:
-        base_path = os.path.abspath(".")
+    base_path = getattr(sys, "_MEIPASS", os.path.abspath("."))
     return os.path.join(base_path, relative_path)
 
 def main():
@@ -84,7 +81,7 @@ $s2.Save()
         clean_env["PYINSTALLER_RESET_ENVIRONMENT"] = "1"
 
         creation_flags = subprocess.CREATE_NEW_PROCESS_GROUP if hasattr(subprocess, "CREATE_NEW_PROCESS_GROUP") else 0
-        subprocess.Popen([target_exe], cwd=target_dir, env=clean_env, creationflags=creation_flags)
+        subprocess.Popen([target_exe, "--post-install"], cwd=target_dir, env=clean_env, creationflags=creation_flags)
 
         # 7. Cuadro de diálogo de confirmación
         ctypes.windll.user32.MessageBoxW(

@@ -4,6 +4,63 @@ Historial cronológico de cambios, nuevas características y mejoras aplicadas a
 
 ---
 
+## [1.3.3] - 2026-09-24
+
+### 🛡️ Corrección Crítica de Sincronización y Purga de Registros
+- **Eliminación de Purgas Destructivas en Consultas de Auditoría**:
+  - Se eliminó el borrado de registros (`purgar_todo=True`) que se disparaba erróneamente al consultar el historial de auditoría o de otros empleados en `ApiPuente`. Las funciones de lectura ya no modifican ni borran datos de la base local.
+  - Se protegió `depurar_registros_eliminados`: ahora exige de forma estricta `WHERE sincronizado = 1`, garantizando que ningún registro pendiente de sincronización pueda ser eliminado localmente.
+- **Recuperación y Reconciliación de Jornadas de Roster**:
+  - Nueva función `reconciliar_rosters_con_historial` que audita periódicamente la tabla `rosters` y regenera cualquier jornada individual faltante en `historial`, resolviendo definitivamente la inconsistencia donde los turnos figuraban en el Gantt pero no en el calendario individual del empleado ni en Google Sheets.
+  - Se recuperaron y sincronizaron con éxito los registros de agosto de Maximiliano Kromm.
+
+### ⚡ Prevención de Duplicados y Concurrencia Segura con Google Sheets
+- **Mutex y Bloqueo de Sincronización**:
+  - Implementación de `_sync_lock = threading.Lock()` en `sheets_service.py` para impedir condiciones de carrera y ejecuciones concurrentes de `sincronizar_pendientes`.
+- **Sincronización Idempotente**:
+  - `sincronizar_pendientes` ahora coteja filas existentes remotas por `id_asistencia` y por la tupla `(empleado, fecha)`, realizando actualizaciones *in-place* en lugar de crear filas duplicadas.
+- **Guardado Atómico de Múltiples Empleados**:
+  - Nueva función `guardar_roster_multiple` que procesa la selección múltiple en una única transacción local y un solo hilo de sincronización, reemplazando el `Promise.all` descontrolado del frontend.
+- **Deduplicador Remoto de Google Sheets**:
+  - Nueva herramienta `deduplicar_hoja_remota` ejecutada con éxito, depurando 22 registros duplicados históricos en la hoja corporativa `1_asistencia_informada`.
+
+### 🏷️ Unificación de Vocabulario: Modalidad "Campo"
+- Se reemplazó la opción "Campaña / Campo" por **"Campo"** en `CheckForm.jsx`, botones, leyendas, selectores y `RpgTavernBoard.jsx`.
+- Compatibilidad retroactiva completa con registros cargados bajo la denominación previa.
+
+### 📊 Integración Arquitectónica con Noodles (Call Graph y Flujo de Funciones)
+- Se incorporó la suite **Noodles** (`unslop-xyz/noodles`) en el backend.
+- Análisis estático del repositorio generando grafos de llamadas (208 funciones, 142 conexiones), diagramas Mermaid por función y visor interactivo navegable en `diagrams/noodles_analysis/viewer.html`.
+
+---
+
+## [1.3.2] - 2026-09-23
+
+### 🔄 Sincronización y Purga en Botón Refrescar
+- **Depuración de Registros de Asistencia Inexistentes**:
+  - El botón **Refrescar** ahora compara de forma síncrona y exhaustiva la base local contra la tabla corporativa `1_asistencia_informada` de Google Sheets.
+  - Elimina de la base local cualquier registro que haya sido borrado de la hoja de cálculo remota para evitar confusiones y discrepancias.
+  - Actualiza registros existentes con sus datos remotos vigentes e inserta los nuevos registros.
+- **Purga Integral de Rosters Huérfanos**:
+  - Google Sheets es la única fuente de verdad: los registros de la tabla local `rosters` que ya no cuenten con asistencias correspondientes en `1_asistencia_informada` son purgados automáticamente al refrescar o consultar la vista.
+  - Se eliminó la persistencia de datos mock en `localStorage` (`ingeap_rosters_mock`) que causaba la aparición de registros borrados al cambiar de ventana.
+  - Se añadió el botón **Refrescar** en la barra superior de `RosterView` e `RosterHistoryView` para sincronización directa e instantánea con Google Sheets.
+
+### 🚀 Reconciliación Automática en Nuevas Instalaciones
+- **Chequeo Inicial Post-Instalación**:
+  - Al instalar o actualizar a una nueva versión (`CheckDiarioIngeap.exe` con flag `--post-install` o detección de versión en `meta_app`), el sistema realiza automáticamente una reconciliación completa contra Google Sheets.
+  - Actualiza la nómina de empleados (`0_usuarios`), el catálogo de proyectos (`0_proyectos`), días no laborales y los registros de asistencias realizados (`1_asistencia_informada`).
+
+### 🖥️ Pantalla Completa: Dos Bloques Verticales en Paralelo
+- **Distribución Responsiva para RRHH**:
+  - Cuando la ventana está maximizada o en pantalla completa, la interfaz organiza las acciones en **dos bloques verticales contiguos**:
+    - **Bloque Izquierdo**: Registro propio del usuario (*Cargar Nuevo Reporte* y *Ver Historial de Registros*).
+    - **Bloque Derecho**: Gestión de RRHH (*Cargar Nuevo Roster*, *Historial de Roster* e *Historial de otros empleados*).
+  - La tarjeta de bienvenida y perfil se adapta a un diseño horizontal compacto.
+  - Elimina completamente la necesidad de hacer scroll vertical con el mouse en resoluciones de pantalla estándar.
+
+---
+
 ## [1.3.1] - 2026-09-17
 
 ### 🛠️ Corrección Crítica del Auto-Updater en Windows 11

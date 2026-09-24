@@ -1,0 +1,32 @@
+graph LR
+    classDef start fill:none,stroke:#4db6ac,color:#00695c
+    classDef process fill:none,stroke:#64b5f6,color:#1565c0
+    classDef endpoint fill:none,stroke:#e57373,color:#c62828
+    classDef updated fill:#fff9c4,stroke:#f9a825,color:#f57f17
+    classDef new fill:#c8e6c9,stroke:#66bb6a,color:#2e7d32
+    frontend_src_components_HomeView_jsx_HomeView["frontend\src\components\HomeView:HomeView"]:::process
+    frontend_src_components_HomeView_jsx_getFechaFormateada(["frontend\src\components\HomeView:getFechaFormateada"]):::endpoint
+    frontend_src_components_HomeView_jsx_getIniciales(["frontend\src\components\HomeView:getIniciales"]):::endpoint
+    frontend_src_components_HomeView_jsx_getNombreArea(["frontend\src\components\HomeView:getNombreArea"]):::endpoint
+    frontend_src_components_RpgTavernBoard_jsx_AxesIcon(["frontend\src\components\RpgTavernBoard:AxesIcon"]):::endpoint
+    frontend_src_components_RpgTavernBoard_jsx_CalendarRpgIcon(["frontend\src\components\RpgTavernBoard:CalendarRpgIcon"]):::endpoint
+    frontend_src_components_RpgTavernBoard_jsx_CoinPouchIcon(["frontend\src\components\RpgTavernBoard:CoinPouchIcon"]):::endpoint
+    frontend_src_components_RpgTavernBoard_jsx_QuillIcon(["frontend\src\components\RpgTavernBoard:QuillIcon"]):::endpoint
+    frontend_src_components_RpgTavernBoard_jsx_RpgTavernBoard["frontend\src\components\RpgTavernBoard:RpgTavernBoard"]:::process
+    frontend_src_components_RpgTavernBoard_jsx_ShieldIcon(["frontend\src\components\RpgTavernBoard:ShieldIcon"]):::endpoint
+    frontend_src_components_RpgTavernBoard_jsx_getFechaMedieval(["frontend\src\components\RpgTavernBoard:getFechaMedieval"]):::endpoint
+    frontend_src_components_RpgTavernBoard_jsx_getIniciales(["frontend\src\components\RpgTavernBoard:getIniciales"]):::endpoint
+    frontend_src_utils_rpgTitles_js_getTituloRpg(["frontend\src\utils\rpgTitles:getTituloRpg"]):::endpoint
+    frontend_src_components_HomeView_jsx_HomeView -.-> frontend_src_components_RpgTavernBoard_jsx_RpgTavernBoard
+    frontend_src_components_HomeView_jsx_HomeView -.-> frontend_src_components_HomeView_jsx_getIniciales
+    frontend_src_components_HomeView_jsx_HomeView -.-> frontend_src_components_HomeView_jsx_getNombreArea
+    frontend_src_components_HomeView_jsx_HomeView -.-> frontend_src_utils_rpgTitles_js_getTituloRpg
+    frontend_src_components_HomeView_jsx_HomeView -.-> frontend_src_components_HomeView_jsx_getFechaFormateada
+    frontend_src_components_RpgTavernBoard_jsx_RpgTavernBoard -.-> frontend_src_components_RpgTavernBoard_jsx_QuillIcon
+    frontend_src_components_RpgTavernBoard_jsx_RpgTavernBoard -.-> frontend_src_components_RpgTavernBoard_jsx_getFechaMedieval
+    frontend_src_components_RpgTavernBoard_jsx_RpgTavernBoard -.-> frontend_src_components_RpgTavernBoard_jsx_getIniciales
+    frontend_src_components_RpgTavernBoard_jsx_RpgTavernBoard -.-> frontend_src_utils_rpgTitles_js_getTituloRpg
+    frontend_src_components_RpgTavernBoard_jsx_RpgTavernBoard -.-> frontend_src_components_RpgTavernBoard_jsx_AxesIcon
+    frontend_src_components_RpgTavernBoard_jsx_RpgTavernBoard -.-> frontend_src_components_RpgTavernBoard_jsx_CalendarRpgIcon
+    frontend_src_components_RpgTavernBoard_jsx_RpgTavernBoard -.-> frontend_src_components_RpgTavernBoard_jsx_ShieldIcon
+    frontend_src_components_RpgTavernBoard_jsx_RpgTavernBoard -.-> frontend_src_components_RpgTavernBoard_jsx_CoinPouchIcon

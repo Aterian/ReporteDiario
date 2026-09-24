@@ -97,7 +97,7 @@ export default function CheckForm({ onRegistroGuardado, onVolver, tema }) {
   const areaNombreFinal = (esUsuarioAreaEspecial && areaElegida)
     ? areaElegida
     : (MAPA_AREAS[areaActiva] || areaActiva || 'General');
-  const esCampañaOCampo = lugar === 'Campaña / Campo';
+  const esCampañaOCampo = lugar === 'Campo' || lugar === 'Campaña / Campo';
   const esFranco = lugar === 'Franco';
   const esFeriadoTrabajado = lugar === 'Feriado Trabajado';
   const esVacaciones = lugar === 'Vacaciones';
@@ -618,7 +618,7 @@ export default function CheckForm({ onRegistroGuardado, onVolver, tema }) {
                       }`}
                       onClick={() => {
                         setLugar(item.id);
-                        if (!esRRHH && item.id !== 'Campaña / Campo') {
+                        if (!esRRHH && item.id !== 'Campo' && item.id !== 'Campaña / Campo') {
                           setUsarRangoFechas(false);
                         }
                       }}
@@ -1113,7 +1113,7 @@ export default function CheckForm({ onRegistroGuardado, onVolver, tema }) {
                     : esLicencia
                     ? (usarRangoFechas ? 'Registrar Período de Licencia' : 'Registrar Licencia')
                     : usarRangoFechas && esCampañaOCampo
-                    ? (isRpg ? '🌲 Registrar Gran Expedición' : 'Registrar Rango Campaña')
+                    ? (isRpg ? '🌲 Registrar Gran Expedición' : 'Registrar Rango Campo')
                     : usarRangoFechas
                     ? `Registrar Rango (${lugar})`
                     : (isRpg ? `⚡ ¡Sellar Misión Diaria! (+${Math.round(totalHs * 100)} EXP)` : 'Registrar Check Diario')}

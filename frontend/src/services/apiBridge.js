@@ -1,7 +1,10 @@
-/**
- * Puente de comunicación entre React y el backend en Python (pywebview).
- * Incluye un fallback para pruebas directas en navegadores convencionales.
- */
+// Purgar inmediatamente cualquier dato simulado residual de versiones anteriores
+try {
+  localStorage.removeItem('ingeap_rosters_mock');
+  localStorage.removeItem('ingeap_historial_mock');
+} catch (e) {
+  // Ignorar en entornos sin acceso a localStorage
+}
 
 const mockApi = {
   obtener_estado_sesion: async () => {
@@ -16,10 +19,7 @@ const mockApi = {
     return { logueado: false, usuario: null };
   },
   iniciar_sesion: async (nombre, dni) => {
-    const nombreNormalizado = nombre.trim().toLowerCase();
     const dniNormalizado = dni.trim();
-    
-    // Simulación con algunos usuarios válidos de prueba
     if (dniNormalizado.length >= 7) {
       const areaSimulada = dniNormalizado === '33357062' ? 'N' : dniNormalizado.endsWith('4') ? 'I' : 'A';
       const usuario = { nombre: nombre.trim(), dni: dniNormalizado, area: areaSimulada };
@@ -49,140 +49,33 @@ const mockApi = {
     const filtrados = todos.filter(t => t.includes(cod));
     return filtrados.length > 0 ? filtrados : todos;
   },
-  guardar_check_diario: async (datos) => {
-    const sesionLocal = localStorage.getItem('ingeap_sesion_mock');
-    const sesion = sesionLocal ? JSON.parse(sesionLocal) : null;
-    const historialRaw = localStorage.getItem('ingeap_historial_mock') || '[]';
-    const historial = JSON.parse(historialRaw);
-    historial.unshift({
-      id: Date.now(),
-      empleado: sesion?.nombre || 'Empleado',
-      usuario_mail: sesion?.mail || '',
-      ...datos,
-      sincronizado: 1,
-      creado_en: new Date().toISOString().replace('T', ' ').substring(0, 19)
-    });
-    localStorage.setItem('ingeap_historial_mock', JSON.stringify(historial));
-    return { exito: true, mensaje: 'Registro guardado correctamente.' };
-  },
-  obtener_historial: async () => {
-    const sesionLocal = localStorage.getItem('ingeap_sesion_mock');
-    const sesion = sesionLocal ? JSON.parse(sesionLocal) : null;
-    const historialRaw = localStorage.getItem('ingeap_historial_mock');
-    if (historialRaw) {
-      const items = JSON.parse(historialRaw);
-      if (!sesion) return items;
-      return items.filter((i) => {
-        const mailMatch = i.usuario_mail && sesion.mail && i.usuario_mail.toLowerCase() === sesion.mail.toLowerCase();
-        const nomMatch = i.empleado && sesion.nombre && i.empleado.toLowerCase() === sesion.nombre.toLowerCase();
-        return mailMatch || nomMatch;
-      });
-    }
-    return [];
-  },
-  verificar_registro_hoy: async () => {
-    const sesionLocal = localStorage.getItem('ingeap_sesion_mock');
-    const sesion = sesionLocal ? JSON.parse(sesionLocal) : null;
-    const historialRaw = localStorage.getItem('ingeap_historial_mock');
-    if (!sesion || !historialRaw) return { registrado: false };
-    const hoy = new Date().toISOString().split('T')[0];
-    const items = JSON.parse(historialRaw);
-    const registrado = items.some(
-      (i) => i.fecha === hoy && (i.usuario_mail === sesion.mail || i.empleado === sesion.nombre)
-    );
-    return { registrado };
-  },
+  guardar_check_diario: async (datos) => ({ exito: true, mensaje: 'Registro guardado (simulado).' }),
+  obtener_historial: async () => ([]),
+  verificar_registro_hoy: async () => ({ registrado: false }),
   verificar_actualizacion: async () => ({ actualizacion_disponible: false }),
   aplicar_actualizacion: async () => ({ exito: true }),
-  guardar_roster: async (datos) => {
-    const raw = localStorage.getItem('ingeap_rosters_mock') || '[]';
-    const lista = JSON.parse(raw);
-    const id = datos.id || 'mock-' + Math.random().toString(36).substring(2, 9);
-    const nuevo = { ...datos, id, creado_en: new Date().toISOString() };
-    const idx = lista.findIndex(r => r.id === id);
-    if (idx >= 0) {
-      lista[idx] = nuevo;
-    } else {
-      lista.push(nuevo);
-    }
-    localStorage.setItem('ingeap_rosters_mock', JSON.stringify(lista));
-    return { exito: true, id };
-  },
-  obtener_rosters: async (desde, hasta) => {
-    const raw = localStorage.getItem('ingeap_rosters_mock') || '[]';
-    const lista = JSON.parse(raw);
-    if (!desde || !hasta) return lista;
-    return lista.filter(r => r.fecha_inicio <= hasta && r.fecha_fin >= desde);
-  },
-  eliminar_roster: async (id) => {
-    const raw = localStorage.getItem('ingeap_rosters_mock') || '[]';
-    let lista = JSON.parse(raw);
-    lista = lista.filter(r => r.id !== id);
-    localStorage.setItem('ingeap_rosters_mock', JSON.stringify(lista));
-    return { exito: true };
-  },
+  guardar_roster: async (datos) => ({ exito: true, id: datos.id || 'mock-' + Date.now() }),
+  obtener_rosters: async (desde, hasta) => ([]),
+  eliminar_roster: async (id) => ({ exito: true }),
+  purgar_rosters_locales: async () => ({ exito: true }),
   exportar_roster_excel: async (anio, mes, proyecto = '') => {
-    alert(`[Modo Simulado] Se exportaría el Excel para el proyecto "${proyecto || 'Todos'}" del mes ${mes}/${anio} con 3 hojas.`);
-    return { exito: true, mensaje: `Excel generado en modo simulado para ${proyecto || 'Ingeap'}.` };
+    alert(`[Modo Simulado] Se exportaría el Excel para "${proyecto || 'Todos'}" del mes ${mes}/${anio}.`);
+    return { exito: true, mensaje: 'Excel generado (modo simulado).' };
   },
   redimensionar_ventana: async () => ({ exito: true }),
   maximizar_ventana: async () => ({ exito: true }),
   restaurar_ventana: async () => ({ exito: true }),
   refrescar_catalogos_sheets: async () => ({ exito: true, mensaje: 'Catálogos actualizados (simulado).' }),
-  obtener_historial_otros_empleados: async (filtroEmpleado = '') => {
-    const raw = localStorage.getItem('ingeap_historial_mock') || '[]';
-    const lista = JSON.parse(raw);
-    if (!filtroEmpleado || filtroEmpleado.toUpperCase() === 'TODOS') return lista;
-    return lista.filter(r => (r.empleado || '').toLowerCase() === filtroEmpleado.toLowerCase());
-  },
-  eliminar_registro_asistencia: async (idRegistro) => {
-    const raw = localStorage.getItem('ingeap_historial_mock') || '[]';
-    let lista = JSON.parse(raw);
-    lista = lista.filter(r => r.id !== Number(idRegistro));
-    localStorage.setItem('ingeap_historial_mock', JSON.stringify(lista));
-    return { exito: true, mensaje: 'Registro eliminado (simulado).' };
-  },
-  obtener_todos_registros_empleado: async (empleado, mesAnio = '') => {
-    const raw = localStorage.getItem('ingeap_historial_mock') || '[]';
-    const lista = JSON.parse(raw);
-    return lista.filter(r => {
-      const empMatch = (r.empleado || '').toLowerCase() === (empleado || '').toLowerCase();
-      if (!empMatch) return false;
-      if (mesAnio) return (r.fecha || '').startsWith(mesAnio);
-      return true;
-    });
-  },
-  obtener_todos_usuarios: async (area = null) => {
-    const mockUsers = [
-      { id: 1, nombre: 'Gabriel Juarez', area: 'I', mail: 'gabriel.juarez@ingeap.com' },
-      { id: 2, nombre: 'Fernando Aimar', area: 'I', mail: 'fernando.aimar@ingeap.com' },
-      { id: 3, nombre: 'Maximiliano Kromm', area: 'I', mail: 'maximiliano.kromm@ingeap.com' },
-      { id: 4, nombre: 'Santiago Suarez', area: 'I', mail: 'santiago.suarez@ingeap.com' },
-      { id: 5, nombre: 'Ivan Emanuel Altamirano', area: 'I', mail: 'ivan.altamirano@ingeap.com' },
-      { id: 6, nombre: 'Agustina Ferrante', area: 'I', mail: 'agustina.ferrante@ingeap.com' },
-      { id: 7, nombre: 'Camila Llovio', area: 'I', mail: 'camila.llovio@ingeap.com' },
-      { id: 8, nombre: 'Facundo Ezequiel Calgaro', area: 'I', mail: 'facundo.calgaro@ingeap.com' },
-      { id: 9, nombre: 'Alejo Ferrero', area: 'I', mail: 'alejo.ferrero@ingeap.com' },
-      { id: 10, nombre: 'José María Zufiaurre', area: 'I', mail: 'jose.zufiaurre@ingeap.com' },
-      { id: 11, nombre: 'Nicolás Parajón', area: 'I', mail: 'nicolas.parajon@ingeap.com' },
-      { id: 12, nombre: 'Norberto José Luis Botto', area: 'I', mail: 'norberto.botto@ingeap.com' },
-      { id: 13, nombre: 'Pablo Zanor', area: 'I', mail: 'pablo.zanor@ingeap.com' },
-      { id: 14, nombre: 'Rodolfo Julian Lescano', area: 'I', mail: 'rodolfo.lescano@ingeap.com' },
-      { id: 15, nombre: 'Usuario Admin', area: 'N', mail: 'admin@ingeap.com' },
-      { id: 16, nombre: 'Usuario RRHH', area: 'RRHH', mail: 'rrhh@ingeap.com' }
-    ];
-    if (area && area !== 'TODOS') {
-      return mockUsers.filter(u => (u.area || '').toUpperCase() === area.toUpperCase());
-    }
-    return mockUsers;
-  }
+  obtener_historial_otros_empleados: async (filtroEmpleado = '') => ([]),
+  eliminar_registro_asistencia: async (idRegistro) => ({ exito: true, mensaje: 'Registro eliminado (simulado).' }),
+  obtener_todos_registros_empleado: async (empleado, mesAnio = '') => ([]),
+  obtener_todos_usuarios: async (area = null) => []
 };
-
 
 let cachedApi = null;
 
 async function getApi() {
-  if (cachedApi) return cachedApi;
+  if (cachedApi && cachedApi !== mockApi) return cachedApi;
 
   if (window.pywebview && window.pywebview.api) {
     cachedApi = window.pywebview.api;
@@ -202,19 +95,20 @@ async function getApi() {
 
     window.addEventListener('pywebviewready', handleReady, { once: true });
 
-    // Fallback tras 1.2 segundos si no estamos dentro de pywebview
+    // Fallback tras 3.5 segundos si no estamos dentro de pywebview
     setTimeout(() => {
       if (!resolved) {
         resolved = true;
         if (window.pywebview && window.pywebview.api) {
           cachedApi = window.pywebview.api;
+          resolve(cachedApi);
         } else {
           console.info('[apiBridge] Corriendo en modo navegador web con datos simulados.');
-          cachedApi = mockApi;
+          // NO bloquear permanentemente cachedApi con mockApi para permitir reintento
+          resolve(mockApi);
         }
-        resolve(cachedApi);
       }
-    }, 1200);
+    }, 3500);
   });
 }
 
@@ -332,6 +226,26 @@ export const api = {
     return [];
   },
 
+  async guardarRosterMultiple(listaDatos) {
+    const bridge = await getApi();
+    if (bridge.guardar_roster_multiple) {
+      return await bridge.guardar_roster_multiple(listaDatos);
+    }
+    const res = [];
+    for (const d of listaDatos) {
+      res.push(await this.guardarRoster(d));
+    }
+    return { exito: res.every(r => r && r.exito), resultados: res };
+  },
+
+  async deduplicarSheets() {
+    const bridge = await getApi();
+    if (bridge.deduplicar_sheets) {
+      return await bridge.deduplicar_sheets();
+    }
+    return { exito: false, error: 'Función no disponible' };
+  },
+
   async guardarRoster(datos) {
     const bridge = await getApi();
     if (bridge.guardar_roster) {
@@ -418,6 +332,15 @@ export const api = {
       return await bridge.obtener_todos_registros_empleado(empleado, mesAnio);
     }
     return [];
+  },
+
+  async purgarRostersLocales() {
+    const bridge = await getApi();
+    if (bridge.purgar_rosters_locales) {
+      return await bridge.purgar_rosters_locales();
+    }
+    return { exito: true };
   }
 };
+
 

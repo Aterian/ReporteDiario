@@ -7,8 +7,12 @@ export default function RosterView({ usuario, onVolver, tema }) {
   // Al entrar a Roster, la ventana se maximiza a pantalla completa.
   // El tamaño se preserva al volver al menú principal para mantener una experiencia consistente.
   useEffect(() => {
+    localStorage.removeItem('ingeap_rosters_mock');
     api.maximizarVentana();
   }, []);
+
+  // Estado para el botón de refrescar / sincronización con Google Sheets
+  const [refrescando, setRefrescando] = useState(false);
 
   // Control de vista: Calendario Gantt visible u oculto
   const [mostrarCalendario, setMostrarCalendario] = useState(true);
@@ -244,6 +248,31 @@ export default function RosterView({ usuario, onVolver, tema }) {
     cargarRostersMes(anioGantt, mesGantt);
   }, [anioGantt, mesGantt]);
 
+  // Escuchar evento de actualización de catálogos o sincronización externa
+  useEffect(() => {
+    const handleCatalogosActualizados = () => {
+      cargarRostersMes(anioGantt, mesGantt);
+    };
+    window.addEventListener('catalogos-actualizados', handleCatalogosActualizados);
+    return () => {
+      window.removeEventListener('catalogos-actualizados', handleCatalogosActualizados);
+    };
+  }, [anioGantt, mesGantt]);
+
+  // Manejo de refrescar manual: depura huérfanos y recarga desde Google Sheets
+  const handleRefrescar = async () => {
+    setRefrescando(true);
+    try {
+      localStorage.removeItem('ingeap_rosters_mock');
+      await api.refrescarCatalogos();
+    } catch (err) {
+      console.error('Error al refrescar catálogos de Roster:', err);
+    } finally {
+      await cargarRostersMes(anioGantt, mesGantt);
+      setRefrescando(false);
+    }
+  };
+
   // Manejo de cambio de mes en el Gantt
   const cambiarMes = (delta) => {
     let nuevoMes = mesGantt + delta;
@@ -325,11 +354,11 @@ export default function RosterView({ usuario, onVolver, tema }) {
 
     setGuardando(true);
     try {
-      const promesas = empleadosSeleccionados.map(empNombre => {
+      const listaDatos = empleadosSeleccionados.map(empNombre => {
         const empObj = empleadosDisponibles.find(e => e.nombre === empNombre);
         const dniEmp = empObj ? empObj.dni : '';
         const mailEmp = empObj ? (empObj.mail || empObj.email || '') : '';
-        return api.guardarRoster({
+        return {
           empleado: empNombre,
           dni: dniEmp,
           usuario_mail: mailEmp,
@@ -339,11 +368,11 @@ export default function RosterView({ usuario, onVolver, tema }) {
           tipo: tipo,
           precio_dia: tipo === 'Campo' ? Number(precioDia) || 0 : 0,
           precio_domingo: tipo === 'Campo' ? Number(precioDomingo) || 0 : 0
-        });
+        };
       });
 
-      const resultados = await Promise.all(promesas);
-      const fallo = resultados.find(r => !r || !r.exito);
+      const resMultiple = await api.guardarRosterMultiple(listaDatos);
+      const fallo = !resMultiple || !resMultiple.exito;
 
       if (!fallo) {
         const cant = empleadosSeleccionados.length;
@@ -456,6 +485,32 @@ export default function RosterView({ usuario, onVolver, tema }) {
         </div>
 
         <div className="roster-top-nav-actions">
+          {/* Botón Refrescar: Sincroniza y depura registros de Sheets y BD local */}
+          <button
+            type="button"
+            className={`btn-roster-refresh ${refrescando ? 'btn-refresh-spinning' : ''}`}
+            onClick={handleRefrescar}
+            disabled={refrescando || cargandoRosters}
+            title="Refrescar y sincronizar con Google Sheets"
+          >
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className={refrescando ? 'spinner' : ''}
+            >
+              <polyline points="23 4 23 10 17 10" />
+              <polyline points="1 20 1 14 7 14" />
+              <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
+            </svg>
+            {refrescando ? 'Sincronizando...' : 'Refrescar'}
+          </button>
+
           {/* NUEVO: Botón para exportar Excel directo desde esta ventana */}
           <button
             type="button"

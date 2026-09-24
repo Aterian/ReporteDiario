@@ -36,7 +36,12 @@ from database import (
     obtener_id_proyecto,
     eliminar_registro_asistencia,
     obtener_historial_otros_empleados,
-    obtener_todos_registros_empleado
+    obtener_todos_registros_empleado,
+    obtener_version_instalada,
+    guardar_version_instalada,
+    reconciliar_rosters_con_historial,
+    purgar_rosters_huerfanos,
+    vaciar_rosters_locales
 )
 from roster_export import generar_excel_roster_mes
 from sheets_service import (
@@ -50,7 +55,8 @@ from sheets_service import (
     obtener_no_laborales_remotos,
     obtener_ids_asistencia_remotos,
     eliminar_registro_remoto,
-    sincronizar_desde_sheets_hacia_local
+    sincronizar_desde_sheets_hacia_local,
+    deduplicar_hoja_remota
 )
 
 
@@ -74,15 +80,7 @@ EMPLEADOS_AUTORIZADOS = [
 
 # Proyectos de respaldo offline si aún no se sincronizó con Google Sheets
 SERVICIOS_DISPONIBLES = [
-    "352-SF-I-1084-Rel Limp Canales Centro-Sta Fe-MEM",
-    "353-SF-I-1086-Fot Proy empalme ruta-R Neg-Baires ing",
-    "356-SF-I-1003-Fot Bat Cambio Traza CE AL-Neuqúen-Heck",
-    "354-SF-M-1085- VEP SCARAFIA SUNCHALES",
-    "351-SF-M-1076- Replanteo Corestein Santa Fe",
-    "350-SF-M-1088- MENSURA CASA CUNA RINCON",
-    "347-SF-M-1032- PRESUPUESTOS ALLASIA",
-    "345-SF-M-1043- REPLANTEO LOTES SOLARO",
-    "344-SF-M-1040- CEP IMOBERDORF"
+    "Esperando sincronizacion"
 ]
 
 
@@ -118,6 +116,56 @@ def sincronizar_catalogos_sheets():
                     print(f"[Catálogos] Área '{u_match['area']}' actualizada para sesión activa.")
     except Exception as e:
         print(f"[Catálogos] Aviso al sincronizar proyectos y usuarios: {e}")
+
+
+def sincronizar_todo_desde_sheets(motivo: str = "inicio"):
+    """
+    Realiza una reconciliación e inspección exhaustiva de la base local contra Google Sheets:
+    - Sincroniza registros pendientes locales previos
+    - Actualiza proyectos activos ('0_proyectos')
+    - Actualiza nómina de empleados autorizados ('0_usuarios')
+    - Actualiza calendario de días no laborales
+    - Compara y purga registros de '1_asistencia_informada' (eliminando locales ausentes en Sheets)
+    """
+    print(f"[SyncGlobal] Iniciando reconciliación total contra Google Sheets ({motivo})...")
+    try:
+        try:
+            sincronizar_pendientes()
+        except Exception as e_pend:
+            print(f"[SyncGlobal] Aviso al sincronizar pendientes: {e_pend}")
+
+        p = obtener_proyectos_remotos()
+        if p:
+            guardar_proyectos_cache(p)
+
+        u = obtener_usuarios_remotos()
+        if u:
+            guardar_usuarios_cache(u)
+            sesion = obtener_sesion_activa()
+            if sesion:
+                dni_act = sesion.get("dni", "").strip()
+                u_match = next((usr for usr in u if str(usr.get("dni", "")).strip() == dni_act), None)
+                if u_match and u_match.get("area") and sesion.get("area") != u_match["area"]:
+                    guardar_sesion_activa(
+                        nombre=sesion.get("nombre", ""),
+                        dni=dni_act,
+                        mail=sesion.get("mail", ""),
+                        avatar=sesion.get("avatar", ""),
+                        area=u_match["area"]
+                    )
+
+        nl = obtener_no_laborales_remotos()
+        if nl:
+            guardar_no_laborales_cache(nl)
+
+        res_asist = sincronizar_desde_sheets_hacia_local()
+        purgar_rosters_huerfanos()
+        print(f"[SyncGlobal] Reconciliación ({motivo}) exitosa: {res_asist}")
+        return True
+    except Exception as e:
+        print(f"[SyncGlobal] Error en reconciliación total ({motivo}): {e}")
+        return False
+
 
 class ApiPuente:
     """Métodos accesibles desde React mediante window.pywebview.api."""
@@ -261,13 +309,22 @@ class ApiPuente:
     def refrescar_catalogos_sheets(self):
         """
         Descarga remotamente proyectos, usuarios autorizados y días no laborales
-        desde Google Sheets para actualizar las cachés locales SQLite en tiempo real.
+        desde Google Sheets para actualizar las cachés locales SQLite en tiempo real,
+        y reconcilia la tabla '1_asistencia_informada' eliminando registros locales ausentes en Sheets.
         """
         try:
+            # 1. Intentar subir primero cualquier reporte local pendiente
+            try:
+                sincronizar_pendientes()
+            except Exception as e_pend:
+                print(f"[Refrescar] Aviso al sincronizar pendientes: {e_pend}")
+
+            # 2. Descargar y actualizar proyectos
             p_remotos = obtener_proyectos_remotos()
             if p_remotos:
                 guardar_proyectos_cache(p_remotos)
 
+            # 3. Descargar y actualizar usuarios
             u_remotos = obtener_usuarios_remotos()
             if u_remotos:
                 guardar_usuarios_cache(u_remotos)
@@ -284,20 +341,42 @@ class ApiPuente:
                             area=u_match["area"]
                         )
 
+            # 4. Descargar y actualizar días no laborales
             nl_remotos = obtener_no_laborales_remotos()
             if nl_remotos:
                 guardar_no_laborales_cache(nl_remotos)
 
-            # Sincronizar en segundo plano el historial general de Sheets hacia SQLite
-            threading.Thread(target=sincronizar_desde_sheets_hacia_local, daemon=True).start()
+            # 4.1 Reconciliar rosters con historial para recuperar cualquier día faltante
+            try:
+                reconciliar_rosters_con_historial()
+            except Exception as e_rec:
+                print(f'[Refrescar] Aviso al reconciliar rosters: {e_rec}')
+
+            # 5. Sincronizar sincrónicamente '1_asistencia_informada', purgando registros locales inexistentes
+            res_asist = sincronizar_desde_sheets_hacia_local()
+            cant_del = res_asist.get("eliminados", 0) if isinstance(res_asist, dict) else 0
+            cant_ins = res_asist.get("insertados", 0) if isinstance(res_asist, dict) else 0
+            cant_act = res_asist.get("actualizados", 0) if isinstance(res_asist, dict) else 0
+
+            # 6. Purgar también cualquier registro de la tabla rosters cuyos días ya no existan en historial
+            cant_rosters_del = purgar_rosters_huerfanos()
 
             cant_p = len(p_remotos) if p_remotos else 0
             cant_u = len(u_remotos) if u_remotos else 0
+
+            msj = f"Catálogos y asistencias actualizados ({cant_p} proyectos, {cant_u} empleados)."
+            if cant_del > 0 or cant_rosters_del > 0:
+                msj += f" Se depuraron {cant_del} asistencia(s) y {cant_rosters_del} turno(s) de roster eliminados en Google Sheets."
+
             return {
                 "exito": True,
-                "mensaje": f"Catálogos actualizados ({cant_p} proyectos, {cant_u} empleados).",
+                "mensaje": msj,
                 "proyectos": cant_p,
-                "usuarios": cant_u
+                "usuarios": cant_u,
+                "asistencias_insertadas": cant_ins,
+                "asistencias_actualizadas": cant_act,
+                "asistencias_depuradas": cant_del,
+                "rosters_depurados": cant_rosters_del
             }
         except Exception as e:
             print(f"[Catálogos] Error al refrescar desde Sheets: {e}")
@@ -643,7 +722,7 @@ class ApiPuente:
         """Retorna todos los registros de asistencia de un empleado específico para auditar en RRHH."""
         return obtener_todos_registros_empleado(empleado=empleado, mes_anio=mes_anio)
 
-    def eliminar_registro_asistencia(self, id_registro: int):
+    def eliminar_registro_asistencia(self, id_registro: int | str):
         """Elimina un reporte de asistencia localmente y dispara el borrado en Google Sheets."""
         try:
             res = eliminar_registro_asistencia(int(id_registro))
@@ -764,8 +843,8 @@ class ApiPuente:
                 print(f"[Ventana] Error al restaurar: {e}")
         return {"exito": True}
 
-    def guardar_roster(self, datos: dict):
-        """Guarda o actualiza un registro de roster con identificador UUID y sincroniza con Google Sheets."""
+    def _guardar_roster_interno(self, datos: dict, disparar_sync: bool = True):
+        """Lógica central para guardar un roster e insertar sus asistencias en historial."""
         try:
             id_roster = str(datos.get("id") or "").strip()
             old_roster = None
@@ -781,15 +860,12 @@ class ApiPuente:
             if not res or not res.get("exito"):
                 return res
 
-            # Cargar los registros en el historial y Google Sheets siguiendo el mismo concepto
-            # que un registro normal, pero en lugar de campo/campaña debe decir "Roster"
             empleado = str(datos.get("empleado", "")).strip()
             proyecto = str(datos.get("proyecto", "")).strip()
             fecha_inicio = str(datos.get("fecha_inicio", "")).strip()
             fecha_fin = str(datos.get("fecha_fin", "")).strip()
             tipo = str(datos.get("tipo", "Campo")).strip()
 
-            # Obtener correo del empleado para las columnas de Google Sheets
             usuario_mail = str(datos.get("usuario_mail", "")).strip()
             if not usuario_mail and empleado:
                 usuarios_disp = obtener_usuarios_cache() or EMPLEADOS_AUTORIZADOS
@@ -797,7 +873,6 @@ class ApiPuente:
                 if emp_match:
                     usuario_mail = emp_match.get("mail") or emp_match.get("email") or ""
 
-            # Determinar lista de fechas del rango nuevo
             from datetime import datetime as dt, timedelta
             fechas_a_cargar = []
             if fecha_inicio and fecha_fin:
@@ -815,7 +890,7 @@ class ApiPuente:
             elif fecha_inicio:
                 fechas_a_cargar = [fecha_inicio]
 
-            # Si se está modificando un registro previo, limpiar días antiguos que ya no correspondan
+            # Limpiar días antiguos si cambió el rango o empleado
             if old_roster:
                 old_emp = old_roster.get("empleado", "")
                 old_ini = old_roster.get("fecha_inicio", "")
@@ -834,7 +909,6 @@ class ApiPuente:
                     except Exception:
                         fechas_antiguas = [old_ini]
                 
-                # Fechas a remover del historial
                 with obtener_conexion() as conn:
                     cur = conn.cursor()
                     for f_ant in fechas_antiguas:
@@ -849,67 +923,104 @@ class ApiPuente:
             tipo_ocf = "Roster" if es_campo else "Franco"
             servicio = proyecto
             horas = 8.0 if es_campo else 0.0
-            fecha_hora = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
             emp_id = obtener_id_empleado(empleado)
             proy_id = obtener_id_proyecto(proyecto) if proyecto else ""
+            sesion = obtener_sesion_activa()
             cargado_por_rrhh = sesion["nombre"] if sesion else "RRHH"
 
-            with obtener_conexion() as conn:
-                cursor = conn.cursor()
-                for dia_f in fechas_a_cargar:
+            # Reconciliar/guardar jornadas en historial
+            for dia_f in fechas_a_cargar:
+                with obtener_conexion() as conn:
+                    cursor = conn.cursor()
                     cursor.execute(
                         "SELECT id FROM historial WHERE empleado = ? AND fecha = ?",
                         (empleado, dia_f)
                     )
                     existente = cursor.fetchone()
-                    if existente:
-                        actualizar_registro_asistencia(
-                            id_registro=existente["id"],
-                            fecha=dia_f,
-                            tipo_ocf=tipo_ocf,
-                            servicio=servicio,
-                            horas=horas,
-                            empleado=empleado,
-                            id_empleado=emp_id,
-                            id_proyecto=proy_id,
-                            cargado_por=cargado_por_rrhh
-                        )
-                    else:
-                        guardar_registro_asistencia(
-                            id_asistencia=str(uuid.uuid4()),
-                            empleado=empleado,
-                            fecha=dia_f,
-                            tipo_ocf=tipo_ocf,
-                            servicio=servicio,
-                            horas=horas,
-                            instrumental="",
-                            usuario_mail=usuario_mail,
-                            fecha_hora=fecha_hora,
-                            sincronizado=False,
-                            cargado_por=cargado_por_rrhh,
-                            id_empleado=emp_id,
-                            id_proyecto=proy_id
-                        )
+                if existente:
+                    actualizar_registro_asistencia(
+                        id_registro=existente["id"],
+                        fecha=dia_f,
+                        tipo_ocf=tipo_ocf,
+                        servicio=servicio,
+                        horas=horas,
+                        empleado=empleado,
+                        id_empleado=emp_id,
+                        id_proyecto=proy_id,
+                        cargado_por=cargado_por_rrhh
+                    )
+                else:
+                    guardar_registro_asistencia(
+                        id_asistencia=str(uuid.uuid4()),
+                        empleado=empleado,
+                        fecha=dia_f,
+                        tipo_ocf=tipo_ocf,
+                        servicio=servicio,
+                        horas=horas,
+                        instrumental="",
+                        usuario_mail=usuario_mail,
+                        sincronizado=False,
+                        cargado_por=cargado_por_rrhh,
+                        id_empleado=emp_id,
+                        id_proyecto=proy_id
+                    )
 
-            # Disparar sincronización en segundo plano con Google Sheets
-            threading.Thread(target=sincronizar_pendientes, daemon=True).start()
+            if disparar_sync:
+                threading.Thread(target=sincronizar_pendientes, daemon=True).start()
 
             return res
         except Exception as e:
-            print(f"[Rosters] Error al guardar roster y sincronizar con Google Sheets: {e}")
+            print(f"[Rosters] Error al guardar roster: {e}")
             return {"exito": False, "error": str(e)}
 
-    def obtener_rosters(self, fecha_desde: str | None = None, fecha_hasta: str | None = None):
-        """Retorna los registros de roster que se superpongan con el período especificado."""
+    def guardar_roster(self, datos: dict):
+        """Guarda o actualiza un registro de roster individual con identificador UUID y sincroniza con Google Sheets."""
+        return self._guardar_roster_interno(datos, disparar_sync=True)
+
+    def guardar_roster_multiple(self, lista_datos: list):
+        """Guarda múltiples registros de roster de forma atómica y ejecuta una única sincronización con Google Sheets."""
+        if not lista_datos:
+            return {"exito": False, "error": "No se recibieron datos de roster."}
         try:
+            resultados = []
+            for d in lista_datos:
+                r = self._guardar_roster_interno(d, disparar_sync=False)
+                resultados.append(r)
+            
+            # Una sola sincronización segura en segundo plano para todo el lote
+            threading.Thread(target=sincronizar_pendientes, daemon=True).start()
+            
+            todos_ok = all(r and r.get("exito") for r in resultados)
+            return {"exito": todos_ok, "resultados": resultados}
+        except Exception as e:
+            print(f"[Rosters] Error en guardar_roster_multiple: {e}")
+            return {"exito": False, "error": str(e)}
+
+    def deduplicar_sheets(self):
+        """Ejecuta la depuración de filas duplicadas en Google Sheets."""
+        return deduplicar_hoja_remota()
+
+
+    def obtener_rosters(self, fecha_desde: str | None = None, fecha_hasta: str | None = None):
+        """Retorna los registros de roster que se superpongan con el período especificado, purgando registros huérfanos."""
+        try:
+            purgar_rosters_huerfanos()
             return obtener_rosters(fecha_desde, fecha_hasta)
         except Exception as e:
             print(f"[Rosters] Error al obtener rosters: {e}")
             return []
 
+    def purgar_rosters_locales(self):
+        """Elimina todos los registros de la tabla rosters para una limpieza forzada."""
+        try:
+            cant = vaciar_rosters_locales()
+            return {"exito": True, "eliminados": cant}
+        except Exception as e:
+            return {"exito": False, "error": str(e)}
+
     def eliminar_roster(self, id_roster: str):
-        """Elimina un registro de roster por su ID UUID y limpia las entradas correspondientes en historial."""
+        """Elimina un registro de roster por su ID UUID y limpia las entradas correspondientes en historial y Google Sheets."""
         try:
             if id_roster:
                 with obtener_conexion() as conn:
@@ -929,9 +1040,20 @@ class ApiPuente:
                                     d_ini, d_fin = d_fin, d_ini
                                 curr = d_ini
                                 while curr <= d_fin:
+                                    f_str = curr.strftime("%Y-%m-%d")
+                                    cursor.execute(
+                                        "SELECT id_asistencia FROM historial WHERE empleado = ? AND fecha = ? AND tipo_ocf IN ('Roster', 'Franco')",
+                                        (emp, f_str)
+                                    )
+                                    filas_asist = cursor.fetchall()
+                                    for fa in filas_asist:
+                                        uid_remoto = fa["id_asistencia"]
+                                        if uid_remoto:
+                                            threading.Thread(target=eliminar_registro_remoto, args=(uid_remoto,), daemon=True).start()
+
                                     cursor.execute(
                                         "DELETE FROM historial WHERE empleado = ? AND fecha = ? AND tipo_ocf IN ('Roster', 'Franco')",
-                                        (emp, curr.strftime("%Y-%m-%d"))
+                                        (emp, f_str)
                                     )
                                     curr += timedelta(days=1)
                                 conn.commit()
@@ -1012,7 +1134,7 @@ def obtener_icono_tray():
     return crear_icono_calendario(64)
 
 
-APP_VERSION = "1.3.1"
+APP_VERSION = "1.3.2"
 
 _mutex_instancia = None
 
@@ -1270,11 +1392,22 @@ def main():
     # 2. Creamos las tablas locales si no existen aún
     inicializar_bd()
 
-    # Intentar sincronizar en segundo plano registros pendientes de sesiones previas
-    threading.Thread(target=sincronizar_pendientes, daemon=True).start()
+    # 3. Detección de versión o nueva instalación
+    version_previa = obtener_version_instalada()
+    es_nueva_version = (version_previa != APP_VERSION) or ("--post-install" in sys.argv)
 
-    # Sincronizar en segundo plano proyectos y usuarios desde Google Sheets
-    threading.Thread(target=sincronizar_catalogos_sheets, daemon=True).start()
+    if es_nueva_version:
+        print(f"[Version] Nueva versión o instalación detectada ({APP_VERSION}, previa: '{version_previa or 'ninguna'}'). Chequeando base local con Google Sheets...")
+        def tarea_post_instalacion():
+            ok = sincronizar_todo_desde_sheets(motivo=f"instalación/actualización v{APP_VERSION}")
+            if ok:
+                guardar_version_instalada(APP_VERSION)
+        threading.Thread(target=tarea_post_instalacion, daemon=True).start()
+    else:
+        # Arranque habitual: sincronizar pendientes, catálogos y asistencias en segundo plano
+        threading.Thread(target=sincronizar_pendientes, daemon=True).start()
+        threading.Thread(target=sincronizar_catalogos_sheets, daemon=True).start()
+        threading.Thread(target=sincronizar_desde_sheets_hacia_local, daemon=True).start()
 
     api = ApiPuente()
     ruta_dist = recurso_path(os.path.join("dist", "index.html"))
@@ -1360,4 +1493,4 @@ if __name__ == "__main__":
     import multiprocessing
     multiprocessing.freeze_support()
     asegurar_instancia_unica()
-    main()
+    main()

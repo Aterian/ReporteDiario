@@ -1,0 +1,137 @@
+graph LR
+    classDef start fill:none,stroke:#4db6ac,color:#00695c
+    classDef process fill:none,stroke:#64b5f6,color:#1565c0
+    classDef endpoint fill:none,stroke:#e57373,color:#c62828
+    classDef updated fill:#fff9c4,stroke:#f9a825,color:#f57f17
+    classDef new fill:#c8e6c9,stroke:#66bb6a,color:#2e7d32
+    backend_crear_icono_py_crear_icono_calendario(["backend\crear_icono:crear_icono_calendario"]):::endpoint
+    backend_crear_icono_py_generar_ico{{"backend\crear_icono:generar_ico"}}:::start
+    backend_database_py_actualizar_avatar_sesion{{"backend\database:actualizar_avatar_sesion"}}:::start
+    backend_database_py_actualizar_registro_asistencia{{"backend\database:actualizar_registro_asistencia [+]"}}:::start
+    backend_database_py_borrar_sesion{{"backend\database:borrar_sesion"}}:::start
+    backend_database_py_depurar_registros_eliminados{{"backend\database:depurar_registros_eliminados"}}:::start
+    backend_database_py_eliminar_registro_asistencia{{"backend\database:eliminar_registro_asistencia"}}:::start
+    backend_database_py_eliminar_registro_roster{{"backend\database:eliminar_registro_roster"}}:::start
+    backend_database_py_guardar_avatar_empleado["backend\database:guardar_avatar_empleado"]:::process
+    backend_database_py_guardar_no_laborales_cache{{"backend\database:guardar_no_laborales_cache"}}:::start
+    backend_database_py_guardar_proyectos_cache{{"backend\database:guardar_proyectos_cache"}}:::start
+    backend_database_py_guardar_registro_asistencia["backend\database:guardar_registro_asistencia [+]"]:::process
+    backend_database_py_guardar_registro_historial{{"backend\database:guardar_registro_historial"}}:::start
+    backend_database_py_guardar_registro_roster{{"backend\database:guardar_registro_roster"}}:::start
+    backend_database_py_guardar_sesion_activa{{"backend\database:guardar_sesion_activa"}}:::start
+    backend_database_py_guardar_usuarios_cache{{"backend\database:guardar_usuarios_cache"}}:::start
+    backend_database_py_guardar_version_instalada{{"backend\database:guardar_version_instalada"}}:::start
+    backend_database_py_inicializar_bd{{"backend\database:inicializar_bd"}}:::start
+    backend_database_py_marcar_como_sincronizados{{"backend\database:marcar_como_sincronizados"}}:::start
+    backend_database_py_obtener_area_por_dni["backend\database:obtener_area_por_dni"]:::process
+    backend_database_py_obtener_avatar_por_dni["backend\database:obtener_avatar_por_dni"]:::process
+    backend_database_py_obtener_historial_otros_empleados{{"backend\database:obtener_historial_otros_empleados"}}:::start
+    backend_database_py_obtener_pendientes_sincronizacion{{"backend\database:obtener_pendientes_sincronizacion"}}:::start
+    backend_database_py_obtener_proyectos_cache{{"backend\database:obtener_proyectos_cache"}}:::start
+    backend_database_py_obtener_rosters{{"backend\database:obtener_rosters"}}:::start
+    backend_database_py_obtener_sesion_activa["backend\database:obtener_sesion_activa"]:::process
+    backend_database_py_obtener_todos_registros_empleado{{"backend\database:obtener_todos_registros_empleado"}}:::start
+    backend_database_py_obtener_ultimos_registros{{"backend\database:obtener_ultimos_registros"}}:::start
+    backend_database_py_obtener_version_instalada{{"backend\database:obtener_version_instalada"}}:::start
+    backend_database_py_purgar_rosters_huerfanos["backend\database:purgar_rosters_huerfanos"]:::process
+    backend_database_py_reconciliar_rosters_con_historial{{"backend\database:reconciliar_rosters_con_historial [+]"}}:::start
+    backend_database_py_usuario_registro_hoy{{"backend\database:usuario_registro_hoy"}}:::start
+    backend_database_py_vaciar_rosters_locales{{"backend\database:vaciar_rosters_locales"}}:::start
+    backend_installer_app_py_main{{"backend\installer_app:main"}}:::start
+    backend_installer_app_py_resource_path(["backend\installer_app:resource_path"]):::endpoint
+    backend_main_py_ApiPuente_guardar_roster_interno(["backend\main:ApiPuente._guardar_roster_interno"]):::endpoint
+    backend_main_py_ApiPuente_aplicar_actualizacion{{"backend\main:ApiPuente.aplicar_actualizacion"}}:::start
+    backend_main_py_ApiPuente_guardar_roster{{"backend\main:ApiPuente.guardar_roster"}}:::start
+    backend_main_py_ApiPuente_guardar_roster_multiple{{"backend\main:ApiPuente.guardar_roster_multiple"}}:::start
+    backend_main_py_ApiPuente_set_ventana(["backend\main:ApiPuente.set_ventana"]):::endpoint
+    backend_main_py_ApiPuente_verificar_actualizacion{{"backend\main:ApiPuente.verificar_actualizacion"}}:::start
+    backend_main_py_asegurar_inicio_automatico(["backend\main:asegurar_inicio_automatico"]):::endpoint
+    backend_main_py_ejecutar_descarga_y_reinicio(["backend\main:ejecutar_descarga_y_reinicio"]):::endpoint
+    backend_main_py_main{{"backend\main:main"}}:::start
+    backend_main_py_obtener_icono_tray["backend\main:obtener_icono_tray"]:::process
+    backend_main_py_recurso_path(["backend\main:recurso_path"]):::endpoint
+    backend_main_py_sincronizar_todo_desde_sheets(["backend\main:sincronizar_todo_desde_sheets"]):::endpoint
+    backend_main_py_tarea_post_instalacion{{"backend\main:tarea_post_instalacion"}}:::start
+    backend_main_py_verificar_actualizacion_github(["backend\main:verificar_actualizacion_github"]):::endpoint
+    backend_roster_export_py_aplicar_borde(["backend\roster_export:_aplicar_borde"]):::endpoint
+    backend_roster_export_py_generar_excel_roster_mes{{"backend\roster_export:generar_excel_roster_mes"}}:::start
+    backend_sheets_service_py_buscar_archivo_credenciales["backend\sheets_service:buscar_archivo_credenciales"]:::process
+    backend_sheets_service_py_deduplicar_hoja_remota{{"backend\sheets_service:deduplicar_hoja_remota"}}:::start
+    backend_sheets_service_py_eliminar_registro_remoto{{"backend\sheets_service:eliminar_registro_remoto"}}:::start
+    backend_sheets_service_py_extraer_spreadsheet_id(["backend\sheets_service:extraer_spreadsheet_id"]):::endpoint
+    backend_sheets_service_py_obtener_cliente["backend\sheets_service:obtener_cliente"]:::process
+    backend_sheets_service_py_obtener_hoja_trabajo["backend\sheets_service:obtener_hoja_trabajo"]:::process
+    backend_sheets_service_py_obtener_ids_asistencia_remotos{{"backend\sheets_service:obtener_ids_asistencia_remotos"}}:::start
+    backend_sheets_service_py_obtener_proyectos_remotos{{"backend\sheets_service:obtener_proyectos_remotos"}}:::start
+    backend_sheets_service_py_obtener_usuarios_remotos{{"backend\sheets_service:obtener_usuarios_remotos"}}:::start
+    backend_sheets_service_py_probar_conexion{{"backend\sheets_service:probar_conexion"}}:::start
+    backend_sheets_service_py_recurso_path(["backend\sheets_service:recurso_path"]):::endpoint
+    backend_sheets_service_py_sincronizar_desde_sheets_hacia_local{{"backend\sheets_service:sincronizar_desde_sheets_hacia_local"}}:::start
+    backend_sheets_service_py_sincronizar_pendientes{{"backend\sheets_service:sincronizar_pendientes [+]"}}:::start
+    frontend_src_App_jsx_App{{"frontend\src\App:App [+]"}}:::start
+    frontend_src_components_CheckForm_jsx_getHorasEquitativas(["frontend\src\components\CheckForm:getHorasEquitativas"]):::endpoint
+    frontend_src_components_CheckForm_jsx_getTotalHoras(["frontend\src\components\CheckForm:getTotalHoras"]):::endpoint
+    frontend_src_components_CheckForm_jsx_handleSubmit{{"frontend\src\components\CheckForm:handleSubmit"}}:::start
+    frontend_src_components_HistoryView_jsx_cargarHistorial(["frontend\src\components\HistoryView:cargarHistorial"]):::endpoint
+    frontend_src_components_HistoryView_jsx_cargarServicios(["frontend\src\components\HistoryView:cargarServicios"]):::endpoint
+    frontend_src_components_HistoryView_jsx_ejecutarSincronizacion{{"frontend\src\components\HistoryView:ejecutarSincronizacion"}}:::start
+    frontend_src_components_HistoryView_jsx_handleCatalogos{{"frontend\src\components\HistoryView:handleCatalogos"}}:::start
+    frontend_src_components_HistoryView_jsx_handleGuardarModificacion{{"frontend\src\components\HistoryView:handleGuardarModificacion"}}:::start
+    frontend_src_components_OtherEmployeesHistoryView_jsx_ejecutarSincronizacion{{"frontend\src\components\OtherEmployeesHistoryView:ejecutarSincronizacion"}}:::start
+    frontend_src_components_OtherEmployeesHistoryView_jsx_handleCatalogos{{"frontend\src\components\OtherEmployeesHistoryView:handleCatalogos"}}:::start
+    frontend_src_components_OtherEmployeesHistoryView_jsx_handleConfirmarEliminacion{{"frontend\src\components\OtherEmployeesHistoryView:handleConfirmarEliminacion"}}:::start
+    frontend_src_components_OtherEmployeesHistoryView_jsx_handleGuardarModificacion{{"frontend\src\components\OtherEmployeesHistoryView:handleGuardarModificacion"}}:::start
+    frontend_src_components_RosterHistoryView_jsx_handleCatalogosActualizados{{"frontend\src\components\RosterHistoryView:handleCatalogosActualizados"}}:::start
+    frontend_src_components_RosterHistoryView_jsx_handleEliminarRegistro{{"frontend\src\components\RosterHistoryView:handleEliminarRegistro"}}:::start
+    frontend_src_components_RosterHistoryView_jsx_handleGuardarEdicion{{"frontend\src\components\RosterHistoryView:handleGuardarEdicion"}}:::start
+    frontend_src_components_RosterHistoryView_jsx_handleRefrescar{{"frontend\src\components\RosterHistoryView:handleRefrescar"}}:::start
+    frontend_src_components_RosterView_jsx_handleCatalogosActualizados{{"frontend\src\components\RosterView:handleCatalogosActualizados"}}:::start
+    frontend_src_components_RosterView_jsx_handleGuardarEdicionGantt{{"frontend\src\components\RosterView:handleGuardarEdicionGantt"}}:::start
+    frontend_src_components_RosterView_jsx_handleGuardarRoster{{"frontend\src\components\RosterView:handleGuardarRoster"}}:::start
+    frontend_src_components_RosterView_jsx_handleRefrescar{{"frontend\src\components\RosterView:handleRefrescar"}}:::start
+    style backend_database_py_actualizar_registro_asistencia stroke-width:6px
+    style backend_database_py_guardar_registro_asistencia stroke-width:6px
+    style backend_database_py_reconciliar_rosters_con_historial stroke-width:6px
+    style backend_sheets_service_py_sincronizar_pendientes stroke-width:6px
+    style frontend_src_App_jsx_App stroke-width:6px
+    backend_crear_icono_py_generar_ico -.-> backend_crear_icono_py_crear_icono_calendario
+    backend_database_py_actualizar_avatar_sesion -.-> backend_database_py_obtener_sesion_activa
+    backend_database_py_actualizar_avatar_sesion -.-> backend_database_py_guardar_avatar_empleado
+    backend_database_py_guardar_registro_historial -.-> backend_database_py_obtener_sesion_activa
+    backend_database_py_guardar_registro_historial -.-> backend_database_py_guardar_registro_asistencia
+    backend_database_py_guardar_sesion_activa -.-> backend_database_py_obtener_avatar_por_dni
+    backend_database_py_guardar_sesion_activa -.-> backend_database_py_obtener_area_por_dni
+    backend_database_py_obtener_rosters -.-> backend_database_py_purgar_rosters_huerfanos
+    backend_database_py_obtener_sesion_activa -.-> backend_database_py_obtener_avatar_por_dni
+    backend_database_py_obtener_sesion_activa -.-> backend_database_py_obtener_area_por_dni
+    backend_installer_app_py_main -.-> backend_installer_app_py_resource_path
+    backend_main_py_ApiPuente_aplicar_actualizacion -.-> backend_main_py_ejecutar_descarga_y_reinicio
+    backend_main_py_ApiPuente_guardar_roster -.-> backend_main_py_ApiPuente_guardar_roster_interno
+    backend_main_py_ApiPuente_guardar_roster_multiple -.-> backend_main_py_ApiPuente_guardar_roster_interno
+    backend_main_py_ApiPuente_verificar_actualizacion -.-> backend_main_py_verificar_actualizacion_github
+    backend_main_py_main -.-> backend_main_py_asegurar_inicio_automatico
+    backend_main_py_main -.-> backend_main_py_recurso_path
+    backend_main_py_main -.-> backend_main_py_ApiPuente_set_ventana
+    backend_main_py_main -.-> backend_main_py_obtener_icono_tray
+    backend_main_py_obtener_icono_tray -.-> backend_main_py_recurso_path
+    backend_main_py_tarea_post_instalacion -.-> backend_main_py_sincronizar_todo_desde_sheets
+    backend_roster_export_py_generar_excel_roster_mes -.-> backend_roster_export_py_aplicar_borde
+    backend_sheets_service_py_buscar_archivo_credenciales -.-> backend_sheets_service_py_recurso_path
+    backend_sheets_service_py_deduplicar_hoja_remota -.-> backend_sheets_service_py_obtener_hoja_trabajo
+    backend_sheets_service_py_eliminar_registro_remoto -.-> backend_sheets_service_py_obtener_hoja_trabajo
+    backend_sheets_service_py_obtener_cliente -.-> backend_sheets_service_py_buscar_archivo_credenciales
+    backend_sheets_service_py_obtener_hoja_trabajo -.-> backend_sheets_service_py_extraer_spreadsheet_id
+    backend_sheets_service_py_obtener_hoja_trabajo -.-> backend_sheets_service_py_obtener_cliente
+    backend_sheets_service_py_obtener_ids_asistencia_remotos -.-> backend_sheets_service_py_obtener_hoja_trabajo
+    backend_sheets_service_py_obtener_proyectos_remotos -.-> backend_sheets_service_py_obtener_hoja_trabajo
+    backend_sheets_service_py_obtener_usuarios_remotos -.-> backend_sheets_service_py_obtener_hoja_trabajo
+    backend_sheets_service_py_probar_conexion -.-> backend_sheets_service_py_extraer_spreadsheet_id
+    backend_sheets_service_py_probar_conexion -.-> backend_sheets_service_py_obtener_hoja_trabajo
+    backend_sheets_service_py_sincronizar_desde_sheets_hacia_local -.-> backend_sheets_service_py_obtener_hoja_trabajo
+    backend_sheets_service_py_sincronizar_pendientes -.-> backend_sheets_service_py_obtener_hoja_trabajo
+    frontend_src_components_CheckForm_jsx_handleSubmit -.-> frontend_src_components_CheckForm_jsx_getTotalHoras
+    frontend_src_components_CheckForm_jsx_handleSubmit -.-> frontend_src_components_CheckForm_jsx_getHorasEquitativas
+    frontend_src_components_HistoryView_jsx_ejecutarSincronizacion -.-> frontend_src_components_HistoryView_jsx_cargarHistorial
+    frontend_src_components_HistoryView_jsx_handleCatalogos --> frontend_src_components_HistoryView_jsx_cargarHistorial
+    frontend_src_components_HistoryView_jsx_handleCatalogos --> frontend_src_components_HistoryView_jsx_cargarServicios
+    frontend_src_components_HistoryView_jsx_handleGuardarModificacion -.-> frontend_src_components_HistoryView_jsx_cargarHistorial

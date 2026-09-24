@@ -6,9 +6,11 @@ export default function RosterHistoryView({ onVolver, onNuevoRoster, tema }) {
 
   // Poner la ventana en pantalla completa al entrar (se conserva el tamaño al salir)
   useEffect(() => {
+    localStorage.removeItem('ingeap_rosters_mock');
     api.maximizarVentana();
   }, []);
 
+  const [refrescando, setRefrescando] = useState(false);
   const [mesSeleccionado, setMesSeleccionado] = useState(() => new Date().getMonth() + 1);
   const [anioSeleccionado, setAnioSeleccionado] = useState(() => new Date().getFullYear());
   const [proyectosDisponibles, setProyectosDisponibles] = useState([]);
@@ -84,6 +86,30 @@ export default function RosterHistoryView({ onVolver, onNuevoRoster, tema }) {
   useEffect(() => {
     cargarRegistrosMes(anioSeleccionado, mesSeleccionado);
   }, [anioSeleccionado, mesSeleccionado]);
+
+  // Escuchar evento de actualización de catálogos o sincronización
+  useEffect(() => {
+    const handleCatalogosActualizados = () => {
+      cargarRegistrosMes(anioSeleccionado, mesSeleccionado);
+    };
+    window.addEventListener('catalogos-actualizados', handleCatalogosActualizados);
+    return () => {
+      window.removeEventListener('catalogos-actualizados', handleCatalogosActualizados);
+    };
+  }, [anioSeleccionado, mesSeleccionado]);
+
+  const handleRefrescar = async () => {
+    setRefrescando(true);
+    try {
+      localStorage.removeItem('ingeap_rosters_mock');
+      await api.refrescarCatalogos();
+    } catch (err) {
+      console.error('Error al refrescar catálogos de Roster:', err);
+    } finally {
+      await cargarRegistrosMes(anioSeleccionado, mesSeleccionado);
+      setRefrescando(false);
+    }
+  };
 
   const handleAbrirEditar = (r) => {
     setEditId(r.id);
@@ -219,6 +245,32 @@ export default function RosterHistoryView({ onVolver, onNuevoRoster, tema }) {
         </div>
 
         <div className="roster-top-nav-actions">
+          {/* Botón Refrescar: Sincroniza y depura registros de Sheets y BD local */}
+          <button
+            type="button"
+            className={`btn-roster-refresh ${refrescando ? 'btn-refresh-spinning' : ''}`}
+            onClick={handleRefrescar}
+            disabled={refrescando || cargando}
+            title="Refrescar y sincronizar con Google Sheets"
+          >
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className={refrescando ? 'spinner' : ''}
+            >
+              <polyline points="23 4 23 10 17 10" />
+              <polyline points="1 20 1 14 7 14" />
+              <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
+            </svg>
+            {refrescando ? 'Sincronizando...' : 'Refrescar'}
+          </button>
+
           <button
             type="button"
             className="btn-go-new-roster"

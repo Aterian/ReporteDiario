@@ -1,0 +1,26 @@
+graph LR
+    classDef start fill:none,stroke:#4db6ac,color:#00695c
+    classDef process fill:none,stroke:#64b5f6,color:#1565c0
+    classDef endpoint fill:none,stroke:#e57373,color:#c62828
+    classDef updated fill:#fff9c4,stroke:#f9a825,color:#f57f17
+    classDef new fill:#c8e6c9,stroke:#66bb6a,color:#2e7d32
+    backend_sheets_service_py_buscar_archivo_credenciales["backend\sheets_service:buscar_archivo_credenciales"]:::process
+    backend_sheets_service_py_cargar_configuracion(["backend\sheets_service:cargar_configuracion"]):::endpoint
+    backend_sheets_service_py_extraer_spreadsheet_id(["backend\sheets_service:extraer_spreadsheet_id"]):::endpoint
+    backend_sheets_service_py_obtener_cliente["backend\sheets_service:obtener_cliente"]:::process
+    backend_sheets_service_py_obtener_hoja_trabajo["backend\sheets_service:obtener_hoja_trabajo"]:::process
+    backend_sheets_service_py_obtener_no_laborales_remotos["backend\sheets_service:obtener_no_laborales_remotos"]:::process
+    backend_sheets_service_py_recurso_path(["backend\sheets_service:recurso_path"]):::endpoint
+    backend_sheets_service_py_sincronizar_pendientes{{"backend\sheets_service:sincronizar_pendientes"}}:::start
+    backend_sheets_service_py_buscar_archivo_credenciales -.-> backend_sheets_service_py_recurso_path
+    backend_sheets_service_py_obtener_cliente -.-> backend_sheets_service_py_cargar_configuracion
+    backend_sheets_service_py_obtener_cliente -.-> backend_sheets_service_py_buscar_archivo_credenciales
+    backend_sheets_service_py_obtener_hoja_trabajo -.-> backend_sheets_service_py_cargar_configuracion
+    backend_sheets_service_py_obtener_hoja_trabajo -.-> backend_sheets_service_py_extraer_spreadsheet_id
+    backend_sheets_service_py_obtener_hoja_trabajo -.-> backend_sheets_service_py_obtener_cliente
+    backend_sheets_service_py_obtener_no_laborales_remotos -.-> backend_sheets_service_py_cargar_configuracion
+    backend_sheets_service_py_obtener_no_laborales_remotos -.-> backend_sheets_service_py_extraer_spreadsheet_id
+    backend_sheets_service_py_obtener_no_laborales_remotos -.-> backend_sheets_service_py_obtener_cliente
+    backend_sheets_service_py_sincronizar_pendientes -.-> backend_sheets_service_py_cargar_configuracion
+    backend_sheets_service_py_sincronizar_pendientes -.-> backend_sheets_service_py_obtener_no_laborales_remotos
+    backend_sheets_service_py_sincronizar_pendientes -.-> backend_sheets_service_py_obtener_hoja_trabajo

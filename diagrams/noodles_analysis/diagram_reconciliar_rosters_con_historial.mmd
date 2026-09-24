@@ -1,0 +1,28 @@
+graph LR
+    classDef start fill:none,stroke:#4db6ac,color:#00695c
+    classDef process fill:none,stroke:#64b5f6,color:#1565c0
+    classDef endpoint fill:none,stroke:#e57373,color:#c62828
+    classDef updated fill:#fff9c4,stroke:#f9a825,color:#f57f17
+    classDef new fill:#c8e6c9,stroke:#66bb6a,color:#2e7d32
+    backend_database_py_calcular_dia_semana["backend\database:calcular_dia_semana"]:::process
+    backend_database_py_es_fecha_feriado["backend\database:es_fecha_feriado"]:::process
+    backend_database_py_normalizar_fecha_iso(["backend\database:normalizar_fecha_iso"]):::endpoint
+    backend_database_py_obtener_conexion(["backend\database:obtener_conexion"]):::endpoint
+    backend_database_py_obtener_id_empleado["backend\database:obtener_id_empleado"]:::process
+    backend_database_py_obtener_id_proyecto["backend\database:obtener_id_proyecto"]:::process
+    backend_database_py_obtener_no_laborales_cache["backend\database:obtener_no_laborales_cache"]:::process
+    backend_database_py_obtener_usuarios_cache["backend\database:obtener_usuarios_cache"]:::process
+    backend_database_py_reconciliar_rosters_con_historial{{"backend\database:reconciliar_rosters_con_historial"}}:::start
+    backend_database_py_calcular_dia_semana -.-> backend_database_py_normalizar_fecha_iso
+    backend_database_py_es_fecha_feriado -.-> backend_database_py_normalizar_fecha_iso
+    backend_database_py_es_fecha_feriado -.-> backend_database_py_obtener_no_laborales_cache
+    backend_database_py_obtener_id_empleado -.-> backend_database_py_obtener_conexion
+    backend_database_py_obtener_id_proyecto -.-> backend_database_py_obtener_conexion
+    backend_database_py_obtener_no_laborales_cache -.-> backend_database_py_obtener_conexion
+    backend_database_py_obtener_usuarios_cache -.-> backend_database_py_obtener_conexion
+    backend_database_py_reconciliar_rosters_con_historial -.-> backend_database_py_obtener_conexion
+    backend_database_py_reconciliar_rosters_con_historial -.-> backend_database_py_obtener_usuarios_cache
+    backend_database_py_reconciliar_rosters_con_historial -.-> backend_database_py_obtener_id_empleado
+    backend_database_py_reconciliar_rosters_con_historial -.-> backend_database_py_obtener_id_proyecto
+    backend_database_py_reconciliar_rosters_con_historial -.-> backend_database_py_calcular_dia_semana
+    backend_database_py_reconciliar_rosters_con_historial -.-> backend_database_py_es_fecha_feriado
