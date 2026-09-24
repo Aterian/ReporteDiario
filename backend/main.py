@@ -1141,7 +1141,7 @@ def obtener_icono_tray():
     return crear_icono_calendario(64)
 
 
-APP_VERSION = "1.3.4"
+APP_VERSION = "1.3.5"
 
 _mutex_instancia = None
 
