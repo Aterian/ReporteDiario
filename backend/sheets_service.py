@@ -267,11 +267,11 @@ def obtener_no_laborales_remotos(spreadsheet_id: str = "") -> list:
 def sincronizar_pendientes() -> dict:
     """
     Lee los registros con sincronizado=0 de la base local y los sube/actualiza
-    en la hoja '1_asistencia_informada' con las 13 columnas completas.
-    Utiliza un bloqueo seguro para impedir concurrencia de hilos y valida si la fila
-    ya existe por id_asistencia o por (empleado, fecha) para evitar duplicados en Google Sheets.
+    en la hoja '1_asistencia_informada' con las 14 columnas completas.
+    Garantiza que cargas con rango de fechas o múltiples proyectos por día
+    se inserten íntegramente sin omisiones ni sobreescrituras accidentales.
     """
-    if not _sync_lock.acquire(blocking=True, timeout=45):
+    if not _sync_lock.acquire(blocking=True, timeout=60):
         return {
             "exito": False,
             "error": "Ya existe una sincronización en curso. Por favor espere unos segundos."
@@ -304,41 +304,47 @@ def sincronizar_pendientes() -> dict:
 
         _, ws = obtener_hoja_trabajo()
 
-        # Obtener todas las filas remotas existentes para mapear por ID y por (empleado, fecha)
+        # Obtener todas las filas remotas existentes para mapear por ID único
         todas_filas = ws.get_all_values()
         headers = [h.strip().lower() for h in todas_filas[0]] if todas_filas else []
         idx_id = headers.index("id_asistencia") if "id_asistencia" in headers else 0
         idx_emp = headers.index("empleado") if "empleado" in headers else 1
         idx_fecha = headers.index("fecha") if "fecha" in headers else 2
+        idx_serv = headers.index("servicio") if "servicio" in headers else 4
 
         mapa_ids_remotos = {}
-        mapa_emp_fecha = {}
+        # Mapeo secundario solo para registros históricos sin UUID remoto: (emp, fecha, servicio)
+        mapa_historico_sin_id = {}
         for r_idx, f in enumerate(todas_filas[1:], start=2):
             uid_val = f[idx_id].strip() if len(f) > idx_id else ""
             emp_val = f[idx_emp].strip().lower() if len(f) > idx_emp else ""
             fec_val = f[idx_fecha].strip() if len(f) > idx_fecha else ""
-            if uid_val and uid_val != "id_asistencia":
+            serv_val = f[idx_serv].strip().lower() if len(f) > idx_serv else ""
+
+            if uid_val and uid_val.lower() != "id_asistencia":
                 mapa_ids_remotos[uid_val] = r_idx
-            if emp_val and fec_val:
-                mapa_emp_fecha[(emp_val, fec_val)] = r_idx
+            elif emp_val and fec_val:
+                mapa_historico_sin_id[(emp_val, fec_val, serv_val)] = r_idx
 
         filas_a_insertar = []
-        ids_sincronizados = []
-        next_row_num = len(todas_filas) + 1
+        filas_a_actualizar = []
+        ids_exitosos = []
 
         for p in pendientes:
             emp = str(p.get("empleado", "")).strip()
             f_str = str(p.get("fecha", "")).strip()
             dia_sem = p.get("dia_semana") or calcular_dia_semana(f_str)
             fer = p.get("feriado") or es_fecha_feriado(f_str, fechas_feriados)
-
+            serv = str(p.get("servicio", "")).strip()
             carg_por = str(p.get("cargado_por") or emp).strip()
+            uid = str(p.get("id_asistencia", "")).strip()
+
             fila = [
-                str(p.get("id_asistencia", "")),
+                uid,
                 emp,
                 f_str,
                 str(p.get("tipo_ocf", "")),
-                str(p.get("servicio", "")),
+                serv,
                 float(p.get("horas", 0.0)),
                 str(p.get("instrumental", "")),
                 str(p.get("usuario_mail", "")),
@@ -350,36 +356,58 @@ def sincronizar_pendientes() -> dict:
                 carg_por
             ]
 
-            uid = p.get("id_asistencia")
-            clave_ef = (emp.lower(), f_str)
+            es_modificacion = int(p.get("modificado") or 0) == 1
 
-            # Si ya existe en Google Sheets por ID o por (empleado, fecha), actualizar in-place
-            row_existente = mapa_ids_remotos.get(uid) or mapa_emp_fecha.get(clave_ef)
+            # Determinamos si ya existe en Google Sheets:
+            # 1. Por id_asistencia (clave primaria inequívoca)
+            # 2. O si es una modificación de un registro antiguo de AppSheet sin UUID que coincide exactamente en (emp, fecha, servicio)
+            row_existente = mapa_ids_remotos.get(uid)
+            if not row_existente and es_modificacion:
+                clave_historica = (emp.lower(), f_str, serv.lower())
+                row_existente = mapa_historico_sin_id.get(clave_historica)
 
             if row_existente:
-                try:
-                    ws.update(range_name=f"A{row_existente}:N{row_existente}", values=[fila], value_input_option=ValueInputOption.user_entered)
-                    ids_sincronizados.append(uid)
-                    mapa_ids_remotos[uid] = row_existente
-                    mapa_emp_fecha[clave_ef] = row_existente
-                except Exception as e_up:
-                    print(f"[Sheets] Error al actualizar fila {row_existente}: {e_up}")
+                filas_a_actualizar.append((row_existente, fila, uid))
             else:
-                filas_a_insertar.append(fila)
-                ids_sincronizados.append(uid)
-                mapa_ids_remotos[uid] = next_row_num
-                mapa_emp_fecha[clave_ef] = next_row_num
-                next_row_num += 1
+                # Es un registro verdaderamente nuevo (ej. día de rango de fechas o nuevo proyecto)
+                filas_a_insertar.append((fila, uid))
 
-        # Inserción en lote en Google Sheets de filas verdaderamente nuevas
+        # 1. Ejecutar actualizaciones in-place para registros preexistentes
+        for row_idx, fila_vals, uid_reg in filas_a_actualizar:
+            try:
+                ws.update(
+                    range_name=f"A{row_idx}:N{row_idx}",
+                    values=[fila_vals],
+                    value_input_option=ValueInputOption.user_entered
+                )
+                ids_exitosos.append(uid_reg)
+                mapa_ids_remotos[uid_reg] = row_idx
+            except Exception as e_up:
+                print(f"[Sheets] Error al actualizar fila {row_idx} ({uid_reg}): {e_up}")
+
+        # 2. Inserción en lote de todas las filas nuevas para garantizar que ningún día de rango se omita
         if filas_a_insertar:
-            ws.append_rows(filas_a_insertar, value_input_option=ValueInputOption.user_entered)
+            bloque_filas = [item[0] for item in filas_a_insertar]
+            uids_bloque = [item[1] for item in filas_a_insertar]
+            try:
+                ws.append_rows(bloque_filas, value_input_option=ValueInputOption.user_entered)
+                ids_exitosos.extend(uids_bloque)
+                print(f"[Sheets] Se insertaron exitosamente {len(bloque_filas)} fila(s) nuevas en Google Sheets.")
+            except Exception as e_ins:
+                print(f"[Sheets] Error al insertar filas en lote: {e_ins}")
+                # Fallback defensivo: intentar fila por fila si falló el lote completo
+                for f_vals, uid_item in filas_a_insertar:
+                    try:
+                        ws.append_rows([f_vals], value_input_option=ValueInputOption.user_entered)
+                        ids_exitosos.append(uid_item)
+                    except Exception as e_indiv:
+                        print(f"[Sheets] Error en inserción individual ({uid_item}): {e_indiv}")
 
-        # Marcar en la base local como sincronizados
-        if ids_sincronizados:
-            marcar_como_sincronizados(ids_sincronizados)
+        # 3. Marcar en la base local como sincronizados ÚNICAMENTE los que efectivamente se subieron
+        if ids_exitosos:
+            marcar_como_sincronizados(ids_exitosos)
 
-        total = len(ids_sincronizados)
+        total = len(ids_exitosos)
         return {
             "exito": True,
             "cantidad": total,
@@ -399,9 +427,12 @@ def sincronizar_pendientes() -> dict:
 def eliminar_registro_remoto(id_asistencia: str) -> bool:
     """
     Busca y elimina la fila en '1_asistencia_informada' cuyo id_asistencia (columna A)
-    coincida con el proporcionado.
+    coincida con el proporcionado, bajo sincronización de hilo segura.
     """
     if not id_asistencia:
+        return False
+    if not _sync_lock.acquire(blocking=True, timeout=30):
+        print(f"[Sheets] Bloqueo ocupado al intentar eliminar {id_asistencia}")
         return False
     try:
         _, ws = obtener_hoja_trabajo()
@@ -416,6 +447,8 @@ def eliminar_registro_remoto(id_asistencia: str) -> bool:
     except Exception as e:
         print(f"[Sheets] Error al eliminar registro remoto ({id_asistencia}): {e}")
         return False
+    finally:
+        _sync_lock.release()
 
 
 def obtener_proyectos_remotos(spreadsheet_id: str = "") -> list:
@@ -660,9 +693,10 @@ def deduplicar_hoja_remota(spreadsheet_id: str = "") -> dict:
         idx_id = headers.index("id_asistencia") if "id_asistencia" in headers else 0
         idx_emp = headers.index("empleado") if "empleado" in headers else 1
         idx_fecha = headers.index("fecha") if "fecha" in headers else 2
+        idx_serv = headers.index("servicio") if "servicio" in headers else 4
 
         vistos_id = set()
-        vistos_emp_fecha = set()
+        vistos_emp_fec_serv = set()
         filas_a_borrar = []
 
         # Recorremos de arriba a abajo para marcar duplicados (conservando la primera aparición)
@@ -670,11 +704,12 @@ def deduplicar_hoja_remota(spreadsheet_id: str = "") -> dict:
             uid = f[idx_id].strip() if len(f) > idx_id else ""
             emp = f[idx_emp].strip().lower() if len(f) > idx_emp else ""
             fec = f[idx_fecha].strip() if len(f) > idx_fecha else ""
+            serv = f[idx_serv].strip().lower() if len(f) > idx_serv else ""
 
             es_duplicado = False
             if uid and uid in vistos_id:
                 es_duplicado = True
-            elif emp and fec and (emp, fec) in vistos_emp_fecha:
+            elif emp and fec and serv and (emp, fec, serv) in vistos_emp_fec_serv:
                 es_duplicado = True
 
             if es_duplicado:
@@ -682,8 +717,8 @@ def deduplicar_hoja_remota(spreadsheet_id: str = "") -> dict:
             else:
                 if uid:
                     vistos_id.add(uid)
-                if emp and fec:
-                    vistos_emp_fecha.add((emp, fec))
+                if emp and fec and serv:
+                    vistos_emp_fec_serv.add((emp, fec, serv))
 
         # Borramos de abajo hacia arriba para no alterar los índices de las filas superiores
         eliminados = 0

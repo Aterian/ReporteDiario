@@ -4,6 +4,24 @@ Historial cronológico de cambios, nuevas características y mejoras aplicadas a
 
 ---
 
+## [1.3.7] - 2026-09-25
+
+### 🌾 Habilitación de Modalidad "Campo" para Mensura
+- **Restauración de Opciones de Terreno en Mensura**:
+  - Se eliminó la restricción que limitaba al área de Mensura (`M`) únicamente a Oficina y Franco de Oficina.
+  - Habilitada nuevamente la modalidad **Campo / Campaña**, permitiendo además la carga mediante **Rango de Fechas** para jornadas de campo en Mensura tanto en `CheckForm` como en la edición desde `HistoryView`.
+  - Se mantiene la exclusividad de oficina únicamente para el perfil de Camila Llovio (Ingeniería).
+
+### 🔄 Corrección Integral de Sincronización con Google Sheets (Carga por Rango y Lote)
+- **Prevención de Omisiones y Sobreescrituras Accidentales**:
+  - Corrección en `sincronizar_pendientes()`: Se desvinculó la clave compuesta no unívoca `(empleado, fecha)` de la creación de registros nuevos. Ahora cada registro generado con UUID nuevo se envía inequívocamente como inserción (`filas_a_insertar`).
+  - Se eliminó el bug de colisión interna en el lote que intentaba actualizar filas inexistentes fuera de los límites de la hoja cuando existían múltiples proyectos en una misma jornada o fechas coincidentes.
+  - Sincronización atómica: los identificadores locales (`sincronizado = 1`) únicamente se marcan tras la confirmación exitosa de inserción en Google Sheets por parte de `ws.append_rows()`.
+  - Corrección de deduplicación remota: `deduplicar_hoja_remota()` ahora discrimina por `(empleado, fecha, servicio)`, protegiendo registros legítimos de colaboradores que trabajan en más de un proyecto el mismo día.
+  - Eliminación concurrente segura: `eliminar_registro_remoto()` y eliminaciones por rango de roster ahora respetan el mutex `_sync_lock` y procesan bajas secuencialmente sin colisiones de índice en la hoja.
+
+---
+
 ## [1.3.6] - 2026-09-25
 
 ### 🔒 Control de Acceso y Visibilidad por Roles y Usuarios

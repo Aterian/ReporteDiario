@@ -97,11 +97,9 @@ export default function CheckForm({ onRegistroGuardado, onVolver, tema }) {
     ? (usuarioSeleccionado.area || '')
     : (sesionUsuario?.area || '')).trim().toUpperCase();
 
-  // Empleados exclusivos de oficina: Todo Mensura (M) y Camila Llovio (Ingeniería)
+  // Empleados exclusivos de oficina: Camila Llovio (Ingeniería)
   // NOTA: La limitación NO aplica si el registro lo carga RRHH (RRHH tiene permisos completos)
   const esSoloOficina = !esRRHH && (
-    areaActiva === 'M' ||
-    areaActiva === 'MENSURA' ||
     empleadoActivoNombre.toLowerCase().includes('camila llovio') ||
     empleadoActivoNombre.toLowerCase().includes('llovio')
   );

@@ -942,12 +942,10 @@ export default function HistoryView({ onVolver, tema, onNuevoReporte, usuario, o
                 {(() => {
                   const esRRHHUsuario = (usuario?.area || '').toUpperCase() === 'RRHH';
                   const esSoloOficinaEditando = !esRRHHUsuario && (
-                    usuario?.area === 'M' ||
                     (usuario?.nombre || '').toLowerCase().includes('camila llovio') ||
                     (usuario?.nombre || '').toLowerCase().includes('llovio') ||
                     (registroEditando?.empleado || '').toLowerCase().includes('camila llovio') ||
-                    (registroEditando?.empleado || '').toLowerCase().includes('llovio') ||
-                    registroEditando?.area === 'M'
+                    (registroEditando?.empleado || '').toLowerCase().includes('llovio')
                   );
                   const opcionesModal = esSoloOficinaEditando
                     ? ['Oficina', 'Franco']

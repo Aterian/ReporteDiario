@@ -1169,6 +1169,7 @@ class ApiPuente:
                                 if d_ini > d_fin:
                                     d_ini, d_fin = d_fin, d_ini
                                 curr = d_ini
+                                uids_a_eliminar = []
                                 while curr <= d_fin:
                                     f_str = curr.strftime("%Y-%m-%d")
                                     cursor.execute(
@@ -1179,7 +1180,7 @@ class ApiPuente:
                                     for fa in filas_asist:
                                         uid_remoto = fa["id_asistencia"]
                                         if uid_remoto:
-                                            threading.Thread(target=eliminar_registro_remoto, args=(uid_remoto,), daemon=True).start()
+                                            uids_a_eliminar.append(uid_remoto)
 
                                     cursor.execute(
                                         "DELETE FROM historial WHERE empleado = ? AND fecha = ? AND tipo_ocf IN ('Roster', 'Franco')",
@@ -1187,6 +1188,12 @@ class ApiPuente:
                                     )
                                     curr += timedelta(days=1)
                                 conn.commit()
+
+                                if uids_a_eliminar:
+                                    def _borrar_lote_remoto(uids):
+                                        for u in uids:
+                                            eliminar_registro_remoto(u)
+                                    threading.Thread(target=_borrar_lote_remoto, args=(uids_a_eliminar,), daemon=True).start()
                             except Exception:
                                 pass
             exito = eliminar_registro_roster(id_roster)
@@ -1267,7 +1274,7 @@ def obtener_icono_tray():
     return crear_icono_calendario(64)
 
 
-APP_VERSION = "1.3.6"
+APP_VERSION = "1.3.7"
 
 _mutex_instancia = None
 
