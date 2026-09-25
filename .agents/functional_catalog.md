@@ -37,3 +37,21 @@
   2. Prohibido usar `(empleado, fecha)` para actualizar registros nuevos o preasignar filas no confirmadas en la hoja.
   3. Marcado en SQLite (`sincronizado = 1`) únicamente tras confirmación exitosa de Google Sheets.
   4. Deduplicación remota evalúa la terna `(empleado, fecha, servicio)` evitando el borrado de jornadas multiproyecto.
+
+## [FN-04.04] Permisos y Reglas de Negocio para Área SIG ("S")
+- **Módulo**: [MOD-04] Control de Permisos y Roles
+- **Flujo Operativo**: Restringe la navegación a registro diario e historial propio. Limita las modalidades operativas a únicamente Oficina y Franco (con cómputo automático de franco de oficina). Filtra los proyectos disponibles a los pertenecientes a las áreas "S" (SIG) y "A" (Aplicaciones), permitiendo además la asignación horaria a otras áreas corporativas.
+- **Tablas afectadas**: `historial`, `0_proyectos`, `0_usuarios`.
+- **Reglas de negocio e invariantes**:
+  1. Vistas visibles: Exclusivamente Formulario Diario e Historial Propio (sin acceso a Roster ni a Historial de Otros Empleados).
+  2. Modalidades operativas: Exclusivamente `Oficina` y `Franco` (oculta Campo/Campaña y subtipos de franco).
+  3. Franco directo de oficina: Computa `tipo_ocf = 'Franco'`, `servicio = 'SIG'`, `horas = 0.0`.
+  4. Catálogo de proyectos: Proyectos de área `S` y área `A`, con selector para imputar tiempo a cualquiera de las 12 áreas corporativas.
+
+## [FN-05.01] Acceso a Vista RPG y Título Erudito Deambulante para Gabriel Canavesio
+- **Módulo**: [MOD-05] Modo Aventura RPG
+- **Flujo Operativo**: Habilita el selector de tema medieval RPG para Gabriel Canavesio y le asigna el título honorífico de "Erudito Deambulante" en el encabezado, perfil y tablón de misiones.
+- **Tablas afectadas**: `sesion`.
+- **Reglas de negocio e invariantes**:
+  1. Acceso a vista RPG permitido para Área A, Iván Valentin y Gabriel Canavesio (`45059000`).
+  2. Título honorífico asignado: `📜 Erudito Deambulante`.

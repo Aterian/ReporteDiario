@@ -45,6 +45,10 @@ const mockApi = {
     if (!area || ['N', 'RRHH', 'TODOS'].includes(area.toUpperCase())) {
       return todos;
     }
+    if (['S', 'SIG'].includes(area.toUpperCase())) {
+      const filtradosSig = todos.filter(t => t.includes('-S-') || t.includes('-A-'));
+      return filtradosSig.length > 0 ? filtradosSig : todos;
+    }
     const cod = `-${area.toUpperCase()}-`;
     const filtrados = todos.filter(t => t.includes(cod));
     return filtrados.length > 0 ? filtrados : todos;

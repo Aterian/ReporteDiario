@@ -34,7 +34,9 @@ export default function App() {
     usuario && (
       (usuario.area || '').trim().toUpperCase() === 'A' ||
       (usuario.nombre || '').toLowerCase().includes('iván') ||
-      (usuario.nombre || '').toLowerCase().includes('ivan')
+      (usuario.nombre || '').toLowerCase().includes('ivan') ||
+      (usuario.nombre || '').toLowerCase().includes('canavesio') ||
+      String(usuario.dni || '').trim() === '45059000'
     )
   );
 

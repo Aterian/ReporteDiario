@@ -54,7 +54,7 @@ export default function HomeView({
       'A': 'Aplicaciones',
       'RRHH': 'Recursos Humanos',
       'VYM': 'Ventas y Marketing',
-      'S': 'Sistemas'
+      'S': 'SIG'
     };
     return mapa[cod] || `Área ${cod}`;
   };

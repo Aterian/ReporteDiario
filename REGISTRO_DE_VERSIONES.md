@@ -4,6 +4,25 @@ Historial cronológico de cambios, nuevas características y mejoras aplicadas a
 
 ---
 
+## [1.3.9] - 2026-09-25
+
+### 🗺️ Soporte, Permisos y Reglas de Negocio para Área SIG ("S")
+- **Integración de Nuevos Usuarios de SIG**:
+  - Incorporados a la base y catálogo los colaboradores **Gabriel Canavesio** y **Renzo Polo** (área `S`).
+- **Permisos de Interfaz y Vistas**:
+  - Navegación acotada exclusivamente a **Registro Diario** e **Historial Propio** (sin acceso a Roster ni a Historial de Otros Empleados).
+- **Modalidades Operativas**:
+  - Restricción estricta a modalidades **Oficina** y **Franco** (oculta opciones de Campo y subtipos de franco).
+  - Cómputo automático de **Franco de Oficina** con 0 hs y servicio asignado directamente al área (`SIG`).
+- **Proyectos y Dedicación de Horas**:
+  - Filtro automático de proyectos que integra tanto el área **"S"** (SIG) como el área **"A"** (Aplicaciones).
+  - Selector disponible para imputar tiempo de trabajo a cualquiera de las 12 áreas corporativas internas.
+- **Vista RPG y Título Honorífico**:
+  - Acceso al tema medieval y vista de Tablón RPG habilitado para **Gabriel Canavesio**.
+  - Título honorífico asignado en interfaz y perfil: **"📜 Erudito Deambulante"**.
+
+---
+
 ## [1.3.8] - 2026-09-25
 
 ### ☕ Franco Directo de Oficina para el Área de Mensura

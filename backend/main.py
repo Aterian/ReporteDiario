@@ -76,7 +76,9 @@ EMPLEADOS_AUTORIZADOS = [
     {"nombre": "Santiago Destefanis", "dni": "36580770", "mail": "sdestefanis@ingeap.com", "area": "N"},
     {"nombre": "Justina Bertolozzi", "dni": "45411162", "mail": "rrhh@ingeap.com", "area": "RRHH"},
     {"nombre": "Alejandro Maglianesi", "dni": "32370731", "mail": "amaglianesi@ingeap.com", "area": "VYM"},
-    {"nombre": "Daiana Sanchez", "dni": "37546183", "mail": "marketing@ingeap.com", "area": "VYM"}
+    {"nombre": "Daiana Sanchez", "dni": "37546183", "mail": "marketing@ingeap.com", "area": "VYM"},
+    {"nombre": "Gabriel Canavesio", "dni": "45059000", "mail": "gabrielcanavesio17@gmail.com", "area": "S"},
+    {"nombre": "Renzo Polo", "dni": "35295498", "mail": "renzoepolo@ingeap.com", "area": "S"}
 ]
 
 # Proyectos de respaldo offline si aún no se sincronizó con Google Sheets
@@ -357,10 +359,12 @@ class ApiPuente:
             return todos
 
         # Proyectos filtrados por el área indicada (ej: 'I', 'A', 'M', 'S', 'VYM')
+        # Para el área SIG ('S'), se incluyen proyectos de su área ('S') y de Aplicaciones ('A')
+        areas_permitidas = ["S", "A"] if area_filtro in ["S", "SIG"] else [area_filtro]
         proyectos_filtrados = []
         vistos_area = set()
         for p in proyectos:
-            if p.get("area", "").strip().upper() == area_filtro and p.get("denominacion"):
+            if p.get("area", "").strip().upper() in areas_permitidas and p.get("denominacion"):
                 nom = p["denominacion"].strip()
                 if nom not in vistos_area:
                     vistos_area.add(nom)
@@ -1274,7 +1278,7 @@ def obtener_icono_tray():
     return crear_icono_calendario(64)
 
 
-APP_VERSION = "1.3.8"
+APP_VERSION = "1.3.9"
 
 _mutex_instancia = None
 

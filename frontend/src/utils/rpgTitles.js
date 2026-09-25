@@ -5,6 +5,11 @@ export function getTituloRpg(nombre) {
   if (!nombre) return '🧙‍♂️ Desarrollador Arcano';
   const n = nombre.toLowerCase().trim();
 
+  // Gabriel Canavesio - Erudito Deambulante
+  if (n.includes('gabriel') || n.includes('canavesio')) {
+    return '📜 Erudito Deambulante';
+  }
+
   // Marco Regis - Hechicero Líder del gremio
   if (n.includes('marco') || n.includes('regis')) {
     return '🧙‍♂️ Hechicero Líder del gremio';

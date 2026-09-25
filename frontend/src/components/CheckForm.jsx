@@ -97,9 +97,11 @@ export default function CheckForm({ onRegistroGuardado, onVolver, tema }) {
     ? (usuarioSeleccionado.area || '')
     : (sesionUsuario?.area || '')).trim().toUpperCase();
 
-  // Empleados exclusivos de oficina: Camila Llovio (Ingeniería)
+  // Empleados exclusivos de oficina: SIG ('S') y Camila Llovio (Ingeniería)
   // NOTA: La limitación NO aplica si el registro lo carga RRHH (RRHH tiene permisos completos)
   const esSoloOficina = !esRRHH && (
+    areaActiva === 'S' ||
+    areaActiva === 'SIG' ||
     empleadoActivoNombre.toLowerCase().includes('camila llovio') ||
     empleadoActivoNombre.toLowerCase().includes('llovio')
   );
@@ -107,7 +109,7 @@ export default function CheckForm({ onRegistroGuardado, onVolver, tema }) {
   const esMensura = areaActiva === 'M' || areaActiva === 'MENSURA';
   const esFrancoDirecto = esSoloOficina || esMensura;
 
-  const esUsuarioAreaEspecial = ['N', 'RRHH', 'A'].includes(areaActiva);
+  const esUsuarioAreaEspecial = ['N', 'RRHH', 'A', 'S'].includes(areaActiva);
   const areaNombreFinal = (esUsuarioAreaEspecial && areaElegida)
     ? areaElegida
     : (MAPA_AREAS[areaActiva] || areaActiva || 'General');
@@ -157,6 +159,19 @@ export default function CheckForm({ onRegistroGuardado, onVolver, tema }) {
       }
     }
   }, [esSoloOficina, esFrancoDirecto, lugar, tipoFranco, usarRangoFechas]);
+
+  // Sincronizar sub-área elegida inicial según el área activa del usuario
+  useEffect(() => {
+    if (areaActiva === 'S' || areaActiva === 'SIG') {
+      setAreaElegida('SIG');
+    } else if (areaActiva === 'A') {
+      setAreaElegida('Aplicaciones');
+    } else if (areaActiva === 'I') {
+      setAreaElegida('Ingeniería');
+    } else if (areaActiva === 'M') {
+      setAreaElegida('Mensura');
+    }
+  }, [areaActiva]);
 
   // Si RRHH activa la opción de cargar para otro, refrescar lista fresca de empleados
   useEffect(() => {
@@ -366,10 +381,11 @@ export default function CheckForm({ onRegistroGuardado, onVolver, tema }) {
           payload.horas = Number(horasFrancoTrabajado || 8);
         } else {
           // Franco de oficina / normal (0 hs, servicio = area)
+          const areaFranco = esFrancoDirecto ? (MAPA_AREAS[areaActiva] || 'SIG') : areaNombreFinal;
           payload.lugar = 'Franco';
           payload.tipo_ocf = 'Franco';
-          payload.servicio = areaNombreFinal;
-          payload.area = areaNombreFinal;
+          payload.servicio = areaFranco;
+          payload.area = areaFranco;
           payload.horas = 0.0;
         }
       } else if (esFeriadoTrabajado) {
@@ -706,7 +722,7 @@ export default function CheckForm({ onRegistroGuardado, onVolver, tema }) {
                 {tipoFranco === 'Franco de Oficina' && (
                   <div className="franco-hours-box" style={{ background: 'var(--bg-surface)', padding: '10px 14px', borderRadius: '8px', border: '1px solid var(--border-subtle)', marginTop: '8px' }}>
                     <span style={{ fontSize: '12.5px', color: 'var(--text-secondary)' }}>
-                      Asignación: Se registrará en la columna de servicio el área <strong>{areaNombreFinal}</strong> con 0 hs computadas.
+                      Asignación: Se registrará en la columna de servicio el área <strong>{esFrancoDirecto ? (MAPA_AREAS[areaActiva] || 'SIG') : areaNombreFinal}</strong> con 0 hs computadas.
                     </span>
                   </div>
                 )}

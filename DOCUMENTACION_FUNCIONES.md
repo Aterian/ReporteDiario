@@ -21,7 +21,7 @@ Expone métodos invocables desde el frontend de React a través del objeto globa
   Retorna la lista de proyectos disponibles aplicando las reglas de negocio de Ingeap:
   - Si se proporciona el parámetro `area` (por ej. cuando RRHH carga para otro empleado), filtra por dicha área.
   - Usuarios del área Núcleo (`N`), Recursos Humanos (`RRHH`), o solicitudes con `area='TODOS'` obtienen **todos** los proyectos activos.
-  - Usuarios de otras áreas específicas (`I` - Ingeniería, `A` - Aplicaciones, `M` - Mensura, `S` - SIG, etc.) ven únicamente los proyectos pertenecientes a su área correspondiente.
+  - Usuarios de otras áreas específicas (`I` - Ingeniería, `A` - Aplicaciones, `M` - Mensura, `VYM`, etc.) ven únicamente los proyectos pertenecientes a su área correspondiente. Para el área `S` (SIG), se incluyen proyectos tanto de su área (`S`) como del área de Aplicaciones (`A`), junto con la opción de imputar tiempo a otras áreas corporativas.
 - **`guardar_check_diario(self, datos: dict)`**:
   Procesa y persiste el reporte diario:
   - **Soporte de RRHH**: Permite al personal de RRHH cargar reportes a nombre de otro empleado.

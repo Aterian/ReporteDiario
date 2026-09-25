@@ -942,6 +942,10 @@ export default function HistoryView({ onVolver, tema, onNuevoReporte, usuario, o
                 {(() => {
                   const esRRHHUsuario = (usuario?.area || '').toUpperCase() === 'RRHH';
                   const esSoloOficinaEditando = !esRRHHUsuario && (
+                    (usuario?.area || '').toUpperCase() === 'S' ||
+                    (usuario?.area || '').toUpperCase() === 'SIG' ||
+                    (registroEditando?.area || '').toUpperCase() === 'S' ||
+                    (registroEditando?.area || '').toUpperCase() === 'SIG' ||
                     (usuario?.nombre || '').toLowerCase().includes('camila llovio') ||
                     (usuario?.nombre || '').toLowerCase().includes('llovio') ||
                     (registroEditando?.empleado || '').toLowerCase().includes('camila llovio') ||
@@ -972,7 +976,14 @@ export default function HistoryView({ onVolver, tema, onNuevoReporte, usuario, o
                           if (nuevoLugar === 'Vacaciones') nuevoServicio = 'Vacaciones';
                           if (nuevoLugar === 'Franco Obra' || nuevoLugar === 'Franco de Obra') nuevoServicio = '';
                           if (nuevoLugar === 'Franco') {
-                            nuevoServicio = esMensuraEditando
+                            const esSigEdit = (usuario?.area || '').toUpperCase() === 'S' ||
+                              (usuario?.area || '').toUpperCase() === 'SIG' ||
+                              (registroEditando?.area || '').toUpperCase() === 'S' ||
+                              (registroEditando?.area || '').toUpperCase() === 'SIG';
+
+                            nuevoServicio = esSigEdit
+                              ? 'SIG'
+                              : esMensuraEditando
                               ? 'Mensura'
                               : (esSoloOficinaEditando
                                 ? ((registroEditando?.empleado || '').toLowerCase().includes('llovio') || (usuario?.nombre || '').toLowerCase().includes('llovio') ? 'Ingeniería' : 'Mensura')
