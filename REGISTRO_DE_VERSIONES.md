@@ -4,6 +4,34 @@ Historial cronológico de cambios, nuevas características y mejoras aplicadas a
 
 ---
 
+## [1.3.6] - 2026-09-25
+
+### 🔒 Control de Acceso y Visibilidad por Roles y Usuarios
+- **Carga e Historial de Roster**:
+  - Acceso y gestión restringidos exclusivamente a **Justina Bertolozzi** (Responsable de RRHH) e **Iván Valentin** (Desarrollador).
+  - Ocultamiento completo de tarjetas en el menú principal (`HomeView`), guardias de redirección en `App.jsx` y bloqueo directo a nivel backend API.
+- **Historial de Otros Empleados**:
+  - Habilitada la visualización para **RRHH**, personal de **Núcleo (área N)** y el desarrollador **Iván Valentin**.
+  - Visualización adaptativa de títulos en el panel de inicio y acceso desde el historial personal.
+- **Restricción de Modificaciones y Bajas**:
+  - Las modificaciones y eliminaciones de registros pertenecientes a otros colaboradores solo pueden ser realizadas por **Justina Bertolozzi** e **Iván Valentin**.
+  - El resto del personal mantiene permiso exclusivo para modificar sus **propios registros**.
+  - Si un usuario no autorizado visualiza registros ajenos, se reemplazan los botones de acción por la etiqueta distintiva `🔒 Solo lectura`.
+- **Doble Capa de Seguridad**:
+  - Validación en interfaz React (UI) y validación transaccional en el backend Python (`modificar_registro`, `eliminar_registro_asistencia`, `guardar_roster`, etc.).
+
+---
+
+## [1.3.5] - 2026-09-24
+
+### ⚡ Carga Asistida de Fines de Semana y Restricciones de Área
+- **Asistente de Fines de Semana**:
+  - Botón asistido en el historial para registrar automáticamente sábados y domingos pendientes como Franco para RRHH y Aplicaciones.
+- **Filtros por Área**:
+  - Restricción de selección de modalidades a Oficina y Franco de Oficina para Mensura y perfiles específicos.
+
+---
+
 ## [1.3.4] - 2026-09-24
 
 ### 👤 Trazabilidad, Auditoría y Control Multi-PC (Columna N `cargado_por`)

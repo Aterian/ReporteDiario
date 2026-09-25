@@ -34,6 +34,7 @@ Rule [SANDBOX-01]: Operación confinada estrictamente a la raíz del workspace l
 Rule [SANDBOX-02] (Comandos Críticos): Operaciones destructivas (`rm -rf`, `DROP TABLE`, ejecuciones `sudo`) requieren autorización explícita (ASK_USER).
 Rule [CREDENTIALS-01]: Prohibido hardcodear secretos, API keys o URLs de base de datos. Lee siempre desde variables de entorno (`.env` con respaldo en `.env.example`).
 Rule [SAFETY-GIT-01]: Verifica estado limpio en Git o genera un commit antes de modificaciones masivas de código o esquemas.
+Rule [GIT-BRANCH-01] (Feature Branches & Versioning): Cada nueva actualización o funcionalidad debe desarrollarse en una rama Git dedicada (`feat/<nombre>` o `fix/<nombre>`). Implementar Conventional Commits (`feat:`, `fix:`, `chore:`, etc.), documentar avances en `REGISTRO_DE_VERSIONES.md`, registrar en `.agents/functional_catalog.md` e incrementar la versión del proyecto según SemVer.
 
 ---
 
