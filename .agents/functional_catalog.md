@@ -18,6 +18,15 @@
   1. Área `M` (Mensura) puede seleccionar cualquier modalidad base (`Oficina`, `Campo`, `Franco`, etc.).
   2. La restricción de oficina exclusiva se mantiene estrictamente para Camila Llovio (Ingeniería).
   3. Carga por rango habilitada para Mensura en modalidad Campo o cuando RRHH realiza la carga delegada.
+  4. Los francos de Mensura se computan directamente como Franco de Oficina con 0 hs y servicio asignado a su área.
+
+## [FN-01.04] Cómputo Directo de Franco de Oficina para Mensura
+- **Módulo**: [MOD-01] Registro de Asistencia Diaria
+- **Flujo Operativo**: Oculta el selector de categorías de franco para el área de Mensura (`M`), computando automáticamente `tipo_ocf = 'Franco'`, `servicio = 'Mensura'`, `horas = 0.0`.
+- **Tablas afectadas**: `historial`.
+- **Reglas de negocio e invariantes**:
+  1. Personal de Mensura (`M`) no visualiza subcategorías de franco en el formulario ni en la edición.
+  2. Al guardar un franco, se asigna `servicio = 'Mensura'` y 0 hs en Google Sheets y en base local.
 
 ## [FN-03.04] Sincronización Confiable de Lotes y Rangos en Google Sheets
 - **Módulo**: [MOD-03] Sincronización Remota Google Sheets

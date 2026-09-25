@@ -4,6 +4,16 @@ Historial cronológico de cambios, nuevas características y mejoras aplicadas a
 
 ---
 
+## [1.3.8] - 2026-09-25
+
+### ☕ Franco Directo de Oficina para el Área de Mensura
+- **Simplificación Operativa para Mensura (`M`)**:
+  - Se eliminó el selector de categorías de franco (`Franco de obra`, `Franco obra trabajado`, `Franco ofic. trabajado`) para colaboradores del área de Mensura.
+  - Al seleccionar la modalidad **Franco**, se registra y computa automáticamente como **Franco de Oficina** con 0 hs y servicio asignado a su área (`Mensura`), guardándose fielmente en Google Sheets como `Franco` (col D) y `Mensura` (col E).
+  - En la vista de edición del historial (`HistoryView`), se acotan las opciones de modalidad para Mensura a `['Oficina', 'Campo', 'Franco', 'Vacaciones', 'Licencia']`, asignando automáticamente `Mensura` al seleccionar Franco.
+
+---
+
 ## [1.3.7] - 2026-09-25
 
 ### 🌾 Habilitación de Modalidad "Campo" para Mensura

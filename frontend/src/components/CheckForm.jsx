@@ -104,6 +104,9 @@ export default function CheckForm({ onRegistroGuardado, onVolver, tema }) {
     empleadoActivoNombre.toLowerCase().includes('llovio')
   );
 
+  const esMensura = areaActiva === 'M' || areaActiva === 'MENSURA';
+  const esFrancoDirecto = esSoloOficina || esMensura;
+
   const esUsuarioAreaEspecial = ['N', 'RRHH', 'A'].includes(areaActiva);
   const areaNombreFinal = (esUsuarioAreaEspecial && areaElegida)
     ? areaElegida
@@ -138,20 +141,22 @@ export default function CheckForm({ onRegistroGuardado, onVolver, tema }) {
     cargarSesion();
   }, []);
 
-  // Mantener consistencia para empleados de Mensura y Camila Llovio (solo Oficina y Franco de Oficina)
+  // Mantener consistencia de oficina exclusiva (Camila Llovio) y Franco directo (Mensura y Camila Llovio)
   useEffect(() => {
     if (esSoloOficina) {
       if (lugar !== 'Oficina' && lugar !== 'Franco') {
         setLugar('Oficina');
       }
-      if (tipoFranco !== 'Franco de Oficina') {
-        setTipoFranco('Franco de Oficina');
-      }
       if (usarRangoFechas) {
         setUsarRangoFechas(false);
       }
     }
-  }, [esSoloOficina, lugar, tipoFranco, usarRangoFechas]);
+    if (esFrancoDirecto) {
+      if (tipoFranco !== 'Franco de Oficina') {
+        setTipoFranco('Franco de Oficina');
+      }
+    }
+  }, [esSoloOficina, esFrancoDirecto, lugar, tipoFranco, usarRangoFechas]);
 
   // Si RRHH activa la opción de cargar para otro, refrescar lista fresca de empleados
   useEffect(() => {
@@ -670,14 +675,14 @@ export default function CheckForm({ onRegistroGuardado, onVolver, tema }) {
               <div className="franco-serene-body" style={{ width: '100%' }}>
                 <h4>{isRpg ? 'Campamento en la Taberna del Reino' : 'Día de Descanso / Franco'}</h4>
                 <p>
-                  {esSoloOficina
+                  {esFrancoDirecto
                     ? (isRpg ? 'Descanso de la Orden en la Ciudadela (0 hs imputadas al área).' : 'Franco de oficina (0 hs imputadas al área de adscripción).')
                     : (isRpg ? 'Define la modalidad del franco a registrar:' : 'Selecciona la categoría de franco a registrar:')
                   }
                 </p>
 
-                {/* Sub-selector de Franco (Oculto para empleados exclusivos de oficina: Mensura y Camila Llovio) */}
-                {!esSoloOficina && (
+                {/* Sub-selector de Franco (Oculto para empleados con franco directo: Mensura y Camila Llovio) */}
+                {!esFrancoDirecto && (
                   <div className="franco-subtypes-grid">
                   {[
                     { id: 'Franco de Oficina', label: 'Franco de oficina', desc: '0 hs • Imputa al área' },

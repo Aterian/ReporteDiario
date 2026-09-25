@@ -947,9 +947,16 @@ export default function HistoryView({ onVolver, tema, onNuevoReporte, usuario, o
                     (registroEditando?.empleado || '').toLowerCase().includes('camila llovio') ||
                     (registroEditando?.empleado || '').toLowerCase().includes('llovio')
                   );
+                  const esMensuraEditando = (usuario?.area || '').toUpperCase() === 'M' ||
+                    (usuario?.area || '').toUpperCase() === 'MENSURA' ||
+                    (registroEditando?.area || '').toUpperCase() === 'M' ||
+                    (registroEditando?.area || '').toUpperCase() === 'MENSURA';
+
                   const opcionesModal = esSoloOficinaEditando
                     ? ['Oficina', 'Franco']
-                    : LUGARES_OPCIONES;
+                    : esMensuraEditando
+                      ? ['Oficina', 'Campo', 'Franco', 'Vacaciones', 'Licencia']
+                      : LUGARES_OPCIONES;
 
                   return (
                     <select
@@ -965,9 +972,11 @@ export default function HistoryView({ onVolver, tema, onNuevoReporte, usuario, o
                           if (nuevoLugar === 'Vacaciones') nuevoServicio = 'Vacaciones';
                           if (nuevoLugar === 'Franco Obra' || nuevoLugar === 'Franco de Obra') nuevoServicio = '';
                           if (nuevoLugar === 'Franco') {
-                            nuevoServicio = esSoloOficinaEditando
-                              ? ((registroEditando?.empleado || '').toLowerCase().includes('llovio') || (usuario?.nombre || '').toLowerCase().includes('llovio') ? 'Ingeniería' : 'Mensura')
-                              : (registroEditando.servicio || 'Área');
+                            nuevoServicio = esMensuraEditando
+                              ? 'Mensura'
+                              : (esSoloOficinaEditando
+                                ? ((registroEditando?.empleado || '').toLowerCase().includes('llovio') || (usuario?.nombre || '').toLowerCase().includes('llovio') ? 'Ingeniería' : 'Mensura')
+                                : (registroEditando.servicio || 'Área'));
                           }
                         } else if (nuevoLugar === 'Franco Ofic Trabajado' || nuevoLugar === 'Franco Trabajado') {
                           nuevoServicio = 'Tiempo dedicado al Área';
