@@ -174,7 +174,7 @@ import unicodedata
 def _normalizar_texto(texto: str | None) -> str:
     if not texto:
         return ""
-    return unicodedata.normalize("NFD", str(texto).lower()).encode("ascii", "ignore").decode("utf-8").strip()
+    return unicodedata.normalize("NFD", texto.lower()).encode("ascii", "ignore").decode("utf-8").strip()
 
 def es_ivan_valentin(usuario: dict | None) -> bool:
     if not usuario:
@@ -223,7 +223,7 @@ def puede_modificar_registro_empleado(usuario: dict | None, empleado_registro: s
     emp_reg = _normalizar_texto(empleado_registro)
     dni_u = str(usuario.get("dni") or "").strip()
     id_u = str(usuario.get("id_origen") or usuario.get("id_usuario") or "").strip()
-    id_reg = str(id_empleado_reg or "").strip()
+    id_reg = (id_empleado_reg or "").strip()
 
     es_propio = (emp_reg and nombre_u and emp_reg == nombre_u) or \
                 (id_reg and (id_reg == id_u or id_reg == dni_u))
