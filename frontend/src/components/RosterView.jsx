@@ -1,8 +1,23 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { api } from '../services/apiBridge';
+import { puedeAccederRoster } from '../utils/permissions';
 
+// [MOD-05] RosterView
 export default function RosterView({ usuario, onVolver, tema }) {
   const isDark = tema === 'dark';
+
+  if (!puedeAccederRoster(usuario)) {
+    return (
+      <div className="view-content" style={{ padding: '32px', textAlign: 'center' }}>
+        <p style={{ fontSize: '15px', color: 'var(--text-secondary)', marginBottom: '16px' }}>
+          Acceso denegado: El módulo de Roster solo puede ser visualizado por Justina Bertolozzi e Iván Valentin.
+        </p>
+        <button type="button" className="btn-back" onClick={onVolver}>
+          Volver al Inicio
+        </button>
+      </div>
+    );
+  }
 
   // Al entrar a Roster, la ventana se maximiza a pantalla completa.
   // El tamaño se preserva al volver al menú principal para mantener una experiencia consistente.

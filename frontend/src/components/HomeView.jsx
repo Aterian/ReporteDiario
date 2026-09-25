@@ -1,7 +1,9 @@
 import React from 'react';
 import RpgTavernBoard from './RpgTavernBoard';
 import { getTituloRpg } from '../utils/rpgTitles';
+import { puedeAccederRoster, puedeVerHistorialOtros } from '../utils/permissions';
 
+// [MOD-01] HomeView
 export default function HomeView({
   usuario,
   tema,
@@ -24,8 +26,9 @@ export default function HomeView({
   }
 
   const isRpg = false;
-  const esRRHH = (usuario?.area || '').trim().toUpperCase() === 'RRHH' ||
-                 (usuario?.area || '').trim().toUpperCase() === 'A';
+  const puedeRoster = puedeAccederRoster(usuario);
+  const puedeOtros = puedeVerHistorialOtros(usuario);
+  const tieneModulosGestion = puedeRoster || puedeOtros;
 
   const getFechaFormateada = () => {
     const hoy = new Date();
@@ -116,8 +119,8 @@ export default function HomeView({
         </div>
       </div>
 
-      {/* Contenedor de módulos (registro propio y gestión de RRHH en 2 bloques verticales en pantalla completa) */}
-      <div className={`home-sections-container ${esRRHH ? 'has-rrhh' : ''}`}>
+      {/* Contenedor de módulos (registro propio y gestión/supervisión en 2 bloques verticales en pantalla completa) */}
+      <div className={`home-sections-container ${tieneModulosGestion ? 'has-rrhh' : ''}`}>
         {/* Bloque 1: Registro propio del colaborador */}
         <div className="home-section-column home-column-propio">
           <div className="home-actions-title">
@@ -202,95 +205,101 @@ export default function HomeView({
           </div>
         </div>
 
-        {/* Bloque 2: Gestión de RRHH - Rosters y Turnos (Exclusivo RRHH) */}
-        {esRRHH && (
+        {/* Bloque 2: Gestión y Supervisión (Roster exclusivo Justina e Iván; Historial de otros RRHH, Núcleo e Iván) */}
+        {tieneModulosGestion && (
           <div className="home-section-column home-column-rrhh">
             <div className="home-actions-title rrhh-title-divider">
-              Gestión de RRHH - Rosters y Turnos
+              {puedeRoster ? 'Gestión de RRHH - Rosters y Turnos' : 'Supervisión y Gestión de Equipo'}
             </div>
             <div className="home-actions-grid rrhh-actions-grid">
-              {/* Botón: Cargar Nuevo Roster */}
-              <button 
-                type="button" 
-                className="home-action-card card-roster" 
-                onClick={onNuevoRoster}
-              >
-                <div className="action-card-icon-box roster-icon">
-                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                    <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
-                    <line x1="16" y1="2" x2="16" y2="6" />
-                    <line x1="8" y1="2" x2="8" y2="6" />
-                    <line x1="3" y1="10" x2="21" y2="10" />
-                    <path d="M8 14h.01M12 14h.01M16 14h.01M8 18h.01M12 18h.01M16 18h.01" />
-                  </svg>
-                </div>
-                <div className="action-card-content">
-                  <span className="action-card-title">Cargar Nuevo Roster</span>
-                  <span className="action-card-desc">
-                    Asignación de turnos, obra, francos y tarifas con calendario Gantt
-                  </span>
-                </div>
-                <div className="action-card-arrow">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                    <polyline points="9 18 15 12 9 6" />
-                  </svg>
-                </div>
-              </button>
+              {/* Botón: Cargar Nuevo Roster (Solo Justina Bertolozzi e Iván Valentin) */}
+              {puedeRoster && (
+                <button 
+                  type="button" 
+                  className="home-action-card card-roster" 
+                  onClick={onNuevoRoster}
+                >
+                  <div className="action-card-icon-box roster-icon">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                      <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+                      <line x1="16" y1="2" x2="16" y2="6" />
+                      <line x1="8" y1="2" x2="8" y2="6" />
+                      <line x1="3" y1="10" x2="21" y2="10" />
+                      <path d="M8 14h.01M12 14h.01M16 14h.01M8 18h.01M12 18h.01M16 18h.01" />
+                    </svg>
+                  </div>
+                  <div className="action-card-content">
+                    <span className="action-card-title">Cargar Nuevo Roster</span>
+                    <span className="action-card-desc">
+                      Asignación de turnos, obra, francos y tarifas con calendario Gantt
+                    </span>
+                  </div>
+                  <div className="action-card-arrow">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                      <polyline points="9 18 15 12 9 6" />
+                    </svg>
+                  </div>
+                </button>
+              )}
 
-              {/* Botón: Historial de Roster */}
-              <button 
-                type="button" 
-                className="home-action-card card-roster-hist" 
-                onClick={onHistorialRoster}
-              >
-                <div className="action-card-icon-box roster-hist-icon">
-                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-                    <polyline points="14 2 14 8 20 8" />
-                    <line x1="16" y1="13" x2="8" y2="13" />
-                    <line x1="16" y1="17" x2="8" y2="17" />
-                    <polyline points="10 9 9 9 8 9" />
-                  </svg>
-                </div>
-                <div className="action-card-content">
-                  <span className="action-card-title">Historial de Roster</span>
-                  <span className="action-card-desc">
-                    Consultar turnos y descargar reporte .xlsx mensual en 3 hojas
-                  </span>
-                </div>
-                <div className="action-card-arrow">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                    <polyline points="9 18 15 12 9 6" />
-                  </svg>
-                </div>
-              </button>
+              {/* Botón: Historial de Roster (Solo Justina Bertolozzi e Iván Valentin) */}
+              {puedeRoster && (
+                <button 
+                  type="button" 
+                  className="home-action-card card-roster-hist" 
+                  onClick={onHistorialRoster}
+                >
+                  <div className="action-card-icon-box roster-hist-icon">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                      <polyline points="14 2 14 8 20 8" />
+                      <line x1="16" y1="13" x2="8" y2="13" />
+                      <line x1="16" y1="17" x2="8" y2="17" />
+                      <polyline points="10 9 9 9 8 9" />
+                    </svg>
+                  </div>
+                  <div className="action-card-content">
+                    <span className="action-card-title">Historial de Roster</span>
+                    <span className="action-card-desc">
+                      Consultar turnos y descargar reporte .xlsx mensual en 3 hojas
+                    </span>
+                  </div>
+                  <div className="action-card-arrow">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                      <polyline points="9 18 15 12 9 6" />
+                    </svg>
+                  </div>
+                </button>
+              )}
 
-              {/* Botón: Historial de otros empleados */}
-              <button 
-                type="button" 
-                className="home-action-card card-other-hist" 
-                onClick={onHistorialOtrosEmpleados}
-              >
-                <div className="action-card-icon-box other-hist-icon">
-                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
-                    <circle cx="9" cy="7" r="4" />
-                    <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
-                    <path d="M16 3.13a4 4 0 0 1 0 7.75" />
-                  </svg>
-                </div>
-                <div className="action-card-content">
-                  <span className="action-card-title">Historial de otros empleados</span>
-                  <span className="action-card-desc">
-                    Gestiona y edita los reportes cargados para otros colaboradores
-                  </span>
-                </div>
-                <div className="action-card-arrow">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                    <polyline points="9 18 15 12 9 6" />
-                  </svg>
-                </div>
-              </button>
+              {/* Botón: Historial de otros empleados (RRHH, Núcleo e Iván Valentin) */}
+              {puedeOtros && (
+                <button 
+                  type="button" 
+                  className="home-action-card card-other-hist" 
+                  onClick={onHistorialOtrosEmpleados}
+                >
+                  <div className="action-card-icon-box other-hist-icon">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+                      <circle cx="9" cy="7" r="4" />
+                      <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+                      <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+                    </svg>
+                  </div>
+                  <div className="action-card-content">
+                    <span className="action-card-title">Historial de otros empleados</span>
+                    <span className="action-card-desc">
+                      Supervisión y auditoría de reportes cargados para colaboradores
+                    </span>
+                  </div>
+                  <div className="action-card-arrow">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                      <polyline points="9 18 15 12 9 6" />
+                    </svg>
+                  </div>
+                </button>
+              )}
             </div>
           </div>
         )}

@@ -168,6 +168,68 @@ def sincronizar_todo_desde_sheets(motivo: str = "inicio"):
         return False
 
 
+# [FN-04.00] Reglas de Permisos y Roles de Backend
+import unicodedata
+
+def _normalizar_texto(texto: str | None) -> str:
+    if not texto:
+        return ""
+    return unicodedata.normalize("NFD", str(texto).lower()).encode("ascii", "ignore").decode("utf-8").strip()
+
+def es_ivan_valentin(usuario: dict | None) -> bool:
+    if not usuario:
+        return False
+    nombre = _normalizar_texto(usuario.get("nombre"))
+    mail = _normalizar_texto(usuario.get("mail") or usuario.get("email"))
+    dni = str(usuario.get("dni") or "").strip()
+    return (("valentin" in nombre and ("ivan" in nombre or "iván" in nombre)) or
+            mail == "sge@ingeap.com" or
+            dni == "40158951")
+
+def es_justina_bertolozzi(usuario: dict | None) -> bool:
+    if not usuario:
+        return False
+    nombre = _normalizar_texto(usuario.get("nombre"))
+    mail = _normalizar_texto(usuario.get("mail") or usuario.get("email"))
+    dni = str(usuario.get("dni") or "").strip()
+    return (("justina" in nombre and "bertolozzi" in nombre) or
+            mail == "rrhh@ingeap.com" or
+            dni == "45411162")
+
+def es_area_rrhh(usuario: dict | None) -> bool:
+    if not usuario:
+        return False
+    area = (usuario.get("area") or "").strip().upper()
+    return area == "RRHH" or es_justina_bertolozzi(usuario)
+
+def es_area_nucleo(usuario: dict | None) -> bool:
+    if not usuario:
+        return False
+    area = (usuario.get("area") or "").strip().upper()
+    return area == "N"
+
+def puede_acceder_roster(usuario: dict | None) -> bool:
+    return es_justina_bertolozzi(usuario) or es_ivan_valentin(usuario)
+
+def puede_ver_historial_otros(usuario: dict | None) -> bool:
+    return es_area_rrhh(usuario) or es_area_nucleo(usuario) or es_ivan_valentin(usuario)
+
+def puede_modificar_registro_empleado(usuario: dict | None, empleado_registro: str, id_empleado_reg: str = "") -> bool:
+    if not usuario:
+        return False
+    if es_justina_bertolozzi(usuario) or es_ivan_valentin(usuario):
+        return True
+    nombre_u = _normalizar_texto(usuario.get("nombre"))
+    emp_reg = _normalizar_texto(empleado_registro)
+    dni_u = str(usuario.get("dni") or "").strip()
+    id_u = str(usuario.get("id_origen") or usuario.get("id_usuario") or "").strip()
+    id_reg = str(id_empleado_reg or "").strip()
+
+    es_propio = (emp_reg and nombre_u and emp_reg == nombre_u) or \
+                (id_reg and (id_reg == id_u or id_reg == dni_u))
+    return bool(es_propio)
+
+
 class ApiPuente:
     """Métodos accesibles desde React mediante window.pywebview.api."""
 
@@ -689,6 +751,28 @@ class ApiPuente:
         except (ValueError, TypeError):
             return {"exito": False, "error": "Identificador de registro no válido."}
 
+        sesion = obtener_sesion_activa()
+        if not sesion:
+            return {"exito": False, "error": "No hay sesión activa para modificar reportes."}
+
+        # Verificar permisos de modificación (Justina e Iván cualquier registro; resto solo propios)
+        with obtener_conexion() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT empleado, id_empleado FROM historial WHERE id = ?", (id_reg,))
+            reg_existente = cursor.fetchone()
+
+        if not reg_existente:
+            return {"exito": False, "error": "No se encontró el registro a modificar en la base local."}
+
+        emp_original = reg_existente["empleado"] or ""
+        id_emp_orig = reg_existente["id_empleado"] or ""
+
+        if not puede_modificar_registro_empleado(sesion, emp_original, id_emp_orig):
+            return {
+                "exito": False,
+                "error": "Acceso denegado: Solo Justina Bertolozzi e Iván Valentin pueden modificar registros de otros empleados."
+            }
+
         fecha = str(datos.get("fecha", "")).strip()
         lugar = str(datos.get("lugar") or datos.get("tipo_ocf", "")).strip()
         servicio = str(datos.get("servicio", "")).strip()
@@ -720,18 +804,44 @@ class ApiPuente:
         return {"exito": False, "error": "No se encontró el registro a modificar en la base local."}
 
     def obtener_historial_otros_empleados(self, filtro_empleado: str = ""):
-        """Retorna la lista de reportes cargados por RRHH para otros empleados."""
+        """Retorna la lista de reportes cargados para otros empleados (RRHH, Núcleo e Iván Valentin)."""
         sesion = obtener_sesion_activa()
+        if not puede_ver_historial_otros(sesion):
+            return []
         usuario_rrhh = sesion.get("nombre", "") if sesion else ""
         return obtener_historial_otros_empleados(usuario_rrhh=usuario_rrhh, filtro_empleado=filtro_empleado)
 
     def obtener_todos_registros_empleado(self, empleado: str, mes_anio: str = ""):
-        """Retorna todos los registros de asistencia de un empleado específico para auditar en RRHH."""
+        """Retorna todos los registros de asistencia de un empleado específico para auditar (RRHH, Núcleo e Iván Valentin)."""
+        sesion = obtener_sesion_activa()
+        if not puede_ver_historial_otros(sesion):
+            return []
         return obtener_todos_registros_empleado(empleado=empleado, mes_anio=mes_anio)
 
     def eliminar_registro_asistencia(self, id_registro: int | str):
         """Elimina un reporte de asistencia localmente y dispara el borrado en Google Sheets."""
+        sesion = obtener_sesion_activa()
+        if not sesion:
+            return {"exito": False, "error": "No hay sesión activa."}
+
         try:
+            with obtener_conexion() as conn:
+                cursor = conn.cursor()
+                cursor.execute("SELECT empleado, id_empleado FROM historial WHERE id = ?", (int(id_registro),))
+                reg_existente = cursor.fetchone()
+
+            if not reg_existente:
+                return {"exito": False, "error": "No se encontró el reporte a eliminar."}
+
+            emp_original = reg_existente["empleado"] or ""
+            id_emp_orig = reg_existente["id_empleado"] or ""
+
+            if not puede_modificar_registro_empleado(sesion, emp_original, id_emp_orig):
+                return {
+                    "exito": False,
+                    "error": "Acceso denegado: Solo Justina Bertolozzi e Iván Valentin pueden eliminar registros de otros empleados."
+                }
+
             res = eliminar_registro_asistencia(int(id_registro))
             if res.get("exito"):
                 id_asistencia = res.get("id_asistencia")
@@ -852,6 +962,10 @@ class ApiPuente:
 
     def _guardar_roster_interno(self, datos: dict, disparar_sync: bool = True):
         """Lógica central para guardar un roster e insertar sus asistencias en historial."""
+        sesion = obtener_sesion_activa()
+        if not puede_acceder_roster(sesion):
+            return {"exito": False, "error": "Acceso denegado: El módulo de Roster solo puede ser gestionado por Justina Bertolozzi e Iván Valentin."}
+
         try:
             id_roster = str(datos.get("id") or "").strip()
             old_roster = None
@@ -1011,6 +1125,9 @@ class ApiPuente:
 
     def obtener_rosters(self, fecha_desde: str | None = None, fecha_hasta: str | None = None):
         """Retorna los registros de roster que se superpongan con el período especificado, purgando registros huérfanos."""
+        sesion = obtener_sesion_activa()
+        if not puede_acceder_roster(sesion):
+            return []
         try:
             purgar_rosters_huerfanos()
             return obtener_rosters(fecha_desde, fecha_hasta)
@@ -1020,6 +1137,9 @@ class ApiPuente:
 
     def purgar_rosters_locales(self):
         """Elimina todos los registros de la tabla rosters para una limpieza forzada."""
+        sesion = obtener_sesion_activa()
+        if not puede_acceder_roster(sesion):
+            return {"exito": False, "error": "Acceso denegado: Solo Justina Bertolozzi e Iván Valentin pueden purgar rosters."}
         try:
             cant = vaciar_rosters_locales()
             return {"exito": True, "eliminados": cant}
@@ -1028,6 +1148,9 @@ class ApiPuente:
 
     def eliminar_roster(self, id_roster: str):
         """Elimina un registro de roster por su ID UUID y limpia las entradas correspondientes en historial y Google Sheets."""
+        sesion = obtener_sesion_activa()
+        if not puede_acceder_roster(sesion):
+            return {"exito": False, "error": "Acceso denegado: Solo Justina Bertolozzi e Iván Valentin pueden eliminar rosters."}
         try:
             if id_roster:
                 with obtener_conexion() as conn:
@@ -1073,6 +1196,9 @@ class ApiPuente:
 
     def exportar_roster_excel(self, anio: int, mes: int, proyecto: str = ""):
         """Abre un diálogo nativo de Windows para guardar el archivo Excel de Roster por proyecto en 3 hojas."""
+        sesion = obtener_sesion_activa()
+        if not puede_acceder_roster(sesion):
+            return {"exito": False, "error": "Acceso denegado: Solo Justina Bertolozzi e Iván Valentin pueden exportar rosters."}
         try:
             nombres_meses = [
                 "", "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
@@ -1141,7 +1267,7 @@ def obtener_icono_tray():
     return crear_icono_calendario(64)
 
 
-APP_VERSION = "1.3.5"
+APP_VERSION = "1.3.6"
 
 _mutex_instancia = None
 

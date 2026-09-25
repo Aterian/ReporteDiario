@@ -9,7 +9,9 @@ import OtherEmployeesHistoryView from './components/OtherEmployeesHistoryView';
 import RosterView from './components/RosterView';
 import RosterHistoryView from './components/RosterHistoryView';
 import ErrorBoundary from './components/ErrorBoundary';
+import { puedeAccederRoster, puedeVerHistorialOtros } from './utils/permissions';
 
+// [MOD-00] App Principal
 export default function App() {
   const [cargandoSesion, setCargandoSesion] = useState(true);
   const [usuario, setUsuario] = useState(null);
@@ -103,6 +105,17 @@ export default function App() {
       delete window.dispararAlertaRecordatorio;
     };
   }, []);
+
+  // Guardia de navegación por permisos y roles
+  useEffect(() => {
+    if (!usuario) return;
+    if ((vistaActiva === 'roster' || vistaActiva === 'historial-roster') && !puedeAccederRoster(usuario)) {
+      setVistaActiva('home');
+    }
+    if (vistaActiva === 'historial-otros' && !puedeVerHistorialOtros(usuario)) {
+      setVistaActiva('home');
+    }
+  }, [vistaActiva, usuario]);
 
 
 
@@ -405,7 +418,7 @@ export default function App() {
           />
         )}
 
-        {vistaActiva === 'historial-otros' && (
+        {vistaActiva === 'historial-otros' && puedeVerHistorialOtros(usuario) && (
           <OtherEmployeesHistoryView
             usuario={usuario}
             tema={tema}
@@ -415,7 +428,7 @@ export default function App() {
           />
         )}
 
-        {vistaActiva === 'roster' && (
+        {vistaActiva === 'roster' && puedeAccederRoster(usuario) && (
           <RosterView
             usuario={usuario}
             tema={tema}
@@ -423,7 +436,7 @@ export default function App() {
           />
         )}
 
-        {vistaActiva === 'historial-roster' && (
+        {vistaActiva === 'historial-roster' && puedeAccederRoster(usuario) && (
           <RosterHistoryView
             usuario={usuario}
             tema={tema}

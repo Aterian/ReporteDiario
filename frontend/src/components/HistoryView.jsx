@@ -1,5 +1,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { api } from '../services/apiBridge';
+import { puedeVerHistorialOtros, puedeModificarRegistro } from '../utils/permissions';
+
+// [MOD-02] HistoryView
 
 // Iconos vectoriales medievales para garantizar renderizado perfecto sin depender de compatibilidad de emojis
 const QuillIcon = ({ size = 16, color = "#78350f" }) => (
@@ -247,6 +250,12 @@ export default function HistoryView({ onVolver, tema, onNuevoReporte, usuario, o
     e.preventDefault();
     if (!registroEditando) return;
 
+    if (!puedeModificarRegistro(usuario, registroEditando)) {
+      alert('Solo Justina Bertolozzi e Iván Valentin pueden modificar registros de otros empleados.');
+      setRegistroEditando(null);
+      return;
+    }
+
     setGuardandoEdicion(true);
     try {
       const res = await api.modificarRegistro({
@@ -421,7 +430,7 @@ export default function HistoryView({ onVolver, tema, onNuevoReporte, usuario, o
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-          {esRRHH && onHistorialOtrosEmpleados && (
+          {puedeVerHistorialOtros(usuario) && onHistorialOtrosEmpleados && (
             <button
               type="button"
               className={isRpg ? 'rpg-wood-btn' : 'btn-action-ghost'}
@@ -671,17 +680,23 @@ export default function HistoryView({ onVolver, tema, onNuevoReporte, usuario, o
                       </div>
 
                       <div className="item-card-footer">
-                        <button
-                          type="button"
-                          className="btn-edit-record"
-                          onClick={() => setRegistroEditando({ ...item })}
-                        >
-                          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
-                            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
-                          </svg>
-                          Modificar
-                        </button>
+                        {puedeModificarRegistro(usuario, item) ? (
+                          <button
+                            type="button"
+                            className="btn-edit-record"
+                            onClick={() => setRegistroEditando({ ...item })}
+                          >
+                            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                              <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                              <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                            </svg>
+                            Modificar
+                          </button>
+                        ) : (
+                          <span className="badge-solo-lectura" title="Solo Justina Bertolozzi e Iván Valentin pueden modificar registros de otros empleados">
+                            🔒 Solo lectura
+                          </span>
+                        )}
                       </div>
                     </div>
                   );
@@ -805,10 +820,12 @@ export default function HistoryView({ onVolver, tema, onNuevoReporte, usuario, o
                           className={`cell-event-pill ${badgeClass}`}
                           onClick={(e) => {
                             e.stopPropagation();
-                            setRegistroEditando({ ...r });
+                            if (puedeModificarRegistro(usuario, r)) {
+                              setRegistroEditando({ ...r });
+                            }
                           }}
-                          style={{ cursor: 'pointer' }}
-                          title={`${lug} - ${r.servicio} (${r.horas} hs) • ${tagCell.label} • Clic para modificar`}
+                          style={{ cursor: puedeModificarRegistro(usuario, r) ? 'pointer' : 'default' }}
+                          title={`${lug} - ${r.servicio} (${r.horas} hs) • ${tagCell.label}${puedeModificarRegistro(usuario, r) ? ' • Clic para modificar' : ' • Solo lectura'}`}
                         >
                           <span className="cell-event-label">{labelText}</span>
                           {tagCell.tipo === 'rrhh' && (

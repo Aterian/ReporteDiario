@@ -1,8 +1,23 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { api } from '../services/apiBridge';
+import { puedeAccederRoster } from '../utils/permissions';
 
-export default function RosterHistoryView({ onVolver, onNuevoRoster, tema }) {
+// [MOD-06] RosterHistoryView
+export default function RosterHistoryView({ usuario, onVolver, onNuevoRoster, tema }) {
   const isDark = tema === 'dark';
+
+  if (!puedeAccederRoster(usuario)) {
+    return (
+      <div className="view-content" style={{ padding: '32px', textAlign: 'center' }}>
+        <p style={{ fontSize: '15px', color: 'var(--text-secondary)', marginBottom: '16px' }}>
+          Acceso denegado: El historial de Roster solo puede ser visualizado por Justina Bertolozzi e Iván Valentin.
+        </p>
+        <button type="button" className="btn-back" onClick={onVolver}>
+          Volver al Inicio
+        </button>
+      </div>
+    );
+  }
 
   // Poner la ventana en pantalla completa al entrar (se conserva el tamaño al salir)
   useEffect(() => {

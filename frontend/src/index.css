@@ -8329,6 +8329,26 @@ html, body {
   background: rgba(109, 40, 217, 0.4);
 }
 
+.badge-solo-lectura {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--text-secondary, #64748b);
+  background: var(--bg-surface-hover, rgba(0, 0, 0, 0.04));
+  border: 1px solid var(--border-subtle, #cbd5e1);
+  border-radius: 6px;
+  user-select: none;
+}
+
+[data-theme='dark'] .badge-solo-lectura {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.12);
+  color: #94a3b8;
+}
+
 .autor-info-banner {
   background: var(--bg-card, #f8fafc);
   border: 1px solid var(--border-color, #e2e8f0);

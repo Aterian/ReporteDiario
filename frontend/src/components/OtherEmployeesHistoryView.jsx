@@ -1,5 +1,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { api } from '../services/apiBridge';
+import { puedeVerHistorialOtros, puedeModificarRegistro } from '../utils/permissions';
+
+// [MOD-03] OtherEmployeesHistoryView
 
 const LUGARES_OPCIONES = [
   'Oficina',
@@ -16,6 +19,20 @@ const LUGARES_OPCIONES = [
 
 export default function OtherEmployeesHistoryView({ usuario, onVolver, tema, onVerMiHistorial, onNuevoReporte }) {
   const isRpg = tema === 'rpg';
+
+  // Si el usuario no tiene permisos para ver historial de otros empleados, denegar acceso
+  if (!puedeVerHistorialOtros(usuario)) {
+    return (
+      <div className="view-content" style={{ padding: '32px', textAlign: 'center' }}>
+        <p style={{ fontSize: '15px', color: 'var(--text-secondary)', marginBottom: '16px' }}>
+          No tienes permisos para visualizar el historial de otros colaboradores.
+        </p>
+        <button type="button" className="btn-back" onClick={onVolver}>
+          Volver al Inicio
+        </button>
+      </div>
+    );
+  }
 
   // Maximizar ventana para experiencia panorámica
   useEffect(() => {
@@ -170,6 +187,12 @@ export default function OtherEmployeesHistoryView({ usuario, onVolver, tema, onV
     e.preventDefault();
     if (!registroEditando) return;
 
+    if (!puedeModificarRegistro(usuario, registroEditando)) {
+      alert('Solo Justina Bertolozzi e Iván Valentin pueden modificar registros de otros empleados.');
+      setRegistroEditando(null);
+      return;
+    }
+
     setGuardandoEdicion(true);
     try {
       const res = await api.modificarRegistro({
@@ -203,6 +226,13 @@ export default function OtherEmployeesHistoryView({ usuario, onVolver, tema, onV
 
   const handleConfirmarEliminacion = async () => {
     if (!registroEliminando) return;
+
+    if (!puedeModificarRegistro(usuario, registroEliminando)) {
+      alert('Solo Justina Bertolozzi e Iván Valentin pueden eliminar registros de otros empleados.');
+      setRegistroEliminando(null);
+      return;
+    }
+
     setEliminando(true);
     try {
       const res = await api.eliminarRegistroAsistencia(registroEliminando.id);
@@ -644,31 +674,39 @@ export default function OtherEmployeesHistoryView({ usuario, onVolver, tema, onV
                       </div>
 
                       <div className="other-card-actions">
-                        <button
-                          type="button"
-                          className="btn-card-action btn-card-edit"
-                          onClick={() => setRegistroEditando({ ...item })}
-                          title="Modificar reporte"
-                        >
-                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
-                            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
-                          </svg>
-                          Modificar
-                        </button>
+                        {puedeModificarRegistro(usuario, item) ? (
+                          <>
+                            <button
+                              type="button"
+                              className="btn-card-action btn-card-edit"
+                              onClick={() => setRegistroEditando({ ...item })}
+                              title="Modificar reporte"
+                            >
+                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                              </svg>
+                              Modificar
+                            </button>
 
-                        <button
-                          type="button"
-                          className="btn-card-action btn-card-delete"
-                          onClick={() => setRegistroEliminando(item)}
-                          title="Eliminar este reporte localmente y de Google Sheets"
-                        >
-                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                            <polyline points="3 6 5 6 21 6" />
-                            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-                          </svg>
-                          Eliminar
-                        </button>
+                            <button
+                              type="button"
+                              className="btn-card-action btn-card-delete"
+                              onClick={() => setRegistroEliminando(item)}
+                              title="Eliminar este reporte localmente y de Google Sheets"
+                            >
+                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                                <polyline points="3 6 5 6 21 6" />
+                                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                              </svg>
+                              Eliminar
+                            </button>
+                          </>
+                        ) : (
+                          <span className="badge-solo-lectura" title="Solo Justina Bertolozzi e Iván Valentin pueden modificar registros de otros empleados">
+                            🔒 Solo lectura
+                          </span>
+                        )}
                       </div>
                     </div>
                   );
@@ -761,14 +799,14 @@ export default function OtherEmployeesHistoryView({ usuario, onVolver, tema, onV
                     className={`calendar-cell ${celda.esHoy ? 'cell-today' : ''} ${tieneRegistros ? 'cell-has-data' : ''}`}
                     onClick={() => {
                       if (!tieneRegistros) return;
-                      if (celda.registros.length === 1) {
+                      if (celda.registros.length === 1 && puedeModificarRegistro(usuario, celda.registros[0])) {
                         setRegistroEditando({ ...celda.registros[0] });
                       } else {
                         setDiaSeleccionadoAuditoria(celda);
                       }
                     }}
                     style={{ cursor: tieneRegistros ? 'pointer' : 'default' }}
-                    title={tieneRegistros ? `${celda.registros.length} registro(s) el ${celda.fechaIso} (Toca para editar/eliminar)` : celda.fechaIso}
+                    title={tieneRegistros ? `${celda.registros.length} registro(s) el ${celda.fechaIso} (Toca para ver detalles)` : celda.fechaIso}
                   >
                     <div className="cell-top-bar">
                       <span className="cell-day-number">{celda.diaNumero}</span>
@@ -797,9 +835,13 @@ export default function OtherEmployeesHistoryView({ usuario, onVolver, tema, onV
                             className={`cell-event-pill ${badgeClass}`}
                             onClick={(e) => {
                               e.stopPropagation();
-                              setRegistroEditando({ ...r });
+                              if (puedeModificarRegistro(usuario, r)) {
+                                setRegistroEditando({ ...r });
+                              } else {
+                                setDiaSeleccionadoAuditoria(celda);
+                              }
                             }}
-                            title={`${lug} - ${r.servicio} (${r.horas} hs) • Clic para editar o eliminar`}
+                            title={`${lug} - ${r.servicio} (${r.horas} hs) • ${puedeModificarRegistro(usuario, r) ? 'Clic para editar o eliminar' : 'Solo lectura'}`}
                           >
                             <span className="cell-event-label">{labelText}</span>
                           </div>
@@ -1035,29 +1077,37 @@ export default function OtherEmployeesHistoryView({ usuario, onVolver, tema, onV
                         {item.horas > 0 ? `${item.horas} hs` : '0 hs'}
                       </span>
                     </div>
-                    <div style={{ display: 'flex', gap: '4px', flexShrink: 0 }}>
-                      <button
-                        type="button"
-                        className="btn-card-action btn-card-edit"
-                        onClick={() => {
-                          setDiaSeleccionadoAuditoria(null);
-                          setRegistroEditando({ ...item });
-                        }}
-                        title="Modificar este registro"
-                      >
-                        Modificar
-                      </button>
-                      <button
-                        type="button"
-                        className="btn-card-action btn-card-delete"
-                        onClick={() => {
-                          setDiaSeleccionadoAuditoria(null);
-                          setRegistroEliminando(item);
-                        }}
-                        title="Eliminar este registro"
-                      >
-                        Eliminar
-                      </button>
+                    <div style={{ display: 'flex', gap: '4px', flexShrink: 0, alignItems: 'center' }}>
+                      {puedeModificarRegistro(usuario, item) ? (
+                        <>
+                          <button
+                            type="button"
+                            className="btn-card-action btn-card-edit"
+                            onClick={() => {
+                              setDiaSeleccionadoAuditoria(null);
+                              setRegistroEditando({ ...item });
+                            }}
+                            title="Modificar este registro"
+                          >
+                            Modificar
+                          </button>
+                          <button
+                            type="button"
+                            className="btn-card-action btn-card-delete"
+                            onClick={() => {
+                              setDiaSeleccionadoAuditoria(null);
+                              setRegistroEliminando(item);
+                            }}
+                            title="Eliminar este registro"
+                          >
+                            Eliminar
+                          </button>
+                        </>
+                      ) : (
+                        <span className="badge-solo-lectura" title="Solo Justina Bertolozzi e Iván Valentin pueden modificar registros de otros empleados">
+                          🔒 Solo lectura
+                        </span>
+                      )}
                     </div>
                   </div>
                 );
