@@ -1,3 +1,4 @@
+# pyright: reportMissingTypeStubs=false
 import os
 import calendar
 from datetime import datetime, date, timedelta

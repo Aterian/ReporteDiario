@@ -4,7 +4,15 @@ import sys
 import shutil
 import uuid
 import json
-from datetime import datetime
+from datetime import datetime, date
+from typing import TypedDict
+
+class BloqueRoster(TypedDict):
+    empleado: str
+    servicio: str
+    tipo: str
+    inicio: date
+    fin: date
 
 def obtener_directorio_datos() -> str:
     """
@@ -1427,8 +1435,8 @@ def reconstruir_rosters_desde_historial() -> int:
                 return 0
 
             # 5. Agrupar en secuencias contiguas del mismo (empleado, servicio, tipo)
-            bloques = []
-            current = None
+            bloques: list[BloqueRoster] = []
+            current: BloqueRoster | None = None
 
             for f in filas:
                 emp = f["empleado"].strip()

@@ -294,7 +294,7 @@ def obtener_no_laborales_remotos(spreadsheet_id: str = "") -> list:
 
 
 # [FN-03.05] Construcción de fila dinámica según esquema de columnas de la hoja
-def construir_fila_asistencia(registro: dict, headers: list = None) -> list:
+def construir_fila_asistencia(registro: dict, headers: list | None = None) -> list:
     """Construye la lista de valores para la fila alineada a los encabezados presentes en la hoja."""
     emp = str(registro.get("empleado", "")).strip()
     f_str = str(registro.get("fecha", "")).strip()
