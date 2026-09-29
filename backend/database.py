@@ -143,6 +143,9 @@ def inicializar_bd():
                 tipo_ocf TEXT NOT NULL,
                 servicio TEXT NOT NULL,
                 horas REAL DEFAULT 0,
+                hora_inicio TEXT DEFAULT '',
+                hora_fin TEXT DEFAULT '',
+                tipo_costo TEXT DEFAULT '',
                 instrumental TEXT DEFAULT '',
                 usuario_mail TEXT DEFAULT '',
                 fecha_hora TEXT DEFAULT '',
@@ -170,6 +173,12 @@ def inicializar_bd():
             cursor.execute("ALTER TABLE historial ADD COLUMN tipo_ocf TEXT DEFAULT ''")
         if "horas" not in columnas_hist:
             cursor.execute("ALTER TABLE historial ADD COLUMN horas REAL DEFAULT 0")
+        if "hora_inicio" not in columnas_hist:
+            cursor.execute("ALTER TABLE historial ADD COLUMN hora_inicio TEXT DEFAULT ''")
+        if "hora_fin" not in columnas_hist:
+            cursor.execute("ALTER TABLE historial ADD COLUMN hora_fin TEXT DEFAULT ''")
+        if "tipo_costo" not in columnas_hist:
+            cursor.execute("ALTER TABLE historial ADD COLUMN tipo_costo TEXT DEFAULT ''")
         if "instrumental" not in columnas_hist:
             cursor.execute("ALTER TABLE historial ADD COLUMN instrumental TEXT DEFAULT ''")
         if "usuario_mail" not in columnas_hist:
@@ -188,6 +197,28 @@ def inicializar_bd():
             cursor.execute("ALTER TABLE historial ADD COLUMN id_proyecto TEXT DEFAULT ''")
         if "modificado" not in columnas_hist:
             cursor.execute("ALTER TABLE historial ADD COLUMN modificado INTEGER DEFAULT 0")
+
+        # Tabla de auditoría para modificaciones realizadas en Google Sheets 1_1_modificaciones_realizadas
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS modificaciones_realizadas (
+                id_modificacion TEXT PRIMARY KEY,
+                id_asistencia TEXT NOT NULL,
+                tipo_antes TEXT DEFAULT '',
+                tipo_despues TEXT DEFAULT '',
+                horas_antes REAL DEFAULT 0,
+                horas_despues REAL DEFAULT 0,
+                servicio_antes TEXT DEFAULT '',
+                servicio_despues TEXT DEFAULT '',
+                fecha_hora_modificaciones TEXT NOT NULL,
+                quien_modifica TEXT NOT NULL,
+                sincronizado INTEGER DEFAULT 0,
+                creado_en TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_historial_fecha ON historial(fecha)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_historial_asistencia ON historial(id_asistencia)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_modificaciones_asistencia ON modificaciones_realizadas(id_asistencia)")
 
         # Tabla de rosters para planificación y turnos de RRHH
         cursor.execute("""
@@ -634,6 +665,7 @@ def obtener_id_proyecto(denominacion: str) -> str:
     except Exception:
         return ""
 
+# [FN-01.05] Guardar asistencia con soporte de horas de campo y tipo de costo
 def guardar_registro_asistencia(
     empleado: str,
     fecha: str,
@@ -649,11 +681,14 @@ def guardar_registro_asistencia(
     sincronizado: bool = False,
     cargado_por: str = "",
     id_empleado: str = "",
-    id_proyecto: str = ""
+    id_proyecto: str = "",
+    hora_inicio: str = "",
+    hora_fin: str = "",
+    tipo_costo: str = ""
 ):
     """
-    Inserta una fila de asistencia con las columnas exactas de Google Sheets:
-    id_asistencia, empleado, fecha, tipo_ocf, servicio, horas, instrumental, usuario_mail, fecha_hora, dia_semana, feriado, id_empleado, id_proyecto
+    Inserta una fila de asistencia con las columnas exactas de Google Sheets (17 columnas):
+    id_asistencia, empleado, fecha, tipo_ocf, servicio, hora_inicio, hora_fin, horas, instrumental, usuario_mail, fecha_hora, dia_semana, feriado, id_empleado, id_proyecto, cargado_por, tipo_costo
     """
     uid = id_asistencia or str(uuid.uuid4())
     ts = fecha_hora or datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -670,11 +705,11 @@ def guardar_registro_asistencia(
         cursor.execute("""
             INSERT INTO historial (
                 id_asistencia, empleado, fecha, tipo_ocf, servicio, 
-                horas, instrumental, usuario_mail, fecha_hora, 
+                horas, hora_inicio, hora_fin, tipo_costo, instrumental, usuario_mail, fecha_hora, 
                 lugar, jornada, dia_semana, feriado, modificado, sincronizado,
                 cargado_por, id_empleado, id_proyecto
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             uid,
             empleado,
@@ -682,6 +717,9 @@ def guardar_registro_asistencia(
             tipo_ocf,
             servicio,
             horas,
+            hora_inicio,
+            hora_fin,
+            tipo_costo,
             instrumental,
             usuario_mail,
             ts,
@@ -698,6 +736,7 @@ def guardar_registro_asistencia(
         conn.commit()
     return uid
 
+# [FN-02.01] Actualizar asistencia y registrar en tabla de auditoría 1_1_modificaciones_realizadas
 def actualizar_registro_asistencia(
     id_registro: int,
     fecha: str,
@@ -708,12 +747,15 @@ def actualizar_registro_asistencia(
     cargado_por: str = "",
     id_empleado: str = "",
     id_proyecto: str = "",
-    usuario_mail: str = ""
+    usuario_mail: str = "",
+    hora_inicio: str = "",
+    hora_fin: str = "",
+    tipo_costo: str = "",
+    quien_modifica: str = ""
 ) -> bool:
     """
-    Actualiza un reporte de asistencia existente en historial
-    y lo marca como pendiente de sincronizar (sincronizado=0, modificado=1).
-    Actualiza empleado, id_empleado y usuario_mail cuando el empleado cambia.
+    Actualiza un reporte de asistencia existente en historial, registra la auditoría
+    en modificaciones_realizadas y marca el registro como pendiente de sincronizar.
     """
     dia_sem = calcular_dia_semana(fecha)
     fer = "SI" if tipo_ocf.strip().lower() == "feriado trabajado" else es_fecha_feriado(fecha)
@@ -721,8 +763,15 @@ def actualizar_registro_asistencia(
 
     with obtener_conexion() as conn:
         cursor = conn.cursor()
-        cursor.execute("SELECT empleado, id_empleado, id_proyecto, usuario_mail FROM historial WHERE id = ?", (id_registro,))
+        cursor.execute("""
+            SELECT id, id_asistencia, empleado, id_empleado, id_proyecto, usuario_mail, 
+                   tipo_ocf, horas, servicio, hora_inicio, hora_fin, tipo_costo
+            FROM historial WHERE id = ?
+        """, (id_registro,))
         row_ant = cursor.fetchone()
+        if not row_ant:
+            return False
+
         emp_actual = empleado or (row_ant["empleado"] if row_ant else "")
         cambio_empleado = bool(row_ant and empleado and empleado.strip().lower() != (row_ant["empleado"] or "").strip().lower())
 
@@ -735,6 +784,41 @@ def actualizar_registro_asistencia(
 
         proy_id = id_proyecto or obtener_id_proyecto(servicio)
 
+        # Registrar auditoría en modificaciones_realizadas
+        uid_asistencia = str(row_ant["id_asistencia"] or "").strip()
+        tipo_previo = str(row_ant["tipo_ocf"] or "")
+        horas_previas = float(row_ant["horas"] or 0.0)
+        servicio_previo = str(row_ant["servicio"] or "")
+
+        hubo_cambio_sustantivo = (
+            tipo_previo.strip().lower() != tipo_ocf.strip().lower() or
+            abs(horas_previas - horas) > 0.01 or
+            servicio_previo.strip().lower() != servicio.strip().lower()
+        )
+
+        if hubo_cambio_sustantivo and uid_asistencia:
+            id_mod = str(uuid.uuid4())
+            fh_mod = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            usuario_autor = (quien_modifica or cargado_por or emp_actual or "Usuario").strip()
+            cursor.execute("""
+                INSERT INTO modificaciones_realizadas (
+                    id_modificacion, id_asistencia, tipo_antes, tipo_despues,
+                    horas_antes, horas_despues, servicio_antes, servicio_despues,
+                    fecha_hora_modificaciones, quien_modifica, sincronizado
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)
+            """, (
+                id_mod,
+                uid_asistencia,
+                tipo_previo,
+                tipo_ocf,
+                horas_previas,
+                horas,
+                servicio_previo,
+                servicio,
+                fh_mod,
+                usuario_autor
+            ))
+
         query = """
             UPDATE historial
             SET fecha = ?,
@@ -746,10 +830,16 @@ def actualizar_registro_asistencia(
                 dia_semana = ?,
                 feriado = ?,
                 id_proyecto = ?,
+                hora_inicio = ?,
+                hora_fin = ?,
                 modificado = 1,
                 sincronizado = 0
         """
-        params = [fecha, tipo_ocf, tipo_ocf, servicio, horas, jornada_txt, dia_sem, fer, proy_id]
+        params = [fecha, tipo_ocf, tipo_ocf, servicio, horas, jornada_txt, dia_sem, fer, proy_id, hora_inicio, hora_fin]
+
+        if tipo_costo:
+            query += ", tipo_costo = ?"
+            params.append(tipo_costo)
 
         if empleado:
             query += ", empleado = ?, id_empleado = ?, usuario_mail = ?"
@@ -799,6 +889,9 @@ def obtener_historial_otros_empleados(usuario_rrhh: str = "", filtro_empleado: s
                 COALESCE(tipo_ocf, lugar) as tipo_ocf,
                 servicio,
                 COALESCE(horas, 0) as horas,
+                COALESCE(hora_inicio, '') as hora_inicio,
+                COALESCE(hora_fin, '') as hora_fin,
+                COALESCE(tipo_costo, '') as tipo_costo,
                 COALESCE(instrumental, '') as instrumental,
                 COALESCE(usuario_mail, '') as usuario_mail,
                 COALESCE(fecha_hora, creado_en) as fecha_hora,
@@ -849,6 +942,9 @@ def obtener_todos_registros_empleado(empleado: str, mes_anio: str = "") -> list:
                 COALESCE(tipo_ocf, lugar) as tipo_ocf,
                 servicio,
                 COALESCE(horas, 0) as horas,
+                COALESCE(hora_inicio, '') as hora_inicio,
+                COALESCE(hora_fin, '') as hora_fin,
+                COALESCE(tipo_costo, '') as tipo_costo,
                 COALESCE(instrumental, '') as instrumental,
                 COALESCE(usuario_mail, '') as usuario_mail,
                 COALESCE(fecha_hora, creado_en) as fecha_hora,
@@ -888,6 +984,9 @@ def obtener_pendientes_sincronizacion():
                 COALESCE(tipo_ocf, lugar) as tipo_ocf,
                 servicio,
                 COALESCE(horas, 0) as horas,
+                COALESCE(hora_inicio, '') as hora_inicio,
+                COALESCE(hora_fin, '') as hora_fin,
+                COALESCE(tipo_costo, '') as tipo_costo,
                 COALESCE(instrumental, '') as instrumental,
                 COALESCE(usuario_mail, '') as usuario_mail,
                 COALESCE(fecha_hora, creado_en) as fecha_hora,
@@ -957,6 +1056,9 @@ def obtener_ultimos_registros(empleado: str = "", usuario_mail: str = "", limite
                     COALESCE(tipo_ocf, lugar) as tipo_ocf,
                     servicio,
                     COALESCE(horas, 0) as horas,
+                    COALESCE(hora_inicio, '') as hora_inicio,
+                    COALESCE(hora_fin, '') as hora_fin,
+                    COALESCE(tipo_costo, '') as tipo_costo,
                     COALESCE(instrumental, '') as instrumental,
                     COALESCE(usuario_mail, '') as usuario_mail,
                     COALESCE(fecha_hora, creado_en) as fecha_hora,
@@ -985,6 +1087,9 @@ def obtener_ultimos_registros(empleado: str = "", usuario_mail: str = "", limite
                     COALESCE(tipo_ocf, lugar) as tipo_ocf,
                     servicio,
                     COALESCE(horas, 0) as horas,
+                    COALESCE(hora_inicio, '') as hora_inicio,
+                    COALESCE(hora_fin, '') as hora_fin,
+                    COALESCE(tipo_costo, '') as tipo_costo,
                     COALESCE(instrumental, '') as instrumental,
                     COALESCE(usuario_mail, '') as usuario_mail,
                     COALESCE(fecha_hora, creado_en) as fecha_hora,
@@ -1027,6 +1132,164 @@ def usuario_registro_hoy(empleado: str = "", usuario_mail: str = "") -> bool:
         """, (fecha_hoy, mail_clean, emp_clean))
         fila = cursor.fetchone()
         return (fila["cant"] if fila else 0) > 0
+
+# [FN-03.05] Asignación masiva de tipo_costo para registros de asistencia
+def actualizar_tipo_costo_lote(ids_asistencia: list, tipo_costo: str) -> int:
+    """Actualiza en lote la columna tipo_costo para los registros indicados en SQLite y los marca para sync."""
+    if not ids_asistencia:
+        return 0
+    with obtener_conexion() as conn:
+        cursor = conn.cursor()
+        val = tipo_costo.strip().capitalize() if tipo_costo.strip().lower() in ["oficina", "campo"] else ""
+        total_modificados = 0
+        for item_id in ids_asistencia:
+            cursor.execute("""
+                UPDATE historial
+                SET tipo_costo = ?,
+                    sincronizado = 0,
+                    modificado = 1
+                WHERE id_asistencia = ? OR id = ?
+            """, (val, str(item_id), item_id if str(item_id).isdigit() else -1))
+            total_modificados += cursor.rowcount
+        conn.commit()
+        return total_modificados
+
+# [FN-02.01] Consultar modificaciones recientes registradas
+def obtener_modificaciones_recientes(limite: int = 50) -> list:
+    """Retorna las últimas modificaciones registradas para auditoría de RRHH."""
+    with obtener_conexion() as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT m.*, h.empleado, h.fecha 
+            FROM modificaciones_realizadas m
+            LEFT JOIN historial h ON m.id_asistencia = h.id_asistencia
+            ORDER BY m.fecha_hora_modificaciones DESC
+            LIMIT ?
+        """, (limite,))
+        return [dict(r) for r in cursor.fetchall()]
+
+# [FN-02.02] Resumen de modificaciones para alertas visuales y badges en RRHH
+def obtener_resumen_modificaciones() -> dict:
+    """Retorna el conteo total de modificaciones y las 10 más recientes."""
+    with obtener_conexion() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT COUNT(*) as total FROM modificaciones_realizadas")
+        row = cursor.fetchone()
+        total = row["total"] if row else 0
+        cursor.execute("""
+            SELECT m.*, h.empleado, h.fecha 
+            FROM modificaciones_realizadas m
+            LEFT JOIN historial h ON m.id_asistencia = h.id_asistencia
+            ORDER BY m.fecha_hora_modificaciones DESC
+            LIMIT 10
+        """)
+        recientes = [dict(r) for r in cursor.fetchall()]
+        return {"total": total, "recientes": recientes}
+
+# [FN-02.01] Obtener modificaciones pendientes de sincronización a Google Sheets
+def obtener_modificaciones_pendientes() -> list:
+    """Retorna las filas de modificaciones_realizadas pendientes de sincronizar con Google Sheets."""
+    with obtener_conexion() as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT id_modificacion, id_asistencia, tipo_antes, tipo_despues,
+                   horas_antes, horas_despues, servicio_antes, servicio_despues,
+                   fecha_hora_modificaciones, quien_modifica
+            FROM modificaciones_realizadas
+            WHERE sincronizado = 0
+            ORDER BY fecha_hora_modificaciones ASC
+        """)
+        return [dict(f) for f in cursor.fetchall()]
+
+# [FN-02.01] Marcar modificaciones como sincronizadas
+def marcar_modificaciones_sincronizadas(ids_modificacion: list):
+    """Marca como sincronizadas (sincronizado = 1) las modificaciones subidas a Google Sheets."""
+    if not ids_modificacion:
+        return
+    with obtener_conexion() as conn:
+        cursor = conn.cursor()
+        placeholders = ",".join(["?"] * len(ids_modificacion))
+        cursor.execute(f"""
+            UPDATE modificaciones_realizadas
+            SET sincronizado = 1
+            WHERE id_modificacion IN ({placeholders})
+        """, ids_modificacion)
+        conn.commit()
+
+# [FN-06.02] Widget de Control de Estado Diario en Pantalla Inicial
+def obtener_estado_diario_empleados(fecha: str = "") -> dict:
+    """
+    Retorna la lista de todos los colaboradores autorizados y su estado de reporte para la fecha actual (o especificada).
+    Verde: Ya envió su check del día.
+    Rojo/Gris: Aún no ha realizado el registro diario.
+    """
+    from datetime import datetime
+    fecha_target = fecha or datetime.now().strftime("%Y-%m-%d")
+
+    usuarios = obtener_usuarios_cache()
+    if not usuarios:
+        with obtener_conexion() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT nombre, mail, area, dni FROM perfiles_empleados")
+            usuarios = [dict(r) for r in cursor.fetchall()]
+
+    with obtener_conexion() as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT empleado, usuario_mail, tipo_ocf, servicio, horas, hora_inicio, hora_fin, tipo_costo, id_asistencia
+            FROM historial
+            WHERE fecha = ?
+        """, (fecha_target,))
+        registros_hoy = cursor.fetchall()
+
+    mapa_registros = {}
+    for r in registros_hoy:
+        emp = (r["empleado"] or "").strip().lower()
+        mail = (r["usuario_mail"] or "").strip().lower()
+        if emp:
+            mapa_registros[emp] = dict(r)
+        if mail:
+            mapa_registros[mail] = dict(r)
+
+    resultado = []
+    con_check = 0
+
+    for u in usuarios:
+        nom = (u.get("nombre") or "").strip()
+        if not nom:
+            continue
+        mail = (u.get("email") or u.get("mail") or "").strip()
+        area = (u.get("area") or "").strip()
+
+        reg = mapa_registros.get(nom.lower()) or (mapa_registros.get(mail.lower()) if mail else None)
+
+        ha_enviado = reg is not None
+        if ha_enviado:
+            con_check += 1
+
+        resultado.append({
+            "nombre": nom,
+            "mail": mail,
+            "area": area,
+            "registrado": ha_enviado,
+            "tipo_ocf": reg["tipo_ocf"] if reg else "",
+            "servicio": reg["servicio"] if reg else "",
+            "horas": reg["horas"] if reg else 0.0,
+            "hora_inicio": reg.get("hora_inicio", "") if reg else "",
+            "hora_fin": reg.get("hora_fin", "") if reg else "",
+            "tipo_costo": reg.get("tipo_costo", "") if reg else ""
+        })
+
+    # Ordenar: primero los pendientes (para que RRHH los audite fácilmente), luego por nombre
+    resultado.sort(key=lambda x: (x["registrado"], x["nombre"].lower()))
+
+    return {
+        "fecha": fecha_target,
+        "total": len(resultado),
+        "registrados": con_check,
+        "pendientes": len(resultado) - con_check,
+        "empleados": resultado
+    }
 
 def guardar_registro_roster(datos: dict) -> dict:
     """Guarda o actualiza un registro de roster con ID UUID obligatorio."""

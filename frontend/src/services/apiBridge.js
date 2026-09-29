@@ -73,7 +73,25 @@ const mockApi = {
   obtener_historial_otros_empleados: async (filtroEmpleado = '') => ([]),
   eliminar_registro_asistencia: async (idRegistro) => ({ exito: true, mensaje: 'Registro eliminado (simulado).' }),
   obtener_todos_registros_empleado: async (empleado, mesAnio = '') => ([]),
-  obtener_todos_usuarios: async (area = null) => []
+  obtener_todos_usuarios: async (area = null) => [],
+  obtener_estado_diario_empleados: async (fecha = '') => ({
+    fecha: fecha || new Date().toISOString().slice(0, 10),
+    total_empleados: 0,
+    registrados: 0,
+    pendientes: 0,
+    lista: []
+  }),
+  obtener_resumen_modificaciones: async () => ({
+    total_modificaciones: 0,
+    ultimas_24h: 0,
+    no_sincronizadas: 0,
+    ultima_modificacion: null
+  }),
+  obtener_modificaciones_recientes: async (limite = 30) => [],
+  actualizar_tipo_costo_masivo: async (idsAsistencia = [], tipoCosto = '') => ({
+    exito: true,
+    actualizados: idsAsistencia.length
+  })
 };
 
 let cachedApi = null;
@@ -352,6 +370,38 @@ export const api = {
       return await bridge.purgar_rosters_locales();
     }
     return { exito: true };
+  },
+
+  async obtenerEstadoDiarioEmpleados(fecha = '') {
+    const bridge = await getApi();
+    if (bridge.obtener_estado_diario_empleados) {
+      return await bridge.obtener_estado_diario_empleados(fecha);
+    }
+    return { fecha: fecha || new Date().toISOString().slice(0, 10), total_empleados: 0, registrados: 0, pendientes: 0, lista: [] };
+  },
+
+  async obtenerResumenModificaciones() {
+    const bridge = await getApi();
+    if (bridge.obtener_resumen_modificaciones) {
+      return await bridge.obtener_resumen_modificaciones();
+    }
+    return { total_modificaciones: 0, ultimas_24h: 0, no_sincronizadas: 0, ultima_modificacion: null };
+  },
+
+  async obtenerModificacionesRecientes(limite = 30) {
+    const bridge = await getApi();
+    if (bridge.obtener_modificaciones_recientes) {
+      return await bridge.obtener_modificaciones_recientes(limite);
+    }
+    return [];
+  },
+
+  async actualizarTipoCostoMasivo(idsAsistencia, tipoCosto) {
+    const bridge = await getApi();
+    if (bridge.actualizar_tipo_costo_masivo) {
+      return await bridge.actualizar_tipo_costo_masivo(idsAsistencia, tipoCosto);
+    }
+    return { exito: true, actualizados: (idsAsistencia || []).length };
   }
 };
 

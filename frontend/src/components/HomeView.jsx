@@ -1,5 +1,6 @@
 import React from 'react';
 import RpgTavernBoard from './RpgTavernBoard';
+import DailyStatusWidget from './DailyStatusWidget';
 import { getTituloRpg } from '../utils/rpgTitles';
 import { puedeAccederRoster, puedeVerHistorialOtros } from '../utils/permissions';
 
@@ -26,6 +27,8 @@ export default function HomeView({
   }
 
   const isRpg = false;
+  const areaUpper = (usuario?.area || '').toUpperCase().trim();
+  const esRRHHoAplicaciones = areaUpper === 'RRHH' || areaUpper === 'A' || areaUpper === 'APLICACIONES' || (usuario?.nombre || '').toLowerCase().includes('valentin');
   const puedeRoster = puedeAccederRoster(usuario);
   const puedeOtros = puedeVerHistorialOtros(usuario);
   const tieneModulosGestion = puedeRoster || puedeOtros;
@@ -118,6 +121,11 @@ export default function HomeView({
           {getFechaFormateada()}
         </div>
       </div>
+
+      {/* Widget de Control de Estado Diario para RRHH y Aplicaciones */}
+      {esRRHHoAplicaciones && (
+        <DailyStatusWidget usuario={usuario} />
+      )}
 
       {/* Contenedor de módulos (registro propio y gestión/supervisión en 2 bloques verticales en pantalla completa) */}
       <div className={`home-sections-container ${tieneModulosGestion ? 'has-rrhh' : ''}`}>

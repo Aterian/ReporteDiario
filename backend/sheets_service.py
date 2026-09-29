@@ -17,7 +17,9 @@ from database import (
     guardar_no_laborales_cache,
     calcular_dia_semana,
     es_fecha_feriado,
-    normalizar_fecha_iso
+    normalizar_fecha_iso,
+    obtener_modificaciones_pendientes,
+    marcar_modificaciones_sincronizadas
 )
 
 def recurso_path(ruta_relativa: str) -> str:
@@ -28,12 +30,15 @@ def recurso_path(ruta_relativa: str) -> str:
 RUTA_CONFIG_USER = os.path.join(obtener_directorio_datos(), "config.json")
 RUTA_CONFIG_BUNDLE = recurso_path("config.json")
 
+# [FN-03.05] Esquema de 17 columnas de la tabla 1_asistencia_informada
 COLUMNAS_ESQUEMA = [
     "id_asistencia",
     "empleado",
     "fecha",
     "tipo_ocf",
     "servicio",
+    "hora_inicio",
+    "hora_fin",
     "horas",
     "instrumental",
     "usuario_mail",
@@ -42,7 +47,22 @@ COLUMNAS_ESQUEMA = [
     "feriado",
     "id_empleado",
     "id_proyecto",
-    "cargado_por"
+    "cargado_por",
+    "tipo_costo"
+]
+
+# [FN-02.01] Esquema de 10 columnas de la tabla 1_1_modificaciones_realizadas (Auditoría)
+COLUMNAS_MODIFICACIONES = [
+    "id_modificacion",
+    "id_asistencia",
+    "tipo_antes",
+    "tipo_despues",
+    "horas_antes",
+    "horas_despues",
+    "servicio_antes",
+    "servicio_despues",
+    "fecha_hora_modificaciones",
+    "quien_modifica"
 ]
 
 def cargar_configuracion():
@@ -161,26 +181,35 @@ def obtener_hoja_trabajo(spreadsheet_id: str = "", sheet_name: str = ""):
                 break
         if encontrada:
             ws = sh.worksheet(encontrada)
+        elif s_name.strip().lower() == "1_1_modificaciones_realizadas":
+            # [FN-02.01] Crear automáticamente la pestaña de auditoría si no existe en el libro
+            try:
+                ws = sh.add_worksheet(title="1_1_modificaciones_realizadas", rows=1000, cols=10)
+                ws.append_row(COLUMNAS_MODIFICACIONES, value_input_option=ValueInputOption.user_entered)
+            except Exception as e_add:
+                raise ValueError(f"No se pudo crear la pestaña '1_1_modificaciones_realizadas': {e_add}")
         else:
             raise ValueError(
                 f"No se encontró la pestaña '{s_name}' en el libro '{sh.title}'. "
                 f"Pestañas disponibles: {', '.join(hojas_disponibles)}"
             )
 
-    # Verificar encabezados: solo en '1_asistencia_informada'
+    # Verificar encabezados: en '1_asistencia_informada' y '1_1_modificaciones_realizadas'
     try:
         es_hoja_asistencia = (s_name.strip().lower() == "1_asistencia_informada")
+        es_hoja_modificaciones = (s_name.strip().lower() == "1_1_modificaciones_realizadas")
         if es_hoja_asistencia:
             fila_1 = ws.row_values(1)
             if not fila_1 or len(fila_1) == 0:
                 ws.append_row(COLUMNAS_ESQUEMA, value_input_option=ValueInputOption.user_entered)
             else:
                 headers_limpios = [c.strip().lower() for c in fila_1]
-                if "id_empleado" not in headers_limpios:
-                    # Agregar columnas L y M al encabezado existente de la hoja de asistencia
-                    ws.update(range_name="L1:M1", values=[["id_empleado", "id_proyecto"]], value_input_option=ValueInputOption.user_entered)
-                if "cargado_por" not in headers_limpios:
-                    ws.update(range_name="N1", values=[["cargado_por"]], value_input_option=ValueInputOption.user_entered)
+                if "hora_inicio" not in headers_limpios or "tipo_costo" not in headers_limpios:
+                    ws.update(range_name="A1:Q1", values=[COLUMNAS_ESQUEMA], value_input_option=ValueInputOption.user_entered)
+        elif es_hoja_modificaciones:
+            fila_1 = ws.row_values(1)
+            if not fila_1 or len(fila_1) == 0:
+                ws.append_row(COLUMNAS_MODIFICACIONES, value_input_option=ValueInputOption.user_entered)
     except Exception as e:
         print(f"Aviso al verificar encabezados: {e}")
 
@@ -264,10 +293,89 @@ def obtener_no_laborales_remotos(spreadsheet_id: str = "") -> list:
         return []
 
 
+# [FN-03.05] Construcción de fila dinámica según esquema de columnas de la hoja
+def construir_fila_asistencia(registro: dict, headers: list = None) -> list:
+    """Construye la lista de valores para la fila alineada a los encabezados presentes en la hoja."""
+    emp = str(registro.get("empleado", "")).strip()
+    f_str = str(registro.get("fecha", "")).strip()
+    dia_sem = registro.get("dia_semana") or calcular_dia_semana(f_str)
+    fer = registro.get("feriado") or es_fecha_feriado(f_str)
+    serv = str(registro.get("servicio", "")).strip()
+    carg_por = str(registro.get("cargado_por") or emp).strip()
+    uid = str(registro.get("id_asistencia", "")).strip()
+    tipo_ocf = str(registro.get("tipo_ocf", "")).strip()
+    try:
+        horas_val = float(registro.get("horas", 0.0))
+    except (ValueError, TypeError):
+        horas_val = 0.0
+    hora_ini = str(registro.get("hora_inicio", "")).strip()
+    hora_fin = str(registro.get("hora_fin", "")).strip()
+    costo = str(registro.get("tipo_costo", "")).strip()
+
+    mapa_valores = {
+        "id_asistencia": uid,
+        "empleado": emp,
+        "fecha": f_str,
+        "tipo_ocf": tipo_ocf,
+        "servicio": serv,
+        "hora_inicio": hora_ini,
+        "hora_fin": hora_fin,
+        "horas": horas_val,
+        "instrumental": str(registro.get("instrumental", "")),
+        "usuario_mail": str(registro.get("usuario_mail", "")),
+        "fecha_hora": str(registro.get("fecha_hora", "")),
+        "dia_semana": dia_sem,
+        "feriado": fer,
+        "id_empleado": str(registro.get("id_empleado", "")),
+        "id_proyecto": str(registro.get("id_proyecto", "")),
+        "cargado_por": carg_por,
+        "tipo_costo": costo
+    }
+
+    if not headers:
+        return [mapa_valores.get(col, "") for col in COLUMNAS_ESQUEMA]
+
+    return [mapa_valores.get(h.strip().lower(), "") for h in headers]
+
+# [FN-02.01] Sincronizar auditoría de modificaciones realizadas con Google Sheets
+def sincronizar_modificaciones_pendientes() -> dict:
+    """Sube a la hoja '1_1_modificaciones_realizadas' de Google Sheets los registros de auditoría pendientes."""
+    pendientes = obtener_modificaciones_pendientes()
+    if not pendientes:
+        return {"exito": True, "cantidad": 0}
+    try:
+        _, ws = obtener_hoja_trabajo(sheet_name="1_1_modificaciones_realizadas")
+        filas = []
+        ids_exitosos = []
+        for p in pendientes:
+            fila = [
+                str(p.get("id_modificacion", "")),
+                str(p.get("id_asistencia", "")),
+                str(p.get("tipo_antes", "")),
+                str(p.get("tipo_despues", "")),
+                float(p.get("horas_antes", 0.0)),
+                float(p.get("horas_despues", 0.0)),
+                str(p.get("servicio_antes", "")),
+                str(p.get("servicio_despues", "")),
+                str(p.get("fecha_hora_modificaciones", "")),
+                str(p.get("quien_modifica", ""))
+            ]
+            filas.append(fila)
+            ids_exitosos.append(p["id_modificacion"])
+
+        if filas:
+            ws.append_rows(filas, value_input_option=ValueInputOption.user_entered)
+            marcar_modificaciones_sincronizadas(ids_exitosos)
+            print(f"[Sheets] Se registraron {len(filas)} modificaciones en '1_1_modificaciones_realizadas'.")
+        return {"exito": True, "cantidad": len(filas)}
+    except Exception as e:
+        print(f"[Sheets] Error al sincronizar modificaciones en Google Sheets: {e}")
+        return {"exito": False, "error": str(e)}
+
 def sincronizar_pendientes() -> dict:
     """
     Lee los registros con sincronizado=0 de la base local y los sube/actualiza
-    en la hoja '1_asistencia_informada' con las 14 columnas completas.
+    en la hoja '1_asistencia_informada' con las 17 columnas completas.
     Garantiza que cargas con rango de fechas o múltiples proyectos por día
     se inserten íntegramente sin omisiones ni sobreescrituras accidentales.
     """
@@ -288,6 +396,11 @@ def sincronizar_pendientes() -> dict:
 
         pendientes = obtener_pendientes_sincronizacion()
         if not pendientes:
+            # Procesar posibles modificaciones pendientes de auditoría aun si no hay asistencias pendientes
+            try:
+                sincronizar_modificaciones_pendientes()
+            except Exception:
+                pass
             return {
                 "exito": True,
                 "cantidad": 0,
@@ -333,29 +446,10 @@ def sincronizar_pendientes() -> dict:
         for p in pendientes:
             emp = str(p.get("empleado", "")).strip()
             f_str = str(p.get("fecha", "")).strip()
-            dia_sem = p.get("dia_semana") or calcular_dia_semana(f_str)
-            fer = p.get("feriado") or es_fecha_feriado(f_str, fechas_feriados)
             serv = str(p.get("servicio", "")).strip()
-            carg_por = str(p.get("cargado_por") or emp).strip()
             uid = str(p.get("id_asistencia", "")).strip()
 
-            fila = [
-                uid,
-                emp,
-                f_str,
-                str(p.get("tipo_ocf", "")),
-                serv,
-                float(p.get("horas", 0.0)),
-                str(p.get("instrumental", "")),
-                str(p.get("usuario_mail", "")),
-                str(p.get("fecha_hora", "")),
-                dia_sem,
-                fer,
-                str(p.get("id_empleado", "")),
-                str(p.get("id_proyecto", "")),
-                carg_por
-            ]
-
+            fila = construir_fila_asistencia(p, headers)
             es_modificacion = int(p.get("modificado") or 0) == 1
 
             # Determinamos si ya existe en Google Sheets:
@@ -375,8 +469,9 @@ def sincronizar_pendientes() -> dict:
         # 1. Ejecutar actualizaciones in-place para registros preexistentes
         for row_idx, fila_vals, uid_reg in filas_a_actualizar:
             try:
+                col_end = chr(ord('A') + len(fila_vals) - 1)
                 ws.update(
-                    range_name=f"A{row_idx}:N{row_idx}",
+                    range_name=f"A{row_idx}:{col_end}{row_idx}",
                     values=[fila_vals],
                     value_input_option=ValueInputOption.user_entered
                 )
@@ -406,6 +501,12 @@ def sincronizar_pendientes() -> dict:
         # 3. Marcar en la base local como sincronizados ÚNICAMENTE los que efectivamente se subieron
         if ids_exitosos:
             marcar_como_sincronizados(ids_exitosos)
+
+        # 4. Sincronizar registros de auditoría de modificaciones
+        try:
+            sincronizar_modificaciones_pendientes()
+        except Exception as e_mod:
+            print(f"[Sheets] Error al sincronizar modificaciones de auditoría: {e_mod}")
 
         total = len(ids_exitosos)
         return {
@@ -572,6 +673,9 @@ def sincronizar_desde_sheets_hacia_local(spreadsheet_id: str = "") -> dict:
         idx_id_emp = headers.index("id_empleado") if "id_empleado" in headers else -1
         idx_id_proy = headers.index("id_proyecto") if "id_proyecto" in headers else -1
         idx_cargado_por = headers.index("cargado_por") if "cargado_por" in headers else -1
+        idx_h_ini = headers.index("hora_inicio") if "hora_inicio" in headers else -1
+        idx_h_fin = headers.index("hora_fin") if "hora_fin" in headers else -1
+        idx_costo = headers.index("tipo_costo") if "tipo_costo" in headers else -1
 
         # Recopilar todos los id_asistencia válidos presentes en Google Sheets
         uids_en_sheets = {str(f[idx_id_asist]).strip() for f in filas[1:] if len(f) > idx_id_asist and str(f[idx_id_asist]).strip()}
@@ -610,6 +714,9 @@ def sincronizar_desde_sheets_hacia_local(spreadsheet_id: str = "") -> dict:
                     hrs = float(f[idx_horas]) if len(f) > idx_horas and str(f[idx_horas]).strip() else 0.0
                 except Exception:
                     hrs = 0.0
+                h_ini = str(f[idx_h_ini]).strip() if (idx_h_ini >= 0 and len(f) > idx_h_ini) else ""
+                h_fin = str(f[idx_h_fin]).strip() if (idx_h_fin >= 0 and len(f) > idx_h_fin) else ""
+                costo = str(f[idx_costo]).strip() if (idx_costo >= 0 and len(f) > idx_costo) else ""
                 inst = str(f[idx_inst]).strip() if len(f) > idx_inst else ""
                 mail = str(f[idx_mail]).strip() if len(f) > idx_mail else ""
                 fh = str(f[idx_fh]).strip() if len(f) > idx_fh else ""
@@ -625,14 +732,16 @@ def sincronizar_desde_sheets_hacia_local(spreadsheet_id: str = "") -> dict:
                     cursor.execute("""
                         UPDATE historial SET
                             empleado = ?, fecha = ?, tipo_ocf = ?, servicio = ?,
-                            horas = ?, instrumental = ?, usuario_mail = ?, fecha_hora = ?,
+                            horas = ?, hora_inicio = ?, hora_fin = ?, tipo_costo = ?,
+                            instrumental = ?, usuario_mail = ?, fecha_hora = ?,
                             lugar = ?, jornada = ?, dia_semana = ?, feriado = ?,
                             modificado = 0, sincronizado = 1, id_empleado = ?, id_proyecto = ?,
                             cargado_por = ?
                         WHERE id_asistencia = ?
                     """, (
                         emp, f_str, tipo, serv,
-                        hrs, inst, mail, fh,
+                        hrs, h_ini, h_fin, costo,
+                        inst, mail, fh,
                         tipo, f"{hrs} hs" if hrs > 0 else tipo, dia_s, fer,
                         id_e, id_p, carg_por, uid
                     ))
@@ -641,14 +750,14 @@ def sincronizar_desde_sheets_hacia_local(spreadsheet_id: str = "") -> dict:
                     cursor.execute("""
                         INSERT INTO historial (
                             id_asistencia, empleado, fecha, tipo_ocf, servicio,
-                            horas, instrumental, usuario_mail, fecha_hora,
+                            horas, hora_inicio, hora_fin, tipo_costo, instrumental, usuario_mail, fecha_hora,
                             lugar, jornada, dia_semana, feriado, modificado, sincronizado,
                             cargado_por, id_empleado, id_proyecto
                         )
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 1, ?, ?, ?)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 1, ?, ?, ?)
                     """, (
                         uid, emp, f_str, tipo, serv,
-                        hrs, inst, mail, fh,
+                        hrs, h_ini, h_fin, costo, inst, mail, fh,
                         tipo, f"{hrs} hs" if hrs > 0 else tipo, dia_s, fer,
                         carg_por, id_e, id_p
                     ))

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { api } from '../services/apiBridge';
 import { puedeVerHistorialOtros, puedeModificarRegistro } from '../utils/permissions';
+import { esServicioAreaInterna, obtenerEtiquetaModalidad } from '../utils/francoUtils';
 
 // [MOD-02] HistoryView
 
@@ -379,7 +380,7 @@ export default function HistoryView({ onVolver, tema, onNuevoReporte, usuario, o
   const getBadgeClassLugar = (lugar, servicio = '') => {
     const l = (lugar || '').toLowerCase().trim();
     const s = (servicio || '').toLowerCase().trim();
-    if (l === 'franco obra' || l === 'franco de obra' || s.includes('franco de obra')) {
+    if (l === 'franco obra' || l === 'franco de obra' || s.includes('franco de obra') || (l === 'franco' && s && !esServicioAreaInterna(s))) {
       return 'badge-modalidad-franco-obra';
     }
     if (l === 'franco obra trabajado') {
@@ -630,7 +631,7 @@ export default function HistoryView({ onVolver, tema, onNuevoReporte, usuario, o
               <div className="history-cards-col">
                 {registrosFiltrados.map((item) => {
                   const horasDisplay = item.horas > 0 ? `${item.horas} hs` : (item.jornada || '0 hs');
-                  const lugarDisplay = item.tipo_ocf || item.lugar || 'Oficina';
+                  const lugarDisplay = obtenerEtiquetaModalidad(item);
                   const badgeClass = getBadgeClassLugar(lugarDisplay, item.servicio);
                   const estaSincronizado = item.sincronizado === 1;
 
@@ -801,7 +802,7 @@ export default function HistoryView({ onVolver, tema, onNuevoReporte, usuario, o
                       const lug = r.tipo_ocf || r.lugar || 'Oficina';
                       const badgeClass = getBadgeClassLugar(lug, r.servicio);
                       let labelText = lug;
-                      if (lug === 'Franco Obra' || r.servicio?.toLowerCase().includes('franco de obra')) {
+                      if (lug === 'Franco Obra' || r.servicio?.toLowerCase().includes('franco de obra') || (lug === 'Franco' && r.servicio && !esServicioAreaInterna(r.servicio))) {
                         labelText = 'F. Obra';
                       } else if (lug === 'Franco Obra Trabajado') {
                         labelText = 'F. Obra Trab.';

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { api } from '../services/apiBridge';
 import { puedeVerHistorialOtros, puedeModificarRegistro } from '../utils/permissions';
+import { esServicioAreaInterna, esFrancoDeObra, obtenerEtiquetaModalidad } from '../utils/francoUtils';
 
 // [MOD-03] OtherEmployeesHistoryView
 
@@ -70,8 +71,16 @@ export default function OtherEmployeesHistoryView({ usuario, onVolver, tema, onV
   const [registroEliminando, setRegistroEliminando] = useState(null);
   const [eliminando, setEliminando] = useState(false);
 
-  // Cantidad manual de Francos Trabajados para la calculadora de liquidación
+  // Selección múltiple para asignación masiva de costo (RRHH)
+  const [seleccionados, setSeleccionados] = useState(new Set());
+  const [aplicandoCosto, setAplicandoCosto] = useState(false);
+
+  // Cantidad manual de días para todas las categorías de liquidación (RRHH)
+  const [diasOficinaManual, setDiasOficinaManual] = useState('');
+  const [diasCampoManual, setDiasCampoManual] = useState('');
+  const [diasFrancoOrdinarioManual, setDiasFrancoOrdinarioManual] = useState('');
   const [diasFrancoManual, setDiasFrancoManual] = useState('');
+  const [diasFeriadoManual, setDiasFeriadoManual] = useState('');
 
   // Tarifas de Liquidación (guardadas en localStorage)
   const [tarifas, setTarifas] = useState(() => {
@@ -84,6 +93,7 @@ export default function OtherEmployeesHistoryView({ usuario, onVolver, tema, onV
     return {
       precioOficina: 0,
       precioObra: 0,
+      precioFrancoOrdinario: 0,
       precioFrancoTrabajado: 0,
       precioFeriadoTrabajado: 0
     };
@@ -157,7 +167,11 @@ export default function OtherEmployeesHistoryView({ usuario, onVolver, tema, onV
 
   useEffect(() => {
     if (empleadoAuditar) {
+      setDiasOficinaManual('');
+      setDiasCampoManual('');
+      setDiasFrancoOrdinarioManual('');
       setDiasFrancoManual('');
+      setDiasFeriadoManual('');
       cargarAuditoriaEmpleado(empleadoAuditar, fechaCalendario);
     }
   }, [empleadoAuditar, fechaCalendario]);
@@ -237,10 +251,14 @@ export default function OtherEmployeesHistoryView({ usuario, onVolver, tema, onV
         lugar: registroEditando.tipo_ocf || registroEditando.lugar || 'Oficina',
         servicio: registroEditando.servicio,
         horas: Number(registroEditando.horas) || 0,
+        hora_inicio: registroEditando.hora_inicio || '',
+        hora_fin: registroEditando.hora_fin || '',
+        tipo_costo: registroEditando.tipo_costo || '',
         empleado: registroEditando.empleado,
         id_empleado: idEmp,
         usuario_mail: mailEmp,
-        id_proyecto: registroEditando.id_proyecto || ''
+        id_proyecto: registroEditando.id_proyecto || '',
+        quien_modifica: usuario?.nombre || ''
       });
 
       if (res && res.exito) {
@@ -288,6 +306,64 @@ export default function OtherEmployeesHistoryView({ usuario, onVolver, tema, onV
       setMensajeSync({ tipo: 'error', texto: 'Error al eliminar el registro.' });
     } finally {
       setEliminando(false);
+    }
+  };
+
+  // Manejo de asignación masiva de tipo_costo (RRHH)
+  const handleToggleSelect = (id) => {
+    setSeleccionados(prev => {
+      const nuevo = new Set(prev);
+      if (nuevo.has(id)) {
+        nuevo.delete(id);
+      } else {
+        nuevo.add(id);
+      }
+      return nuevo;
+    });
+  };
+
+  const handleToggleSelectAll = () => {
+    const visiblesIds = registrosFiltrados.map(r => r.id);
+    const todosSeleccionados = visiblesIds.length > 0 && visiblesIds.every(id => seleccionados.has(id));
+    if (todosSeleccionados) {
+      setSeleccionados(prev => {
+        const nuevo = new Set(prev);
+        visiblesIds.forEach(id => nuevo.delete(id));
+        return nuevo;
+      });
+    } else {
+      setSeleccionados(prev => {
+        const nuevo = new Set(prev);
+        visiblesIds.forEach(id => nuevo.add(id));
+        return nuevo;
+      });
+    }
+  };
+
+  const handleAplicarTipoCostoLote = async (tipoCosto) => {
+    if (seleccionados.size === 0) return;
+    setAplicandoCosto(true);
+    try {
+      const idsArray = Array.from(seleccionados);
+      const res = await api.actualizarTipoCostoMasivo(idsArray, tipoCosto);
+      if (res && res.exito) {
+        setMensajeSync({
+          tipo: 'exito',
+          texto: `Se aplicó tipo de costo '${tipoCosto || 'Sin asignar'}' a ${res.actualizados || idsArray.length} registros.`
+        });
+        setSeleccionados(new Set());
+        await cargarDatos();
+        if (empleadoAuditar) {
+          await cargarAuditoriaEmpleado(empleadoAuditar, fechaCalendario);
+        }
+      } else {
+        setMensajeSync({ tipo: 'error', texto: res?.error || 'No se pudo actualizar el tipo de costo en lote.' });
+      }
+    } catch (err) {
+      console.error('Error al aplicar tipo de costo masivo:', err);
+      setMensajeSync({ tipo: 'error', texto: 'Error al comunicarse con la aplicación.' });
+    } finally {
+      setAplicandoCosto(false);
     }
   };
 
@@ -384,6 +460,7 @@ export default function OtherEmployeesHistoryView({ usuario, onVolver, tema, onV
 
     const fechasOficina = new Set();
     const fechasObra = new Set();
+    const fechasFrancoOrdinario = new Set();
     const fechasFrancoTrabajado = new Set();
     const fechasFeriadoTrabajado = new Set();
 
@@ -391,6 +468,7 @@ export default function OtherEmployeesHistoryView({ usuario, onVolver, tema, onV
       if (!r.fecha || !r.fecha.startsWith(prefijoMes)) return;
       const f = r.fecha.trim();
       const lug = (r.tipo_ocf || r.lugar || '').trim();
+      const lugLower = lug.toLowerCase();
       const srv = (r.servicio || '').trim();
       const srvLower = srv.toLowerCase();
       const hrs = Number(r.horas) || 0;
@@ -398,41 +476,38 @@ export default function OtherEmployeesHistoryView({ usuario, onVolver, tema, onV
 
       // 1. Franco trabajado (oficina u obra)
       if (
-        lug.toLowerCase() === 'franco ofic trabajado' ||
-        lug.toLowerCase() === 'franco obra trabajado' ||
+        lugLower === 'franco ofic trabajado' ||
+        lugLower === 'franco obra trabajado' ||
         srv === 'Franco Trabajado' ||
-        (lug === 'Franco' && hrs > 0 && srvLower.includes('trabajado'))
+        (lugLower === 'franco' && hrs > 0 && srvLower.includes('trabajado'))
       ) {
         fechasFrancoTrabajado.add(f);
       }
       // 2. Feriado trabajado
-      else if (lug.toLowerCase() === 'feriado trabajado' || (esFer && hrs > 0)) {
+      else if (lugLower === 'feriado trabajado' || (esFer && hrs > 0)) {
         fechasFeriadoTrabajado.add(f);
       }
-      // 3. Franco de Obra -> Contar como días de Obra
-      else if (
-        lug.toLowerCase() === 'franco obra' ||
-        lug.toLowerCase() === 'franco de obra' ||
-        srvLower.includes('franco de obra') ||
-        (lug === 'Franco' && srvLower.includes('obra'))
-      ) {
+      // 3. Franco de Obra -> Computa como Día de Campo
+      else if (esFrancoDeObra(r)) {
         fechasObra.add(f);
+        fechasFrancoOrdinario.add(f);
       }
-      // 4. Franco normal o de oficina -> Contar como días de Oficina
+      // 4. Franco normal o con servicio de áreas internas -> Computa como Día de Oficina
       else if (
-        lug.toLowerCase() === 'franco' ||
-        lug.toLowerCase() === 'franco de oficina' ||
+        lugLower === 'franco' ||
+        lugLower === 'franco de oficina' ||
         srvLower.includes('franco de oficina') ||
-        srvLower === 'franco'
+        (lugLower === 'franco' && esServicioAreaInterna(srv))
       ) {
         fechasOficina.add(f);
+        fechasFrancoOrdinario.add(f);
       }
       // 5. Obra / Campo habitual
-      else if (['campaña / campo', 'campo', 'obra', 'roster'].includes(lug.toLowerCase())) {
+      else if (['campaña / campo', 'campo', 'obra', 'roster'].includes(lugLower)) {
         fechasObra.add(f);
       }
       // 6. Oficina habitual
-      else if (['oficina', 'home office'].includes(lug.toLowerCase())) {
+      else if (['oficina', 'home office'].includes(lugLower)) {
         fechasOficina.add(f);
       }
     });
@@ -440,21 +515,39 @@ export default function OtherEmployeesHistoryView({ usuario, onVolver, tema, onV
     return {
       diasOficina: fechasOficina.size,
       diasObra: fechasObra.size,
+      diasFrancoOrdinario: fechasFrancoOrdinario.size,
       diasFrancoTrabajado: fechasFrancoTrabajado.size,
       diasFeriadoTrabajado: fechasFeriadoTrabajado.size
     };
   }, [registrosEmpleadoAuditar, fechaCalendario]);
 
-  // Cantidad efectiva de Francos Trabajados (manual o automática)
+  // Cantidad efectiva para cada categoría (con soporte de ingreso manual y botón de retorno automático)
+  const cantDiasOficina = (diasOficinaManual !== '' && !isNaN(Number(diasOficinaManual)))
+    ? Math.max(0, Number(diasOficinaManual))
+    : conteosLiquidacion.diasOficina;
+
+  const cantDiasObra = (diasCampoManual !== '' && !isNaN(Number(diasCampoManual)))
+    ? Math.max(0, Number(diasCampoManual))
+    : conteosLiquidacion.diasObra;
+
+  const cantDiasFrancoOrdinario = (diasFrancoOrdinarioManual !== '' && !isNaN(Number(diasFrancoOrdinarioManual)))
+    ? Math.max(0, Number(diasFrancoOrdinarioManual))
+    : conteosLiquidacion.diasFrancoOrdinario;
+
   const cantDiasFrancoTrabajado = (diasFrancoManual !== '' && !isNaN(Number(diasFrancoManual)))
     ? Math.max(0, Number(diasFrancoManual))
     : conteosLiquidacion.diasFrancoTrabajado;
 
-  const subtotalOficina = conteosLiquidacion.diasOficina * (tarifas.precioOficina || 0);
-  const subtotalObra = conteosLiquidacion.diasObra * (tarifas.precioObra || 0);
+  const cantDiasFeriadoTrabajado = (diasFeriadoManual !== '' && !isNaN(Number(diasFeriadoManual)))
+    ? Math.max(0, Number(diasFeriadoManual))
+    : conteosLiquidacion.diasFeriadoTrabajado;
+
+  const subtotalOficina = cantDiasOficina * (tarifas.precioOficina || 0);
+  const subtotalObra = cantDiasObra * (tarifas.precioObra || 0);
+  const subtotalFrancoOrdinario = cantDiasFrancoOrdinario * (tarifas.precioFrancoOrdinario || 0);
   const subtotalFranco = cantDiasFrancoTrabajado * (tarifas.precioFrancoTrabajado || 0);
-  const subtotalFeriado = conteosLiquidacion.diasFeriadoTrabajado * (tarifas.precioFeriadoTrabajado || 0);
-  const totalLiquidar = subtotalOficina + subtotalObra + subtotalFranco + subtotalFeriado;
+  const subtotalFeriado = cantDiasFeriadoTrabajado * (tarifas.precioFeriadoTrabajado || 0);
+  const totalLiquidar = subtotalOficina + subtotalObra + subtotalFrancoOrdinario + subtotalFranco + subtotalFeriado;
 
   const formatMoneda = (val) => {
     return new Intl.NumberFormat('es-AR', {
@@ -468,7 +561,7 @@ export default function OtherEmployeesHistoryView({ usuario, onVolver, tema, onV
   const getBadgeClassLugar = (lugar, servicio = '') => {
     const l = (lugar || '').toLowerCase().trim();
     const s = (servicio || '').toLowerCase().trim();
-    if (l === 'franco obra' || l === 'franco de obra' || s.includes('franco de obra')) {
+    if (l === 'franco obra' || l === 'franco de obra' || s.includes('franco de obra') || (l === 'franco' && s && !esServicioAreaInterna(s))) {
       return 'badge-modalidad-franco-obra';
     }
     if (l === 'franco obra trabajado') {
@@ -647,6 +740,80 @@ export default function OtherEmployeesHistoryView({ usuario, onVolver, tema, onV
                 )}
               </div>
             </div>
+
+            {/* Asignación Masiva de Costos Toolbar */}
+            <div className="bulk-selection-toolbar" style={{ marginTop: '8px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <button
+                  type="button"
+                  className="btn-action-ghost"
+                  style={{ fontSize: '11px', padding: '3px 8px' }}
+                  onClick={handleToggleSelectAll}
+                >
+                  {registrosFiltrados.length > 0 && registrosFiltrados.every(r => seleccionados.has(r.id))
+                    ? '☑ Deseleccionar visibles'
+                    : '☐ Seleccionar visibles'}
+                </button>
+                {seleccionados.size > 0 && (
+                  <span style={{ fontSize: '11px', fontWeight: 600, color: '#cc3333' }}>
+                    {seleccionados.size} seleccionado(s)
+                  </span>
+                )}
+              </div>
+
+              {seleccionados.size > 0 && (
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  background: 'var(--bg-surface-elevated, #f8fafc)',
+                  border: '1px solid #cc333340',
+                  padding: '6px 10px',
+                  borderRadius: '6px',
+                  flexWrap: 'wrap'
+                }}>
+                  <span style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-secondary)' }}>
+                    Asignar Costo:
+                  </span>
+                  <button
+                    type="button"
+                    className="btn-action-ghost"
+                    style={{ fontSize: '11px', padding: '3px 8px', background: '#3b82f615', color: '#2563eb', borderColor: '#3b82f640' }}
+                    onClick={() => handleAplicarTipoCostoLote('Oficina')}
+                    disabled={aplicandoCosto}
+                  >
+                    Oficina
+                  </button>
+                  <button
+                    type="button"
+                    className="btn-action-ghost"
+                    style={{ fontSize: '11px', padding: '3px 8px', background: '#10b98115', color: '#059669', borderColor: '#10b98140' }}
+                    onClick={() => handleAplicarTipoCostoLote('Campo')}
+                    disabled={aplicandoCosto}
+                  >
+                    Campo
+                  </button>
+                  <button
+                    type="button"
+                    className="btn-action-ghost"
+                    style={{ fontSize: '11px', padding: '3px 8px' }}
+                    onClick={() => handleAplicarTipoCostoLote('')}
+                    disabled={aplicandoCosto}
+                  >
+                    Sin Asignar
+                  </button>
+                  <button
+                    type="button"
+                    className="btn-action-ghost"
+                    style={{ fontSize: '11px', padding: '3px 6px', marginLeft: 'auto' }}
+                    onClick={() => setSeleccionados(new Set())}
+                    title="Limpiar selección"
+                  >
+                    ✕
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
 
           <div className="other-cards-scroll">
@@ -672,29 +839,49 @@ export default function OtherEmployeesHistoryView({ usuario, onVolver, tema, onV
             ) : (
               <div className="other-cards-col">
                 {registrosFiltrados.map((item) => {
-                  const lugarDisplay = item.tipo_ocf || item.lugar || 'Oficina';
+                  const lugarDisplay = obtenerEtiquetaModalidad(item);
                   const badgeClass = getBadgeClassLugar(lugarDisplay, item.servicio);
                   const horasDisplay = item.horas > 0 ? `${item.horas} hs` : (item.jornada || '0 hs');
                   const estaSincronizado = item.sincronizado === 1;
+                  const isChecked = seleccionados.has(item.id);
 
                   return (
-                    <div key={item.id} className="other-record-card">
+                    <div key={item.id} className={`other-record-card ${isChecked ? 'card-selected' : ''}`}>
                       <div className="other-card-header">
-                        <div className="other-card-user">
-                          <div className="other-user-avatar">
-                            {getIniciales(item.empleado)}
-                          </div>
-                          <div className="other-user-meta">
-                            <span className="other-user-name">{item.empleado || 'Sin empleado'}</span>
-                            {item.cargado_por && (
-                              <span className="other-user-sub">
-                                Cargado por: <strong>{item.cargado_por}</strong>
-                              </span>
-                            )}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <input
+                            type="checkbox"
+                            style={{
+                              width: '18px',
+                              height: '18px',
+                              cursor: 'pointer',
+                              accentColor: '#cc3333'
+                            }}
+                            checked={isChecked}
+                            onChange={() => handleToggleSelect(item.id)}
+                            title="Seleccionar para asignar costo"
+                          />
+                          <div className="other-card-user">
+                            <div className="other-user-avatar">
+                              {getIniciales(item.empleado)}
+                            </div>
+                            <div className="other-user-meta">
+                              <span className="other-user-name">{item.empleado || 'Sin empleado'}</span>
+                              {item.cargado_por && (
+                                <span className="other-user-sub">
+                                  Cargado por: <strong>{item.cargado_por}</strong>
+                                </span>
+                              )}
+                            </div>
                           </div>
                         </div>
 
                         <div className="other-card-badges">
+                          {item.tipo_costo && (
+                            <span className={`status-badge ${item.tipo_costo.toLowerCase() === 'campo' ? 'badge-costo-campo' : 'badge-costo-oficina'}`}>
+                              Costo: {item.tipo_costo}
+                            </span>
+                          )}
                           <span className={`status-badge ${estaSincronizado ? 'status-synced' : 'status-pending'}`}>
                             {estaSincronizado ? 'Sincronizado' : 'Pendiente'}
                           </span>
@@ -955,8 +1142,36 @@ export default function OtherEmployeesHistoryView({ usuario, onVolver, tema, onV
               <div className="liquidation-item">
                 <div className="liq-item-top">
                   <span className="liq-label">Día de Oficina</span>
-                  <span className="liq-count-badge" title="Incluye oficina y francos normales">{conteosLiquidacion.diasOficina} días</span>
+                  <span className="liq-count-badge" title="Incluye oficina y francos asignados a áreas internas">{conteosLiquidacion.diasOficina} detectado(s)</span>
                 </div>
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '2px' }}>
+                  <label style={{ fontSize: '11px', color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>
+                    Cant. días:
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="1"
+                    className="form-input form-input-sm"
+                    style={{ width: '65px', height: '28px', padding: '2px 6px', fontWeight: 700 }}
+                    value={diasOficinaManual !== '' ? diasOficinaManual : conteosLiquidacion.diasOficina}
+                    onChange={(e) => setDiasOficinaManual(e.target.value)}
+                    title="Cantidad de días de oficina (editable manualmente)"
+                  />
+                  {diasOficinaManual !== '' && (
+                    <button
+                      type="button"
+                      className="btn-action-ghost"
+                      style={{ padding: '2px 5px', fontSize: '10px' }}
+                      onClick={() => setDiasOficinaManual('')}
+                      title="Restablecer al conteo automático del calendario"
+                    >
+                      ↺ Auto
+                    </button>
+                  )}
+                </div>
+
                 <div className="liq-input-row">
                   <span className="liq-currency-symbol">$</span>
                   <input
@@ -970,17 +1185,45 @@ export default function OtherEmployeesHistoryView({ usuario, onVolver, tema, onV
                   />
                 </div>
                 <div className="liq-subtotal-row">
-                  <span>Subtotal:</span>
+                  <span>Subtotal ({cantDiasOficina} d):</span>
                   <strong>{formatMoneda(subtotalOficina)}</strong>
                 </div>
               </div>
 
-              {/* Tarjeta 2: Obra */}
+              {/* Tarjeta 2: Obra / Campo */}
               <div className="liquidation-item">
                 <div className="liq-item-top">
-                  <span className="liq-label">Día de Obra / Campo</span>
-                  <span className="liq-count-badge" title="Incluye campo/obra y francos de obra">{conteosLiquidacion.diasObra} días</span>
+                  <span className="liq-label">Día de Campo / Obra</span>
+                  <span className="liq-count-badge" title="Incluye campo/obra y francos de obra">{conteosLiquidacion.diasObra} detectado(s)</span>
                 </div>
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '2px' }}>
+                  <label style={{ fontSize: '11px', color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>
+                    Cant. días:
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="1"
+                    className="form-input form-input-sm"
+                    style={{ width: '65px', height: '28px', padding: '2px 6px', fontWeight: 700 }}
+                    value={diasCampoManual !== '' ? diasCampoManual : conteosLiquidacion.diasObra}
+                    onChange={(e) => setDiasCampoManual(e.target.value)}
+                    title="Cantidad de días de obra/campo (editable manualmente)"
+                  />
+                  {diasCampoManual !== '' && (
+                    <button
+                      type="button"
+                      className="btn-action-ghost"
+                      style={{ padding: '2px 5px', fontSize: '10px' }}
+                      onClick={() => setDiasCampoManual('')}
+                      title="Restablecer al conteo automático del calendario"
+                    >
+                      ↺ Auto
+                    </button>
+                  )}
+                </div>
+
                 <div className="liq-input-row">
                   <span className="liq-currency-symbol">$</span>
                   <input
@@ -994,12 +1237,64 @@ export default function OtherEmployeesHistoryView({ usuario, onVolver, tema, onV
                   />
                 </div>
                 <div className="liq-subtotal-row">
-                  <span>Subtotal:</span>
+                  <span>Subtotal ({cantDiasObra} d):</span>
                   <strong>{formatMoneda(subtotalObra)}</strong>
                 </div>
               </div>
 
-              {/* Tarjeta 3: Franco Trabajado (con asignación manual o automática) */}
+              {/* Tarjeta 3: Francos Ordinarios */}
+              <div className="liquidation-item">
+                <div className="liq-item-top">
+                  <span className="liq-label">Francos Ordinarios</span>
+                  <span className="liq-count-badge" title="Francos no trabajados detectados en el mes">{conteosLiquidacion.diasFrancoOrdinario} detectado(s)</span>
+                </div>
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '2px' }}>
+                  <label style={{ fontSize: '11px', color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>
+                    Cant. días:
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="1"
+                    className="form-input form-input-sm"
+                    style={{ width: '65px', height: '28px', padding: '2px 6px', fontWeight: 700 }}
+                    value={diasFrancoOrdinarioManual !== '' ? diasFrancoOrdinarioManual : conteosLiquidacion.diasFrancoOrdinario}
+                    onChange={(e) => setDiasFrancoOrdinarioManual(e.target.value)}
+                    title="Cantidad de francos ordinarios (editable manualmente)"
+                  />
+                  {diasFrancoOrdinarioManual !== '' && (
+                    <button
+                      type="button"
+                      className="btn-action-ghost"
+                      style={{ padding: '2px 5px', fontSize: '10px' }}
+                      onClick={() => setDiasFrancoOrdinarioManual('')}
+                      title="Restablecer al conteo automático del calendario"
+                    >
+                      ↺ Auto
+                    </button>
+                  )}
+                </div>
+
+                <div className="liq-input-row">
+                  <span className="liq-currency-symbol">$</span>
+                  <input
+                    type="number"
+                    min="0"
+                    step="100"
+                    placeholder="Precio franco ord."
+                    className="form-input form-input-sm liq-input"
+                    value={tarifas.precioFrancoOrdinario || ''}
+                    onChange={(e) => handleTarifaChange('precioFrancoOrdinario', e.target.value)}
+                  />
+                </div>
+                <div className="liq-subtotal-row">
+                  <span>Subtotal ({cantDiasFrancoOrdinario} d):</span>
+                  <strong>{formatMoneda(subtotalFrancoOrdinario)}</strong>
+                </div>
+              </div>
+
+              {/* Tarjeta 4: Franco Trabajado (con asignación manual o automática) */}
               <div className="liquidation-item">
                 <div className="liq-item-top">
                   <span className="liq-label">Franco Trabajado</span>
@@ -1051,12 +1346,40 @@ export default function OtherEmployeesHistoryView({ usuario, onVolver, tema, onV
                 </div>
               </div>
 
-              {/* Tarjeta 4: Feriado Trabajado */}
+              {/* Tarjeta 5: Feriado Trabajado */}
               <div className="liquidation-item">
                 <div className="liq-item-top">
                   <span className="liq-label">Feriado Trabajado</span>
-                  <span className="liq-count-badge">{conteosLiquidacion.diasFeriadoTrabajado} días</span>
+                  <span className="liq-count-badge">{conteosLiquidacion.diasFeriadoTrabajado} detectado(s)</span>
                 </div>
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '2px' }}>
+                  <label style={{ fontSize: '11px', color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>
+                    Cant. días:
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="1"
+                    className="form-input form-input-sm"
+                    style={{ width: '65px', height: '28px', padding: '2px 6px', fontWeight: 700 }}
+                    value={diasFeriadoManual !== '' ? diasFeriadoManual : conteosLiquidacion.diasFeriadoTrabajado}
+                    onChange={(e) => setDiasFeriadoManual(e.target.value)}
+                    title="Cantidad de feriados trabajados (editable manualmente)"
+                  />
+                  {diasFeriadoManual !== '' && (
+                    <button
+                      type="button"
+                      className="btn-action-ghost"
+                      style={{ padding: '2px 5px', fontSize: '10px' }}
+                      onClick={() => setDiasFeriadoManual('')}
+                      title="Restablecer al conteo automático del calendario"
+                    >
+                      ↺ Auto
+                    </button>
+                  )}
+                </div>
+
                 <div className="liq-input-row">
                   <span className="liq-currency-symbol">$</span>
                   <input
@@ -1070,7 +1393,7 @@ export default function OtherEmployeesHistoryView({ usuario, onVolver, tema, onV
                   />
                 </div>
                 <div className="liq-subtotal-row">
-                  <span>Subtotal:</span>
+                  <span>Subtotal ({cantDiasFeriadoTrabajado} d):</span>
                   <strong>{formatMoneda(subtotalFeriado)}</strong>
                 </div>
               </div>
@@ -1354,19 +1677,79 @@ export default function OtherEmployeesHistoryView({ usuario, onVolver, tema, onV
                 </div>
               )}
 
+              {/* Si es Campo: selectores de hora inicio y fin */}
+              {['Campo', 'Campaña / Campo'].includes(registroEditando.tipo_ocf || registroEditando.lugar) && (
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                  <div className="form-group-clean">
+                    <label className="form-label-clean">Hora Inicio:</label>
+                    <input
+                      type="time"
+                      className="form-input form-input-clean"
+                      value={registroEditando.hora_inicio || ''}
+                      onChange={(e) => {
+                        const hIni = e.target.value;
+                        const hFin = registroEditando.hora_fin;
+                        let hCalc = registroEditando.horas;
+                        if (hIni && hFin) {
+                          const [h1, m1] = hIni.split(':').map(Number);
+                          const [h2, m2] = hFin.split(':').map(Number);
+                          let diff = (h2 * 60 + m2) - (h1 * 60 + m1);
+                          if (diff < 0) diff += 24 * 60;
+                          hCalc = Number((diff / 60).toFixed(2));
+                        }
+                        setRegistroEditando({ ...registroEditando, hora_inicio: hIni, horas: hCalc });
+                      }}
+                    />
+                  </div>
+                  <div className="form-group-clean">
+                    <label className="form-label-clean">Hora Fin:</label>
+                    <input
+                      type="time"
+                      className="form-input form-input-clean"
+                      value={registroEditando.hora_fin || ''}
+                      onChange={(e) => {
+                        const hFin = e.target.value;
+                        const hIni = registroEditando.hora_inicio;
+                        let hCalc = registroEditando.horas;
+                        if (hIni && hFin) {
+                          const [h1, m1] = hIni.split(':').map(Number);
+                          const [h2, m2] = hFin.split(':').map(Number);
+                          let diff = (h2 * 60 + m2) - (h1 * 60 + m1);
+                          if (diff < 0) diff += 24 * 60;
+                          hCalc = Number((diff / 60).toFixed(2));
+                        }
+                        setRegistroEditando({ ...registroEditando, hora_fin: hFin, horas: hCalc });
+                      }}
+                    />
+                  </div>
+                </div>
+              )}
+
               <div className="form-group-clean">
                 <label className="form-label-clean">Horas Registradas:</label>
                 <input
                   type="number"
-                  step="0.5"
+                  step="0.1"
                   min="0"
-                  max="24"
                   className="form-input form-input-clean"
                   value={registroEditando.horas}
                   onChange={(e) => setRegistroEditando({ ...registroEditando, horas: e.target.value })}
                   disabled={['Franco', 'Franco de Oficina', 'Franco Obra', 'Franco de Obra', 'Vacaciones', 'Licencia'].includes(registroEditando.tipo_ocf || registroEditando.lugar)}
                   required
                 />
+              </div>
+
+              <div className="form-group-clean">
+                <label className="form-label-clean">Tipo de Costo (RRHH):</label>
+                <select
+                  className="form-select form-select-clean"
+                  value={registroEditando.tipo_costo || ''}
+                  onChange={(e) => setRegistroEditando({ ...registroEditando, tipo_costo: e.target.value })}
+                >
+                  <option value="">-- Sin Asignar --</option>
+                  <option value="Oficina">Oficina</option>
+                  <option value="Campo">Campo</option>
+                </select>
               </div>
 
               <div className="modal-actions" style={{ justifyContent: 'space-between' }}>

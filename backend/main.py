@@ -43,7 +43,11 @@ from database import (
     reconciliar_rosters_con_historial,
     purgar_rosters_huerfanos,
     vaciar_rosters_locales,
-    reconstruir_rosters_desde_historial
+    reconstruir_rosters_desde_historial,
+    actualizar_tipo_costo_lote,
+    obtener_modificaciones_recientes,
+    obtener_resumen_modificaciones,
+    obtener_estado_diario_empleados
 )
 from roster_export import generar_excel_roster_mes
 from sheets_service import (
@@ -505,6 +509,30 @@ class ApiPuente:
 
         proyectos = datos.get("proyectos")
         lugar_norm = lugar.strip().lower()
+
+        # [FN-01.05] Normalización estricta de Campo
+        if lugar_norm in ["campo", "campaña", "campaña / campo", "campana"]:
+            lugar = "Campo"
+            lugar_norm = "campo"
+
+        hora_inicio = str(datos.get("hora_inicio", "")).strip() if lugar_norm == "campo" else ""
+        hora_fin = str(datos.get("hora_fin", "")).strip() if lugar_norm == "campo" else ""
+        tipo_costo = str(datos.get("tipo_costo", "")).strip()
+        if not tipo_costo:
+            tipo_costo = "Campo" if lugar_norm == "campo" else ("Oficina" if lugar_norm == "oficina" else "")
+
+        horas_campo_calc = None
+        if lugar_norm == "campo" and hora_inicio and hora_fin:
+            try:
+                t1 = datetime.strptime(hora_inicio, "%H:%M")
+                t2 = datetime.strptime(hora_fin, "%H:%M")
+                diff_seg = (t2 - t1).total_seconds()
+                if diff_seg < 0:
+                    diff_seg += 24 * 3600
+                horas_campo_calc = round(diff_seg / 3600.0, 2)
+            except Exception:
+                pass
+
         sub_franco = str(datos.get("tipo_franco") or datos.get("sub_franco") or "").strip().lower()
 
         es_franco_obra = (lugar_norm in ["franco obra", "franco de obra"]) or (lugar_norm == "franco" and "obra" in sub_franco and "trabajado" not in sub_franco)
@@ -536,7 +564,10 @@ class ApiPuente:
                     sincronizado=False,
                     cargado_por=cargado_por,
                     id_empleado=id_empleado,
-                    id_proyecto=id_proy
+                    id_proyecto=id_proy,
+                    hora_inicio="",
+                    hora_fin="",
+                    tipo_costo=tipo_costo
                 )
             # Caso: Franco Obra Trabajado (computa hs, nro servicio)
             elif es_franco_obra_trabajado:
@@ -559,7 +590,10 @@ class ApiPuente:
                     sincronizado=False,
                     cargado_por=cargado_por,
                     id_empleado=id_empleado,
-                    id_proyecto=id_proy
+                    id_proyecto=id_proy,
+                    hora_inicio="",
+                    hora_fin="",
+                    tipo_costo=tipo_costo
                 )
             # Caso: Franco Ofic Trabajado (computa hs, nro servicio / area)
             elif es_franco_ofic_trabajado or es_franco_trabajado_gen:
@@ -582,7 +616,10 @@ class ApiPuente:
                     sincronizado=False,
                     cargado_por=cargado_por,
                     id_empleado=id_empleado,
-                    id_proyecto=id_proy
+                    id_proyecto=id_proy,
+                    hora_inicio="",
+                    hora_fin="",
+                    tipo_costo=tipo_costo
                 )
             # Caso: Franco normal / de oficina (0 hs, servicio = area para nucleo, rrhh, aplicaciones, vym)
             elif es_franco_normal:
@@ -620,7 +657,10 @@ class ApiPuente:
                     sincronizado=False,
                     cargado_por=cargado_por,
                     id_empleado=id_empleado,
-                    id_proyecto=""
+                    id_proyecto="",
+                    hora_inicio="",
+                    hora_fin="",
+                    tipo_costo=tipo_costo
                 )
             # Caso: Feriado Trabajado (computa hs, nro servicio)
             elif es_feriado_trabajado:
@@ -644,7 +684,10 @@ class ApiPuente:
                     sincronizado=False,
                     cargado_por=cargado_por,
                     id_empleado=id_empleado,
-                    id_proyecto=id_proy
+                    id_proyecto=id_proy,
+                    hora_inicio="",
+                    hora_fin="",
+                    tipo_costo=tipo_costo
                 )
             # Caso: Vacaciones (0 hs, vacaciones)
             elif es_vacaciones:
@@ -661,7 +704,10 @@ class ApiPuente:
                     sincronizado=False,
                     cargado_por=cargado_por,
                     id_empleado=id_empleado,
-                    id_proyecto=""
+                    id_proyecto="",
+                    hora_inicio="",
+                    hora_fin="",
+                    tipo_costo=tipo_costo
                 )
             # Caso: Licencia (0 hs, tipos de licencia)
             elif es_licencia:
@@ -680,7 +726,10 @@ class ApiPuente:
                     sincronizado=False,
                     cargado_por=cargado_por,
                     id_empleado=id_empleado,
-                    id_proyecto=""
+                    id_proyecto="",
+                    hora_inicio="",
+                    hora_fin="",
+                    tipo_costo=tipo_costo
                 )
             # Caso 4: Múltiples proyectos provistos en datos['proyectos']
             elif isinstance(proyectos, list) and len(proyectos) > 0:
@@ -709,15 +758,21 @@ class ApiPuente:
                             sincronizado=False,
                             cargado_por=cargado_por,
                             id_empleado=id_empleado,
-                            id_proyecto=id_proy
+                            id_proyecto=id_proy,
+                            hora_inicio=hora_inicio,
+                            hora_fin=hora_fin,
+                            tipo_costo=tipo_costo
                         )
             # Caso 5: Sin proyectos seleccionados (Tiempo dedicado al Área u Oficina/Home/Campo directo)
             else:
                 srv_area = str(datos.get("servicio", "Tiempo dedicado al Área")).strip() or "Tiempo dedicado al Área"
-                try:
-                    hrs = float(datos.get("horas", 8))
-                except (ValueError, TypeError):
-                    hrs = 8.0
+                if lugar_norm == "campo" and horas_campo_calc is not None:
+                    hrs = horas_campo_calc
+                else:
+                    try:
+                        hrs = float(datos.get("horas", 8))
+                    except (ValueError, TypeError):
+                        hrs = 8.0
 
                 id_proy = str(datos.get("id_proyecto", "")).strip() or obtener_id_proyecto(srv_area)
 
@@ -734,7 +789,10 @@ class ApiPuente:
                     sincronizado=False,
                     cargado_por=cargado_por,
                     id_empleado=id_empleado,
-                    id_proyecto=id_proy
+                    id_proyecto=id_proy,
+                    hora_inicio=hora_inicio,
+                    hora_fin=hora_fin,
+                    tipo_costo=tipo_costo
                 )
 
         threading.Thread(target=sincronizar_pendientes, daemon=True).start()
@@ -781,6 +839,17 @@ class ApiPuente:
         usuario_mail = str(datos.get("usuario_mail", "")).strip()
         id_proy = str(datos.get("id_proyecto", "")).strip()
 
+        # [FN-01.05] Normalización de Campo en modificación
+        lugar_norm = lugar.strip().lower()
+        if lugar_norm in ["campo", "campaña", "campaña / campo", "campana"]:
+            lugar = "Campo"
+            lugar_norm = "campo"
+
+        hora_inicio = str(datos.get("hora_inicio", "")).strip() if lugar_norm == "campo" else ""
+        hora_fin = str(datos.get("hora_fin", "")).strip() if lugar_norm == "campo" else ""
+        tipo_costo = str(datos.get("tipo_costo", "")).strip()
+        quien_modifica = sesion.get("nombre", "RRHH").strip() if sesion else "RRHH"
+
         if not usuario_mail and empleado:
             usuario_mail = obtener_email_empleado(empleado)
         if not id_emp and empleado:
@@ -790,6 +859,17 @@ class ApiPuente:
             horas = float(datos.get("horas", 0.0))
         except (ValueError, TypeError):
             horas = 0.0
+
+        if lugar_norm == "campo" and hora_inicio and hora_fin and horas == 0.0:
+            try:
+                t1 = datetime.strptime(hora_inicio, "%H:%M")
+                t2 = datetime.strptime(hora_fin, "%H:%M")
+                diff_seg = (t2 - t1).total_seconds()
+                if diff_seg < 0:
+                    diff_seg += 24 * 3600
+                horas = round(diff_seg / 3600.0, 2)
+            except Exception:
+                pass
 
         if not fecha or not lugar or not servicio:
             return {"exito": False, "error": "Todos los campos son obligatorios para modificar el reporte."}
@@ -803,12 +883,48 @@ class ApiPuente:
             empleado=empleado,
             id_empleado=id_emp,
             id_proyecto=id_proy,
-            usuario_mail=usuario_mail
+            usuario_mail=usuario_mail,
+            hora_inicio=hora_inicio,
+            hora_fin=hora_fin,
+            tipo_costo=tipo_costo,
+            quien_modifica=quien_modifica
         )
         if ok:
             threading.Thread(target=sincronizar_pendientes, daemon=True).start()
             return {"exito": True, "mensaje": "Reporte modificado exitosamente."}
         return {"exito": False, "error": "No se encontró el registro a modificar en la base local."}
+
+    # [FN-06.02] Widget de Control de Estado Diario
+    def obtener_estado_diario_empleados(self, fecha: str = ""):
+        """Retorna el estado de reporte del día para los colaboradores activos (Verde: envió, Rojo/Gris: pendiente)."""
+        return obtener_estado_diario_empleados(fecha)
+
+    # [FN-02.02] Resumen de Modificaciones para Alertas y Badges en RRHH
+    def obtener_resumen_modificaciones(self):
+        """Retorna conteo total y modificaciones recientes para alertas visuales."""
+        return obtener_resumen_modificaciones()
+
+    # [FN-02.01] Modificaciones recientes para auditoría
+    def obtener_modificaciones_recientes(self, limite: int = 50):
+        """Retorna la lista de modificaciones de auditoría registradas."""
+        return obtener_modificaciones_recientes(limite)
+
+    # [FN-03.05] Asignación masiva de tipo_costo (Oficina / Campo)
+    def actualizar_tipo_costo_masivo(self, datos: dict):
+        """Aplica en lote el tipo de costo ('Oficina' | 'Campo') a una lista de registros y sincroniza."""
+        if not isinstance(datos, dict):
+            return {"exito": False, "error": "Datos inválidos."}
+        ids = datos.get("ids_asistencia") or datos.get("ids") or []
+        costo = str(datos.get("tipo_costo", "")).strip()
+        if not ids:
+            return {"exito": False, "error": "No se seleccionaron registros para asignar costo."}
+        afectados = actualizar_tipo_costo_lote(ids, costo)
+        threading.Thread(target=sincronizar_pendientes, daemon=True).start()
+        return {
+            "exito": True,
+            "mensaje": f"Se asignó tipo de costo '{costo or 'Sin asignar'}' a {afectados} registro(s).",
+            "afectados": afectados
+        }
 
     def obtener_historial_otros_empleados(self, filtro_empleado: str = ""):
         """Retorna la lista de reportes cargados para otros empleados (RRHH, Núcleo e Iván Valentin)."""
@@ -1047,7 +1163,7 @@ class ApiPuente:
                             )
                     conn.commit()
 
-            tipo_norm = str(tipo).strip().capitalize()
+            tipo_norm = tipo.strip().capitalize()
             if tipo_norm == "Campo":
                 tipo_ocf = "Roster"
                 servicio = proyecto
@@ -1308,7 +1424,7 @@ def obtener_icono_tray():
     return crear_icono_calendario(64)
 
 
-APP_VERSION = "1.4.0"
+APP_VERSION = "1.5.0"
 
 _mutex_instancia = None
 
@@ -1635,16 +1751,11 @@ def main():
         menu
     )
 
-    def al_minimizar():
-        if ventana:
-            ventana.hide()
-
     def al_cerrar():
         if ventana:
             ventana.hide()
         return False
 
-    ventana.events.minimized += al_minimizar
     ventana.events.closing += al_cerrar
 
     # Iniciamos el icono de la bandeja en segundo plano

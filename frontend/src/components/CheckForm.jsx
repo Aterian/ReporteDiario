@@ -3,7 +3,7 @@ import { api } from '../services/apiBridge';
 
 const LUGARES_BASE = [
   { id: 'Oficina', label: 'Oficina', labelRpg: '🏰 Ciudadela (Oficina)', icon: 'M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z' },
-  { id: 'Campaña / Campo', label: 'Campaña', labelRpg: '🌲 Expedición (Campaña)', icon: 'M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z' },
+  { id: 'Campo', label: 'Campo', labelRpg: '🌲 Expedición (Campo)', icon: 'M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z' },
   { id: 'Franco', label: 'Franco', labelRpg: '🍺 Taberna & Descanso', icon: 'M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z' }
 ];
 
@@ -53,6 +53,8 @@ export default function CheckForm({ onRegistroGuardado, onVolver, tema }) {
   const [fechaFin, setFechaFin] = useState(getFechaHoy());
   const [usarRangoFechas, setUsarRangoFechas] = useState(false);
   const [lugar, setLugar] = useState('Oficina');
+  const [horaInicio, setHoraInicio] = useState('08:00');
+  const [horaFin, setHoraFin] = useState('17:00');
   const [tipoFranco, setTipoFranco] = useState('Franco de Oficina');
   const [proyectoFrancoObra, setProyectoFrancoObra] = useState('');
   const [proyectoFrancoOfic, setProyectoFrancoOfic] = useState('');
@@ -61,6 +63,21 @@ export default function CheckForm({ onRegistroGuardado, onVolver, tema }) {
   const [horasFeriado, setHorasFeriado] = useState(8);
   const [tipoLicencia, setTipoLicencia] = useState('Médica');
   const [detalleLicencia, setDetalleLicencia] = useState('');
+
+  const calcularHorasDecimales = (inicio, fin) => {
+    if (!inicio || !fin) return 0;
+    const [hIni, mIni] = String(inicio).split(':').map(Number);
+    const [hFin, mFin] = String(fin).split(':').map(Number);
+    if (isNaN(hIni) || isNaN(mIni) || isNaN(hFin) || isNaN(mFin)) return 0;
+    let minTotales = (hFin * 60 + mFin) - (hIni * 60 + mIni);
+    if (minTotales < 0) {
+      minTotales += 24 * 60;
+    }
+    const dec = minTotales / 60;
+    return Number(dec.toFixed(2));
+  };
+
+  const horasCampoCalculadas = calcularHorasDecimales(horaInicio, horaFin);
 
   // Sesión y permisos
   const [sesionUsuario, setSesionUsuario] = useState(null);
@@ -272,13 +289,18 @@ export default function CheckForm({ onRegistroGuardado, onVolver, tema }) {
 
   // Cálculo de horas
   const getHorasEquitativas = () => {
-    if (proyectosSeleccionados.length === 0) return 8;
-    return Number((8 / proyectosSeleccionados.length).toFixed(1));
+    const base = esCampañaOCampo ? horasCampoCalculadas : 8;
+    if (proyectosSeleccionados.length === 0) return base;
+    return Number((base / proyectosSeleccionados.length).toFixed(1));
   };
 
   const getTotalHoras = () => {
-    if (proyectosSeleccionados.length === 0) return Math.max(0, horasArea);
-    if (modoDivision === 'equitativo') return 8;
+    if (proyectosSeleccionados.length === 0) {
+      return esCampañaOCampo ? horasCampoCalculadas : Math.max(0, horasArea);
+    }
+    if (modoDivision === 'equitativo') {
+      return esCampañaOCampo ? horasCampoCalculadas : 8;
+    }
     const total = proyectosSeleccionados.reduce((acc, p) => acc + (Number(horasPorProyecto[p]) || 0), 0);
     return Math.round(total * 10) / 10;
   };
@@ -339,13 +361,31 @@ export default function CheckForm({ onRegistroGuardado, onVolver, tema }) {
       }
     }
 
+    if (esCampañaOCampo) {
+      if (!horaInicio || !horaFin) {
+        setMensajeError('Por favor ingresa la hora de inicio y fin para la jornada de campo.');
+        return;
+      }
+      if (horasCampoCalculadas <= 0) {
+        setMensajeError('La jornada de campo calculada debe ser mayor a 0 horas.');
+        return;
+      }
+    }
+
     setEnviando(true);
 
     try {
       let payload = {
         fecha,
-        lugar
+        lugar: esCampañaOCampo ? 'Campo' : lugar,
+        tipo_ocf: esCampañaOCampo ? 'Campo' : lugar
       };
+
+      if (esCampañaOCampo) {
+        payload.hora_inicio = horaInicio;
+        payload.hora_fin = horaFin;
+        payload.horas = horasCampoCalculadas;
+      }
 
       if (cargarParaOtro && usuarioSeleccionado) {
         payload.empleado = usuarioSeleccionado.nombre;
@@ -406,27 +446,43 @@ export default function CheckForm({ onRegistroGuardado, onVolver, tema }) {
         payload.servicio = `Licencia - ${descLic}`;
         payload.horas = 0.0;
       } else if (proyectosSeleccionados.length === 0) {
-        // Sin proyectos específicos: Tiempo dedicado al área
-        const h = modoDivision === 'equitativo' ? 8 : horasArea;
-        const nombreServicio = esUsuarioAreaEspecial
-          ? `Dedicado al área - ${areaElegida}`
-          : 'Dedicado al área';
+        // Sin proyectos específicos: Tiempo dedicado al área o Campo general
+        const h = esCampañaOCampo ? horasCampoCalculadas : (modoDivision === 'equitativo' ? 8 : horasArea);
+        const nombreServicio = esCampañaOCampo
+          ? (esUsuarioAreaEspecial ? `Campo - ${areaElegida}` : 'Campo')
+          : (esUsuarioAreaEspecial ? `Dedicado al área - ${areaElegida}` : 'Dedicado al área');
 
         payload.proyectos = [{ servicio: nombreServicio, horas: h }];
         payload.servicio = nombreServicio;
         payload.horas = h;
       } else {
-        if (modoDivision === 'equitativo') {
-          const h = getHorasEquitativas();
-          payload.proyectos = proyectosSeleccionados.map(p => ({
-            servicio: p,
-            horas: h
-          }));
+        if (esCampañaOCampo) {
+          if (modoDivision === 'equitativo') {
+            const h = Number((horasCampoCalculadas / proyectosSeleccionados.length).toFixed(2));
+            payload.proyectos = proyectosSeleccionados.map(p => ({
+              servicio: p,
+              horas: h
+            }));
+          } else {
+            payload.proyectos = proyectosSeleccionados.map(p => ({
+              servicio: p,
+              horas: Number(horasPorProyecto[p]) || 0
+            }));
+          }
+          payload.horas = horasCampoCalculadas;
         } else {
-          payload.proyectos = proyectosSeleccionados.map(p => ({
-            servicio: p,
-            horas: Number(horasPorProyecto[p]) || 0
-          }));
+          if (modoDivision === 'equitativo') {
+            const h = getHorasEquitativas();
+            payload.proyectos = proyectosSeleccionados.map(p => ({
+              servicio: p,
+              horas: h
+            }));
+          } else {
+            payload.proyectos = proyectosSeleccionados.map(p => ({
+              servicio: p,
+              horas: Number(horasPorProyecto[p]) || 0
+            }));
+          }
         }
       }
 
@@ -682,6 +738,64 @@ export default function CheckForm({ onRegistroGuardado, onVolver, tema }) {
                 })}
               </div>
             </div>
+
+            {/* Si la modalidad es Campo: Selector dinámico de Hora Inicio y Hora Fin con cálculo automático */}
+            {esCampañaOCampo && (
+              <div className="campo-horarios-card">
+                <div className="campo-horarios-header">
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#cc3333" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round">
+                      <circle cx="12" cy="12" r="10" />
+                      <polyline points="12 6 12 12 16 14" />
+                    </svg>
+                    <span className="campo-horarios-title">
+                      {isRpg ? '⏱️ Horario de Expedición en Campo' : 'Horario de Jornada en Campo'}
+                    </span>
+                  </div>
+                  <span className="campo-horas-badge" title="Cálculo automático: Hora Fin - Hora Inicio">
+                    {horasCampoCalculadas} hs calculadas
+                  </span>
+                </div>
+
+                <div className="campo-horarios-grid">
+                  <div className="campo-time-field">
+                    <label className="form-label-clean" htmlFor="horaInicio">
+                      Hora Inicio <strong className="required">*</strong>
+                    </label>
+                    <input
+                      id="horaInicio"
+                      type="time"
+                      className="form-input form-input-clean campo-time-input"
+                      value={horaInicio}
+                      onChange={(e) => setHoraInicio(e.target.value)}
+                      disabled={enviando}
+                      required
+                    />
+                  </div>
+
+                  <div className="campo-time-field">
+                    <label className="form-label-clean" htmlFor="horaFin">
+                      Hora Fin <strong className="required">*</strong>
+                    </label>
+                    <input
+                      id="horaFin"
+                      type="time"
+                      className="form-input form-input-clean campo-time-input"
+                      value={horaFin}
+                      onChange={(e) => setHoraFin(e.target.value)}
+                      disabled={enviando}
+                      required
+                    />
+                  </div>
+                </div>
+
+                <div className="campo-horarios-calc-info">
+                  <span>
+                    De {horaInicio || '--:--'} a {horaFin || '--:--'} hs • Total calculado: <strong>{horasCampoCalculadas} horas decimales</strong>
+                  </span>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* SI ES FRANCO, FERIADO TRABAJADO, VACACIONES O LICENCIA */}

@@ -65,3 +65,33 @@
   2. Al modificar el empleado de una asistencia, se actualizan obligatoriamente `empleado`, `id_empleado` y `usuario_mail` en local y Sheets.
   3. Desactivado todo autollenado sintético de filas en Sheets (`reconciliar_rosters_con_historial` inerte). Solo los usuarios crean registros.
   4. Botón Limpiar ejecuta borrado local transaccional y descarga completa desde Google Sheets.
+
+## [FN-01.05] Normalización de Campo y Horas de Inicio y Fin
+- **Módulo**: [MOD-01] Registro de Asistencia Diaria
+- **Flujo Operativo**: Despliega selectores táctiles de hora_inicio y hora_fin al marcar modalidad Campo, calculando automáticamente las horas totales en formato decimal. Normaliza cualquier selección de campo a estrictamente 'Campo' en almacenamiento.
+- **Tablas afectadas**: `historial`, `1_asistencia_informada`.
+- **Reglas de negocio e invariantes**:
+  1. 'campaña' o 'campo' se persiste invariablemente como 'Campo'.
+  2. Horas en campo calculadas como decimal: `hora_fin - hora_inicio` (soporta cruces de medianoche).
+  3. hora_inicio y hora_fin obligatorias solo en Campo; vacías en Oficina y Franco.
+  4. Inputs con área táctil mínima de 44px conforme directiva mobile-first.
+
+## [FN-02.01] Auditoría de Modificaciones de Asistencia
+- **Módulo**: [MOD-02] Auditoría y Trazabilidad
+- **Flujo Operativo**: Detecta cambios sustantivos (tipo, horas, servicio) al editar registros de asistencia e inserta un evento de auditoría en tabla local y en la hoja remota `1_1_modificaciones_realizadas`. Expone indicador visual de modificaciones para RRHH.
+- **Tablas afectadas**: `modificaciones_realizadas`, `1_1_modificaciones_realizadas`.
+- **Reglas de negocio e invariantes**:
+  1. Registra 10 atributos de auditoría incluyendo UUID, valores previos/posteriores, timestamp ISO y usuario autor.
+  2. Sincronización automática de eventos de auditoría pendientes hacia Google Sheets durante ciclos de sync.
+  3. Resumen de auditoría accesible en widget de inicio para RRHH y perfiles de gestión.
+
+## [FN-06.02] Control de Estado Diario, Costos Masivos y Liquidación Flexible
+- **Módulo**: [MOD-06] Gestión de Roster y Asistencia RRHH
+- **Flujo Operativo**: Monitorea en el inicio el cumplimiento de registro diario por empleado en tiempo real. Permite asignación masiva de tipo_costo (Oficina/Campo) en el historial de colaboradores y edición flexible de días en la calculadora de liquidación.
+- **Tablas afectadas**: `historial`, `1_asistencia_informada`, `0_usuarios`.
+- **Reglas de negocio e invariantes**:
+  1. Franco con servicio de obra computa como Día de Campo en liquidación y muestra etiqueta 'Franco de obra'.
+  2. Franco con área interna computa como Día de Oficina en liquidación.
+  3. Asignación masiva actualiza tipo_costo en SQLite y Google Sheets en columna Q.
+  4. Calculadora de liquidación permite sobreescritura manual en todas las categorías con opción de reset automático.
+

@@ -4,6 +4,38 @@ Historial cronológico de cambios, nuevas características y mejoras aplicadas a
 
 ---
 
+## [1.5.0] - 2026-09-29
+
+### 📊 Esquema de 17 Columnas, Auditoría de Modificaciones y Control Diario RRHH
+- **Esquema de 17 Columnas en `1_asistencia_informada`**:
+  - Incorporadas columnas: `hora_inicio`, `hora_fin`, `instrumental` (vacío por diseño) y `tipo_costo` ('Oficina' | 'Campo' | sin asignar).
+  - Migración automática en SQLite y sincronización bidireccional mediante mapeo posicional dinámico en Google Sheets.
+- **Hoja y Tabla de Auditoría `1_1_modificaciones_realizadas`**:
+  - Creación automática de la hoja `1_1_modificaciones_realizadas` en Google Sheets y tabla en SQLite.
+  - Registro auditable de cualquier edición de registros con 10 columnas: `id_modificacion`, `id_asistencia`, `tipo_antes`, `tipo_despues`, `horas_antes`, `horas_despues`, `servicio_antes`, `servicio_despues`, `fecha_hora_modificaciones`, `quien_modifica`.
+  - Sincronización automática de modificaciones pendientes hacia Google Sheets.
+- **Normalización de 'Campo' y Cálculo Automático de Horas**:
+  - Normalización estricta de "campaña" o "campo" guardándose exclusivamente como `"Campo"`.
+  - Despliegue dinámico de selectores `hora_inicio` y `hora_fin` (mínimo 44px de alto para inputs táctiles) al seleccionar Campo.
+  - Cálculo automático de `horas_totales = hora_fin - hora_inicio` en formato decimal sin límite de jornada.
+- **Criterio de Clasificación de Francos (Franco de Obra)**:
+  - En vistas de historial se muestra la etiqueta `"Franco de obra"` cuando `tipo_ocf == 'Franco'` y tiene un proyecto/servicio de obra asignado.
+  - En la Calculadora de Liquidación de RRHH: los Francos de obra computan como **Días de Campo**, mientras que los Francos asignados a áreas internas computan como **Días de Oficina**.
+- **Calculadora de Liquidación con Edición Flexible**:
+  - Habilitada la edición manual de cantidad de días para todas las categorías (Oficina, Campo, Francos Ordinarios, Francos Trabajados, Feriados Trabajados), con botón `↺ Auto` para restablecer el cómputo calculado.
+- **Asignación Masiva de Tipo de Costo (RRHH)**:
+  - Casillas de selección múltiple en `OtherEmployeesHistoryView` con barra de acciones flotante para imputar masivamente `tipo_costo` (`Oficina`, `Campo` o Sin Asignar).
+  - Actualización atómica en base de datos local y propagación a Google Sheets.
+- **Widget de Control de Estado Diario (RRHH / Aplicaciones)**:
+  - Nuevo componente `DailyStatusWidget` integrado en la pantalla de inicio (`HomeView`) para perfiles con permisos de gestión.
+  - Monitoreo en tiempo real del estado de envío de asistencia del día con barra de progreso, filtros rápidos (Todos, Pendientes, Enviados) y buscador.
+  - Banner y modal de alerta de modificaciones recientes para auditoría inmediata.
+- **Comportamiento Nativo de Ventana en Windows (PyWebView)**:
+  - Minimizar (`_`): comportamiento nativo de Windows permaneciendo en la barra de tareas (no se esconde en la bandeja).
+  - Cerrar (`X`): interceptado con `window.hide()` manteniéndose en segundo plano en el System Tray.
+
+---
+
 ## [1.4.0] - 2026-09-29
 
 ### 👥 Mejoras y Controles en Módulos de RRHH (Roster y Asistencia)
