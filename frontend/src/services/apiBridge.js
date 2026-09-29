@@ -250,6 +250,14 @@ export const api = {
     return { exito: false, error: 'Función no disponible' };
   },
 
+  async limpiarYDescargarSheets() {
+    const bridge = await getApi();
+    if (bridge.limpiar_y_descargar_sheets) {
+      return await bridge.limpiar_y_descargar_sheets();
+    }
+    return { exito: false, error: 'Función no disponible' };
+  },
+
   async guardarRoster(datos) {
     const bridge = await getApi();
     if (bridge.guardar_roster) {

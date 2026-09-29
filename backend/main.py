@@ -33,6 +33,7 @@ from database import (
     eliminar_registro_roster,
     obtener_conexion,
     obtener_id_empleado,
+    obtener_email_empleado,
     obtener_id_proyecto,
     eliminar_registro_asistencia,
     obtener_historial_otros_empleados,
@@ -57,7 +58,8 @@ from sheets_service import (
     obtener_ids_asistencia_remotos,
     eliminar_registro_remoto,
     sincronizar_desde_sheets_hacia_local,
-    deduplicar_hoja_remota
+    deduplicar_hoja_remota,
+    limpiar_y_descargar_desde_sheets
 )
 
 
@@ -412,12 +414,6 @@ class ApiPuente:
             nl_remotos = obtener_no_laborales_remotos()
             if nl_remotos:
                 guardar_no_laborales_cache(nl_remotos)
-
-            # 4.1 Reconciliar rosters con historial para recuperar cualquier día faltante
-            try:
-                reconciliar_rosters_con_historial()
-            except Exception as e_rec:
-                print(f'[Refrescar] Aviso al reconciliar rosters: {e_rec}')
 
             # 5. Sincronizar sincrónicamente '1_asistencia_informada', purgando registros locales inexistentes
             res_asist = sincronizar_desde_sheets_hacia_local()
@@ -782,7 +778,13 @@ class ApiPuente:
         servicio = str(datos.get("servicio", "")).strip()
         empleado = str(datos.get("empleado", "")).strip()
         id_emp = str(datos.get("id_empleado", "")).strip()
+        usuario_mail = str(datos.get("usuario_mail", "")).strip()
         id_proy = str(datos.get("id_proyecto", "")).strip()
+
+        if not usuario_mail and empleado:
+            usuario_mail = obtener_email_empleado(empleado)
+        if not id_emp and empleado:
+            id_emp = obtener_id_empleado(empleado)
 
         try:
             horas = float(datos.get("horas", 0.0))
@@ -800,7 +802,8 @@ class ApiPuente:
             horas=horas,
             empleado=empleado,
             id_empleado=id_emp,
-            id_proyecto=id_proy
+            id_proyecto=id_proy,
+            usuario_mail=usuario_mail
         )
         if ok:
             threading.Thread(target=sincronizar_pendientes, daemon=True).start()
@@ -1039,15 +1042,32 @@ class ApiPuente:
                     for f_ant in fechas_antiguas:
                         if f_ant not in fechas_a_cargar or old_emp != empleado:
                             cur.execute(
-                                "DELETE FROM historial WHERE empleado = ? AND fecha = ? AND tipo_ocf IN ('Roster', 'Franco')",
+                                "DELETE FROM historial WHERE empleado = ? AND fecha = ? AND tipo_ocf IN ('Roster', 'Franco', 'Licencia', 'Vacaciones')",
                                 (old_emp, f_ant)
                             )
                     conn.commit()
 
-            es_campo = (tipo.lower() == "campo")
-            tipo_ocf = "Roster" if es_campo else "Franco"
-            servicio = proyecto
-            horas = 8.0 if es_campo else 0.0
+            tipo_norm = str(tipo).strip().capitalize()
+            if tipo_norm == "Campo":
+                tipo_ocf = "Roster"
+                servicio = proyecto
+                horas = 8.0
+            elif tipo_norm == "Franco":
+                tipo_ocf = "Franco"
+                servicio = proyecto
+                horas = 0.0
+            elif tipo_norm == "Licencia":
+                tipo_ocf = "Licencia"
+                servicio = "Licencia Médica"
+                horas = 0.0
+            elif tipo_norm == "Vacaciones":
+                tipo_ocf = "Vacaciones"
+                servicio = "Vacaciones"
+                horas = 0.0
+            else:
+                tipo_ocf = tipo_norm
+                servicio = proyecto
+                horas = 8.0 if tipo_norm.lower() == "campo" else 0.0
 
             emp_id = obtener_id_empleado(empleado)
             proy_id = obtener_id_proyecto(proyecto) if proyecto else ""
@@ -1126,6 +1146,16 @@ class ApiPuente:
         """Ejecuta la depuración de filas duplicadas en Google Sheets."""
         return deduplicar_hoja_remota()
 
+    def limpiar_y_descargar_sheets(self):
+        """Elimina todos los registros locales de historial y rosters y los descarga frescos desde Google Sheets."""
+        sesion = obtener_sesion_activa()
+        if not sesion:
+            return {"exito": False, "error": "No hay sesión activa."}
+        try:
+            return limpiar_y_descargar_desde_sheets()
+        except Exception as e:
+            return {"exito": False, "error": str(e)}
+
 
     def obtener_rosters(self, fecha_desde: str | None = None, fecha_hasta: str | None = None):
         """Retorna los registros de roster que se superpongan con el período especificado, purgando registros huérfanos."""
@@ -1177,7 +1207,7 @@ class ApiPuente:
                                 while curr <= d_fin:
                                     f_str = curr.strftime("%Y-%m-%d")
                                     cursor.execute(
-                                        "SELECT id_asistencia FROM historial WHERE empleado = ? AND fecha = ? AND tipo_ocf IN ('Roster', 'Franco')",
+                                        "SELECT id_asistencia FROM historial WHERE empleado = ? AND fecha = ? AND tipo_ocf IN ('Roster', 'Franco', 'Licencia', 'Vacaciones')",
                                         (emp, f_str)
                                     )
                                     filas_asist = cursor.fetchall()
@@ -1187,7 +1217,7 @@ class ApiPuente:
                                             uids_a_eliminar.append(uid_remoto)
 
                                     cursor.execute(
-                                        "DELETE FROM historial WHERE empleado = ? AND fecha = ? AND tipo_ocf IN ('Roster', 'Franco')",
+                                        "DELETE FROM historial WHERE empleado = ? AND fecha = ? AND tipo_ocf IN ('Roster', 'Franco', 'Licencia', 'Vacaciones')",
                                         (emp, f_str)
                                     )
                                     curr += timedelta(days=1)
@@ -1278,7 +1308,7 @@ def obtener_icono_tray():
     return crear_icono_calendario(64)
 
 
-APP_VERSION = "1.3.9"
+APP_VERSION = "1.4.0"
 
 _mutex_instancia = None
 

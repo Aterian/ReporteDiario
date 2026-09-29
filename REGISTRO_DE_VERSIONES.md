@@ -4,6 +4,28 @@ Historial cronológico de cambios, nuevas características y mejoras aplicadas a
 
 ---
 
+## [1.4.0] - 2026-09-29
+
+### 👥 Mejoras y Controles en Módulos de RRHH (Roster y Asistencia)
+- **Carga de Roster con Licencia y Vacaciones**:
+  - Habilitadas las opciones de tipo de jornada **"Licencia"** y **"Vacaciones"** en la creación y edición de Roster.
+  - Al seleccionar Licencia o Vacaciones, se omiten tarifas de obra y se asignan 0 horas.
+  - Soporte visual en Gantt (`L` en rojo y `V` en ámbar), en tarjetas de estado y en exportación Excel oficial en 3 hojas.
+- **Eliminación de Turnos de Roster**:
+  - Incorporado botón de **"Eliminar Turno"** en el modal de edición de Roster en la vista Gantt.
+  - Las rutinas de eliminación y purga ahora limpian apropiadamente los registros asociados en `historial` y Google Sheets para los 4 tipos de jornada (`Roster`, `Franco`, `Licencia`, `Vacaciones`).
+- **Eliminación de Auto-rellenado no Deseado**:
+  - Desactivada la función de reconciliación automática que generaba filas sintéticas en `historial` y provocaba superposición involuntaria con licencias en Google Sheets. Solo los usuarios pueden crear registros.
+- **Botón "Limpiar" para Roster e Historial de Otros Empleados**:
+  - Añadido botón **"Limpiar"** en las vistas de Roster (`RosterView`) y de Historial de Otros Empleados (`OtherEmployeesHistoryView`).
+  - Purga la base de datos local y vuelve a descargar la información oficial directamente desde Google Sheets, previniendo duplicados o discrepancias por modificaciones externas.
+- **Sincronización Completa de Empleado en Asistencia**:
+  - Al modificar el empleado de un registro de asistencia en `OtherEmployeesHistoryView`, se actualizan sincrónicamente el **email** (`usuario_mail`) y el **id del empleado** (`id_empleado`) tanto en la base local como en Google Sheets `1_asistencia_informada`.
+- **Filtro por Empleado en Historial de Roster**:
+  - Incorporado selector desplegable para filtrar por empleado específico en `RosterHistoryView`.
+
+---
+
 ## [1.3.9] - 2026-09-25
 
 ### 🗺️ Soporte, Permisos y Reglas de Negocio para Área SIG ("S")

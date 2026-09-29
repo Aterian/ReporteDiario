@@ -16,6 +16,10 @@ COLOR_CAMPO_CELL = "D1FAE5"     # Verde suave para Campo
 COLOR_CAMPO_TEXT = "065F46"     # Verde oscuro
 COLOR_FRANCO_CELL = "EDE9FE"    # Púrpura suave para Franco
 COLOR_FRANCO_TEXT = "5B21B6"    # Púrpura oscuro
+COLOR_VACACIONES_CELL = "FEF3C7" # Ámbar suave para Vacaciones
+COLOR_VACACIONES_TEXT = "B45309" # Ámbar oscuro
+COLOR_LICENCIA_CELL = "FEE2E2"   # Rojo suave para Licencia
+COLOR_LICENCIA_TEXT = "B91C1C"   # Rojo oscuro
 COLOR_BORDER = "CBD5E1"         # Slate border
 
 def _aplicar_borde(cell: Any, top: bool = True, bottom: bool = True, left: bool = True, right: bool = True):
@@ -261,6 +265,14 @@ def generar_excel_roster_mes(anio: int, mes: int, ruta_archivo: str, proyecto: s
                                 c_dia_val.value = "C"
                                 c_dia_val.fill = PatternFill(start_color=COLOR_CAMPO_CELL, end_color=COLOR_CAMPO_CELL, fill_type="solid")
                                 c_dia_val.font = Font(name="Calibri", size=9, bold=True, color=COLOR_CAMPO_TEXT)
+                            elif tipo == "Vacaciones":
+                                c_dia_val.value = "V"
+                                c_dia_val.fill = PatternFill(start_color=COLOR_VACACIONES_CELL, end_color=COLOR_VACACIONES_CELL, fill_type="solid")
+                                c_dia_val.font = Font(name="Calibri", size=9, bold=True, color=COLOR_VACACIONES_TEXT)
+                            elif tipo == "Licencia":
+                                c_dia_val.value = "L"
+                                c_dia_val.fill = PatternFill(start_color=COLOR_LICENCIA_CELL, end_color=COLOR_LICENCIA_CELL, fill_type="solid")
+                                c_dia_val.font = Font(name="Calibri", size=9, bold=True, color=COLOR_LICENCIA_TEXT)
                             else:
                                 c_dia_val.value = "F"
                                 c_dia_val.fill = PatternFill(start_color=COLOR_FRANCO_CELL, end_color=COLOR_FRANCO_CELL, fill_type="solid")

@@ -42,6 +42,7 @@ export default function OtherEmployeesHistoryView({ usuario, onVolver, tema, onV
   const [registros, setRegistros] = useState([]);
   const [cargando, setCargando] = useState(true);
   const [sincronizando, setSincronizando] = useState(false);
+  const [limpiando, setLimpiando] = useState(false);
   const [mensajeSync, setMensajeSync] = useState(null);
 
   // Catálogos auxiliares
@@ -183,6 +184,37 @@ export default function OtherEmployeesHistoryView({ usuario, onVolver, tema, onV
     }
   };
 
+  const handleLimpiarLocalYDescargar = async () => {
+    if (!window.confirm('¿Deseas limpiar todos los registros locales y volver a descargar la información oficial desde Google Sheets? Esta acción descarta datos locales y previene registros duplicados.')) {
+      return;
+    }
+    setLimpiando(true);
+    setMensajeSync(null);
+    try {
+      const res = await api.limpiarYDescargarSheets();
+      if (res && res.exito) {
+        setMensajeSync({
+          tipo: 'exito',
+          texto: res.mensaje || 'Registros locales limpiados y sincronizados desde Google Sheets.'
+        });
+        await cargarDatos();
+        if (empleadoAuditar) {
+          await cargarAuditoriaEmpleado(empleadoAuditar, fechaCalendario);
+        }
+      } else {
+        setMensajeSync({
+          tipo: 'error',
+          texto: res?.error || 'No se pudo completar la limpieza y descarga desde Google Sheets.'
+        });
+      }
+    } catch (err) {
+      console.error(err);
+      setMensajeSync({ tipo: 'error', texto: 'Error de comunicación al limpiar y descargar.' });
+    } finally {
+      setLimpiando(false);
+    }
+  };
+
   const handleGuardarModificacion = async (e) => {
     e.preventDefault();
     if (!registroEditando) return;
@@ -195,6 +227,10 @@ export default function OtherEmployeesHistoryView({ usuario, onVolver, tema, onV
 
     setGuardandoEdicion(true);
     try {
+      const empData = empleados.find(u => u.nombre === registroEditando.empleado);
+      const idEmp = registroEditando.id_empleado || (empData ? (empData.id_origen || empData.id_usuario || empData.dni || '') : '');
+      const mailEmp = registroEditando.usuario_mail || (empData ? (empData.email || empData.mail || '') : '');
+
       const res = await api.modificarRegistro({
         id: registroEditando.id,
         fecha: registroEditando.fecha,
@@ -202,7 +238,8 @@ export default function OtherEmployeesHistoryView({ usuario, onVolver, tema, onV
         servicio: registroEditando.servicio,
         horas: Number(registroEditando.horas) || 0,
         empleado: registroEditando.empleado,
-        id_empleado: registroEditando.id_empleado || '',
+        id_empleado: idEmp,
+        usuario_mail: mailEmp,
         id_proyecto: registroEditando.id_proyecto || ''
       });
 
@@ -526,7 +563,7 @@ export default function OtherEmployeesHistoryView({ usuario, onVolver, tema, onV
               }
               setCargando(false);
             }}
-            disabled={cargando || sincronizando}
+            disabled={cargando || sincronizando || limpiando}
             title="Actualizar registros desde Google Sheets y base local"
           >
             <svg
@@ -545,6 +582,29 @@ export default function OtherEmployeesHistoryView({ usuario, onVolver, tema, onV
               <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
             </svg>
             Refrescar
+          </button>
+
+          <button
+            type="button"
+            className="btn-refresh"
+            onClick={handleLimpiarLocalYDescargar}
+            disabled={cargando || sincronizando || limpiando}
+            title="Eliminar registros locales y descargar directamente desde Google Sheets para evitar duplicados"
+          >
+            <svg
+              width="12"
+              height="12"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className={limpiando ? 'spinner' : ''}
+            >
+              <path d="M3 6h18m-2 0v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6m3 0V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
+            </svg>
+            {limpiando ? 'Limpiando...' : 'Limpiar'}
           </button>
         </div>
       </div>
@@ -1147,7 +1207,16 @@ export default function OtherEmployeesHistoryView({ usuario, onVolver, tema, onV
                 <select
                   className="form-select form-select-clean"
                   value={registroEditando.empleado}
-                  onChange={(e) => setRegistroEditando({ ...registroEditando, empleado: e.target.value })}
+                  onChange={(e) => {
+                    const nuevoNombre = e.target.value;
+                    const empData = empleados.find(u => u.nombre === nuevoNombre);
+                    setRegistroEditando({
+                      ...registroEditando,
+                      empleado: nuevoNombre,
+                      id_empleado: empData ? (empData.id_origen || empData.id_usuario || empData.dni || '') : '',
+                      usuario_mail: empData ? (empData.email || empData.mail || '') : ''
+                    });
+                  }}
                   required
                 >
                   {empleados.map(u => (

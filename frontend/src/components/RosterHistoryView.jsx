@@ -31,6 +31,7 @@ export default function RosterHistoryView({ usuario, onVolver, onNuevoRoster, te
   const [proyectosDisponibles, setProyectosDisponibles] = useState([]);
   const [proyectoSeleccionado, setProyectoSeleccionado] = useState('');
   const [filtrarTablaPorProyecto, setFiltrarTablaPorProyecto] = useState(false);
+  const [filtroEmpleado, setFiltroEmpleado] = useState('TODOS');
   const [rosters, setRosters] = useState([]);
   const [cargando, setCargando] = useState(true);
   const [exportando, setExportando] = useState(false);
@@ -231,11 +232,26 @@ export default function RosterHistoryView({ usuario, onVolver, onNuevoRoster, te
     }
   };
 
-  // Filtrado de la tabla según el checkbox
+  // Lista combinada de empleados para el selector de filtro
+  const listaEmpleadosFiltro = useMemo(() => {
+    const setEmps = new Set();
+    empleadosDisponibles.forEach(e => { if (e.nombre) setEmps.add(e.nombre.trim()); });
+    rosters.forEach(r => { if (r.empleado) setEmps.add(r.empleado.trim()); });
+    return Array.from(setEmps).sort();
+  }, [empleadosDisponibles, rosters]);
+
+  // Filtrado de la tabla según proyecto y empleado
   const rostersFiltrados = useMemo(() => {
-    if (!filtrarTablaPorProyecto || !proyectoSeleccionado) return rosters;
-    return rosters.filter(r => r.proyecto === proyectoSeleccionado);
-  }, [rosters, filtrarTablaPorProyecto, proyectoSeleccionado]);
+    return rosters.filter(r => {
+      if (filtrarTablaPorProyecto && proyectoSeleccionado && r.proyecto !== proyectoSeleccionado) {
+        return false;
+      }
+      if (filtroEmpleado && filtroEmpleado !== 'TODOS' && r.empleado !== filtroEmpleado) {
+        return false;
+      }
+      return true;
+    });
+  }, [rosters, filtrarTablaPorProyecto, proyectoSeleccionado, filtroEmpleado]);
 
   return (
     <div className={`roster-history-container ${isDark ? 'dark-theme' : ''}`}>
@@ -330,7 +346,7 @@ export default function RosterHistoryView({ usuario, onVolver, onNuevoRoster, te
             </div>
 
             {/* Selector de Proyecto de Ingeniería a Exportar */}
-            <div className="history-period-selector" style={{ flex: 1, minWidth: '260px' }}>
+            <div className="history-period-selector" style={{ flex: 1, minWidth: '220px' }}>
               <label className="history-filter-label">Proyecto (Área de Ingeniería - I):</label>
               <select
                 value={proyectoSeleccionado}
@@ -340,6 +356,22 @@ export default function RosterHistoryView({ usuario, onVolver, onNuevoRoster, te
               >
                 {proyectosDisponibles.map((p, idx) => (
                   <option key={idx} value={p}>{p}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Selector para filtrar por empleado */}
+            <div className="history-period-selector" style={{ minWidth: '200px' }}>
+              <label className="history-filter-label">Filtrar por Empleado:</label>
+              <select
+                value={filtroEmpleado}
+                onChange={(e) => setFiltroEmpleado(e.target.value)}
+                className="period-select"
+                style={{ width: '100%' }}
+              >
+                <option value="TODOS">Todos los Empleados</option>
+                {listaEmpleadosFiltro.map((nom, idx) => (
+                  <option key={idx} value={nom}>{nom}</option>
                 ))}
               </select>
             </div>
@@ -447,8 +479,8 @@ export default function RosterHistoryView({ usuario, onVolver, onNuevoRoster, te
                       <td className="date-cell">{r.fecha_inicio}</td>
                       <td className="date-cell">{r.fecha_fin}</td>
                       <td>
-                        <span className={`status-pill ${r.tipo === 'Campo' ? 'status-campo' : 'status-franco'}`}>
-                          {r.tipo === 'Campo' ? '🚜 Campo' : '🏠 Franco'}
+                        <span className={`status-pill status-${(r.tipo || 'campo').toLowerCase()}`}>
+                          {r.tipo === 'Campo' ? '🚜 Campo' : r.tipo === 'Franco' ? '🏠 Franco' : r.tipo === 'Vacaciones' ? '🏖️ Vacaciones' : r.tipo === 'Licencia' ? '🏥 Licencia' : r.tipo}
                         </span>
                       </td>
                       <td className="num-cell">
@@ -583,6 +615,20 @@ export default function RosterHistoryView({ usuario, onVolver, onNuevoRoster, te
                     onClick={() => setEditTipo('Franco')}
                   >
                     🏠 Franco / Descanso
+                  </button>
+                  <button
+                    type="button"
+                    className={`btn-type-pill pill-vacaciones ${editTipo === 'Vacaciones' ? 'active' : ''}`}
+                    onClick={() => setEditTipo('Vacaciones')}
+                  >
+                    🏖️ Vacaciones
+                  </button>
+                  <button
+                    type="button"
+                    className={`btn-type-pill pill-licencia ${editTipo === 'Licencia' ? 'active' : ''}`}
+                    onClick={() => setEditTipo('Licencia')}
+                  >
+                    🏥 Licencia
                   </button>
                 </div>
               </div>

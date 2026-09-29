@@ -55,3 +55,13 @@
 - **Reglas de negocio e invariantes**:
   1. Acceso a vista RPG permitido para Área A, Iván Valentin y Gabriel Canavesio (`45059000`).
   2. Título honorífico asignado: `📜 Erudito Deambulante`.
+
+## [FN-06.01] Controles de RRHH: Roster, Asistencia y Depuración
+- **Módulo**: [MOD-06] Gestión de Roster y Asistencia RRHH
+- **Flujo Operativo**: Permite cargar Licencia y Vacaciones en Roster, eliminar turnos y filtrar por empleado en el historial. Actualiza id_empleado y usuario_mail al cambiar de empleado en la edición de asistencia. Añade botón Limpiar para depurar la base local y descargar desde Google Sheets sin autollenado.
+- **Tablas afectadas**: `rosters`, `historial`, `1_asistencia_informada`.
+- **Reglas de negocio e invariantes**:
+  1. Tipos válidos de Roster: `Campo`, `Franco`, `Licencia`, `Vacaciones`. Licencia y Vacaciones computan 0 hs y tarifas en 0.
+  2. Al modificar el empleado de una asistencia, se actualizan obligatoriamente `empleado`, `id_empleado` y `usuario_mail` en local y Sheets.
+  3. Desactivado todo autollenado sintético de filas en Sheets (`reconciliar_rosters_con_historial` inerte). Solo los usuarios crean registros.
+  4. Botón Limpiar ejecuta borrado local transaccional y descarga completa desde Google Sheets.

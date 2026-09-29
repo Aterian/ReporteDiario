@@ -602,6 +602,22 @@ def obtener_id_empleado(nombre_o_dni: str) -> str:
     except Exception:
         return ""
 
+def obtener_email_empleado(nombre_o_dni: str) -> str:
+    """Busca el email asociado al nombre o DNI en la tabla usuarios_cache."""
+    if not nombre_o_dni:
+        return ""
+    val = nombre_o_dni.strip().lower()
+    try:
+        with obtener_conexion() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT email FROM usuarios_cache WHERE LOWER(dni) = ? OR LOWER(nombre) = ? LIMIT 1", (val, val))
+            row = cursor.fetchone()
+            if row and row["email"]:
+                return str(row["email"]).strip()
+    except Exception:
+        pass
+    return ""
+
 def obtener_id_proyecto(denominacion: str) -> str:
     """Busca el id_proyecto asociado a la denominación en la tabla proyectos_cache."""
     if not denominacion:
@@ -691,11 +707,13 @@ def actualizar_registro_asistencia(
     empleado: str = "",
     cargado_por: str = "",
     id_empleado: str = "",
-    id_proyecto: str = ""
+    id_proyecto: str = "",
+    usuario_mail: str = ""
 ) -> bool:
     """
     Actualiza un reporte de asistencia existente en historial
     y lo marca como pendiente de sincronizar (sincronizado=0, modificado=1).
+    Actualiza empleado, id_empleado y usuario_mail cuando el empleado cambia.
     """
     dia_sem = calcular_dia_semana(fecha)
     fer = "SI" if tipo_ocf.strip().lower() == "feriado trabajado" else es_fecha_feriado(fecha)
@@ -703,10 +721,18 @@ def actualizar_registro_asistencia(
 
     with obtener_conexion() as conn:
         cursor = conn.cursor()
-        cursor.execute("SELECT empleado, id_empleado, id_proyecto FROM historial WHERE id = ?", (id_registro,))
+        cursor.execute("SELECT empleado, id_empleado, id_proyecto, usuario_mail FROM historial WHERE id = ?", (id_registro,))
         row_ant = cursor.fetchone()
         emp_actual = empleado or (row_ant["empleado"] if row_ant else "")
-        emp_id = id_empleado or (row_ant["id_empleado"] if row_ant and row_ant["id_empleado"] else obtener_id_empleado(emp_actual))
+        cambio_empleado = bool(row_ant and empleado and empleado.strip().lower() != (row_ant["empleado"] or "").strip().lower())
+
+        if cambio_empleado:
+            emp_id = id_empleado or obtener_id_empleado(emp_actual)
+            emp_mail = usuario_mail or obtener_email_empleado(emp_actual)
+        else:
+            emp_id = id_empleado or (row_ant["id_empleado"] if row_ant and row_ant["id_empleado"] else obtener_id_empleado(emp_actual))
+            emp_mail = usuario_mail or (row_ant["usuario_mail"] if row_ant and row_ant["usuario_mail"] else obtener_email_empleado(emp_actual))
+
         proy_id = id_proyecto or obtener_id_proyecto(servicio)
 
         query = """
@@ -726,8 +752,11 @@ def actualizar_registro_asistencia(
         params = [fecha, tipo_ocf, tipo_ocf, servicio, horas, jornada_txt, dia_sem, fer, proy_id]
 
         if empleado:
-            query += ", empleado = ?, id_empleado = ?"
-            params.extend([empleado, emp_id])
+            query += ", empleado = ?, id_empleado = ?, usuario_mail = ?"
+            params.extend([empleado, emp_id, emp_mail])
+        elif usuario_mail:
+            query += ", usuario_mail = ?"
+            params.append(usuario_mail)
 
         if cargado_por:
             query += ", cargado_por = ?"
@@ -1043,95 +1072,17 @@ def guardar_registro_roster(datos: dict) -> dict:
 
 def reconciliar_rosters_con_historial() -> int:
     """
-    Verifica que cada turno registrado en la tabla rosters tenga todas sus jornadas
-    individuales cargadas en la tabla historial.
-    Si algún día del rango no existe en historial (por ejemplo, si fue purgado por error
-    o pendiente de sincronización), lo regenera con sincronizado=0 para que se suba
-    a Google Sheets y aparezca inmediatamente en el calendario personal de asistencia.
-    Retorna la cantidad de días restaurados.
+    [Desactivado por regla de negocio]: No se deben rellenar automáticamente registros
+    a la hoja de Google Sheets. Solo los usuarios pueden crear registros.
     """
-    from datetime import datetime as dt, timedelta
-    recuperados = 0
-    try:
-        with obtener_conexion() as conn:
-            cursor = conn.cursor()
-            cursor.execute("SELECT * FROM rosters")
-            rosters = cursor.fetchall()
-            
-            usuarios_cache = obtener_usuarios_cache() or []
-            mapa_mails = {}
-            for u in usuarios_cache:
-                nom = (u.get("nombre") or "").strip().lower()
-                m = (u.get("mail") or u.get("email") or "").strip()
-                if nom and m:
-                    mapa_mails[nom] = m
-
-            for r in rosters:
-                emp = str(r["empleado"] or "").strip()
-                f_ini = str(r["fecha_inicio"] or "").strip()
-                f_fin = str(r["fecha_fin"] or "").strip()
-                tipo = str(r["tipo"] or "Campo").strip()
-                proy = str(r["proyecto"] or "").strip()
-                
-                if not emp or not f_ini:
-                    continue
-
-                dias_rango = []
-                try:
-                    di = dt.strptime(f_ini, "%Y-%m-%d")
-                    df = dt.strptime(f_fin, "%Y-%m-%d") if f_fin else di
-                    if di > df:
-                        di, df = df, di
-                    curr = di
-                    while curr <= df:
-                        dias_rango.append(curr.strftime("%Y-%m-%d"))
-                        curr += timedelta(days=1)
-                except Exception:
-                    dias_rango = [f_ini]
-
-                es_campo = (tipo.lower() == "campo")
-                tipo_ocf = "Roster" if es_campo else "Franco"
-                horas = 8.0 if es_campo else 0.0
-                jornada_txt = f"{horas} hs" if horas > 0 else "Franco"
-                emp_id = obtener_id_empleado(emp)
-                proy_id = obtener_id_proyecto(proy) if proy else ""
-                mail = mapa_mails.get(emp.lower(), "")
-                ts_now = dt.now().strftime("%Y-%m-%d %H:%M:%S")
-
-                for d_str in dias_rango:
-                    cursor.execute("SELECT id FROM historial WHERE LOWER(empleado) = ? AND fecha = ?", (emp.lower(), d_str))
-                    row_h = cursor.fetchone()
-                    if not row_h:
-                        uid_asist = str(uuid.uuid4())
-                        dia_sem = calcular_dia_semana(d_str)
-                        fer = es_fecha_feriado(d_str)
-                        cursor.execute("""
-                            INSERT INTO historial (
-                                id_asistencia, empleado, fecha, tipo_ocf, servicio,
-                                horas, instrumental, usuario_mail, fecha_hora,
-                                lugar, jornada, dia_semana, feriado, modificado, sincronizado,
-                                cargado_por, id_empleado, id_proyecto
-                            )
-                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, 'RRHH', ?, ?)
-                        """, (
-                            uid_asist, emp, d_str, tipo_ocf, proy,
-                            horas, "", mail, ts_now,
-                            tipo_ocf, jornada_txt, dia_sem, fer,
-                            emp_id, proy_id
-                        ))
-                        recuperados += 1
-            if recuperados > 0:
-                conn.commit()
-                print(f"[BD] Se reconciliaron y recuperaron {recuperados} jornada(s) de Roster en historial.")
-    except Exception as e:
-        print(f"[BD] Error en reconciliar_rosters_con_historial: {e}")
-    return recuperados
+    return 0
 
 def purgar_rosters_huerfanos() -> int:
     """
     Elimina de la tabla rosters cualquier registro cuyos días ya no existan en historial.
     Esto garantiza que si se eliminaron filas de asistencia en Google Sheets (y por tanto
     se purgaron de historial), el registro de roster desaparezca automáticamente.
+    Soporta turnos de Campo (Roster), Franco, Licencia y Vacaciones.
     """
     try:
         with obtener_conexion() as conn:
@@ -1146,7 +1097,7 @@ def purgar_rosters_huerfanos() -> int:
                     WHERE empleado = ? 
                       AND fecha >= ? 
                       AND fecha <= ? 
-                      AND tipo_ocf IN ('Roster', 'Franco')
+                      AND tipo_ocf IN ('Roster', 'Franco', 'Licencia', 'Vacaciones')
                     """,
                     (f["empleado"], f["fecha_inicio"], f["fecha_fin"])
                 )
@@ -1165,8 +1116,8 @@ def purgar_rosters_huerfanos() -> int:
 def reconstruir_rosters_desde_historial() -> int:
     """
     Examina la tabla historial y reconstruye automáticamente en la tabla local 'rosters'
-    los bloques de planificación de Roster y Franco de obra que hayan sido sincronizados
-    desde Google Sheets (o cargados en otra computadora).
+    los bloques de planificación de Campo, Franco, Licencia y Vacaciones que hayan sido
+    sincronizados desde Google Sheets.
     Preserva registros y tarifas existentes sin duplicar.
     Retorna la cantidad de bloques de roster incorporados a la tabla rosters.
     """
@@ -1199,11 +1150,11 @@ def reconstruir_rosters_desde_historial() -> int:
                 for r in cursor.fetchall()
             }
 
-            # 4. Leer jornadas de historial que califiquen como Roster o Franco de obra
+            # 4. Leer jornadas de historial que califiquen como Roster, Franco, Vacaciones o Licencia
             cursor.execute("""
                 SELECT empleado, servicio, fecha, tipo_ocf
                 FROM historial
-                WHERE tipo_ocf = 'Roster' 
+                WHERE tipo_ocf IN ('Roster', 'Vacaciones', 'Licencia')
                    OR (tipo_ocf = 'Franco' AND servicio != '' AND servicio NOT IN ('Oficina', 'Administración', 'Área'))
                 ORDER BY LOWER(empleado), LOWER(servicio), fecha ASC
             """)
@@ -1219,7 +1170,18 @@ def reconstruir_rosters_desde_historial() -> int:
             for f in filas:
                 emp = f["empleado"].strip()
                 srv = f["servicio"].strip()
-                tipo_bd = "Campo" if f["tipo_ocf"].strip().lower() == "roster" else "Franco"
+                t_raw = f["tipo_ocf"].strip().lower()
+                if t_raw == "roster":
+                    tipo_bd = "Campo"
+                elif t_raw == "franco":
+                    tipo_bd = "Franco"
+                elif t_raw == "vacaciones":
+                    tipo_bd = "Vacaciones"
+                elif t_raw == "licencia":
+                    tipo_bd = "Licencia"
+                else:
+                    tipo_bd = f["tipo_ocf"].strip()
+
                 fec = datetime.strptime(f["fecha"].strip(), "%Y-%m-%d").date()
 
                 if current is None:

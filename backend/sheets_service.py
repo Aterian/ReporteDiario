@@ -736,3 +736,40 @@ def deduplicar_hoja_remota(spreadsheet_id: str = "") -> dict:
         return {"exito": False, "error": str(e)}
     finally:
         _sync_lock.release()
+
+
+def limpiar_y_descargar_desde_sheets(spreadsheet_id: str = "") -> dict:
+    """
+    Elimina los registros locales de historial y rosters para purgar cualquier
+    incongruencia o modificación indebida, y descarga nuevamente todos los registros
+    vigentes desde la hoja '1_asistencia_informada' de Google Sheets.
+    """
+    if not _sync_lock.acquire(blocking=True, timeout=60):
+        return {
+            "exito": False,
+            "error": "Ya existe una sincronización en curso. Por favor espere unos segundos."
+        }
+    try:
+        with obtener_conexion() as conn:
+            cursor = conn.cursor()
+            cursor.execute("DELETE FROM historial")
+            cursor.execute("DELETE FROM rosters")
+            conn.commit()
+
+        # Descargar directamente de Google Sheets
+        res = sincronizar_desde_sheets_hacia_local(spreadsheet_id)
+        # Reconstruir los bloques de rosters a partir del historial limpio descargado
+        reconstruir_rosters_desde_historial()
+
+        cant_ins = res.get("insertados", 0) if isinstance(res, dict) else 0
+        return {
+            "exito": True,
+            "mensaje": f"Base local limpiada y sincronizada: {cant_ins} registro(s) descargados desde Google Sheets.",
+            "total": cant_ins
+        }
+    except Exception as e:
+        print(f"[Sheets] Error en limpiar_y_descargar_desde_sheets: {e}")
+        return {"exito": False, "error": str(e)}
+    finally:
+        _sync_lock.release()
+

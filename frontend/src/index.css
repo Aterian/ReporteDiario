@@ -5167,6 +5167,32 @@ html, body {
   color: #c4b5fd;
 }
 
+.btn-type-pill.pill-vacaciones.active {
+  border-color: #d97706;
+  background: #fffbeb;
+  color: #b45309;
+}
+.btn-type-pill.pill-vacaciones.active .pill-dot {
+  background: #d97706;
+}
+[data-theme='dark'] .btn-type-pill.pill-vacaciones.active {
+  background: rgba(217, 119, 6, 0.25);
+  color: #fde68a;
+}
+
+.btn-type-pill.pill-licencia.active {
+  border-color: #dc2626;
+  background: #fef2f2;
+  color: #b91c1c;
+}
+.btn-type-pill.pill-licencia.active .pill-dot {
+  background: #dc2626;
+}
+[data-theme='dark'] .btn-type-pill.pill-licencia.active {
+  background: rgba(220, 38, 38, 0.25);
+  color: #fca5a5;
+}
+
 /* Tarifas */
 .tariffs-container {
   background: var(--bg-surface-hover);
@@ -5760,6 +5786,14 @@ html, body {
   background: #7c3aed;
   color: #ffffff;
 }
+.gantt-bar-cell.bar-vacaciones {
+  background: #d97706;
+  color: #ffffff;
+}
+.gantt-bar-cell.bar-licencia {
+  background: #dc2626;
+  color: #ffffff;
+}
 
 /* ==========================================================================
    VISTA: HISTORIAL Y EXPORTACIÓN EXCEL DE ROSTERS
@@ -5969,6 +6003,22 @@ html, body {
 [data-theme='dark'] .status-pill.status-franco {
   background: rgba(124, 58, 237, 0.2);
   color: #c4b5fd;
+}
+.status-pill.status-vacaciones {
+  background: #fef3c7;
+  color: #b45309;
+}
+.status-pill.status-licencia {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+[data-theme='dark'] .status-pill.status-vacaciones {
+  background: rgba(217, 119, 6, 0.2);
+  color: #fde68a;
+}
+[data-theme='dark'] .status-pill.status-licencia {
+  background: rgba(220, 38, 38, 0.2);
+  color: #fca5a5;
 }
 
 .btn-delete-roster {

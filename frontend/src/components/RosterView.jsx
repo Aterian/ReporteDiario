@@ -52,7 +52,7 @@ export default function RosterView({ usuario, onVolver, tema }) {
   const [empleadosSeleccionados, setEmpleadosSeleccionados] = useState([]);
   const [fechaInicio, setFechaInicio] = useState(getFechaHoy());
   const [fechaFin, setFechaFin] = useState(getFechaHoy());
-  const [tipo, setTipo] = useState('Campo'); // 'Campo' | 'Franco'
+  const [tipo, setTipo] = useState('Campo'); // 'Campo' | 'Franco' | 'Vacaciones' | 'Licencia'
   const [precioDia, setPrecioDia] = useState('');
   const [precioDomingo, setPrecioDomingo] = useState('');
 
@@ -82,6 +82,8 @@ export default function RosterView({ usuario, onVolver, tema }) {
   const [editPrecioDia, setEditPrecioDia] = useState('');
   const [editPrecioDomingo, setEditPrecioDomingo] = useState('');
   const [guardandoEdit, setGuardandoEdit] = useState(false);
+  const [eliminandoEdit, setEliminandoEdit] = useState(false);
+  const [limpiando, setLimpiando] = useState(false);
 
   const handleAbrirEditarGantt = (r) => {
     if (!r) return;
@@ -94,6 +96,32 @@ export default function RosterView({ usuario, onVolver, tema }) {
     setEditPrecioDia(r.precio_dia != null ? String(r.precio_dia) : '');
     setEditPrecioDomingo(r.precio_domingo != null ? String(r.precio_domingo) : '');
     setModalEditar(true);
+  };
+
+  const handleEliminarTurnoGantt = async () => {
+    if (!editId) return;
+    if (!window.confirm(`¿Estás seguro de eliminar el registro de roster de ${editEmpleado}?`)) {
+      return;
+    }
+    setEliminandoEdit(true);
+    try {
+      const res = await api.eliminarRoster(editId);
+      if (res && res.exito) {
+        setModalEditar(false);
+        setMensajeFeedback({
+          tipo: 'exito',
+          texto: `Turno de roster de ${editEmpleado} eliminado correctamente.`
+        });
+        await cargarRostersMes(anioGantt, mesGantt);
+      } else {
+        alert(res?.error || 'No se pudo eliminar el registro de roster.');
+      }
+    } catch (err) {
+      console.error(err);
+      alert('Error de conexión al eliminar el turno.');
+    } finally {
+      setEliminandoEdit(false);
+    }
   };
 
   const handleGuardarEdicionGantt = async (e) => {
@@ -285,6 +313,36 @@ export default function RosterView({ usuario, onVolver, tema }) {
     } finally {
       await cargarRostersMes(anioGantt, mesGantt);
       setRefrescando(false);
+    }
+  };
+
+  // Manejo de limpiar local: elimina datos locales y descarga de Google Sheets
+  const handleLimpiarLocalYDescargar = async () => {
+    if (!window.confirm('¿Deseas limpiar todos los registros locales y volver a descargar la información oficial desde Google Sheets? Esta acción descarta cambios locales no sincronizados y evita duplicados.')) {
+      return;
+    }
+    setLimpiando(true);
+    setMensajeFeedback(null);
+    try {
+      localStorage.removeItem('ingeap_rosters_mock');
+      const res = await api.limpiarYDescargarSheets();
+      if (res && res.exito) {
+        setMensajeFeedback({
+          tipo: 'exito',
+          texto: res.mensaje || 'Registros locales limpiados y actualizados exitosamente desde Google Sheets.'
+        });
+        await cargarRostersMes(anioGantt, mesGantt);
+      } else {
+        setMensajeFeedback({
+          tipo: 'error',
+          texto: res?.error || 'No se pudo completar la limpieza y descarga.'
+        });
+      }
+    } catch (err) {
+      console.error(err);
+      setMensajeFeedback({ tipo: 'error', texto: 'Error de comunicación al limpiar y descargar.' });
+    } finally {
+      setLimpiando(false);
     }
   };
 
@@ -505,7 +563,7 @@ export default function RosterView({ usuario, onVolver, tema }) {
             type="button"
             className={`btn-roster-refresh ${refrescando ? 'btn-refresh-spinning' : ''}`}
             onClick={handleRefrescar}
-            disabled={refrescando || cargandoRosters}
+            disabled={refrescando || cargandoRosters || limpiando}
             title="Refrescar y sincronizar con Google Sheets"
           >
             <svg
@@ -524,6 +582,30 @@ export default function RosterView({ usuario, onVolver, tema }) {
               <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
             </svg>
             {refrescando ? 'Sincronizando...' : 'Refrescar'}
+          </button>
+
+          {/* Botón Limpiar: Purga datos locales y descarga directamente de Google Sheets */}
+          <button
+            type="button"
+            className="btn-roster-refresh"
+            onClick={handleLimpiarLocalYDescargar}
+            disabled={refrescando || cargandoRosters || limpiando}
+            title="Eliminar registros locales y descargar registros oficiales desde Google Sheets para evitar duplicados"
+          >
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className={limpiando ? 'spinner' : ''}
+            >
+              <path d="M3 6h18m-2 0v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6m3 0V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
+            </svg>
+            {limpiando ? 'Limpiando...' : 'Limpiar'}
           </button>
 
           {/* NUEVO: Botón para exportar Excel directo desde esta ventana */}
@@ -714,7 +796,7 @@ export default function RosterView({ usuario, onVolver, tema }) {
                 </div>
               </div>
 
-              {/* 4. ESTADO DE ROSTER: CAMPO O FRANCO */}
+              {/* 4. ESTADO DE ROSTER: CAMPO, FRANCO, VACACIONES O LICENCIA */}
               <div className="form-group-roster">
                 <label className="roster-label">
                   <span className="roster-label-num">4</span>
@@ -736,6 +818,22 @@ export default function RosterView({ usuario, onVolver, tema }) {
                   >
                     <span className="pill-dot"></span>
                     🏠 Días de Franco
+                  </button>
+                  <button
+                    type="button"
+                    className={`btn-type-pill pill-vacaciones ${tipo === 'Vacaciones' ? 'active' : ''}`}
+                    onClick={() => setTipo('Vacaciones')}
+                  >
+                    <span className="pill-dot"></span>
+                    🏖️ Vacaciones
+                  </button>
+                  <button
+                    type="button"
+                    className={`btn-type-pill pill-licencia ${tipo === 'Licencia' ? 'active' : ''}`}
+                    onClick={() => setTipo('Licencia')}
+                  >
+                    <span className="pill-dot"></span>
+                    🏥 Licencia
                   </button>
                 </div>
               </div>
@@ -1125,12 +1223,32 @@ export default function RosterView({ usuario, onVolver, tema }) {
                                 >
                                   {rInfo && (
                                     <div
-                                      className={`gantt-bar-cell ${rInfo.tipo === 'Campo' ? 'bar-campo' : 'bar-franco'}`}
-                                      title={`${rInfo.tipo === 'Campo' ? '🚜 Campo / Obra' : '🏠 Franco'}\nEmpleado: ${emp.nombre}\nProyecto: ${rInfo.proyecto}\nTarifa día: $${rInfo.precio_dia || 0} | Dom: $${rInfo.precio_domingo || 0}\n\n(Click para modificar este turno)`}
+                                      className={`gantt-bar-cell ${
+                                        rInfo.tipo === 'Campo'
+                                          ? 'bar-campo'
+                                          : rInfo.tipo === 'Franco'
+                                          ? 'bar-franco'
+                                          : rInfo.tipo === 'Vacaciones'
+                                          ? 'bar-vacaciones'
+                                          : 'bar-licencia'
+                                      }`}
+                                      title={`${
+                                        rInfo.tipo === 'Campo'
+                                          ? '🚜 Campo / Obra'
+                                          : rInfo.tipo === 'Franco'
+                                          ? '🏠 Franco'
+                                          : rInfo.tipo === 'Vacaciones'
+                                          ? '🏖️ Vacaciones'
+                                          : '🏥 Licencia'
+                                      }\nEmpleado: ${emp.nombre}\nProyecto: ${rInfo.proyecto}${
+                                        rInfo.tipo === 'Campo'
+                                          ? `\nTarifa día: $${rInfo.precio_dia || 0} | Dom: $${rInfo.precio_domingo || 0}`
+                                          : ''
+                                      }\n\n(Click para modificar o eliminar este turno)`}
                                       onClick={() => handleAbrirEditarGantt(rInfo)}
                                       style={{ cursor: 'pointer' }}
                                     >
-                                      {rInfo.tipo === 'Campo' ? 'C' : 'F'}
+                                      {rInfo.tipo === 'Campo' ? 'C' : rInfo.tipo === 'Franco' ? 'F' : rInfo.tipo === 'Vacaciones' ? 'V' : 'L'}
                                     </div>
                                   )}
                                 </td>
@@ -1308,6 +1426,20 @@ export default function RosterView({ usuario, onVolver, tema }) {
                   >
                     🏠 Franco / Descanso
                   </button>
+                  <button
+                    type="button"
+                    className={`btn-type-pill pill-vacaciones ${editTipo === 'Vacaciones' ? 'active' : ''}`}
+                    onClick={() => setEditTipo('Vacaciones')}
+                  >
+                    🏖️ Vacaciones
+                  </button>
+                  <button
+                    type="button"
+                    className={`btn-type-pill pill-licencia ${editTipo === 'Licencia' ? 'active' : ''}`}
+                    onClick={() => setEditTipo('Licencia')}
+                  >
+                    🏥 Licencia
+                  </button>
                 </div>
               </div>
 
@@ -1341,23 +1473,42 @@ export default function RosterView({ usuario, onVolver, tema }) {
                 </div>
               )}
 
-              <div className="roster-modal-footer" style={{ marginTop: '12px' }}>
+              <div className="roster-modal-footer" style={{ marginTop: '12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                 <button
                   type="button"
-                  className="btn-modal-cancel"
-                  disabled={guardandoEdit}
-                  onClick={() => setModalEditar(false)}
+                  className="btn-modal-delete"
+                  disabled={guardandoEdit || eliminandoEdit}
+                  onClick={handleEliminarTurnoGantt}
+                  style={{
+                    background: 'transparent',
+                    border: '1px solid #ef4444',
+                    color: '#ef4444',
+                    padding: '8px 14px',
+                    borderRadius: '6px',
+                    cursor: 'pointer',
+                    fontWeight: '600'
+                  }}
                 >
-                  Cancelar
+                  {eliminandoEdit ? 'Eliminando...' : '🗑️ Eliminar Turno'}
                 </button>
-                <button
-                  type="submit"
-                  className="btn-modal-confirm"
-                  disabled={guardandoEdit}
-                  style={{ background: '#2563eb' }}
-                >
-                  {guardandoEdit ? 'Guardando...' : 'Guardar Modificación'}
-                </button>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <button
+                    type="button"
+                    className="btn-modal-cancel"
+                    disabled={guardandoEdit || eliminandoEdit}
+                    onClick={() => setModalEditar(false)}
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="submit"
+                    className="btn-modal-confirm"
+                    disabled={guardandoEdit || eliminandoEdit}
+                    style={{ background: '#2563eb' }}
+                  >
+                    {guardandoEdit ? 'Guardando...' : 'Guardar Modificación'}
+                  </button>
+                </div>
               </div>
             </form>
           </div>
