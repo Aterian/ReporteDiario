@@ -47,7 +47,8 @@ from database import (
     actualizar_tipo_costo_lote,
     obtener_modificaciones_recientes,
     obtener_resumen_modificaciones,
-    obtener_estado_diario_empleados
+    obtener_estado_diario_empleados,
+    obtener_actividad_dia_anterior
 )
 from roster_export import generar_excel_roster_mes
 from sheets_service import (
@@ -77,7 +78,7 @@ EMPLEADOS_AUTORIZADOS = [
     {"nombre": "Rocío Salim", "dni": "37880578", "mail": "rsalim@ingeap.com", "area": "M"},
     {"nombre": "Daiana Ferrero", "dni": "37875017", "mail": "of.tecnica@ingeap.com", "area": "M"},
     {"nombre": "Marco Regis", "dni": "38337660", "mail": "sge@ingeap.com", "area": "A"},
-    {"nombre": "Iván Valentin", "dni": "40158951", "mail": "sge@ingeap.com", "area": "A"},
+    {"nombre": "Iván Valentin", "dni": "40158951", "mail": "ivangvalentin97@gmail.com", "area": "A"},
     {"nombre": "Lionel Juarez", "dni": "43008805", "mail": "ljuarez@ingeap.com", "area": "A"},
     {"nombre": "Santiago Destefanis", "dni": "36580770", "mail": "sdestefanis@ingeap.com", "area": "N"},
     {"nombre": "Justina Bertolozzi", "dni": "45411162", "mail": "rrhh@ingeap.com", "area": "RRHH"},
@@ -191,7 +192,7 @@ def es_ivan_valentin(usuario: dict | None) -> bool:
     mail = _normalizar_texto(usuario.get("mail") or usuario.get("email"))
     dni = str(usuario.get("dni") or "").strip()
     return (("valentin" in nombre and ("ivan" in nombre or "iván" in nombre)) or
-            mail == "sge@ingeap.com" or
+            mail in ("ivangvalentin97@gmail.com", "sge@ingeap.com") or
             dni == "40158951")
 
 def es_justina_bertolozzi(usuario: dict | None) -> bool:
@@ -506,6 +507,21 @@ class ApiPuente:
             fechas_a_cargar = [str(f).strip() for f in datos["fechas"] if f]
         else:
             fechas_a_cargar = [fecha_inicio]
+
+        # [FN-01.06] Restricción de fechas a la semana activa para empleados regulares
+        es_exento_fecha = es_rrhh or es_ivan_valentin(sesion) or (cargado_por and es_rrhh)
+        if not es_exento_fecha:
+            from datetime import timedelta
+            hoy_dt = datetime.now()
+            lunes_dt = hoy_dt - timedelta(days=hoy_dt.weekday())
+            fecha_lunes_str = lunes_dt.strftime("%Y-%m-%d")
+
+            for f_val in fechas_a_cargar:
+                if f_val < fecha_lunes_str:
+                    return {
+                        "exito": False,
+                        "error": f"Acceso restringido: Solo puedes registrar asistencias correspondientes a la semana activa (desde el lunes {fecha_lunes_str})."
+                    }
 
         proyectos = datos.get("proyectos")
         lugar_norm = lugar.strip().lower()
@@ -832,6 +848,19 @@ class ApiPuente:
             }
 
         fecha = str(datos.get("fecha", "")).strip()
+
+        # [FN-01.06] Restricción de modificación a la semana activa para empleados regulares
+        if not (es_justina_bertolozzi(sesion) or es_ivan_valentin(sesion) or es_area_rrhh(sesion)):
+            from datetime import timedelta
+            hoy_dt = datetime.now()
+            lunes_dt = hoy_dt - timedelta(days=hoy_dt.weekday())
+            fecha_lunes_str = lunes_dt.strftime("%Y-%m-%d")
+            if fecha < fecha_lunes_str:
+                return {
+                    "exito": False,
+                    "error": f"Acceso restringido: Solo puedes modificar asistencias correspondientes a la semana activa (desde el lunes {fecha_lunes_str})."
+                }
+
         lugar = str(datos.get("lugar") or datos.get("tipo_ocf", "")).strip()
         servicio = str(datos.get("servicio", "")).strip()
         empleado = str(datos.get("empleado", "")).strip()
@@ -940,6 +969,14 @@ class ApiPuente:
         if not puede_ver_historial_otros(sesion):
             return []
         return obtener_todos_registros_empleado(empleado=empleado, mes_anio=mes_anio)
+
+    # [FN-06.05] Actividad de ayer estilo usuarios conectados
+    def obtener_actividad_dia_anterior(self):
+        """Retorna el estado de asistencia de todos los colaboradores para el día anterior (ayer)."""
+        sesion = obtener_sesion_activa()
+        if not puede_ver_historial_otros(sesion):
+            return {"fecha": "", "total": 0, "enviados": 0, "pendientes": 0, "usuarios": []}
+        return obtener_actividad_dia_anterior()
 
     def eliminar_registro_asistencia(self, id_registro: int | str):
         """Elimina un reporte de asistencia localmente y dispara el borrado en Google Sheets."""
@@ -1424,7 +1461,7 @@ def obtener_icono_tray():
     return crear_icono_calendario(64)
 
 
-APP_VERSION = "1.5.0"
+APP_VERSION = "1.6.0"
 
 _mutex_instancia = None
 
@@ -1502,16 +1539,169 @@ def asegurar_inicio_automatico():
             print(f"[AutoStart] Error registrando en Windows Run: {e}")
 
 
+# [FN-03.06] Verificación de Actualizaciones Remotas desde GitHub Releases
 def verificar_actualizacion_github():
-    """Consulta de actualizaciones automáticas deshabilitada por configuración del usuario."""
+    """
+    Consulta el repositorio oficial de GitHub buscando la última versión publicada.
+    Retorna si hay actualización disponible, versión actual, versión nueva y URL de descarga.
+    """
+    try:
+        cfg = cargar_configuracion()
+        repo = cfg.get("github_repo", "Aterian/ReporteDiario")
+        if not repo:
+            return {"actualizacion_disponible": False, "version_actual": APP_VERSION}
+
+        url = f"https://api.github.com/repos/{repo}/releases/latest"
+        req = urllib.request.Request(
+            url,
+            headers={
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) CheckDiarioIngeap-App",
+                "Accept": "application/vnd.github.v3+json"
+            }
+        )
+        import ssl
+        ctx = ssl.create_default_context()
+        with urllib.request.urlopen(req, timeout=6, context=ctx) as response:
+            data = json.loads(response.read().decode("utf-8"))
+            tag_name = data.get("tag_name", "").strip()
+            version_remota = tag_name.lstrip("v").strip()
+            assets = data.get("assets", [])
+
+            # Buscar binario ejecutable (.exe)
+            exe_asset = next(
+                (a for a in assets if "checkdiarioingeap" in a.get("name", "").lower() and a.get("name", "").lower().endswith(".exe")),
+                next((a for a in assets if a.get("name", "").lower().endswith(".exe")), None)
+            )
+            url_descarga = exe_asset.get("browser_download_url", "") if exe_asset else ""
+
+            def parse_ver(v_str):
+                partes = []
+                for p in v_str.split("."):
+                    try:
+                        partes.append(int(p))
+                    except ValueError:
+                        partes.append(0)
+                return tuple(partes)
+
+            es_mas_nueva = parse_ver(version_remota) > parse_ver(APP_VERSION)
+
+            if es_mas_nueva and url_descarga:
+                return {
+                    "actualizacion_disponible": True,
+                    "version_actual": APP_VERSION,
+                    "version_nueva": version_remota,
+                    "notas": data.get("body", "") or "Mejoras y correcciones en esta versión.",
+                    "url_descarga": url_descarga
+                }
+    except Exception as e:
+        print(f"[AutoUpdate] Verificación de actualización remota omitida: {e}")
+
     return {"actualizacion_disponible": False, "version_actual": APP_VERSION}
+
+
+# [FN-03.07] Mecanismo de Actualización Desacoplado para Windows 11 / Windows 10
+def ejecutar_modo_actualizador(argv: list):
+    """
+    Subproceso actualizador independiente. Evita inspección dinámica del proceso padre
+    y resuelve condiciones de carrera en Windows 11 recibiendo parámetros explícitos vía CLI:
+      --updater --parent-pid <PID> --target-dir "<DIR>" --update-file "<FILE>"
+    """
+    import argparse
+    import shutil
+    import ctypes
+
+    parser = argparse.ArgumentParser(description="Actualizador Check Diario Ingeap")
+    parser.add_argument("--updater", action="store_true")
+    parser.add_argument("--parent-pid", type=int, required=True)
+    parser.add_argument("--target-dir", type=str, required=True)
+    parser.add_argument("--update-file", type=str, required=True)
+
+    args, _ = parser.parse_known_args(argv[1:])
+    parent_pid = args.parent_pid
+    target_dir = os.path.abspath(args.target_dir)
+    update_file = os.path.abspath(args.update_file)
+    target_exe = os.path.join(target_dir, "CheckDiarioIngeap.exe")
+
+    # 1. Espera activa explícita al proceso padre mediante la API nativa de Windows
+    SYNCHRONIZE = 0x00100000
+    kernel32 = ctypes.windll.kernel32
+    h_proc = kernel32.OpenProcess(SYNCHRONIZE, False, parent_pid)
+    if h_proc:
+        kernel32.WaitForSingleObject(h_proc, 30000)
+        kernel32.CloseHandle(h_proc)
+
+    time.sleep(1)
+
+    # 2. Bucle de sustitución con reintentos para tolerar el escaneo en tiempo real de Windows Defender
+    reemplazo_exitoso = False
+    for _ in range(25):
+        try:
+            shutil.copy2(update_file, target_exe)
+            reemplazo_exitoso = True
+            break
+        except Exception:
+            try:
+                subprocess.run(
+                    ["taskkill", "/F", "/IM", "CheckDiarioIngeap.exe"],
+                    capture_output=True,
+                    creationflags=subprocess.CREATE_NO_WINDOW if hasattr(subprocess, "CREATE_NO_WINDOW") else 0
+                )
+            except Exception:
+                pass
+            time.sleep(1)
+
+    if not reemplazo_exitoso:
+        try:
+            ctypes.windll.user32.MessageBoxW(
+                0,
+                "No fue posible completar el reemplazo del archivo ejecutable.\n"
+                "Por favor ejecuta el instalador manualmente para actualizar.",
+                "Actualización - Check Diario",
+                0x10  # MB_ICONERROR
+            )
+        except Exception:
+            pass
+        return
+
+    # 3. Quitar Zone.Identifier (SmartScreen) del binario sustituido
+    no_window_flag = subprocess.CREATE_NO_WINDOW if hasattr(subprocess, "CREATE_NO_WINDOW") else 0
+    try:
+        subprocess.run(
+            ["powershell", "-NoProfile", "-NonInteractive", "-Command", f"Unblock-File -LiteralPath '{target_exe}' -ErrorAction SilentlyContinue"],
+            creationflags=no_window_flag,
+            timeout=5
+        )
+    except Exception:
+        pass
+
+    # 4. Limpieza del archivo temporal descargado
+    try:
+        if os.path.exists(update_file) and os.path.abspath(update_file) != os.path.abspath(target_exe):
+            os.remove(update_file)
+    except Exception:
+        pass
+
+    # 5. Reinicio de la aplicación actualizada con entorno rigurosamente limpio
+    clean_env = os.environ.copy()
+    for k in list(clean_env.keys()):
+        if k.startswith(("_MEI", "_PYI", "PYINSTALLER")):
+            clean_env.pop(k, None)
+    clean_env["PYINSTALLER_RESET_ENVIRONMENT"] = "1"
+
+    flags = 0
+    if hasattr(subprocess, "CREATE_NEW_PROCESS_GROUP"):
+        flags |= subprocess.CREATE_NEW_PROCESS_GROUP
+    if hasattr(subprocess, "DETACHED_PROCESS"):
+        flags |= subprocess.DETACHED_PROCESS
+
+    subprocess.Popen([target_exe, "--post-update"], cwd=target_dir, env=clean_env, creationflags=flags)
 
 
 def ejecutar_descarga_y_reinicio(url_descarga: str):
     """
-    Descarga el nuevo .exe en TEMP y ejecuta el reemplazo en segundo plano.
-    Diseñado específicamente para compatibilidad total con Windows 11, evitando bloqueos
-    por escaneo en tiempo real de Microsoft Defender y permisos de SmartScreen.
+    Descarga el nuevo .exe en TEMP y lanza el actualizador independiente con paso explícito
+    de parámetros CLI (--parent-pid, --target-dir, --update-file) y entorno limpio,
+    previniendo el error de inspección de proceso padre en Windows 11.
     """
     if not getattr(sys, "frozen", False):
         return {"exito": False, "error": "La actualización automática solo aplica sobre el ejecutable (.exe)."}
@@ -1532,7 +1722,6 @@ def ejecutar_descarga_y_reinicio(url_descarga: str):
         with urllib.request.urlopen(req, timeout=120, context=ctx) as resp, open(nuevo_exe, "wb") as f:
             f.write(resp.read())
 
-        # Desbloquear permisos de Windows 11 SmartScreen en el archivo recién descargado (quitar Zone.Identifier)
         no_window_flag = subprocess.CREATE_NO_WINDOW if hasattr(subprocess, "CREATE_NO_WINDOW") else 0
         try:
             subprocess.run(
@@ -1545,60 +1734,7 @@ def ejecutar_descarga_y_reinicio(url_descarga: str):
 
         ruta_actual_exe = sys.executable
         dir_actual_exe = os.path.dirname(ruta_actual_exe)
-        ruta_bat = os.path.join(temp_dir, "update_check_diario.bat")
-
-        # Script Batch robusto con bucle de espera y reintentos (hasta 30 segundos)
-        # para tolerar el escaneo en tiempo real de Microsoft Defender y la liberación de locks de Windows 11
-        contenido_bat = f"""@echo off
-setlocal enabledelayedexpansion
-
-:: 1. Finalizar cualquier proceso previo para liberar bloqueos del binario
-taskkill /F /IM CheckDiarioIngeap.exe >nul 2>&1
-
-:: 2. Bucle de reintentos de reemplazo (espera a que Defender y Windows liberen el archivo)
-set INTENTO=0
-:INTENTO_COPIA
-set /a INTENTO+=1
-timeout /t 1 /nobreak >nul
-
-copy /y "{nuevo_exe}" "{ruta_actual_exe}" >nul 2>&1
-if !ERRORLEVEL! equ 0 goto EXITO_COPIA
-
-:: Reintentar forzar cierre si continúa ocupado
-taskkill /F /IM CheckDiarioIngeap.exe >nul 2>&1
-
-if !INTENTO! lss 30 goto INTENTO_COPIA
-
-:: Registro de diagnóstico en caso de fallo
-echo [ERROR] No se pudo reemplazar CheckDiarioIngeap.exe tras 30 intentos. > "%TEMP%\\checkdiario_update_fail.log"
-goto LIMPIEZA
-
-:EXITO_COPIA
-:: 3. Limpiar archivo temporal de descarga
-del /f /q "{nuevo_exe}" >nul 2>&1
-
-:: 4. Desbloquear la aplicación actualizada para Windows 11 SmartScreen (quitar Zone.Identifier)
-powershell -NoProfile -ExecutionPolicy Bypass -Command "Unblock-File -LiteralPath '{ruta_actual_exe}' -ErrorAction SilentlyContinue" >nul 2>&1
-
-:: 5. Limpiar variables de entorno de PyInstaller para asegurar inicio limpio
-set _MEIPASS=
-set _MEIPASS2=
-set _PYI_APPLICATION_HOME_DIR=
-set _PYI_PARENT_PROCESS_LEVEL=
-set _PYI_ARCHIVE_FILE=
-set _PYI_SPLASH_IPC=
-set PYINSTALLER_RESET_ENVIRONMENT=1
-
-:: 6. Lanzar la aplicación desde su carpeta oficial de instalación
-cd /d "{dir_actual_exe}"
-start "" /D "{dir_actual_exe}" "{ruta_actual_exe}"
-timeout /t 1 /nobreak >nul
-
-:LIMPIEZA
-del "%~f0" >nul 2>&1
-"""
-        with open(ruta_bat, "w", encoding="utf-8") as f:
-            f.write(contenido_bat)
+        mi_pid = os.getpid()
 
         clean_env = os.environ.copy()
         for k in list(clean_env.keys()):
@@ -1606,7 +1742,21 @@ del "%~f0" >nul 2>&1
                 clean_env.pop(k, None)
         clean_env["PYINSTALLER_RESET_ENVIRONMENT"] = "1"
 
-        subprocess.Popen(["cmd.exe", "/c", ruta_bat], env=clean_env, creationflags=no_window_flag)
+        flags = 0
+        if hasattr(subprocess, "CREATE_NEW_PROCESS_GROUP"):
+            flags |= subprocess.CREATE_NEW_PROCESS_GROUP
+        if hasattr(subprocess, "DETACHED_PROCESS"):
+            flags |= subprocess.DETACHED_PROCESS
+
+        cmd = [
+            nuevo_exe,
+            "--updater",
+            "--parent-pid", str(mi_pid),
+            "--target-dir", dir_actual_exe,
+            "--update-file", nuevo_exe
+        ]
+
+        subprocess.Popen(cmd, cwd=temp_dir, env=clean_env, creationflags=flags)
         os._exit(0)
     except Exception as e:
         return {"exito": False, "error": str(e)}
@@ -1777,5 +1927,8 @@ def main():
 if __name__ == "__main__":
     import multiprocessing
     multiprocessing.freeze_support()
+    if "--updater" in sys.argv:
+        ejecutar_modo_actualizador(sys.argv)
+        sys.exit(0)
     asegurar_instancia_unica()
     main()

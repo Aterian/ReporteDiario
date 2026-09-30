@@ -253,6 +253,11 @@ def inicializar_bd():
             )
         """)
 
+        # Actualización de email oficial para Iván Valentin
+        cursor.execute("UPDATE usuarios_cache SET mail = 'ivangvalentin97@gmail.com' WHERE dni = '40158951' OR LOWER(nombre) LIKE '%valentin%'")
+        cursor.execute("UPDATE sesion SET mail = 'ivangvalentin97@gmail.com' WHERE dni = '40158951' OR LOWER(nombre) LIKE '%valentin%'")
+        cursor.execute("UPDATE perfiles_empleados SET mail = 'ivangvalentin97@gmail.com' WHERE dni = '40158951' OR LOWER(nombre) LIKE '%valentin%'")
+
         conn.commit()
 
 def obtener_avatar_por_dni(dni: str) -> str:
@@ -882,12 +887,11 @@ def eliminar_registro_asistencia(id_registro: int) -> dict:
 
 def obtener_historial_otros_empleados(usuario_rrhh: str = "", filtro_empleado: str = "") -> list:
     """
-    Retorna los registros de historial cargados por personal de RRHH para otros empleados.
-    Muestra los registros cargados por el usuario o para otros empleados delegados.
+    Retorna el listado completo de registros de asistencia histórica para supervisión de RRHH,
+    con soporte para filtrar por un empleado específico o consultar todos los registros.
     """
     with obtener_conexion() as conn:
         cursor = conn.cursor()
-        u_clean = (usuario_rrhh or "").strip().lower()
         query = """
             SELECT 
                 id,
@@ -913,22 +917,108 @@ def obtener_historial_otros_empleados(usuario_rrhh: str = "", filtro_empleado: s
                 sincronizado,
                 creado_en
             FROM historial
-            WHERE (
-                (cargado_por != '' AND LOWER(cargado_por) != LOWER(empleado))
-                OR (cargado_por != '' AND LOWER(cargado_por) = ?)
-                OR (cargado_por = '' AND ? != '' AND LOWER(empleado) != ?)
-            )
+            WHERE 1=1
         """
-        params = [u_clean, u_clean, u_clean]
+        params = []
 
         if filtro_empleado and filtro_empleado.strip().upper() != "TODOS":
             query += " AND LOWER(empleado) = ?"
             params.append(filtro_empleado.strip().lower())
 
-        query += " ORDER BY fecha DESC, id DESC LIMIT 200"
+        query += " ORDER BY fecha DESC, id DESC LIMIT 500"
         cursor.execute(query, params)
         filas = cursor.fetchall()
         return [dict(f) for f in filas]
+
+
+# [FN-06.05] Consulta de Actividad del Día Anterior para Gestión RRHH
+def obtener_actividad_dia_anterior() -> dict:
+    """
+    Consulta el estado de registro de los colaboradores para el día anterior (ayer).
+    Estilo 'usuarios conectados':
+    - Verde: el colaborador registró al menos una asistencia para la fecha de ayer.
+    - Gris: el colaborador no cuenta con registros para la fecha de ayer.
+    """
+    from datetime import timedelta
+    ayer_dt = datetime.now() - timedelta(days=1)
+    fecha_ayer = ayer_dt.strftime("%Y-%m-%d")
+
+    with obtener_conexion() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT nombre, dni, mail, area FROM usuarios_cache ORDER BY nombre ASC")
+        usuarios = cursor.fetchall()
+
+        if not usuarios:
+            return {"fecha": fecha_ayer, "total": 0, "enviados": 0, "pendientes": 0, "usuarios": []}
+
+        cursor.execute("""
+            SELECT 
+                LOWER(empleado) as emp_lower,
+                empleado,
+                tipo_ocf,
+                lugar,
+                servicio,
+                horas,
+                hora_inicio,
+                hora_fin
+            FROM historial
+            WHERE fecha = ?
+        """, (fecha_ayer,))
+        regs = cursor.fetchall()
+
+        mapa_regs = {}
+        for r in regs:
+            emp_k = r["emp_lower"]
+            if emp_k not in mapa_regs:
+                mapa_regs[emp_k] = []
+            mapa_regs[emp_k].append(r)
+
+        lista_res = []
+        enviados = 0
+
+        for u in usuarios:
+            nom = u["nombre"].strip()
+            nom_k = nom.lower()
+            dni = str(u["dni"] or "").strip()
+            area = str(u["area"] or "").strip()
+            mail = str(u["mail"] or "").strip()
+            avatar = obtener_avatar_por_dni(dni)
+
+            tiene_check = nom_k in mapa_regs and len(mapa_regs[nom_k]) > 0
+            if tiene_check:
+                enviados += 1
+                detalles = mapa_regs[nom_k]
+                primer = detalles[0]
+                lug = primer["tipo_ocf"] or primer["lugar"] or "Oficina"
+                serv = primer["servicio"] or ""
+                hrs = sum(float(x["horas"] or 0) for x in detalles)
+            else:
+                lug = ""
+                serv = ""
+                hrs = 0.0
+
+            lista_res.append({
+                "nombre": nom,
+                "dni": dni,
+                "area": area,
+                "mail": mail,
+                "avatar": avatar,
+                "registro_ayer": tiene_check,
+                "lugar": lug,
+                "servicio": serv,
+                "horas": hrs,
+                "cantidad_registros": len(mapa_regs.get(nom_k, []))
+            })
+
+        pendientes = len(usuarios) - enviados
+
+        return {
+            "fecha": fecha_ayer,
+            "total": len(usuarios),
+            "enviados": enviados,
+            "pendientes": pendientes,
+            "usuarios": lista_res
+        }
 
 def obtener_todos_registros_empleado(empleado: str, mes_anio: str = "") -> list:
     """

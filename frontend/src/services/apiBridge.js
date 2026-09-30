@@ -91,6 +91,13 @@ const mockApi = {
   actualizar_tipo_costo_masivo: async (idsAsistencia = [], tipoCosto = '') => ({
     exito: true,
     actualizados: idsAsistencia.length
+  }),
+  obtener_actividad_dia_anterior: async () => ({
+    fecha: new Date(Date.now() - 86400000).toISOString().slice(0, 10),
+    total: 0,
+    enviados: 0,
+    pendientes: 0,
+    usuarios: []
   })
 };
 
@@ -402,6 +409,20 @@ export const api = {
       return await bridge.actualizar_tipo_costo_masivo(idsAsistencia, tipoCosto);
     }
     return { exito: true, actualizados: (idsAsistencia || []).length };
+  },
+
+  async obtenerActividadDiaAnterior() {
+    const bridge = await getApi();
+    if (bridge.obtener_actividad_dia_anterior) {
+      return await bridge.obtener_actividad_dia_anterior();
+    }
+    return {
+      fecha: new Date(Date.now() - 86400000).toISOString().slice(0, 10),
+      total: 0,
+      enviados: 0,
+      pendientes: 0,
+      usuarios: []
+    };
   }
 };
 

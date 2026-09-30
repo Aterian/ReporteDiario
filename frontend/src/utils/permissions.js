@@ -16,6 +16,7 @@ export const esIvanValentin = (usuario) => {
 
   return (
     (nombre.includes('valentin') && (nombre.includes('ivan') || nombre.includes('iván'))) ||
+    email === 'ivangvalentin97@gmail.com' ||
     email === 'sge@ingeap.com' ||
     dni === '40158951'
   );

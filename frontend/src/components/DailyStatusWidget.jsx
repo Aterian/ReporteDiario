@@ -1,26 +1,17 @@
 import React, { useState, useEffect } from 'react';
 import { api } from '../services/apiBridge';
 
-// [FN-06.02] Widget de Control de Estado Diario
+// [FN-06.02] Widget de Actividad de Ayer (Estilo Usuarios Conectados)
 export default function DailyStatusWidget({ usuario }) {
-  const getFechaHoy = () => {
-    const hoy = new Date();
-    const anio = hoy.getFullYear();
-    const mes = String(hoy.getMonth() + 1).padStart(2, '0');
-    const dia = String(hoy.getDate()).padStart(2, '0');
-    return `${anio}-${mes}-${dia}`;
-  };
-
-  const [fecha, setFecha] = useState(getFechaHoy());
   const [data, setData] = useState({
-    fecha: getFechaHoy(),
-    total_empleados: 0,
-    registrados: 0,
+    fecha: '',
+    total: 0,
+    enviados: 0,
     pendientes: 0,
-    lista: []
+    usuarios: []
   });
   const [cargando, setCargando] = useState(true);
-  const [filtro, setFiltro] = useState('todos'); // 'todos' | 'pendientes' | 'registrados'
+  const [filtro, setFiltro] = useState('todos'); // 'todos' | 'pendientes' | 'enviados'
   const [busqueda, setBusqueda] = useState('');
 
   // Modificaciones auditadas
@@ -29,15 +20,15 @@ export default function DailyStatusWidget({ usuario }) {
   const [modificacionesRecientes, setModificacionesRecientes] = useState([]);
   const [cargandoModificaciones, setCargandoModificaciones] = useState(false);
 
-  const cargarEstado = async (fechaConsulta = fecha) => {
+  const cargarActividad = async () => {
     setCargando(true);
     try {
-      const res = await api.obtenerEstadoDiarioEmpleados(fechaConsulta);
-      if (res && Array.isArray(res.lista)) {
+      const res = await api.obtenerActividadDiaAnterior();
+      if (res && Array.isArray(res.usuarios)) {
         setData(res);
       }
     } catch (err) {
-      console.error('Error al cargar estado diario de empleados:', err);
+      console.error('Error al cargar actividad del día anterior:', err);
     } finally {
       setCargando(false);
     }
@@ -55,18 +46,18 @@ export default function DailyStatusWidget({ usuario }) {
   };
 
   useEffect(() => {
-    cargarEstado(fecha);
+    cargarActividad();
     cargarResumenModificaciones();
 
     const handleCatalogos = () => {
-      cargarEstado(fecha);
+      cargarActividad();
       cargarResumenModificaciones();
     };
     window.addEventListener('catalogos-actualizados', handleCatalogos);
     return () => {
       window.removeEventListener('catalogos-actualizados', handleCatalogos);
     };
-  }, [fecha]);
+  }, []);
 
   const handleVerModificaciones = async () => {
     setModalModificacionesOpen(true);
@@ -90,82 +81,75 @@ export default function DailyStatusWidget({ usuario }) {
     return (partes[0][0] + partes[partes.length - 1][0]).toUpperCase();
   };
 
-  const listaFiltrada = (data.lista || []).filter((item) => {
-    if (filtro === 'pendientes' && item.registrado) return false;
-    if (filtro === 'registrados' && !item.registrado) return false;
+  const formatFechaAyer = (fechaStr) => {
+    if (!fechaStr) return '';
+    try {
+      const [anio, mes, dia] = fechaStr.split('-');
+      return `${dia}/${mes}`;
+    } catch {
+      return fechaStr;
+    }
+  };
+
+  const listaFiltrada = (data.usuarios || []).filter((item) => {
+    if (filtro === 'pendientes' && item.enviado) return false;
+    if (filtro === 'enviados' && !item.enviado) return false;
     if (busqueda) {
       const q = busqueda.toLowerCase();
       const n = (item.nombre || '').toLowerCase();
       const a = (item.area || '').toLowerCase();
-      const s = (item.servicio || '').toLowerCase();
       const m = (item.modalidad || '').toLowerCase();
-      if (!n.includes(q) && !a.includes(q) && !s.includes(q) && !m.includes(q)) {
+      if (!n.includes(q) && !a.includes(q) && !m.includes(q)) {
         return false;
       }
     }
     return true;
   });
 
-  const porcentaje = data.total_empleados > 0
-    ? Math.round((data.registrados / data.total_empleados) * 100)
-    : 0;
-
   return (
-    <div className="daily-status-widget-container">
-      {/* Alerta/Badge de Modificaciones de Auditoría */}
+    <div className="daily-status-widget-container connected-widget-compact">
+      {/* Alerta/Badge sutil de Modificaciones de Auditoría */}
       {resumenModificaciones && (resumenModificaciones.ultimas_24h > 0 || resumenModificaciones.total_modificaciones > 0) && (
-        <div className="audit-modification-banner" onClick={handleVerModificaciones} title="Clic para ver historial de modificaciones">
-          <div className="audit-banner-left">
-            <span className="audit-bell-icon">🔔</span>
-            <div className="audit-banner-text">
-              <strong>Control de Auditoría:</strong>{' '}
-              {resumenModificaciones.ultimas_24h > 0 ? (
-                <span>
-                  Se registraron <strong style={{ color: '#cc3333' }}>{resumenModificaciones.ultimas_24h}</strong> modificaciones en las últimas 24 hs.
-                </span>
-              ) : (
-                <span>
-                  Hay <strong>{resumenModificaciones.total_modificaciones}</strong> registros auditados en <code>1_1_modificaciones_realizadas</code>.
-                </span>
-              )}
-            </div>
-          </div>
-          <button type="button" className="audit-banner-btn">
-            Ver detalle ({resumenModificaciones.total_modificaciones})
-          </button>
+        <div className="audit-modification-banner-compact" onClick={handleVerModificaciones} title="Clic para ver historial de modificaciones">
+          <span className="audit-bell-icon">🔔</span>
+          <span className="audit-banner-text-compact">
+            {resumenModificaciones.ultimas_24h > 0
+              ? `${resumenModificaciones.ultimas_24h} modif. en 24h`
+              : `${resumenModificaciones.total_modificaciones} registros auditados`}
+          </span>
+          <span className="audit-link-inline">Ver detalle ›</span>
         </div>
       )}
 
-      {/* Tarjeta Principal del Widget */}
-      <div className="daily-status-card">
+      {/* Tarjeta Principal del Widget Estilo Usuarios Conectados */}
+      <div className="daily-status-card compact-card">
         {/* Cabecera del Widget */}
-        <div className="daily-status-header">
+        <div className="daily-status-header-compact">
           <div className="daily-status-title-box">
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <span className="daily-status-icon">👥</span>
-              <div>
-                <h3 className="daily-status-title">Control de Estado Diario</h3>
-                <span className="daily-status-subtitle">
-                  Supervisión en tiempo real de checks enviados hoy
-                </span>
-              </div>
-            </div>
+            <h4 className="daily-status-title">Actividad de ayer</h4>
+            {data.fecha && (
+              <span className="daily-status-date-badge">
+                {formatFechaAyer(data.fecha)}
+              </span>
+            )}
           </div>
 
-          <div className="daily-status-controls">
-            <input
-              type="date"
-              className="form-input form-input-sm daily-date-picker"
-              value={fecha}
-              onChange={(e) => setFecha(e.target.value)}
-              title="Cambiar fecha de inspección"
-            />
+          <div className="daily-status-header-right">
+            <div className="daily-counters-inline">
+              <span className="counter-pill-green" title="Enviaron su registro">
+                <span className="status-dot-inline green" /> {data.enviados}
+              </span>
+              <span className="counter-pill-gray" title="Pendientes de registro">
+                <span className="status-dot-inline gray" /> {data.pendientes}
+              </span>
+            </div>
+
             <button
               type="button"
-              className="btn-refresh"
-              onClick={() => cargarEstado(fecha)}
+              className="btn-refresh-compact"
+              onClick={cargarActividad}
               disabled={cargando}
-              title="Actualizar estado"
+              title="Actualizar estado de actividad"
             >
               <svg
                 width="12"
@@ -186,42 +170,10 @@ export default function DailyStatusWidget({ usuario }) {
           </div>
         </div>
 
-        {/* Barra de progreso y contadores rápidos */}
-        <div className="daily-status-metric-bar">
-          <div className="daily-metric-pill total">
-            <span className="metric-num">{data.total_empleados}</span>
-            <span className="metric-label">Equipo</span>
-          </div>
-
-          <div className="daily-metric-pill green" onClick={() => setFiltro('registrados')} title="Ver registrados">
-            <span className="metric-dot green" />
-            <span className="metric-num">{data.registrados}</span>
-            <span className="metric-label">Completados</span>
-          </div>
-
-          <div className="daily-metric-pill red" onClick={() => setFiltro('pendientes')} title="Ver pendientes">
-            <span className="metric-dot red" />
-            <span className="metric-num">{data.pendientes}</span>
-            <span className="metric-label">Pendientes</span>
-          </div>
-
-          <div className="daily-metric-progress-wrapper">
-            <div className="progress-info">
-              <span>{porcentaje}% completado</span>
-            </div>
-            <div className="progress-track">
-              <div
-                className="progress-fill"
-                style={{ width: `${porcentaje}%`, backgroundColor: porcentaje === 100 ? '#10b981' : '#cc3333' }}
-              />
-            </div>
-          </div>
-        </div>
-
-        {/* Filtros de búsqueda */}
-        <div className="daily-status-filter-row">
-          <div className="daily-search-box">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+        {/* Barra de Filtros y Búsqueda Rápida */}
+        <div className="daily-compact-filter-bar">
+          <div className="daily-search-box-compact">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
               <circle cx="11" cy="11" r="8" />
               <line x1="21" y1="21" x2="16.65" y2="16.65" />
             </svg>
@@ -230,87 +182,79 @@ export default function DailyStatusWidget({ usuario }) {
               placeholder="Buscar colaborador..."
               value={busqueda}
               onChange={(e) => setBusqueda(e.target.value)}
-              className="daily-search-input"
+              className="daily-search-input-compact"
             />
             {busqueda && (
-              <button type="button" className="daily-search-clear" onClick={() => setBusqueda('')}>✕</button>
+              <button type="button" className="daily-search-clear-compact" onClick={() => setBusqueda('')}>✕</button>
             )}
           </div>
 
-          <div className="daily-filter-pills">
+          <div className="daily-filter-pills-compact">
             <button
               type="button"
-              className={`pill-btn ${filtro === 'todos' ? 'active' : ''}`}
+              className={`pill-btn-compact ${filtro === 'todos' ? 'active' : ''}`}
               onClick={() => setFiltro('todos')}
             >
-              Todos ({data.total_empleados})
+              Todos ({data.total})
             </button>
             <button
               type="button"
-              className={`pill-btn pill-pending ${filtro === 'pendientes' ? 'active' : ''}`}
+              className={`pill-btn-compact ${filtro === 'pendientes' ? 'active pending' : ''}`}
               onClick={() => setFiltro('pendientes')}
             >
               Pendientes ({data.pendientes})
             </button>
             <button
               type="button"
-              className={`pill-btn pill-done ${filtro === 'registrados' ? 'active' : ''}`}
-              onClick={() => setFiltro('registrados')}
+              className={`pill-btn-compact ${filtro === 'enviados' ? 'active sent' : ''}`}
+              onClick={() => setFiltro('enviados')}
             >
-              Enviados ({data.registrados})
+              Enviados ({data.enviados})
             </button>
           </div>
         </div>
 
-        {/* Lista compacta de colaboradores */}
-        <div className="daily-status-list-scroll">
-          {cargando && data.lista.length === 0 ? (
-            <div className="daily-status-empty">
-              <div className="spinner" style={{ width: '20px', height: '20px' }} />
-              <span>Consultando estado del personal...</span>
+        {/* Lista con Estilo de Usuarios Conectados */}
+        <div className="connected-users-scroll-list">
+          {cargando && data.usuarios.length === 0 ? (
+            <div className="daily-status-empty-compact">
+              <div className="spinner" style={{ width: '18px', height: '18px' }} />
+              <span>Consultando actividad...</span>
             </div>
           ) : listaFiltrada.length === 0 ? (
-            <div className="daily-status-empty">
-              <span>No se encontraron empleados para el criterio seleccionado.</span>
+            <div className="daily-status-empty-compact">
+              <span>No hay colaboradores para mostrar.</span>
             </div>
           ) : (
-            <div className="daily-status-grid">
+            <div className="connected-users-grid">
               {listaFiltrada.map((emp) => {
-                const esReg = emp.registrado;
+                const enviado = !!emp.enviado;
                 return (
                   <div
                     key={emp.dni || emp.nombre}
-                    className={`daily-employee-row ${esReg ? 'row-completed' : 'row-pending'}`}
+                    className={`connected-user-pill ${enviado ? 'status-sent' : 'status-pending'}`}
+                    title={`${emp.nombre}${emp.area ? ` (${emp.area})` : ''} • ${enviado ? `Enviado: ${emp.modalidad || ''}` : 'Sin registro cargado ayer'}`}
                   >
-                    <div className="daily-emp-avatar">
-                      {getIniciales(emp.nombre)}
-                      <span className={`emp-avatar-dot ${esReg ? 'dot-green' : 'dot-red'}`} />
+                    <div className="connected-avatar-container">
+                      <div className="connected-avatar-circle">
+                        {getIniciales(emp.nombre)}
+                      </div>
+                      <span className={`connected-dot ${enviado ? 'dot-green' : 'dot-gray'}`} />
                     </div>
 
-                    <div className="daily-emp-info">
-                      <div className="daily-emp-name-line">
-                        <span className="daily-emp-name">{emp.nombre}</span>
-                        {emp.area && <span className="daily-emp-area">{emp.area}</span>}
+                    <div className="connected-user-text">
+                      <div className="connected-user-name-line">
+                        <span className="connected-user-name">{emp.nombre}</span>
+                        {emp.area && <span className="connected-area-tag">{emp.area}</span>}
                       </div>
-
-                      <div className="daily-emp-detail-line">
-                        {esReg ? (
-                          <span className="daily-detail-text">
-                            <strong style={{ color: '#059669' }}>✓ {emp.modalidad}</strong>
-                            {emp.horas > 0 && ` (${emp.horas} hs)`}
-                            {emp.servicio && ` • ${emp.servicio}`}
+                      <span className="connected-user-desc">
+                        {enviado ? (
+                          <span className="text-desc-sent">
+                            ✓ {emp.modalidad || 'Enviado'} {emp.horas > 0 ? `(${emp.horas}h)` : ''}
                           </span>
                         ) : (
-                          <span className="daily-detail-pending">
-                            ⏳ Sin registro el día de hoy
-                          </span>
+                          <span className="text-desc-pending">Sin registro</span>
                         )}
-                      </div>
-                    </div>
-
-                    <div className="daily-emp-badge-box">
-                      <span className={`daily-badge ${esReg ? 'badge-sent' : 'badge-wait'}`}>
-                        {esReg ? 'Enviado' : 'Pendiente'}
                       </span>
                     </div>
                   </div>

@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { api } from '../services/apiBridge';
+import { esIvanValentin } from '../utils/permissions';
 
 const LUGARES_BASE = [
   { id: 'Oficina', label: 'Oficina', labelRpg: '🏰 Ciudadela (Oficina)', icon: 'M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z' },
@@ -46,6 +47,18 @@ export default function CheckForm({ onRegistroGuardado, onVolver, tema }) {
     const anio = hoy.getFullYear();
     const mes = String(hoy.getMonth() + 1).padStart(2, '0');
     const dia = String(hoy.getDate()).padStart(2, '0');
+    return `${anio}-${mes}-${dia}`;
+  };
+
+  const getLunesSemanaActual = () => {
+    const hoy = new Date();
+    const diaSem = hoy.getDay(); // 0: Domingo, 1: Lunes, ..., 6: Sábado
+    const diffDias = diaSem === 0 ? 6 : diaSem - 1;
+    const lunes = new Date(hoy);
+    lunes.setDate(hoy.getDate() - diffDias);
+    const anio = lunes.getFullYear();
+    const mes = String(lunes.getMonth() + 1).padStart(2, '0');
+    const dia = String(lunes.getDate()).padStart(2, '0');
     return `${anio}-${mes}-${dia}`;
   };
 
@@ -113,6 +126,11 @@ export default function CheckForm({ onRegistroGuardado, onVolver, tema }) {
   const areaActiva = ((cargarParaOtro && usuarioSeleccionado)
     ? (usuarioSeleccionado.area || '')
     : (sesionUsuario?.area || '')).trim().toUpperCase();
+
+  // [FN-01.06] Restricción de fechas a la semana activa para empleados regulares
+  const esExentoLimiteFecha = esRRHH || esIvanValentin(sesionUsuario) || cargarParaOtro;
+  const fechaMinimaSemana = esExentoLimiteFecha ? undefined : getLunesSemanaActual();
+  const fechaMaximaPermitida = esExentoLimiteFecha ? undefined : getFechaHoy();
 
   // Empleados exclusivos de oficina: SIG ('S') y Camila Llovio (Ingeniería)
   // NOTA: La limitación NO aplica si el registro lo carga RRHH (RRHH tiene permisos completos)
@@ -368,6 +386,18 @@ export default function CheckForm({ onRegistroGuardado, onVolver, tema }) {
       }
       if (horasCampoCalculadas <= 0) {
         setMensajeError('La jornada de campo calculada debe ser mayor a 0 horas.');
+        return;
+      }
+    }
+
+    // [FN-01.06] Validación de semana activa en cliente
+    if (!esExentoLimiteFecha && fechaMinimaSemana) {
+      if (fecha < fechaMinimaSemana) {
+        setMensajeError(`Solo puedes registrar asistencias correspondientes a la semana activa (desde el lunes ${fechaMinimaSemana}).`);
+        return;
+      }
+      if (usarRangoFechas && fechaFin && fechaFin < fechaMinimaSemana) {
+        setMensajeError(`El rango de fechas no puede comenzar antes del lunes ${fechaMinimaSemana}.`);
         return;
       }
     }
@@ -665,6 +695,8 @@ export default function CheckForm({ onRegistroGuardado, onVolver, tema }) {
                       type="date"
                       className="form-input form-input-clean"
                       value={fecha}
+                      min={fechaMinimaSemana}
+                      max={fechaMaximaPermitida}
                       onChange={(e) => setFecha(e.target.value)}
                       disabled={enviando}
                     />
@@ -675,6 +707,8 @@ export default function CheckForm({ onRegistroGuardado, onVolver, tema }) {
                       type="date"
                       className="form-input form-input-clean"
                       value={fechaFin}
+                      min={fechaMinimaSemana}
+                      max={fechaMaximaPermitida}
                       onChange={(e) => setFechaFin(e.target.value)}
                       disabled={enviando}
                     />
@@ -686,6 +720,8 @@ export default function CheckForm({ onRegistroGuardado, onVolver, tema }) {
                   type="date"
                   className="form-input form-input-clean"
                   value={fecha}
+                  min={fechaMinimaSemana}
+                  max={fechaMaximaPermitida}
                   onChange={(e) => setFecha(e.target.value)}
                   disabled={enviando}
                 />

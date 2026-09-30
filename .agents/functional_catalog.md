@@ -95,3 +95,23 @@
   3. Asignación masiva actualiza tipo_costo en SQLite y Google Sheets en columna Q.
   4. Calculadora de liquidación permite sobreescritura manual en todas las categorías con opción de reset automático.
 
+## [FN-06.03] Selección Multidía en Calendario y Liquidación de 4 Categorías
+- **Módulo**: [MOD-06] Gestión de Roster y Asistencia RRHH
+- **Flujo Operativo**: Permite tildar casillas en días del calendario mensual y aplicar tipo de costo masivo mediante barra flotante. Estandariza la calculadora a exactamente 4 categorías y renombra el panel izquierdo a listado completo con filtro de colaborador.
+- **Tablas afectadas**: `historial`, `1_asistencia_informada`.
+- **Reglas de negocio e invariantes**:
+  1. Exactamente 4 categorías de liquidación: Día de oficina, Día de obra, Franco trabajado, Feriado trabajado.
+  2. Barra flotante de asignación aparece únicamente cuando hay 1 o más días tildados en el calendario.
+  3. Panel izquierdo muestra todos los registros con filtro interactivo por empleado.
+  4. Empleados regulares restringidos a registrar únicamente fechas de la semana activa en curso.
+
+## [FN-07.01] Actualizador Remoto Desacoplado para Windows 11
+- **Módulo**: [MOD-07] Distribución y Actualizaciones
+- **Flujo Operativo**: Comprueba releases en GitHub (`Aterian/ReporteDiario`), descarga el ejecutable y ejecuta el modo desacoplado `--updater` que espera la salida del proceso padre vía Windows API, reemplaza el binario y reinicia la aplicación.
+- **Tablas afectadas**: N/A.
+- **Reglas de negocio e invariantes**:
+  1. Parámetros CLI `--parent-pid`, `--target-dir` y `--update-file` eliminan dependencia de variables de entorno de PyInstaller que causan fallas de seguridad en Windows 11.
+  2. Espera determinista mediante `OpenProcess` y `WaitForSingleObject`.
+  3. Desbloqueo de SmartScreen mediante `Unblock-File` de PowerShell previo al relanzamiento.
+
+

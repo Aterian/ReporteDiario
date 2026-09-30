@@ -4,6 +4,33 @@ Historial cronológico de cambios, nuevas características y mejoras aplicadas a
 
 ---
 
+## [1.6.0] - 2026-09-30
+
+### 🚀 Actualización Remota Desacoplada, Selección Multidía en Calendario y Optimización de Interfaz
+- **Actualización de Identidad Operativa**:
+  - Actualizado el correo electrónico de Iván Valentin a `ivangvalentin97@gmail.com` en catálogo de autorizados, permisos del frontend y migraciones automáticas de base de datos.
+- **Calculadora de Liquidación Estricta (4 Categorías)**:
+  - Reducción y estandarización a exactamente 4 categorías de liquidación: `"Día de oficina"`, `"Día de obra"`, `"Franco trabajado"` y `"Feriado trabajado"`.
+  - Eliminada la categoría residual "Franco ordinario" / "Francos no trabajados" tanto del cálculo como de la interfaz.
+- **Restricción de Fechas en Registro Diario**:
+  - Empleados regulares limitados a registrar únicamente fechas dentro de la semana activa en curso (desde el lunes de la semana actual hasta hoy).
+  - Exención de restricción para perfiles de RRHH, Núcleo e Iván Valentin para permitir cargas retroactivas.
+- **Selección Multidía en Calendario de Auditoría y Listado Completo**:
+  - Casillas de selección en la esquina superior derecha de cada celda del calendario mensual para seleccionar múltiples días auditados.
+  - Barra de herramientas flotante contextual que aparece cuando hay 1 o más días seleccionados, permitiendo imputar masivamente `Costo Oficina`, `Costo Campo` o `Sin Asignar`.
+  - Panel izquierdo renombrado a **"Listado de registros"** con visualización completa de asistencias y selector desplegable para filtrar por colaborador específico.
+- **Control de Actividad de Ayer en Pantalla Principal**:
+  - Widget reposicionado directamente debajo de las opciones de RRHH en `HomeView`.
+  - Rediseñado bajo el patrón de **"Usuarios Conectados"** (avatar con iniciales, nombre, área y punto de estado verde/gris consultando en SQLite si enviaron su registro ayer).
+- **Menú Inicial Compacto sin Desplazamiento**:
+  - Optimización de espaciados, paddings y encabezados en `HomeView` para permitir visualización panorámica en dos columnas sin barra de desplazamiento vertical.
+- **Mecanismo de Actualización Remota Resistente a Windows 11**:
+  - Modo desacoplado `--updater` con parámetros CLI explícitos (`--parent-pid`, `--target-dir`, `--update-file`) que prescinde de introspección dinámica de procesos y variables de entorno del bootloader de PyInstaller.
+  - Sincronización nativa con la API de Windows (`OpenProcess` + `WaitForSingleObject`), reemplazo robusto en bucle con desbloqueo de SmartScreen (`Unblock-File`) y reinicio independiente en `DETACHED_PROCESS`.
+  - Restablecida la comprobación periódica y manual de releases contra el repositorio oficial de GitHub (`Aterian/ReporteDiario`).
+
+---
+
 ## [1.5.0] - 2026-09-29
 
 ### 📊 Esquema de 17 Columnas, Auditoría de Modificaciones y Control Diario RRHH

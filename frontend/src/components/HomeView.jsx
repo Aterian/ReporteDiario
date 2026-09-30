@@ -122,11 +122,6 @@ export default function HomeView({
         </div>
       </div>
 
-      {/* Widget de Control de Estado Diario para RRHH y Aplicaciones */}
-      {esRRHHoAplicaciones && (
-        <DailyStatusWidget usuario={usuario} />
-      )}
-
       {/* Contenedor de módulos (registro propio y gestión/supervisión en 2 bloques verticales en pantalla completa) */}
       <div className={`home-sections-container ${tieneModulosGestion ? 'has-rrhh' : ''}`}>
         {/* Bloque 1: Registro propio del colaborador */}
@@ -309,6 +304,11 @@ export default function HomeView({
                 </button>
               )}
             </div>
+
+            {/* Widget de Control de Estado Diario (Actividad de ayer) ubicado debajo de las opciones de RRHH */}
+            {esRRHHoAplicaciones && (
+              <DailyStatusWidget usuario={usuario} />
+            )}
           </div>
         )}
       </div>
