@@ -119,6 +119,7 @@ def inicializar_bd():
                 id_usuario TEXT PRIMARY KEY,
                 nombre TEXT NOT NULL,
                 email TEXT DEFAULT '',
+                mail TEXT DEFAULT '',
                 area TEXT DEFAULT '',
                 dni TEXT NOT NULL,
                 id_origen TEXT DEFAULT '',
@@ -131,6 +132,10 @@ def inicializar_bd():
         cols_usr = [col["name"] for col in cursor.fetchall()]
         if "id_origen" not in cols_usr:
             cursor.execute("ALTER TABLE usuarios_cache ADD COLUMN id_origen TEXT DEFAULT ''")
+        if "mail" not in cols_usr:
+            cursor.execute("ALTER TABLE usuarios_cache ADD COLUMN mail TEXT DEFAULT ''")
+        if "email" not in cols_usr:
+            cursor.execute("ALTER TABLE usuarios_cache ADD COLUMN email TEXT DEFAULT ''")
 
         # Tabla de caché para días no laborales (0_no_laborales)
         cursor.execute("""
@@ -254,9 +259,18 @@ def inicializar_bd():
         """)
 
         # Actualización de email oficial para Iván Valentin
-        cursor.execute("UPDATE usuarios_cache SET mail = 'ivangvalentin97@gmail.com' WHERE dni = '40158951' OR LOWER(nombre) LIKE '%valentin%'")
-        cursor.execute("UPDATE sesion SET mail = 'ivangvalentin97@gmail.com' WHERE dni = '40158951' OR LOWER(nombre) LIKE '%valentin%'")
-        cursor.execute("UPDATE perfiles_empleados SET mail = 'ivangvalentin97@gmail.com' WHERE dni = '40158951' OR LOWER(nombre) LIKE '%valentin%'")
+        try:
+            cursor.execute("UPDATE usuarios_cache SET email = 'ivangvalentin97@gmail.com', mail = 'ivangvalentin97@gmail.com' WHERE dni = '40158951' OR LOWER(nombre) LIKE '%valentin%'")
+        except Exception:
+            pass
+        try:
+            cursor.execute("UPDATE sesion SET mail = 'ivangvalentin97@gmail.com' WHERE dni = '40158951' OR LOWER(nombre) LIKE '%valentin%'")
+        except Exception:
+            pass
+        try:
+            cursor.execute("UPDATE perfiles_empleados SET mail = 'ivangvalentin97@gmail.com' WHERE dni = '40158951' OR LOWER(nombre) LIKE '%valentin%'")
+        except Exception:
+            pass
 
         conn.commit()
 
@@ -945,7 +959,7 @@ def obtener_actividad_dia_anterior() -> dict:
 
     with obtener_conexion() as conn:
         cursor = conn.cursor()
-        cursor.execute("SELECT nombre, dni, mail, area FROM usuarios_cache ORDER BY nombre ASC")
+        cursor.execute("SELECT nombre, dni, email, area FROM usuarios_cache ORDER BY nombre ASC")
         usuarios = cursor.fetchall()
 
         if not usuarios:
@@ -981,7 +995,7 @@ def obtener_actividad_dia_anterior() -> dict:
             nom_k = nom.lower()
             dni = str(u["dni"] or "").strip()
             area = str(u["area"] or "").strip()
-            mail = str(u["mail"] or "").strip()
+            mail_val = str(u["email"] or "").strip() if "email" in u.keys() else ""
             avatar = obtener_avatar_por_dni(dni)
 
             tiene_check = nom_k in mapa_regs and len(mapa_regs[nom_k]) > 0
@@ -1001,9 +1015,12 @@ def obtener_actividad_dia_anterior() -> dict:
                 "nombre": nom,
                 "dni": dni,
                 "area": area,
-                "mail": mail,
+                "mail": mail_val,
+                "email": mail_val,
                 "avatar": avatar,
+                "enviado": tiene_check,
                 "registro_ayer": tiene_check,
+                "modalidad": lug,
                 "lugar": lug,
                 "servicio": serv,
                 "horas": hrs,
