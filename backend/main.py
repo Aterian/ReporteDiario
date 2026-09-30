@@ -47,6 +47,9 @@ from database import (
     actualizar_tipo_costo_lote,
     obtener_modificaciones_recientes,
     obtener_resumen_modificaciones,
+    obtener_notificaciones_modificaciones,
+    marcar_modificacion_revisada,
+    marcar_todas_modificaciones_revisadas,
     obtener_estado_diario_empleados,
     obtener_actividad_dia_anterior
 )
@@ -64,7 +67,8 @@ from sheets_service import (
     eliminar_registro_remoto,
     sincronizar_desde_sheets_hacia_local,
     deduplicar_hoja_remota,
-    limpiar_y_descargar_desde_sheets
+    limpiar_y_descargar_desde_sheets,
+    descargar_modificaciones_desde_sheets
 )
 
 
@@ -938,21 +942,47 @@ class ApiPuente:
         """Retorna la lista de modificaciones de auditoría registradas."""
         return obtener_modificaciones_recientes(limite)
 
+    # [FN-02.02] Notificaciones y avisos de modificaciones para RRHH
+    def obtener_notificaciones_modificaciones(self, solo_no_revisadas: bool = True):
+        """Retorna las modificaciones pendientes de revisión para avisar a RRHH."""
+        return obtener_notificaciones_modificaciones(solo_no_revisadas)
+
+    def marcar_modificacion_revisada(self, id_modificacion: str):
+        """Marca una modificación como vista/revisada por RRHH."""
+        marcar_modificacion_revisada(id_modificacion)
+        return {"exito": True}
+
+    def marcar_todas_modificaciones_revisadas(self):
+        """Marca todas las modificaciones pendientes como leídas."""
+        marcar_todas_modificaciones_revisadas()
+        return {"exito": True}
+
+    def verificar_nuevas_modificaciones_sheets(self):
+        """Descarga de Google Sheets cualquier nueva modificación en 1_1_modificaciones_realizadas."""
+        return descargar_modificaciones_desde_sheets()
+
     # [FN-03.05] Asignación masiva de tipo_costo (Oficina / Campo)
-    def actualizar_tipo_costo_masivo(self, datos: dict):
-        """Aplica en lote el tipo de costo ('Oficina' | 'Campo') a una lista de registros y sincroniza."""
-        if not isinstance(datos, dict):
-            return {"exito": False, "error": "Datos inválidos."}
-        ids = datos.get("ids_asistencia") or datos.get("ids") or []
-        costo = str(datos.get("tipo_costo", "")).strip()
+    def actualizar_tipo_costo_masivo(self, datos_o_ids, tipo_costo: str = None):
+        """Aplica en lote el tipo de costo ('Oficina' | 'Campo' | '') a una lista de registros y sincroniza."""
+        if isinstance(datos_o_ids, dict):
+            ids = datos_o_ids.get("ids_asistencia") or datos_o_ids.get("ids") or []
+            costo = str(datos_o_ids.get("tipo_costo", "")).strip()
+        elif isinstance(datos_o_ids, (list, tuple)):
+            ids = list(datos_o_ids)
+            costo = str(tipo_costo or "").strip()
+        else:
+            return {"exito": False, "error": "Datos inválidos para asignación de costo."}
+
         if not ids:
             return {"exito": False, "error": "No se seleccionaron registros para asignar costo."}
+
         afectados = actualizar_tipo_costo_lote(ids, costo)
         threading.Thread(target=sincronizar_pendientes, daemon=True).start()
         return {
             "exito": True,
             "mensaje": f"Se asignó tipo de costo '{costo or 'Sin asignar'}' a {afectados} registro(s).",
-            "afectados": afectados
+            "afectados": afectados,
+            "actualizados": afectados
         }
 
     def obtener_historial_otros_empleados(self, filtro_empleado: str = ""):
@@ -1461,7 +1491,7 @@ def obtener_icono_tray():
     return crear_icono_calendario(64)
 
 
-APP_VERSION = "1.6.0"
+APP_VERSION = "1.7.0"
 
 _mutex_instancia = None
 

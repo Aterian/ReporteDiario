@@ -247,6 +247,38 @@ export const api = {
     return { exito: false, error: 'Función no disponible' };
   },
 
+  async obtenerNotificacionesModificaciones(soloNoRevisadas = true) {
+    const bridge = await getApi();
+    if (bridge.obtener_notificaciones_modificaciones) {
+      return await bridge.obtener_notificaciones_modificaciones(soloNoRevisadas);
+    }
+    return [];
+  },
+
+  async marcarModificacionRevisada(idModificacion) {
+    const bridge = await getApi();
+    if (bridge.marcar_modificacion_revisada) {
+      return await bridge.marcar_modificacion_revisada(idModificacion);
+    }
+    return { exito: true };
+  },
+
+  async marcarTodasModificacionesRevisadas() {
+    const bridge = await getApi();
+    if (bridge.marcar_todas_modificaciones_revisadas) {
+      return await bridge.marcar_todas_modificaciones_revisadas();
+    }
+    return { exito: true };
+  },
+
+  async verificarNuevasModificacionesSheets() {
+    const bridge = await getApi();
+    if (bridge.verificar_nuevas_modificaciones_sheets) {
+      return await bridge.verificar_nuevas_modificaciones_sheets();
+    }
+    return { exito: true, nuevas: 0 };
+  },
+
   async obtenerTodosUsuarios(area = null) {
     const bridge = await getApi();
     if (bridge.obtener_todos_usuarios) {
@@ -406,7 +438,14 @@ export const api = {
   async actualizarTipoCostoMasivo(idsAsistencia, tipoCosto) {
     const bridge = await getApi();
     if (bridge.actualizar_tipo_costo_masivo) {
-      return await bridge.actualizar_tipo_costo_masivo(idsAsistencia, tipoCosto);
+      try {
+        return await bridge.actualizar_tipo_costo_masivo(idsAsistencia, tipoCosto);
+      } catch (err) {
+        return await bridge.actualizar_tipo_costo_masivo({
+          ids: idsAsistencia,
+          tipo_costo: tipoCosto
+        });
+      }
     }
     return { exito: true, actualizados: (idsAsistencia || []).length };
   },

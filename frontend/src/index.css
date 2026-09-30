@@ -9490,3 +9490,441 @@ html, body {
   }
 }
 
+/* =========================================================================
+   [FN-02.02] Avisos y Notificaciones de Modificaciones para RRHH
+   ========================================================================= */
+
+/* Banner flotante superior para RRHH */
+.rrhh-notification-banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%);
+  border: 1.5px solid #f59e0b;
+  border-left: 5px solid #d97706;
+  border-radius: 10px;
+  padding: 10px 16px;
+  margin: 10px 16px 4px 16px;
+  box-shadow: 0 4px 14px rgba(217, 119, 6, 0.16);
+  animation: slideDownBanner 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+  position: relative;
+  z-index: 99;
+}
+
+[data-theme="dark"] .rrhh-notification-banner {
+  background: linear-gradient(135deg, #2d2013 0%, #1f160b 100%);
+  border-color: #b45309;
+  border-left-color: #f59e0b;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4);
+}
+
+@keyframes slideDownBanner {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.rrhh-notif-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+  background: rgba(245, 158, 11, 0.2);
+  color: #b45309;
+  flex-shrink: 0;
+  animation: ringBell 2s ease-in-out infinite;
+}
+
+[data-theme="dark"] .rrhh-notif-icon {
+  background: rgba(245, 158, 11, 0.15);
+  color: #fbbf24;
+}
+
+@keyframes ringBell {
+  0%, 100% { transform: rotate(0); }
+  10%, 30% { transform: rotate(14deg); }
+  20%, 40% { transform: rotate(-14deg); }
+  50% { transform: rotate(0); }
+}
+
+.rrhh-notif-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+
+.rrhh-notif-title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.rrhh-notif-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: #92400e;
+  letter-spacing: -0.2px;
+}
+
+[data-theme="dark"] .rrhh-notif-title {
+  color: #fde68a;
+}
+
+.rrhh-notif-count-badge {
+  font-size: 10px;
+  font-weight: 700;
+  background: #d97706;
+  color: #ffffff;
+  padding: 1px 6px;
+  border-radius: 10px;
+}
+
+.rrhh-notif-desc {
+  font-size: 12px;
+  color: #78350f;
+  line-height: 1.35;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+[data-theme="dark"] .rrhh-notif-desc {
+  color: #fcd34d;
+}
+
+.rrhh-notif-diff {
+  font-weight: 600;
+  color: #b45309;
+}
+
+[data-theme="dark"] .rrhh-notif-diff {
+  color: #fbbf24;
+}
+
+.rrhh-notif-author {
+  font-size: 11px;
+  color: var(--text-secondary);
+  font-style: italic;
+}
+
+.rrhh-notif-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.btn-rrhh-goto {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: #cc3333;
+  color: #ffffff;
+  border: none;
+  border-radius: 6px;
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 6px rgba(204, 51, 51, 0.25);
+}
+
+.btn-rrhh-goto:hover {
+  background: #b32424;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 10px rgba(204, 51, 51, 0.35);
+}
+
+.btn-rrhh-dismiss {
+  background: transparent;
+  border: none;
+  color: #92400e;
+  font-size: 15px;
+  cursor: pointer;
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s ease;
+}
+
+[data-theme="dark"] .btn-rrhh-dismiss {
+  color: #fde68a;
+}
+
+.btn-rrhh-dismiss:hover {
+  background: rgba(217, 119, 6, 0.2);
+}
+
+/* Tarjeta en HomeView */
+.home-modificaciones-card {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-left: 4px solid #d97706;
+  border-radius: 10px;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  box-shadow: var(--shadow-sm);
+  margin-top: 4px;
+}
+
+.home-mod-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  border-bottom: 1px solid var(--border-subtle);
+  padding-bottom: 6px;
+}
+
+.home-mod-card-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.home-mod-bell {
+  font-size: 14px;
+}
+
+.home-mod-count-pill {
+  font-size: 10px;
+  font-weight: 700;
+  background: #f59e0b;
+  color: #1e293b;
+  padding: 1px 6px;
+  border-radius: 10px;
+}
+
+.home-mod-subtitle {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.home-mod-items-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.home-mod-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  background: var(--bg-subtle, rgba(0, 0, 0, 0.02));
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  padding: 6px 10px;
+  transition: background 0.15s ease;
+}
+
+.home-mod-item:hover {
+  background: var(--bg-hover);
+}
+
+.home-mod-item-main {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.home-mod-item-top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.home-mod-emp {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.home-mod-fecha {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.home-mod-diff-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+}
+
+.home-mod-diff-tag {
+  color: #d97706;
+  font-weight: 600;
+}
+
+.home-mod-author {
+  color: var(--text-muted);
+}
+
+.home-mod-item-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.btn-home-mod-view {
+  background: #cc333315;
+  color: #cc3333;
+  border: 1px solid #cc333340;
+  border-radius: 5px;
+  padding: 4px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-home-mod-view:hover {
+  background: #cc3333;
+  color: #ffffff;
+}
+
+.btn-home-mod-check {
+  background: transparent;
+  color: var(--text-muted);
+  border: 1px solid var(--border-subtle);
+  border-radius: 5px;
+  width: 24px;
+  height: 24px;
+  font-size: 12px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+}
+
+.btn-home-mod-check:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+/* =========================================================================
+   [FN-02.02] Distinción Visual en Calendario de Otros Empleados
+   ========================================================================= */
+
+/* Celda de calendario con registros modificados */
+.calendar-cell.cell-has-modified {
+  border-color: rgba(217, 119, 6, 0.4) !important;
+  background-color: rgba(245, 158, 11, 0.035) !important;
+}
+
+/* Celda destacada por salto directo desde notificación */
+.calendar-cell.cell-destacada-modificacion {
+  outline: 2.5px solid #d97706 !important;
+  outline-offset: -1px;
+  background-color: rgba(245, 158, 11, 0.12) !important;
+  animation: pulseDestacada 2.5s ease-in-out infinite;
+  z-index: 2;
+}
+
+@keyframes pulseDestacada {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(217, 119, 6, 0.4);
+  }
+  50% {
+    box-shadow: 0 0 0 5px rgba(217, 119, 6, 0.15);
+  }
+}
+
+/* Icono indicador en barra superior de celda de calendario */
+.cell-mod-badge {
+  font-size: 10px;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1px 3px;
+  background: rgba(217, 119, 6, 0.18);
+  border-radius: 3px;
+  color: #b45309;
+}
+
+[data-theme="dark"] .cell-mod-badge {
+  background: rgba(245, 158, 11, 0.25);
+  color: #fbbf24;
+}
+
+/* Pastilla de evento modificada en calendario */
+.cell-event-pill.cell-event-modified {
+  border: 1.5px solid #d97706 !important;
+  box-shadow: 0 1px 3px rgba(217, 119, 6, 0.25);
+  position: relative;
+  font-weight: 600;
+}
+
+.pill-mod-icon {
+  font-size: 9px;
+  margin-right: 2px;
+  flex-shrink: 0;
+}
+
+.pill-mod-tag {
+  font-size: 8.5px;
+  font-weight: 800;
+  background: #d97706;
+  color: #ffffff;
+  padding: 0 3px;
+  border-radius: 2px;
+  margin-left: auto;
+  line-height: 1.2;
+  letter-spacing: 0.3px;
+  flex-shrink: 0;
+}
+
+/* Badge de modificado en listado de la columna izquierda */
+.status-badge.badge-modificado {
+  background: #fef3c7;
+  color: #92400e;
+  border: 1px solid #f59e0b;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+
+[data-theme="dark"] .status-badge.badge-modificado {
+  background: #2d2013;
+  color: #fde68a;
+  border-color: #b45309;
+}
+
+/* Indicador en barra de referencias del calendario */
+.legend-mod-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  font-size: 9px;
+  font-weight: 800;
+  background: #d97706;
+  color: #ffffff;
+  padding: 1px 4px;
+  border-radius: 3px;
+  line-height: 1;
+}
+

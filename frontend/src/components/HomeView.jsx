@@ -13,7 +13,10 @@ export default function HomeView({
   onAvatarClick,
   onNuevoRoster,
   onHistorialRoster,
-  onHistorialOtrosEmpleados
+  onHistorialOtrosEmpleados,
+  notificacionesModificaciones = [],
+  onIrACalendarioModificacion,
+  onDescartarNotificacion
 }) {
   if (tema === 'rpg') {
     return (
@@ -304,6 +307,58 @@ export default function HomeView({
                 </button>
               )}
             </div>
+
+            {/* [FN-02.02] Alerta y avisos de modificaciones pendientes para RRHH */}
+            {notificacionesModificaciones && notificacionesModificaciones.length > 0 && (
+              <div className="home-modificaciones-card">
+                <div className="home-mod-card-header">
+                  <div className="home-mod-card-title">
+                    <span className="home-mod-bell">🔔</span>
+                    <span>Modificaciones pendientes de revisión</span>
+                    <span className="home-mod-count-pill">{notificacionesModificaciones.length}</span>
+                  </div>
+                  <span className="home-mod-subtitle">Cambios realizados por colaboradores</span>
+                </div>
+                <div className="home-mod-items-list">
+                  {notificacionesModificaciones.slice(0, 3).map((item) => (
+                    <div key={item.id_modificacion} className="home-mod-item">
+                      <div className="home-mod-item-main">
+                        <div className="home-mod-item-top">
+                          <span className="home-mod-emp">{item.empleado}</span>
+                          <span className="home-mod-fecha">{item.fecha}</span>
+                        </div>
+                        <div className="home-mod-diff-row">
+                          <span className="home-mod-diff-tag">
+                            {item.tipo_antes || 'Sin asignar'} ({item.horas_antes || 0}hs) ➔ {item.tipo_despues} ({item.horas_despues || 0}hs)
+                          </span>
+                          {item.quien_modifica && (
+                            <span className="home-mod-author">• Por {item.quien_modifica}</span>
+                          )}
+                        </div>
+                      </div>
+                      <div className="home-mod-item-actions">
+                        <button
+                          type="button"
+                          className="btn-home-mod-view"
+                          onClick={() => onIrACalendarioModificacion && onIrACalendarioModificacion(item)}
+                          title="Abrir directamente en el calendario del empleado"
+                        >
+                          Ver en calendario ➔
+                        </button>
+                        <button
+                          type="button"
+                          className="btn-home-mod-check"
+                          onClick={() => onDescartarNotificacion && onDescartarNotificacion(item.id_modificacion)}
+                          title="Marcar como revisado"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* Widget de Control de Estado Diario (Actividad de ayer) ubicado debajo de las opciones de RRHH */}
             {esRRHHoAplicaciones && (

@@ -4,6 +4,28 @@ Historial cronológico de cambios, nuevas características y mejoras aplicadas a
 
 ---
 
+## [1.7.0] - 2026-09-30
+
+### 🔔 Notificaciones de Modificaciones para RRHH y Distinción Visual en Calendario
+- **Aviso y Notificación de Modificaciones para RRHH (`1_1_modificaciones_realizadas`)**:
+  - Incorporada descarga remota en segundo plano desde la hoja `1_1_modificaciones_realizadas` de Google Sheets hacia la base de datos local SQLite para asegurar que el responsable de RRHH detecte cambios realizados por colaboradores desde cualquier equipo.
+  - Implementado banner interactivo de notificación superior en la aplicación (`rrhh-notification-banner`) y tarjeta dedicada de avisos en `HomeView` (`home-modificaciones-card`) con conteo de modificaciones pendientes de revisión, detalle del colaborador, fecha y resumen comparativo (`tipo_antes` ➔ `tipo_despues`).
+  - Acción directa **"Ver cambio en calendario"**: con un solo clic, redirige inmediatamente a la ventana de `OtherEmployeesHistoryView`, preselecciona al colaborador, navega el calendario al año y mes correspondiente, resalta la celda con pulso cromático y abre el desglose del día modificado.
+  - Opciones de descarte rápido para marcar modificaciones individuales o colectivas como revisadas (`revisado = 1`).
+- **Distinción Visual en el Calendario de Otros Empleados (`OtherEmployeesHistoryView`)**:
+  - Marcador distintivo en las celdas de calendario (`.cell-has-modified` y `.cell-mod-badge` con icono ✏️) para aquellos días que registran modificaciones.
+  - Resalte visual destacado en las pastillas de eventos (`.cell-event-pill.cell-event-modified`) con borde ámbar de alto contraste, icono ✏️ y etiqueta `MOD`.
+  - Tooltips descriptivos y bloque de detalle en el modal del día (`.dia-modal-mod-callout`) que explicitan quién modificó el registro, en qué fecha/hora y qué valores cambiaron (tipo de lugar y horas).
+- **Corrección en Asignación Masiva de Tipo de Costo**:
+  - Habilitada recepción polimórfica en `actualizar_tipo_costo_masivo` (backend y bridge frontend) para admitir tanto llamadas por lista de IDs como por diccionario empaquetado, resolviendo el error `Error al comunicarse con la aplicación.` al interactuar con la barra flotante.
+- **Sincronización Total entre Listado de Registros y Calendario**:
+  - Ampliado el límite de consulta de historial a 5000 registros para evitar el truncamiento de meses históricos en la base local.
+  - Sincronización bidireccional inmediata: seleccionar un colaborador en el listado o en el encabezado de auditoría actualiza ambos componentes al unísono.
+  - Añadido filtro opcional "Solo mes visible" para visualizar en la lista exactamente las jornadas del mes desplegado en el calendario.
+  - Incorporado botón "📅 Calendario" en cada tarjeta del listado para enfocar y abrir la celda correspondiente en el calendario con un solo clic.
+
+---
+
 ## [1.6.0] - 2026-09-30
 
 ### 🚀 Actualización Remota Desacoplada, Selección Multidía en Calendario y Optimización de Interfaz

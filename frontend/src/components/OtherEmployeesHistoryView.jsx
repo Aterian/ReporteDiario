@@ -18,7 +18,15 @@ const LUGARES_OPCIONES = [
   'Licencia'
 ];
 
-export default function OtherEmployeesHistoryView({ usuario, onVolver, tema, onVerMiHistorial, onNuevoReporte }) {
+export default function OtherEmployeesHistoryView({
+  usuario,
+  onVolver,
+  tema,
+  onVerMiHistorial,
+  onNuevoReporte,
+  navegacionAuditoria,
+  onConsumirNavegacion
+}) {
   const isRpg = tema === 'rpg';
 
   // Si el usuario no tiene permisos para ver historial de otros empleados, denegar acceso
@@ -62,6 +70,7 @@ export default function OtherEmployeesHistoryView({ usuario, onVolver, tema, onV
   const [registrosEmpleadoAuditar, setRegistrosEmpleadoAuditar] = useState([]);
   const [cargandoAuditoria, setCargandoAuditoria] = useState(false);
   const [diaSeleccionadoAuditoria, setDiaSeleccionadoAuditoria] = useState(null);
+  const [diaDestacado, setDiaDestacado] = useState(null);
 
   // Modal de edición
   const [registroEditando, setRegistroEditando] = useState(null);
@@ -77,6 +86,7 @@ export default function OtherEmployeesHistoryView({ usuario, onVolver, tema, onV
 
   // Filtro por empleado en lista izquierda y selección de días en calendario
   const [filtroEmpleadoLista, setFiltroEmpleadoLista] = useState('');
+  const [filtroSoloMes, setFiltroSoloMes] = useState(false);
   const [diasSeleccionadosCalendario, setDiasSeleccionadosCalendario] = useState(new Set());
 
   // Cantidad manual de días para las 4 categorías de liquidación (RRHH)
@@ -124,7 +134,11 @@ export default function OtherEmployeesHistoryView({ usuario, onVolver, tema, onV
       if (Array.isArray(dataRegs)) setRegistros(dataRegs);
       if (Array.isArray(dataEmps) && dataEmps.length > 0) {
         setEmpleados(dataEmps);
-        setEmpleadoAuditar(prev => prev || dataEmps[0].nombre);
+        setEmpleadoAuditar(prev => {
+          const emp = prev || dataEmps[0].nombre;
+          setFiltroEmpleadoLista(fPrev => (!fPrev ? emp : fPrev));
+          return emp;
+        });
       }
       if (Array.isArray(dataServs)) setServiciosDisponibles(dataServs);
     } catch (err) {
@@ -166,6 +180,27 @@ export default function OtherEmployeesHistoryView({ usuario, onVolver, tema, onV
       window.removeEventListener('catalogos-actualizados', handleCatalogos);
     };
   }, []);
+
+  // [FN-02.02] Responder a navegación directa desde aviso/notificación de RRHH
+  useEffect(() => {
+    if (navegacionAuditoria && navegacionAuditoria.empleado) {
+      const emp = navegacionAuditoria.empleado;
+      setEmpleadoAuditar(emp);
+      setFiltroEmpleadoLista(emp);
+      if (navegacionAuditoria.fecha) {
+        const partes = String(navegacionAuditoria.fecha).split('-');
+        if (partes.length === 3) {
+          const anio = parseInt(partes[0], 10);
+          const mes = parseInt(partes[1], 10);
+          setFechaCalendario(new Date(anio, mes - 1, 1));
+        }
+        setDiaDestacado(navegacionAuditoria.fecha);
+      }
+      if (onConsumirNavegacion) {
+        onConsumirNavegacion();
+      }
+    }
+  }, [navegacionAuditoria]);
 
   useEffect(() => {
     if (empleadoAuditar) {
@@ -371,9 +406,18 @@ export default function OtherEmployeesHistoryView({ usuario, onVolver, tema, onV
 
   // Filtrado en memoria para la lista de registros (lado izquierdo)
   const registrosFiltrados = useMemo(() => {
+    const anio = fechaCalendario.getFullYear();
+    const mesStr = String(fechaCalendario.getMonth() + 1).padStart(2, '0');
+    const prefijoMes = `${anio}-${mesStr}`;
+
     return registros.filter(r => {
       if (filtroEmpleadoLista && (r.empleado || '').trim().toLowerCase() !== filtroEmpleadoLista.trim().toLowerCase()) {
         return false;
+      }
+      if (filtroSoloMes) {
+        if (!r.fecha || !r.fecha.startsWith(prefijoMes)) {
+          return false;
+        }
       }
       if (filtroTexto) {
         const q = filtroTexto.toLowerCase();
@@ -388,7 +432,7 @@ export default function OtherEmployeesHistoryView({ usuario, onVolver, tema, onV
       }
       return true;
     });
-  }, [registros, filtroTexto, filtroEmpleadoLista]);
+  }, [registros, filtroTexto, filtroEmpleadoLista, filtroSoloMes, fechaCalendario]);
 
   // Mapa de registros del empleado seleccionado indexados por fecha (YYYY-MM-DD) para el calendario
   const mapaRegistrosAuditoria = useMemo(() => {
@@ -441,6 +485,16 @@ export default function OtherEmployeesHistoryView({ usuario, onVolver, tema, onV
 
     return celdas;
   }, [fechaCalendario, mapaRegistrosAuditoria]);
+
+  // [FN-02.02] Auto-abrir modal de auditoría al navegar desde notificación de RRHH
+  useEffect(() => {
+    if (diaDestacado && diasMesCalendario.length > 0) {
+      const celdaTarget = diasMesCalendario.find(c => c.fechaIso === diaDestacado);
+      if (celdaTarget && celdaTarget.registros && celdaTarget.registros.length > 0) {
+        setDiaSeleccionadoAuditoria(celdaTarget);
+      }
+    }
+  }, [diaDestacado, diasMesCalendario]);
 
   // Asignar tipo de costo a todos los registros de los días seleccionados en el calendario
   const handleAplicarTipoCostoDiasCalendario = async (tipoCosto) => {
@@ -784,7 +838,11 @@ export default function OtherEmployeesHistoryView({ usuario, onVolver, tema, onV
                   className="form-select form-select-sm"
                   style={{ width: '100%', height: '30px', fontSize: '12px' }}
                   value={filtroEmpleadoLista}
-                  onChange={(e) => setFiltroEmpleadoLista(e.target.value)}
+                  onChange={(e) => {
+                    const nuevo = e.target.value;
+                    setFiltroEmpleadoLista(nuevo);
+                    if (nuevo) setEmpleadoAuditar(nuevo);
+                  }}
                   title="Filtrar listado por empleado"
                 >
                   <option value="">Todos los empleados</option>
@@ -794,6 +852,19 @@ export default function OtherEmployeesHistoryView({ usuario, onVolver, tema, onV
                     </option>
                   ))}
                 </select>
+              </div>
+
+              {/* Filtro rápido por mes del calendario */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px', color: 'var(--text-secondary)', cursor: 'pointer', userSelect: 'none' }}>
+                  <input
+                    type="checkbox"
+                    checked={filtroSoloMes}
+                    onChange={(e) => setFiltroSoloMes(e.target.checked)}
+                    style={{ accentColor: '#cc3333', cursor: 'pointer' }}
+                  />
+                  <span>Solo mes visible ({nombresMeses[fechaCalendario.getMonth()]} {fechaCalendario.getFullYear()})</span>
+                </label>
               </div>
             </div>
 
@@ -933,6 +1004,11 @@ export default function OtherEmployeesHistoryView({ usuario, onVolver, tema, onV
                         </div>
 
                         <div className="other-card-badges">
+                          {Boolean(item.fue_modificado || item.modificado) && (
+                            <span className="status-badge badge-modificado" title={item.detalle_modificacion || 'Registro modificado'}>
+                              ✏️ Modificado
+                            </span>
+                          )}
                           {item.tipo_costo && (
                             <span className={`status-badge ${item.tipo_costo.toLowerCase() === 'campo' ? 'badge-costo-campo' : 'badge-costo-oficina'}`}>
                               Costo: {item.tipo_costo}
@@ -977,6 +1053,28 @@ export default function OtherEmployeesHistoryView({ usuario, onVolver, tema, onV
                       </div>
 
                       <div className="other-card-actions">
+                        <button
+                          type="button"
+                          className="btn-card-action"
+                          style={{ color: '#2563eb', borderColor: '#3b82f640' }}
+                          onClick={() => {
+                            if (item.empleado && item.empleado !== empleadoAuditar) {
+                              setEmpleadoAuditar(item.empleado);
+                              setFiltroEmpleadoLista(item.empleado);
+                            }
+                            if (item.fecha) {
+                              const partes = String(item.fecha).split('-');
+                              if (partes.length === 3) {
+                                setFechaCalendario(new Date(parseInt(partes[0], 10), parseInt(partes[1], 10) - 1, 1));
+                              }
+                              setDiaDestacado(item.fecha);
+                            }
+                          }}
+                          title="Ver y enfocar este día en el calendario"
+                        >
+                          📅 Calendario
+                        </button>
+
                         {puedeModificarRegistro(usuario, item) ? (
                           <>
                             <button
@@ -1036,7 +1134,11 @@ export default function OtherEmployeesHistoryView({ usuario, onVolver, tema, onV
               <select
                 className="form-select form-select-clean audit-select-field"
                 value={empleadoAuditar}
-                onChange={(e) => setEmpleadoAuditar(e.target.value)}
+                onChange={(e) => {
+                  const nuevo = e.target.value;
+                  setEmpleadoAuditar(nuevo);
+                  setFiltroEmpleadoLista(nuevo);
+                }}
               >
                 {empleados.map(u => (
                   <option key={u.dni || u.nombre} value={u.nombre}>
@@ -1143,11 +1245,13 @@ export default function OtherEmployeesHistoryView({ usuario, onVolver, tema, onV
 
                 const tieneRegistros = celda.registros.length > 0;
                 const estaSeleccionado = diasSeleccionadosCalendario.has(celda.fechaIso);
+                const tieneModificados = celda.registros.some(r => r.fue_modificado === 1 || r.modificado === 1);
+                const esDestacada = diaDestacado === celda.fechaIso;
 
                 return (
                   <div
                     key={celda.id}
-                    className={`calendar-cell ${celda.esHoy ? 'cell-today' : ''} ${tieneRegistros ? 'cell-has-data' : ''} ${estaSeleccionado ? 'cell-selected-day' : ''}`}
+                    className={`calendar-cell ${celda.esHoy ? 'cell-today' : ''} ${tieneRegistros ? 'cell-has-data' : ''} ${estaSeleccionado ? 'cell-selected-day' : ''} ${tieneModificados ? 'cell-has-modified' : ''} ${esDestacada ? 'cell-destacada-modificacion' : ''}`}
                     onClick={() => {
                       if (!tieneRegistros) return;
                       if (celda.registros.length === 1 && puedeModificarRegistro(usuario, celda.registros[0])) {
@@ -1157,10 +1261,17 @@ export default function OtherEmployeesHistoryView({ usuario, onVolver, tema, onV
                       }
                     }}
                     style={{ cursor: tieneRegistros ? 'pointer' : 'default' }}
-                    title={tieneRegistros ? `${celda.registros.length} registro(s) el ${celda.fechaIso} (Toca para ver detalles)` : celda.fechaIso}
+                    title={tieneRegistros ? `${celda.registros.length} registro(s) el ${celda.fechaIso}${tieneModificados ? ' • Contiene registros modificados' : ''} (Toca para ver detalles)` : celda.fechaIso}
                   >
                     <div className="cell-top-bar">
-                      <span className="cell-day-number">{celda.diaNumero}</span>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                        <span className="cell-day-number">{celda.diaNumero}</span>
+                        {tieneModificados && (
+                          <span className="cell-mod-badge" title="Este día contiene registros que fueron modificados">
+                            ✏️
+                          </span>
+                        )}
+                      </div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
                         {celda.esHoy && <span className="cell-today-dot" title="Hoy" />}
                         {tieneRegistros && (
@@ -1191,6 +1302,7 @@ export default function OtherEmployeesHistoryView({ usuario, onVolver, tema, onV
                       {celda.registros.slice(0, 3).map((r, idx) => {
                         const lug = r.tipo_ocf || r.lugar || 'Oficina';
                         const badgeClass = getBadgeClassLugar(lug, r.servicio);
+                        const fueMod = r.fue_modificado === 1 || r.modificado === 1;
                         let labelText = lug;
                         if (lug === 'Franco Obra' || r.servicio?.toLowerCase().includes('franco de obra')) {
                           labelText = 'F. Obra';
@@ -1206,7 +1318,7 @@ export default function OtherEmployeesHistoryView({ usuario, onVolver, tema, onV
                         return (
                           <div
                             key={r.id || idx}
-                            className={`cell-event-pill ${badgeClass}`}
+                            className={`cell-event-pill ${badgeClass} ${fueMod ? 'cell-event-modified' : ''}`}
                             onClick={(e) => {
                               e.stopPropagation();
                               if (puedeModificarRegistro(usuario, r)) {
@@ -1215,9 +1327,11 @@ export default function OtherEmployeesHistoryView({ usuario, onVolver, tema, onV
                                 setDiaSeleccionadoAuditoria(celda);
                               }
                             }}
-                            title={`${lug} - ${r.servicio} (${r.horas} hs) • ${puedeModificarRegistro(usuario, r) ? 'Clic para editar o eliminar' : 'Solo lectura'}`}
+                            title={`${lug} - ${r.servicio} (${r.horas} hs)${fueMod ? ' • ✏️ REGISTRO MODIFICADO' : ''}${r.detalle_modificacion ? ' • ' + r.detalle_modificacion : ''} • ${puedeModificarRegistro(usuario, r) ? 'Clic para editar o eliminar' : 'Solo lectura'}`}
                           >
+                            {fueMod && <span className="pill-mod-icon" title="Modificado">✏️</span>}
                             <span className="cell-event-label">{labelText}</span>
+                            {fueMod && <span className="pill-mod-tag">MOD</span>}
                           </div>
                         );
                       })}
@@ -1243,6 +1357,7 @@ export default function OtherEmployeesHistoryView({ usuario, onVolver, tema, onV
                 <span className="legend-item"><span className="legend-color-box badge-modalidad-feriado-trabajado" /> Feriado Trab.</span>
                 <span className="legend-item"><span className="legend-color-box badge-modalidad-vacaciones" /> Vacaciones</span>
                 <span className="legend-item"><span className="legend-color-box badge-modalidad-licencia" /> Licencia</span>
+                <span className="legend-item"><span className="legend-mod-indicator">✏️ MOD</span> Modificado</span>
               </div>
             </div>
           </div>
@@ -1534,6 +1649,18 @@ export default function OtherEmployeesHistoryView({ usuario, onVolver, tema, onV
                       <span style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>
                         {item.horas > 0 ? `${item.horas} hs` : '0 hs'}
                       </span>
+                      {Boolean(item.fue_modificado || item.modificado) && (
+                        <div style={{ marginTop: '4px', background: '#fef3c7', border: '1px solid #f59e0b', borderRadius: '4px', padding: '4px 6px' }}>
+                          <span style={{ fontSize: '10px', fontWeight: 700, color: '#b45309', display: 'flex', alignItems: 'center', gap: '3px' }}>
+                            ✏️ REGISTRO MODIFICADO
+                          </span>
+                          {item.detalle_modificacion && (
+                            <span style={{ fontSize: '11px', color: '#92400e', display: 'block', marginTop: '2px' }}>
+                              {item.detalle_modificacion}
+                            </span>
+                          )}
+                        </div>
+                      )}
                     </div>
                     <div style={{ display: 'flex', gap: '4px', flexShrink: 0, alignItems: 'center' }}>
                       {puedeModificarRegistro(usuario, item) ? (

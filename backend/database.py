@@ -225,9 +225,16 @@ def inicializar_bd():
                 fecha_hora_modificaciones TEXT NOT NULL,
                 quien_modifica TEXT NOT NULL,
                 sincronizado INTEGER DEFAULT 0,
+                revisado INTEGER DEFAULT 0,
                 creado_en TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """)
+
+        # Migración defensiva: asegurar columna revisado en modificaciones_realizadas
+        cursor.execute("PRAGMA table_info(modificaciones_realizadas)")
+        columnas_mods = [col[1] for col in cursor.fetchall()]
+        if "revisado" not in columnas_mods:
+            cursor.execute("ALTER TABLE modificaciones_realizadas ADD COLUMN revisado INTEGER DEFAULT 0")
 
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_historial_fecha ON historial(fecha)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_historial_asistencia ON historial(id_asistencia)")
@@ -899,6 +906,54 @@ def eliminar_registro_asistencia(id_registro: int) -> dict:
         conn.commit()
         return {"exito": True, "id_asistencia": id_asistencia}
 
+# [FN-02.01] Enriquecer registros de historial con trazabilidad de modificaciones
+def _enriquecer_registros_con_modificaciones(cursor, registros: list) -> list:
+    """Enriquece una lista de diccionarios de historial con trazabilidad y detalle de modificaciones."""
+    if not registros:
+        return registros
+    uids = [str(r.get("id_asistencia", "")).strip() for r in registros if r.get("id_asistencia")]
+    mods_map = {}
+    if uids:
+        placeholders = ",".join(["?"] * len(uids))
+        cursor.execute(f"""
+            SELECT id_modificacion, id_asistencia, tipo_antes, tipo_despues,
+                   horas_antes, horas_despues, servicio_antes, servicio_despues,
+                   fecha_hora_modificaciones, quien_modifica
+            FROM modificaciones_realizadas
+            WHERE id_asistencia IN ({placeholders})
+            ORDER BY fecha_hora_modificaciones ASC
+        """, uids)
+        for m in cursor.fetchall():
+            uid = str(m["id_asistencia"]).strip()
+            if uid not in mods_map:
+                mods_map[uid] = []
+            mods_map[uid].append(dict(m))
+
+    for r in registros:
+        uid = str(r.get("id_asistencia", "")).strip()
+        mods = mods_map.get(uid, [])
+        if mods or r.get("modificado") == 1:
+            r["fue_modificado"] = 1
+            r["modificaciones"] = mods
+            if mods:
+                ult = mods[-1]
+                t_ant = ult.get("tipo_antes") or "Sin tipo"
+                t_desp = ult.get("tipo_despues") or "Sin tipo"
+                h_ant = ult.get("horas_antes") or 0
+                h_desp = ult.get("horas_despues") or 0
+                quien = ult.get("quien_modifica") or "Colaborador"
+                fh = ult.get("fecha_hora_modificaciones") or ""
+                r["detalle_modificacion"] = (
+                    f"Modificado por {quien} ({fh}): {t_ant} ({h_ant} hs) -> {t_desp} ({h_desp} hs)"
+                )
+            else:
+                r["detalle_modificacion"] = "Registro modificado"
+        else:
+            r["fue_modificado"] = 0
+            r["modificaciones"] = []
+            r["detalle_modificacion"] = ""
+    return registros
+
 def obtener_historial_otros_empleados(usuario_rrhh: str = "", filtro_empleado: str = "") -> list:
     """
     Retorna el listado completo de registros de asistencia histórica para supervisión de RRHH,
@@ -928,6 +983,7 @@ def obtener_historial_otros_empleados(usuario_rrhh: str = "", filtro_empleado: s
                 COALESCE(cargado_por, '') as cargado_por,
                 COALESCE(id_empleado, '') as id_empleado,
                 COALESCE(id_proyecto, '') as id_proyecto,
+                COALESCE(modificado, 0) as modificado,
                 sincronizado,
                 creado_en
             FROM historial
@@ -939,10 +995,10 @@ def obtener_historial_otros_empleados(usuario_rrhh: str = "", filtro_empleado: s
             query += " AND LOWER(empleado) = ?"
             params.append(filtro_empleado.strip().lower())
 
-        query += " ORDER BY fecha DESC, id DESC LIMIT 500"
+        query += " ORDER BY fecha DESC, id DESC LIMIT 5000"
         cursor.execute(query, params)
-        filas = cursor.fetchall()
-        return [dict(f) for f in filas]
+        filas = [dict(f) for f in cursor.fetchall()]
+        return _enriquecer_registros_con_modificaciones(cursor, filas)
 
 
 # [FN-06.05] Consulta de Actividad del Día Anterior para Gestión RRHH
@@ -1070,6 +1126,7 @@ def obtener_todos_registros_empleado(empleado: str, mes_anio: str = "") -> list:
                 COALESCE(cargado_por, '') as cargado_por,
                 COALESCE(id_empleado, '') as id_empleado,
                 COALESCE(id_proyecto, '') as id_proyecto,
+                COALESCE(modificado, 0) as modificado,
                 sincronizado,
                 creado_en
             FROM historial
@@ -1084,7 +1141,8 @@ def obtener_todos_registros_empleado(empleado: str, mes_anio: str = "") -> list:
 
         query += " ORDER BY fecha ASC, id ASC"
         cursor.execute(query, params)
-        return [dict(f) for f in cursor.fetchall()]
+        filas = [dict(f) for f in cursor.fetchall()]
+        return _enriquecer_registros_con_modificaciones(cursor, filas)
 
 def obtener_pendientes_sincronizacion():
     """Retorna todas las filas de historial que aún no han sido sincronizadas con Google Sheets."""
@@ -1275,13 +1333,71 @@ def obtener_modificaciones_recientes(limite: int = 50) -> list:
     with obtener_conexion() as conn:
         cursor = conn.cursor()
         cursor.execute("""
-            SELECT m.*, h.empleado, h.fecha 
+            SELECT m.*, 
+                   COALESCE(NULLIF(h.empleado, ''), m.quien_modifica) as empleado, 
+                   COALESCE(NULLIF(h.fecha, ''), SUBSTR(m.fecha_hora_modificaciones, 1, 10)) as fecha
             FROM modificaciones_realizadas m
             LEFT JOIN historial h ON m.id_asistencia = h.id_asistencia
             ORDER BY m.fecha_hora_modificaciones DESC
             LIMIT ?
         """, (limite,))
         return [dict(r) for r in cursor.fetchall()]
+
+# [FN-02.02] Consultar notificaciones de modificaciones pendientes para aviso de RRHH
+def obtener_notificaciones_modificaciones(solo_no_revisadas: bool = True) -> list:
+    """
+    Retorna las modificaciones de auditoría para avisos y notificaciones de RRHH.
+    Si solo_no_revisadas es True, retorna solo aquellas no revisadas (revisado = 0).
+    """
+    with obtener_conexion() as conn:
+        cursor = conn.cursor()
+        filtro = "WHERE COALESCE(m.revisado, 0) = 0" if solo_no_revisadas else ""
+        cursor.execute(f"""
+            SELECT 
+                m.id_modificacion,
+                m.id_asistencia,
+                COALESCE(m.tipo_antes, '') as tipo_antes,
+                COALESCE(m.tipo_despues, '') as tipo_despues,
+                COALESCE(m.horas_antes, 0) as horas_antes,
+                COALESCE(m.horas_despues, 0) as horas_despues,
+                COALESCE(m.servicio_antes, '') as servicio_antes,
+                COALESCE(m.servicio_despues, '') as servicio_despues,
+                m.fecha_hora_modificaciones,
+                COALESCE(m.quien_modifica, '') as quien_modifica,
+                COALESCE(m.revisado, 0) as revisado,
+                COALESCE(NULLIF(h.empleado, ''), m.quien_modifica) as empleado,
+                COALESCE(NULLIF(h.fecha, ''), SUBSTR(m.fecha_hora_modificaciones, 1, 10)) as fecha,
+                COALESCE(h.servicio, m.servicio_despues) as servicio_actual,
+                COALESCE(h.tipo_ocf, h.lugar, m.tipo_despues) as tipo_actual
+            FROM modificaciones_realizadas m
+            LEFT JOIN historial h ON m.id_asistencia = h.id_asistencia
+            {filtro}
+            ORDER BY m.fecha_hora_modificaciones DESC
+            LIMIT 50
+        """)
+        return [dict(r) for r in cursor.fetchall()]
+
+# [FN-02.02] Marcar modificación como revisada por RRHH
+def marcar_modificacion_revisada(id_modificacion: str):
+    """Marca una modificación como leída o revisada por RRHH para removerla de las alertas pendientes."""
+    if not id_modificacion:
+        return
+    with obtener_conexion() as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            UPDATE modificaciones_realizadas
+            SET revisado = 1
+            WHERE id_modificacion = ?
+        """, (id_modificacion,))
+        conn.commit()
+
+# [FN-02.02] Marcar todas las modificaciones pendientes como revisadas
+def marcar_todas_modificaciones_revisadas():
+    """Marca todas las modificaciones pendientes como revisadas."""
+    with obtener_conexion() as conn:
+        cursor = conn.cursor()
+        cursor.execute("UPDATE modificaciones_realizadas SET revisado = 1 WHERE COALESCE(revisado, 0) = 0")
+        conn.commit()
 
 # [FN-02.02] Resumen de modificaciones para alertas visuales y badges en RRHH
 def obtener_resumen_modificaciones() -> dict:

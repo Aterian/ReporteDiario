@@ -372,6 +372,76 @@ def sincronizar_modificaciones_pendientes() -> dict:
         print(f"[Sheets] Error al sincronizar modificaciones en Google Sheets: {e}")
         return {"exito": False, "error": str(e)}
 
+# [FN-02.01] Descargar auditoría de modificaciones realizadas desde Google Sheets hacia local
+def descargar_modificaciones_desde_sheets(spreadsheet_id: str = "") -> dict:
+    """
+    Descarga las modificaciones de la hoja '1_1_modificaciones_realizadas' de Google Sheets,
+    e inserta en la base local las que aún no existan, permitiendo a RRHH recibir alertas y avisos
+    de cambios realizados por los colaboradores desde cualquier equipo.
+    """
+    try:
+        sh, ws = obtener_hoja_trabajo(spreadsheet_id=spreadsheet_id, sheet_name="1_1_modificaciones_realizadas")
+        filas = ws.get_all_values()
+        if not filas or len(filas) < 2:
+            return {"exito": True, "nuevas": 0}
+
+        headers = [str(h).strip().lower() for h in filas[0]]
+        idx_id_mod = headers.index("id_modificacion") if "id_modificacion" in headers else 0
+        idx_id_asist = headers.index("id_asistencia") if "id_asistencia" in headers else 1
+        idx_tipo_ant = headers.index("tipo_antes") if "tipo_antes" in headers else 2
+        idx_tipo_desp = headers.index("tipo_despues") if "tipo_despues" in headers else 3
+        idx_h_ant = headers.index("horas_antes") if "horas_antes" in headers else 4
+        idx_h_desp = headers.index("horas_despues") if "horas_despues" in headers else 5
+        idx_serv_ant = headers.index("servicio_antes") if "servicio_antes" in headers else 6
+        idx_serv_desp = headers.index("servicio_despues") if "servicio_despues" in headers else 7
+        idx_fh = headers.index("fecha_hora_modificaciones") if "fecha_hora_modificaciones" in headers else 8
+        idx_quien = headers.index("quien_modifica") if "quien_modifica" in headers else 9
+
+        with obtener_conexion() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT id_modificacion FROM modificaciones_realizadas")
+            existentes = {str(r["id_modificacion"]).strip() for r in cursor.fetchall()}
+
+            nuevas = 0
+            for f in filas[1:]:
+                id_m = str(f[idx_id_mod]).strip() if len(f) > idx_id_mod else ""
+                if not id_m:
+                    continue
+                if id_m not in existentes:
+                    id_a = str(f[idx_id_asist]).strip() if len(f) > idx_id_asist else ""
+                    t_ant = str(f[idx_tipo_ant]).strip() if len(f) > idx_tipo_ant else ""
+                    t_desp = str(f[idx_tipo_desp]).strip() if len(f) > idx_tipo_desp else ""
+                    try:
+                        h_ant = float(f[idx_h_ant]) if len(f) > idx_h_ant and str(f[idx_h_ant]).strip() else 0.0
+                    except Exception:
+                        h_ant = 0.0
+                    try:
+                        h_desp = float(f[idx_h_desp]) if len(f) > idx_h_desp and str(f[idx_h_desp]).strip() else 0.0
+                    except Exception:
+                        h_desp = 0.0
+                    s_ant = str(f[idx_serv_ant]).strip() if len(f) > idx_serv_ant else ""
+                    s_desp = str(f[idx_serv_desp]).strip() if len(f) > idx_serv_desp else ""
+                    fh = str(f[idx_fh]).strip() if len(f) > idx_fh else ""
+                    quien = str(f[idx_quien]).strip() if len(f) > idx_quien else ""
+
+                    cursor.execute("""
+                        INSERT INTO modificaciones_realizadas (
+                            id_modificacion, id_asistencia, tipo_antes, tipo_despues,
+                            horas_antes, horas_despues, servicio_antes, servicio_despues,
+                            fecha_hora_modificaciones, quien_modifica, sincronizado, revisado
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 0)
+                    """, (id_m, id_a, t_ant, t_desp, h_ant, h_desp, s_ant, s_desp, fh, quien))
+                    existentes.add(id_m)
+                    nuevas += 1
+
+            conn.commit()
+            if nuevas > 0:
+                print(f"[Sheets] Se descargaron {nuevas} nuevas modificaciones desde '1_1_modificaciones_realizadas'.")
+            return {"exito": True, "nuevas": nuevas}
+    except Exception as e:
+        print(f"[Sheets] Error al descargar modificaciones desde Google Sheets: {e}")
+        return {"exito": False, "error": str(e), "nuevas": 0}
+
 def sincronizar_pendientes() -> dict:
     """
     Lee los registros con sincronizado=0 de la base local y los sube/actualiza
@@ -769,6 +839,10 @@ def sincronizar_desde_sheets_hacia_local(spreadsheet_id: str = "") -> dict:
                 reconstruir_rosters_desde_historial()
             except Exception:
                 pass
+            try:
+                descargar_modificaciones_desde_sheets(spreadsheet_id=spreadsheet_id)
+            except Exception as e_mod:
+                print(f"[Sheets] Aviso al descargar modificaciones en sync local: {e_mod}")
             print(f"[Sheets] Sincronización completa: {insertados} insertados, {actualizados} actualizados, {len(ids_a_borrar)} purgados.")
             return {
                 "exito": True,

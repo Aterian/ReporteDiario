@@ -30,6 +30,8 @@ backend/dist/*.exe
 *.msi
 
 # --- ENTORNO PYTHON Y COMPILACIÓN ---
+build/
+dist/
 backend/venv/
 backend/env/
 backend/build/

@@ -19,6 +19,8 @@ export default function App() {
   const [recordatorioPendiente, setRecordatorioPendiente] = useState(null);
   const [refrescando, setRefrescando] = useState(false);
   const [toastRefresco, setToastRefresco] = useState(null);
+  const [notificacionesModificaciones, setNotificacionesModificaciones] = useState([]);
+  const [navegacionAuditoria, setNavegacionAuditoria] = useState(null);
   const fileInputRef = useRef(null);
 
   const [tema, setTema] = useState(() => {
@@ -108,6 +110,49 @@ export default function App() {
     };
   }, []);
 
+  // [FN-02.02] Monitoreo y carga de notificaciones de modificaciones para RRHH
+  useEffect(() => {
+    if (!usuario || !puedeVerHistorialOtros(usuario)) {
+      setNotificacionesModificaciones([]);
+      return;
+    }
+    let activo = true;
+
+    const cargarNotifs = async () => {
+      try {
+        const lista = await api.obtenerNotificacionesModificaciones(true);
+        if (activo && Array.isArray(lista)) {
+          setNotificacionesModificaciones(lista);
+        }
+      } catch (err) {
+        console.error('Error al cargar notificaciones de modificaciones:', err);
+      }
+    };
+
+    cargarNotifs();
+
+    // Verificación periódica cada 45 segundos para descargar modificaciones remotas desde Google Sheets
+    const intervalo = setInterval(async () => {
+      try {
+        await api.verificarNuevasModificacionesSheets();
+        cargarNotifs();
+      } catch (e) {
+        // Silenciar fallos periódicos de conexión
+      }
+    }, 45000);
+
+    const handleCatalogos = () => {
+      cargarNotifs();
+    };
+    window.addEventListener('catalogos-actualizados', handleCatalogos);
+
+    return () => {
+      activo = false;
+      clearInterval(intervalo);
+      window.removeEventListener('catalogos-actualizados', handleCatalogos);
+    };
+  }, [usuario]);
+
   // Guardia de navegación por permisos y roles
   useEffect(() => {
     if (!usuario) return;
@@ -118,6 +163,33 @@ export default function App() {
       setVistaActiva('home');
     }
   }, [vistaActiva, usuario]);
+
+  const handleIrACalendarioModificacion = async (notif) => {
+    if (!notif) return;
+    try {
+      await api.marcarModificacionRevisada(notif.id_modificacion);
+    } catch (e) {
+      console.error(e);
+    }
+    setNotificacionesModificaciones(prev => prev.filter(n => n.id_modificacion !== notif.id_modificacion));
+    setNavegacionAuditoria({
+      empleado: notif.empleado,
+      fecha: notif.fecha,
+      idAsistencia: notif.id_asistencia,
+      idModificacion: notif.id_modificacion,
+      ts: Date.now()
+    });
+    setVistaActiva('historial-otros');
+  };
+
+  const handleDescartarNotificacion = async (idModificacion) => {
+    try {
+      await api.marcarModificacionRevisada(idModificacion);
+    } catch (e) {
+      console.error(e);
+    }
+    setNotificacionesModificaciones(prev => prev.filter(n => n.id_modificacion !== idModificacion));
+  };
 
 
 
@@ -355,6 +427,51 @@ export default function App() {
 
 
 
+      {/* Cartel / Pop-up de Notificación para RRHH sobre Modificaciones en Registros */}
+      {puedeVerHistorialOtros(usuario) && notificacionesModificaciones.length > 0 && vistaActiva !== 'historial-otros' && (
+        <div className="rrhh-notification-banner">
+          <div className="rrhh-notif-icon">
+            <span style={{ fontSize: '18px' }}>🔔</span>
+          </div>
+          <div className="rrhh-notif-body">
+            <div className="rrhh-notif-title-row">
+              <span className="rrhh-notif-title">Modificación en Registro Diario</span>
+              {notificacionesModificaciones.length > 1 && (
+                <span className="rrhh-notif-count-badge">+{notificacionesModificaciones.length - 1} más</span>
+              )}
+            </div>
+            <div className="rrhh-notif-desc">
+              <strong>{notificacionesModificaciones[0].empleado}</strong> modificó el registro del{' '}
+              <strong>{notificacionesModificaciones[0].fecha}</strong>{' '}
+              <span className="rrhh-notif-diff">
+                ({notificacionesModificaciones[0].tipo_antes || 'Sin asignar'} ➔ {notificacionesModificaciones[0].tipo_despues})
+              </span>
+              {notificacionesModificaciones[0].quien_modifica && (
+                <span className="rrhh-notif-author"> • Por {notificacionesModificaciones[0].quien_modifica}</span>
+              )}
+            </div>
+          </div>
+          <div className="rrhh-notif-actions">
+            <button
+              type="button"
+              className="btn-rrhh-goto"
+              onClick={() => handleIrACalendarioModificacion(notificacionesModificaciones[0])}
+              title="Ir directo al calendario del empleado para ver el cambio"
+            >
+              📅 Ver cambio en calendario
+            </button>
+            <button
+              type="button"
+              className="btn-rrhh-dismiss"
+              onClick={() => handleDescartarNotificacion(notificacionesModificaciones[0].id_modificacion)}
+              title="Marcar como revisado"
+            >
+              ✕
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Cartel / Pop-up de Recordatorio de Registro Diario */}
       {recordatorioPendiente && vistaActiva !== 'check' && (
         <div className={`reminder-banner ${recordatorioPendiente.tipo === '16:30' ? 'reminder-alert' : 'reminder-normal'}`}>
@@ -399,6 +516,9 @@ export default function App() {
             onHistorialRoster={() => setVistaActiva('historial-roster')}
             onHistorialOtrosEmpleados={() => setVistaActiva('historial-otros')}
             onAvatarClick={handleTriggerAvatar}
+            notificacionesModificaciones={notificacionesModificaciones}
+            onIrACalendarioModificacion={handleIrACalendarioModificacion}
+            onDescartarNotificacion={handleDescartarNotificacion}
           />
         )}
 
@@ -427,6 +547,8 @@ export default function App() {
             onVolver={() => setVistaActiva('home')}
             onVerMiHistorial={() => setVistaActiva('historial')}
             onNuevoReporte={() => setVistaActiva('check')}
+            navegacionAuditoria={navegacionAuditoria}
+            onConsumirNavegacion={() => setNavegacionAuditoria(null)}
           />
         )}
 

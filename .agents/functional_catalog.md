@@ -115,3 +115,12 @@
   3. Desbloqueo de SmartScreen mediante `Unblock-File` de PowerShell previo al relanzamiento.
 
 
+## [FN-02.03] Notificaciones de Modificaciones para RRHH y Distinción Visual en Calendario
+- **Módulo**: [MOD-02] Auditoría y Trazabilidad
+- **Flujo Operativo**: Detecta y sincroniza filas agregadas en `1_1_modificaciones_realizadas` de Google Sheets hacia la base local. Emite aviso y banner interactivo a RRHH con botón para saltar de inmediato al calendario del colaborador en el mes del evento. Distingue visualmente los días y turnos modificados en el calendario de otros empleados.
+- **Tablas afectadas**: `modificaciones_realizadas`, `1_1_modificaciones_realizadas`, `historial`.
+- **Reglas de negocio e invariantes**:
+  1. Notificaciones visibles en banner global y en tarjeta interactiva de inicio para roles de RRHH / gestión.
+  2. Al pulsar "Ver cambio en calendario", navega automáticamente a la vista de otros empleados, selecciona al colaborador, desplaza el calendario al mes del cambio, resalta la celda y abre el detalle del día.
+  3. Celdas y pastillas con modificaciones previas exhiben indicador ✏️, badge 'MOD' y tooltip explicativo.
+  4. Estado de revisión (`revisado = 1`) permite descartar o marcar como leída la notificación de modificación.
