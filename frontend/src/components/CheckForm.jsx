@@ -50,17 +50,6 @@ export default function CheckForm({ onRegistroGuardado, onVolver, tema }) {
     return `${anio}-${mes}-${dia}`;
   };
 
-  const getLunesSemanaActual = () => {
-    const hoy = new Date();
-    const diaSem = hoy.getDay(); // 0: Domingo, 1: Lunes, ..., 6: Sábado
-    const diffDias = diaSem === 0 ? 6 : diaSem - 1;
-    const lunes = new Date(hoy);
-    lunes.setDate(hoy.getDate() - diffDias);
-    const anio = lunes.getFullYear();
-    const mes = String(lunes.getMonth() + 1).padStart(2, '0');
-    const dia = String(lunes.getDate()).padStart(2, '0');
-    return `${anio}-${mes}-${dia}`;
-  };
 
   const [fecha, setFecha] = useState(getFechaHoy());
   const [fechaFin, setFechaFin] = useState(getFechaHoy());
@@ -128,10 +117,7 @@ export default function CheckForm({ onRegistroGuardado, onVolver, tema }) {
     ? (usuarioSeleccionado.area || '')
     : (sesionUsuario?.area || '')).trim().toUpperCase();
 
-  // [FN-01.06] Restricción de fechas a la semana activa para empleados regulares
-  const esExentoLimiteFecha = esRRHH || esIvanValentin(sesionUsuario) || cargarParaOtro;
-  const fechaMinimaSemana = esExentoLimiteFecha ? undefined : getLunesSemanaActual();
-  const fechaMaximaPermitida = esExentoLimiteFecha ? undefined : getFechaHoy();
+  // [FN-01.06] Libertad de fechas: sin restricción semanal para ningún colaborador
 
   // Empleados exclusivos de oficina: SIG ('S') y Camila Llovio (Ingeniería)
   // NOTA: La limitación NO aplica si el registro lo carga RRHH (RRHH tiene permisos completos)
@@ -391,17 +377,6 @@ export default function CheckForm({ onRegistroGuardado, onVolver, tema }) {
       }
     }
 
-    // [FN-01.06] Validación de semana activa en cliente
-    if (!esExentoLimiteFecha && fechaMinimaSemana) {
-      if (fecha < fechaMinimaSemana) {
-        setMensajeError(`Solo puedes registrar asistencias correspondientes a la semana activa (desde el lunes ${fechaMinimaSemana}).`);
-        return;
-      }
-      if (usarRangoFechas && fechaFin && fechaFin < fechaMinimaSemana) {
-        setMensajeError(`El rango de fechas no puede comenzar antes del lunes ${fechaMinimaSemana}.`);
-        return;
-      }
-    }
 
     setEnviando(true);
 
@@ -732,8 +707,6 @@ export default function CheckForm({ onRegistroGuardado, onVolver, tema }) {
                       type="date"
                       className="form-input form-input-clean"
                       value={fecha}
-                      min={fechaMinimaSemana}
-                      max={fechaMaximaPermitida}
                       onChange={(e) => setFecha(e.target.value)}
                       disabled={enviando}
                     />
@@ -744,8 +717,6 @@ export default function CheckForm({ onRegistroGuardado, onVolver, tema }) {
                       type="date"
                       className="form-input form-input-clean"
                       value={fechaFin}
-                      min={fechaMinimaSemana}
-                      max={fechaMaximaPermitida}
                       onChange={(e) => setFechaFin(e.target.value)}
                       disabled={enviando}
                     />
@@ -757,8 +728,6 @@ export default function CheckForm({ onRegistroGuardado, onVolver, tema }) {
                   type="date"
                   className="form-input form-input-clean"
                   value={fecha}
-                  min={fechaMinimaSemana}
-                  max={fechaMaximaPermitida}
                   onChange={(e) => setFecha(e.target.value)}
                   disabled={enviando}
                 />

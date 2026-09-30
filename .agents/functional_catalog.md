@@ -144,13 +144,14 @@
   2. Barra flotante de asignación (`calendar-floating-cost-toolbar`) y checkboxes del calendario (`calendar-day-checkbox`) condicionados a `puedeGestionarTipoCosto(usuario)`.
   3. Endpoint del backend `actualizar_tipo_costo_masivo` valida y rechaza peticiones de usuarios sin permiso correspondiente.
 
-## [FN-01.07] Transparencia e Indicador de Sincronización Automática con Google Sheets
+## [FN-01.06] Libertad de Selección de Fechas para Registro Diario
 - **Módulo**: [MOD-01] Registro de Asistencia Diaria
-- **Flujo Operativo**: Muestra al usuario una cuenta regresiva animada (~4 seg) al guardar o modificar un reporte informando que la subida a Google Sheets se realiza automáticamente en segundo plano sin necesidad de presionar 'Subir'.
+- **Flujo Operativo**: Otorga libertad total a todos los colaboradores para seleccionar y registrar la fecha de asistencia requerida sin restricciones de semana activa.
 - **Tablas afectadas**: `historial`, `1_asistencia_informada`.
 - **Reglas de negocio e invariantes**:
-  1. En `CheckForm`: tarjeta de progreso animada con cuenta regresiva ("⏳ Sincronizando con Google Sheets (~4s)... No es necesario presionar 'Subir'").
-  2. En `HistoryView` y `OtherEmployeesHistoryView`: pulso informativo de sincronización activa junto al botón de subida.
-  3. El hilo en segundo plano emite `catalogos-actualizados` al concluir `sincronizar_pendientes()`, transformando reactivamente los registros pendientes a sincronizados.
+  1. Todos los empleados pueden cargar o editar asistencias de cualquier fecha sin bloqueos por inicio de semana (lunes).
+  2. Removidos los atributos `min` y `max` restrictivos del selector de fechas en `CheckForm`.
+  3. Eliminadas las validaciones de límite temporal en los métodos `guardar_check_diario` y `modificar_registro` del backend.
+
 
 

@@ -4,6 +4,16 @@ Historial cronológico de cambios, nuevas características y mejoras aplicadas a
 
 ---
 
+## [1.9.0] - 2026-09-30
+
+### 📅 Libertad de Selección de Fechas en Registro Diario
+- **Eliminación de la Restricción Semanal (`[FN-01.06]`)**:
+  - Se eliminó el límite que restringía a los colaboradores a cargar o modificar reportes únicamente dentro de la semana activa en curso.
+  - Todos los empleados tienen ahora total libertad para seleccionar y cargar reportes de cualquier fecha requerida sin bloqueos en el formulario ni en la edición.
+  - Removidas las validaciones de fecha mínima tanto en el cliente (`CheckForm.jsx`) como en el servidor (`guardar_check_diario` y `modificar_registro` en `main.py`).
+
+---
+
 ## [1.8.0] - 2026-09-30
 
 ### 🛡️ Panel Comparativo de Modificaciones, Restricción de Costos y Sincronización Proactiva

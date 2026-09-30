@@ -537,21 +537,7 @@ class ApiPuente:
         else:
             fechas_a_cargar = [fecha_inicio]
 
-        # [FN-01.06] Restricción de fechas a la semana activa para empleados regulares
-        es_exento_fecha = es_rrhh or es_ivan_valentin(sesion) or (cargado_por and es_rrhh)
-        if not es_exento_fecha:
-            from datetime import timedelta
-            hoy_dt = datetime.now()
-            lunes_dt = hoy_dt - timedelta(days=hoy_dt.weekday())
-            fecha_lunes_str = lunes_dt.strftime("%Y-%m-%d")
-
-            for f_val in fechas_a_cargar:
-                if f_val < fecha_lunes_str:
-                    return {
-                        "exito": False,
-                        "error": f"Acceso restringido: Solo puedes registrar asistencias correspondientes a la semana activa (desde el lunes {fecha_lunes_str})."
-                    }
-
+        # [FN-01.06] Libertad de fechas: cualquier colaborador puede registrar la fecha que requiera
         proyectos = datos.get("proyectos")
         lugar_norm = lugar.strip().lower()
 
@@ -878,18 +864,7 @@ class ApiPuente:
 
         fecha = str(datos.get("fecha", "")).strip()
 
-        # [FN-01.06] Restricción de modificación a la semana activa para empleados regulares
-        if not (es_justina_bertolozzi(sesion) or es_ivan_valentin(sesion) or es_area_rrhh(sesion)):
-            from datetime import timedelta
-            hoy_dt = datetime.now()
-            lunes_dt = hoy_dt - timedelta(days=hoy_dt.weekday())
-            fecha_lunes_str = lunes_dt.strftime("%Y-%m-%d")
-            if fecha < fecha_lunes_str:
-                return {
-                    "exito": False,
-                    "error": f"Acceso restringido: Solo puedes modificar asistencias correspondientes a la semana activa (desde el lunes {fecha_lunes_str})."
-                }
-
+        # [FN-01.06] Libertad de fechas: cualquier colaborador puede modificar cualquier fecha de su reporte
         lugar = str(datos.get("lugar") or datos.get("tipo_ocf", "")).strip()
         servicio = str(datos.get("servicio", "")).strip()
         empleado = str(datos.get("empleado", "")).strip()
@@ -1525,7 +1500,7 @@ def obtener_icono_tray():
     return crear_icono_calendario(64)
 
 
-APP_VERSION = "1.8.0"
+APP_VERSION = "1.9.0"
 
 _mutex_instancia = None
 
