@@ -115,6 +115,7 @@ export default function CheckForm({ onRegistroGuardado, onVolver, tema }) {
   const [enviando, setEnviando] = useState(false);
   const [mensajeExito, setMensajeExito] = useState('');
   const [mensajeError, setMensajeError] = useState('');
+  const [segundosSyncRestantes, setSegundosSyncRestantes] = useState(0);
 
   // =========================================================================
   // VARIABLES DERIVADAS (Declaradas aquí para evitar errores TDZ antes de los hooks)
@@ -526,12 +527,20 @@ export default function CheckForm({ onRegistroGuardado, onVolver, tema }) {
         if (onRegistroGuardado) {
           onRegistroGuardado();
         }
-        setTimeout(() => {
-          setMensajeExito('');
-          if (onVolver) {
-            onVolver();
-          }
-        }, 1300);
+        setSegundosSyncRestantes(4);
+        const timer = setInterval(() => {
+          setSegundosSyncRestantes((prev) => {
+            if (prev <= 1) {
+              clearInterval(timer);
+              setTimeout(() => {
+                setMensajeExito('');
+                if (onVolver) onVolver();
+              }, 500);
+              return 0;
+            }
+            return prev - 1;
+          });
+        }, 1000);
       } else {
         setMensajeError(res.error || 'No se pudo registrar el reporte.');
       }
@@ -580,11 +589,39 @@ export default function CheckForm({ onRegistroGuardado, onVolver, tema }) {
           </>
         )}
         {mensajeExito && (
-          <div className="alert alert-success">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M20 6L9 17l-5-5" />
-            </svg>
-            <span>{mensajeExito}</span>
+          <div className="alert alert-success sync-progress-alert">
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', width: '100%' }}>
+              <div className="sync-pulse-spinner" />
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '3px', flex: 1 }}>
+                <strong style={{ fontSize: '13px', color: '#065f46' }}>{mensajeExito}</strong>
+                <span style={{ fontSize: '12px', color: '#047857', display: 'flex', alignItems: 'center', gap: '4px', flexWrap: 'wrap' }}>
+                  ⏳ Sincronizando con Google Sheets (~{segundosSyncRestantes > 0 ? segundosSyncRestantes : 1}s)...
+                  <span style={{ fontWeight: 600, color: '#065f46' }}>No es necesario presionar 'Subir'</span>.
+                </span>
+              </div>
+              <button
+                type="button"
+                className="btn-sync-dismiss"
+                onClick={() => {
+                  setMensajeExito('');
+                  if (onVolver) onVolver();
+                }}
+                style={{
+                  background: 'rgba(6, 95, 70, 0.1)',
+                  border: '1px solid rgba(6, 95, 70, 0.25)',
+                  color: '#065f46',
+                  borderRadius: '4px',
+                  padding: '3px 8px',
+                  fontSize: '11px',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  whiteSpace: 'nowrap'
+                }}
+                title="Volver al inicio de inmediato"
+              >
+                Continuar ➔
+              </button>
+            </div>
           </div>
         )}
 

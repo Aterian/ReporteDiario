@@ -78,3 +78,16 @@ export const puedeModificarRegistro = (usuario, registro) => {
 
   return Boolean(esPropio);
 };
+
+// [FN-04.05] Permisos de Aplicaciones
+export const esAreaAplicaciones = (usuario) => {
+  if (!usuario) return false;
+  const area = (usuario.area || '').toUpperCase().trim();
+  return area === 'A' || area === 'APLICACIONES' || esIvanValentin(usuario);
+};
+
+// [FN-04.05] Gestión de Tipo de Costo (Exclusivo RRHH y Aplicaciones)
+export const puedeGestionarTipoCosto = (usuario) => {
+  return esAreaRRHH(usuario) || esAreaAplicaciones(usuario);
+};
+

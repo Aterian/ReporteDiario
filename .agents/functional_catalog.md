@@ -124,3 +124,33 @@
   2. Al pulsar "Ver cambio en calendario", navega automáticamente a la vista de otros empleados, selecciona al colaborador, desplaza el calendario al mes del cambio, resalta la celda y abre el detalle del día.
   3. Celdas y pastillas con modificaciones previas exhiben indicador ✏️, badge 'MOD' y tooltip explicativo.
   4. Estado de revisión (`revisado = 1`) permite descartar o marcar como leída la notificación de modificación.
+
+## [FN-02.04] Panel Flotante Dividido Comparativo de Modificaciones y Gestión de Revisión RRHH
+- **Módulo**: [MOD-02] Auditoría y Trazabilidad
+- **Flujo Operativo**: Presenta un panel flotante dividido comparativo (split view) que confronta lado a lado los datos del registro anteriores a la modificación (lado izquierdo) y posteriores (lado derecho), utilizando la tabla `1_1_modificaciones_realizadas`. Permite auditar diferencias de modalidad, horas y proyectos, seleccionar iteraciones históricas y marcar el cambio como revisado.
+- **Tablas afectadas**: `modificaciones_realizadas`, `1_1_modificaciones_realizadas`, `historial`.
+- **Reglas de negocio e invariantes**:
+  1. Panel dividido: lado izquierdo datos previos (`tipo_antes`, `horas_antes`, `servicio_antes`) vs. lado derecho datos actuales (`tipo_despues`, `horas_despues`, `servicio_despues`).
+  2. Divisor central con flecha direccional y delta de horas computadas (`+hs`, `-hs` o `0 hs`).
+  3. Resumen ejecutivo de cambios e historial de versiones por chips en caso de modificaciones múltiples sobre una misma asistencia.
+  4. Botón "✓ Marcar como Revisado por RRHH" persiste `revisado = 1` y actualiza reactivamente el banner superior y el calendario.
+
+## [FN-04.05] Restricción de Permisos para Tipo de Costo (RRHH y Aplicaciones)
+- **Módulo**: [MOD-04] Control de Permisos y Roles
+- **Flujo Operativo**: Restringe la visualización y edición del Tipo de Costo en el Panel de Control de Empleados exclusivamente al personal de Recursos Humanos (Justina Bertolozzi) y Área de Aplicaciones / Administrador (Iván Valentin).
+- **Tablas afectadas**: `historial`, `1_asistencia_informada`.
+- **Reglas de negocio e invariantes**:
+  1. Usuarios con roles operativos o de Núcleo (`N`) no visualizan botones flotantes de costo, checkboxes de selección masiva, badges de costo ni el campo selector en el modal de edición.
+  2. Barra flotante de asignación (`calendar-floating-cost-toolbar`) y checkboxes del calendario (`calendar-day-checkbox`) condicionados a `puedeGestionarTipoCosto(usuario)`.
+  3. Endpoint del backend `actualizar_tipo_costo_masivo` valida y rechaza peticiones de usuarios sin permiso correspondiente.
+
+## [FN-01.07] Transparencia e Indicador de Sincronización Automática con Google Sheets
+- **Módulo**: [MOD-01] Registro de Asistencia Diaria
+- **Flujo Operativo**: Muestra al usuario una cuenta regresiva animada (~4 seg) al guardar o modificar un reporte informando que la subida a Google Sheets se realiza automáticamente en segundo plano sin necesidad de presionar 'Subir'.
+- **Tablas afectadas**: `historial`, `1_asistencia_informada`.
+- **Reglas de negocio e invariantes**:
+  1. En `CheckForm`: tarjeta de progreso animada con cuenta regresiva ("⏳ Sincronizando con Google Sheets (~4s)... No es necesario presionar 'Subir'").
+  2. En `HistoryView` y `OtherEmployeesHistoryView`: pulso informativo de sincronización activa junto al botón de subida.
+  3. El hilo en segundo plano emite `catalogos-actualizados` al concluir `sincronizar_pendientes()`, transformando reactivamente los registros pendientes a sincronizados.
+
+

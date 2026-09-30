@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { api } from '../services/apiBridge';
-import { puedeVerHistorialOtros, puedeModificarRegistro } from '../utils/permissions';
+import { puedeVerHistorialOtros, puedeModificarRegistro, puedeGestionarTipoCosto } from '../utils/permissions';
 import { esServicioAreaInterna, esFrancoDeObra, obtenerEtiquetaModalidad } from '../utils/francoUtils';
 
 // [MOD-03] OtherEmployeesHistoryView
@@ -88,6 +88,9 @@ export default function OtherEmployeesHistoryView({
   const [filtroEmpleadoLista, setFiltroEmpleadoLista] = useState('');
   const [filtroSoloMes, setFiltroSoloMes] = useState(false);
   const [diasSeleccionadosCalendario, setDiasSeleccionadosCalendario] = useState(new Set());
+  const [marcandoRevisadoId, setMarcandoRevisadoId] = useState(null);
+  const [comparativaModificacion, setComparativaModificacion] = useState(null);
+  const puedeEditarCosto = puedeGestionarTipoCosto(usuario);
 
   // Cantidad manual de días para las 4 categorías de liquidación (RRHH)
   const [diasOficinaManual, setDiasOficinaManual] = useState('');
@@ -196,11 +199,28 @@ export default function OtherEmployeesHistoryView({
         }
         setDiaDestacado(navegacionAuditoria.fecha);
       }
+      if (navegacionAuditoria.idAsistencia) {
+        const targetId = String(navegacionAuditoria.idAsistencia).trim();
+        const targetItem = registros.find(r => String(r.id_asistencia || r.id).trim() === targetId);
+        if (targetItem) {
+          abrirComparativa(targetItem);
+        }
+      }
       if (onConsumirNavegacion) {
         onConsumirNavegacion();
       }
     }
-  }, [navegacionAuditoria]);
+  }, [navegacionAuditoria, registros]);
+
+  // Si hay un día destacado por auditoría, intentar abrir comparativa automáticamente al cargar datos
+  useEffect(() => {
+    if (diaDestacado && registrosEmpleadoAuditar.length > 0 && !comparativaModificacion) {
+      const itemDestacado = registrosEmpleadoAuditar.find(r => r.fecha === diaDestacado && Boolean(r.fue_modificado || r.modificado || (r.modificaciones && r.modificaciones.length > 0)));
+      if (itemDestacado) {
+        abrirComparativa(itemDestacado);
+      }
+    }
+  }, [diaDestacado, registrosEmpleadoAuditar]);
 
   useEffect(() => {
     if (empleadoAuditar) {
@@ -299,7 +319,10 @@ export default function OtherEmployeesHistoryView({
       });
 
       if (res && res.exito) {
-        setMensajeSync({ tipo: 'exito', texto: 'Registro modificado exitosamente.' });
+        setMensajeSync({
+          tipo: 'exito',
+          texto: 'Registro modificado exitosamente. Sincronizando con Google Sheets en segundo plano (~3-5 seg)... No es necesario presionar Subir.'
+        });
         setRegistroEditando(null);
         await cargarDatos();
         if (empleadoAuditar) {
@@ -344,6 +367,95 @@ export default function OtherEmployeesHistoryView({
     } finally {
       setEliminando(false);
     }
+  };
+
+  // [FN-02.02] Marcar modificación de una asistencia como revisada por RRHH
+  const handleMarcarRevisado = async (item) => {
+    const idAsistencia = item.id_asistencia || item.id;
+    if (!idAsistencia) return;
+    setMarcandoRevisadoId(idAsistencia);
+    try {
+      await api.marcarModificacionPorAsistenciaRevisada(idAsistencia);
+      setRegistros(prev => prev.map(r => {
+        if (r.id_asistencia === idAsistencia || r.id === item.id) {
+          return { ...r, modificacion_pendiente: 0, modificacion_revisada: 1 };
+        }
+        return r;
+      }));
+      setRegistrosEmpleadoAuditar(prev => prev.map(r => {
+        if (r.id_asistencia === idAsistencia || r.id === item.id) {
+          return { ...r, modificacion_pendiente: 0, modificacion_revisada: 1 };
+        }
+        return r;
+      }));
+      if (diaSeleccionadoAuditoria) {
+        setDiaSeleccionadoAuditoria(prev => {
+          if (!prev) return null;
+          return {
+            ...prev,
+            registros: prev.registros.map(r => {
+              if (r.id_asistencia === idAsistencia || r.id === item.id) {
+                return { ...r, modificacion_pendiente: 0, modificacion_revisada: 1 };
+              }
+              return r;
+            })
+          };
+        });
+      }
+      if (comparativaModificacion) {
+        setComparativaModificacion(prev => {
+          if (!prev) return null;
+          const targetId = prev.registro?.id_asistencia || prev.registro?.id;
+          if (targetId === idAsistencia || targetId === item.id) {
+            const modsUpdated = (prev.modificaciones || []).map(m => ({ ...m, revisado: 1 }));
+            return {
+              ...prev,
+              modificaciones: modsUpdated,
+              modActiva: prev.modActiva ? { ...prev.modActiva, revisado: 1 } : null,
+              registro: { ...prev.registro, modificacion_pendiente: 0, modificacion_revisada: 1 }
+            };
+          }
+          return prev;
+        });
+      }
+      setMensajeSync({
+        tipo: 'exito',
+        texto: 'Modificación marcada como revisada. La alerta visual fue desactivada.'
+      });
+      window.dispatchEvent(new CustomEvent('catalogos-actualizados'));
+    } catch (err) {
+      console.error('Error al marcar modificación como revisada:', err);
+      setMensajeSync({ tipo: 'error', texto: 'No se pudo marcar la modificación como revisada.' });
+    } finally {
+      setMarcandoRevisadoId(null);
+    }
+  };
+
+  // [FN-02.04] Abrir panel flotante dividido comparativo de modificación
+  const abrirComparativa = (item, modEspecifica = null) => {
+    if (!item) return;
+    const mods = Array.isArray(item.modificaciones) ? item.modificaciones : [];
+    const modActiva = modEspecifica || (mods.length > 0 ? mods[mods.length - 1] : null);
+    setComparativaModificacion({
+      registro: item,
+      modificaciones: mods,
+      modActiva: modActiva,
+      indiceActivo: modActiva ? mods.findIndex(m => m.id_modificacion === modActiva.id_modificacion) : (mods.length - 1)
+    });
+  };
+
+  const handleMarcarRevisadoDesdeComparativa = async () => {
+    if (!comparativaModificacion?.registro) return;
+    await handleMarcarRevisado(comparativaModificacion.registro);
+  };
+
+  const handleCambiarModificacionActiva = (idx) => {
+    if (!comparativaModificacion || !comparativaModificacion.modificaciones[idx]) return;
+    setComparativaModificacion(prev => ({
+      ...prev,
+      modActiva: prev.modificaciones[idx],
+      indiceActivo: idx
+    }));
   };
 
   // Manejo de asignación masiva de tipo_costo (RRHH)
@@ -716,20 +828,25 @@ export default function OtherEmployeesHistoryView({
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           {pendientesCount > 0 && (
-            <button
-              type="button"
-              className="btn-sync"
-              onClick={ejecutarSincronizacion}
-              disabled={sincronizando}
-              title="Sincronizar cambios pendientes con Google Sheets"
-            >
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M3 12a9 9 0 0 1 15-6.7L21 8" />
-                <path d="M3 22v-6h6" />
-                <path d="M21 12a9 9 0 0 1-15 6.7L3 16" />
-              </svg>
-              <span>{sincronizando ? 'Enviando...' : `Subir (${pendientesCount})`}</span>
-            </button>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span className="sync-auto-helper" title="La aplicación sincroniza en segundo plano automáticamente">
+                <span className="sync-dot-pulse" /> Sincronización automática activa (~3-5s)
+              </span>
+              <button
+                type="button"
+                className="btn-sync"
+                onClick={ejecutarSincronizacion}
+                disabled={sincronizando}
+                title="Sincronizar cambios pendientes inmediatamente con Google Sheets (No requerido: se sincroniza solo)"
+              >
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M3 12a9 9 0 0 1 15-6.7L21 8" />
+                  <path d="M3 22v-6h6" />
+                  <path d="M21 12a9 9 0 0 1-15 6.7L3 16" />
+                </svg>
+                <span>{sincronizando ? 'Enviando...' : `Subir ahora (${pendientesCount})`}</span>
+              </button>
+            </div>
           )}
 
           <button
@@ -868,79 +985,81 @@ export default function OtherEmployeesHistoryView({
               </div>
             </div>
 
-            {/* Asignación Masiva de Costos Toolbar */}
-            <div className="bulk-selection-toolbar" style={{ marginTop: '8px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <button
-                  type="button"
-                  className="btn-action-ghost"
-                  style={{ fontSize: '11px', padding: '3px 8px' }}
-                  onClick={handleToggleSelectAll}
-                >
-                  {registrosFiltrados.length > 0 && registrosFiltrados.every(r => seleccionados.has(r.id))
-                    ? '☑ Deseleccionar visibles'
-                    : '☐ Seleccionar visibles'}
-                </button>
-                {seleccionados.size > 0 && (
-                  <span style={{ fontSize: '11px', fontWeight: 600, color: '#cc3333' }}>
-                    {seleccionados.size} seleccionado(s)
-                  </span>
-                )}
-              </div>
-
-              {seleccionados.size > 0 && (
-                <div style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '6px',
-                  background: 'var(--bg-surface-elevated, #f8fafc)',
-                  border: '1px solid #cc333340',
-                  padding: '6px 10px',
-                  borderRadius: '6px',
-                  flexWrap: 'wrap'
-                }}>
-                  <span style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-secondary)' }}>
-                    Asignar Costo:
-                  </span>
-                  <button
-                    type="button"
-                    className="btn-action-ghost"
-                    style={{ fontSize: '11px', padding: '3px 8px', background: '#3b82f615', color: '#2563eb', borderColor: '#3b82f640' }}
-                    onClick={() => handleAplicarTipoCostoLote('Oficina')}
-                    disabled={aplicandoCosto}
-                  >
-                    Oficina
-                  </button>
-                  <button
-                    type="button"
-                    className="btn-action-ghost"
-                    style={{ fontSize: '11px', padding: '3px 8px', background: '#10b98115', color: '#059669', borderColor: '#10b98140' }}
-                    onClick={() => handleAplicarTipoCostoLote('Campo')}
-                    disabled={aplicandoCosto}
-                  >
-                    Campo
-                  </button>
+            {/* Asignación Masiva de Costos Toolbar (Exclusivo RRHH y Aplicaciones) */}
+            {puedeEditarCosto && (
+              <div className="bulk-selection-toolbar" style={{ marginTop: '8px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <button
                     type="button"
                     className="btn-action-ghost"
                     style={{ fontSize: '11px', padding: '3px 8px' }}
-                    onClick={() => handleAplicarTipoCostoLote('')}
-                    disabled={aplicandoCosto}
+                    onClick={handleToggleSelectAll}
                   >
-                    Sin Asignar
+                    {registrosFiltrados.length > 0 && registrosFiltrados.every(r => seleccionados.has(r.id))
+                      ? '☑ Deseleccionar visibles'
+                      : '☐ Seleccionar visibles'}
                   </button>
-                  <button
-                    type="button"
-                    className="btn-action-ghost"
-                    style={{ fontSize: '11px', padding: '3px 6px', marginLeft: 'auto' }}
-                    onClick={() => setSeleccionados(new Set())}
-                    title="Limpiar selección"
-                  >
-                    ✕
-                  </button>
+                  {seleccionados.size > 0 && (
+                    <span style={{ fontSize: '11px', fontWeight: 600, color: '#cc3333' }}>
+                      {seleccionados.size} seleccionado(s)
+                    </span>
+                  )}
                 </div>
-              )}
-            </div>
+
+                {seleccionados.size > 0 && (
+                  <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    background: 'var(--bg-surface-elevated, #f8fafc)',
+                    border: '1px solid #cc333340',
+                    padding: '6px 10px',
+                    borderRadius: '6px',
+                    flexWrap: 'wrap'
+                  }}>
+                    <span style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-secondary)' }}>
+                      Asignar Costo:
+                    </span>
+                    <button
+                      type="button"
+                      className="btn-action-ghost"
+                      style={{ fontSize: '11px', padding: '3px 8px', background: '#3b82f615', color: '#2563eb', borderColor: '#3b82f640' }}
+                      onClick={() => handleAplicarTipoCostoLote('Oficina')}
+                      disabled={aplicandoCosto}
+                    >
+                      Oficina
+                    </button>
+                    <button
+                      type="button"
+                      className="btn-action-ghost"
+                      style={{ fontSize: '11px', padding: '3px 8px', background: '#10b98115', color: '#059669', borderColor: '#10b98140' }}
+                      onClick={() => handleAplicarTipoCostoLote('Campo')}
+                      disabled={aplicandoCosto}
+                    >
+                      Campo
+                    </button>
+                    <button
+                      type="button"
+                      className="btn-action-ghost"
+                      style={{ fontSize: '11px', padding: '3px 8px' }}
+                      onClick={() => handleAplicarTipoCostoLote('')}
+                      disabled={aplicandoCosto}
+                    >
+                      Sin Asignar
+                    </button>
+                    <button
+                      type="button"
+                      className="btn-action-ghost"
+                      style={{ fontSize: '11px', padding: '3px 6px', marginLeft: 'auto' }}
+                      onClick={() => setSeleccionados(new Set())}
+                      title="Limpiar selección"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           <div className="other-cards-scroll">
@@ -976,18 +1095,20 @@ export default function OtherEmployeesHistoryView({
                     <div key={item.id} className={`other-record-card ${isChecked ? 'card-selected' : ''}`}>
                       <div className="other-card-header">
                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                          <input
-                            type="checkbox"
-                            style={{
-                              width: '18px',
-                              height: '18px',
-                              cursor: 'pointer',
-                              accentColor: '#cc3333'
-                            }}
-                            checked={isChecked}
-                            onChange={() => handleToggleSelect(item.id)}
-                            title="Seleccionar para asignar costo"
-                          />
+                          {puedeEditarCosto && (
+                            <input
+                              type="checkbox"
+                              style={{
+                                width: '18px',
+                                height: '18px',
+                                cursor: 'pointer',
+                                accentColor: '#cc3333'
+                              }}
+                              checked={isChecked}
+                              onChange={() => handleToggleSelect(item.id)}
+                              title="Seleccionar para asignar costo"
+                            />
+                          )}
                           <div className="other-card-user">
                             <div className="other-user-avatar">
                               {getIniciales(item.empleado)}
@@ -1005,11 +1126,17 @@ export default function OtherEmployeesHistoryView({
 
                         <div className="other-card-badges">
                           {Boolean(item.fue_modificado || item.modificado) && (
-                            <span className="status-badge badge-modificado" title={item.detalle_modificacion || 'Registro modificado'}>
-                              ✏️ Modificado
-                            </span>
+                            item.modificacion_revisada === 1 && item.modificacion_pendiente !== 1 ? (
+                              <span className="status-badge badge-modificado-revisado" title={item.detalle_modificacion || 'Modificación revisada por RRHH'}>
+                                ✓ Revisado
+                              </span>
+                            ) : (
+                              <span className="status-badge badge-modificado" title={item.detalle_modificacion || 'Modificado - Pendiente de revisión'}>
+                                ✏️ Modificado
+                              </span>
+                            )
                           )}
-                          {item.tipo_costo && (
+                          {puedeEditarCosto && item.tipo_costo && (
                             <span className={`status-badge ${item.tipo_costo.toLowerCase() === 'campo' ? 'badge-costo-campo' : 'badge-costo-oficina'}`}>
                               Costo: {item.tipo_costo}
                             </span>
@@ -1074,6 +1201,31 @@ export default function OtherEmployeesHistoryView({
                         >
                           📅 Calendario
                         </button>
+
+                        {Boolean(item.fue_modificado || item.modificado || (item.modificaciones && item.modificaciones.length > 0)) && (
+                          <button
+                            type="button"
+                            className="btn-card-action btn-comparativa-action"
+                            style={{ color: '#7c3aed', borderColor: '#8b5cf650', background: '#8b5cf615', fontWeight: 600 }}
+                            onClick={() => abrirComparativa(item)}
+                            title="Auditar modificación: ver comparativa dividida antes y después"
+                          >
+                            ⚖️ Comparativa
+                          </button>
+                        )}
+
+                        {(item.modificacion_pendiente === 1 || (Boolean(item.fue_modificado || item.modificado) && item.modificacion_revisada !== 1)) && (
+                          <button
+                            type="button"
+                            className="btn-card-action"
+                            style={{ color: '#059669', borderColor: '#10b98150', background: '#10b98115', fontWeight: 600 }}
+                            disabled={marcandoRevisadoId === (item.id_asistencia || item.id)}
+                            onClick={() => handleMarcarRevisado(item)}
+                            title="Marcar modificación como revisada por RRHH para quitar la alerta"
+                          >
+                            ✓ Revisado
+                          </button>
+                        )}
 
                         {puedeModificarRegistro(usuario, item) ? (
                           <>
@@ -1180,8 +1332,8 @@ export default function OtherEmployeesHistoryView({
 
           {/* Grilla del Calendario Mensual Interactivo */}
           <div className="audit-calendar-wrapper" style={{ position: 'relative' }}>
-            {/* Barra flotante para asignación masiva de costo a días seleccionados */}
-            {diasSeleccionadosCalendario.size > 0 && (
+            {/* Barra flotante para asignación masiva de costo a días seleccionados (Solo RRHH y Aplicaciones) */}
+            {puedeEditarCosto && diasSeleccionadosCalendario.size > 0 && (
               <div className="calendar-floating-cost-toolbar">
                 <div className="floating-cost-left">
                   <span className="floating-cost-badge">{diasSeleccionadosCalendario.size}</span>
@@ -1245,36 +1397,38 @@ export default function OtherEmployeesHistoryView({
 
                 const tieneRegistros = celda.registros.length > 0;
                 const estaSeleccionado = diasSeleccionadosCalendario.has(celda.fechaIso);
-                const tieneModificados = celda.registros.some(r => r.fue_modificado === 1 || r.modificado === 1);
+                const tieneModificadosPendientes = celda.registros.some(r => r.modificacion_pendiente === 1 || (r.fue_modificado === 1 && r.modificacion_revisada !== 1));
+                const tieneModificadosRevisados = !tieneModificadosPendientes && celda.registros.some(r => r.modificacion_revisada === 1);
                 const esDestacada = diaDestacado === celda.fechaIso;
 
                 return (
                   <div
                     key={celda.id}
-                    className={`calendar-cell ${celda.esHoy ? 'cell-today' : ''} ${tieneRegistros ? 'cell-has-data' : ''} ${estaSeleccionado ? 'cell-selected-day' : ''} ${tieneModificados ? 'cell-has-modified' : ''} ${esDestacada ? 'cell-destacada-modificacion' : ''}`}
+                    className={`calendar-cell ${celda.esHoy ? 'cell-today' : ''} ${tieneRegistros ? 'cell-has-data' : ''} ${estaSeleccionado ? 'cell-selected-day' : ''} ${tieneModificadosPendientes ? 'cell-has-modified' : ''} ${tieneModificadosRevisados ? 'cell-has-modified-reviewed' : ''} ${esDestacada ? 'cell-destacada-modificacion' : ''}`}
                     onClick={() => {
                       if (!tieneRegistros) return;
-                      if (celda.registros.length === 1 && puedeModificarRegistro(usuario, celda.registros[0])) {
-                        setRegistroEditando({ ...celda.registros[0] });
-                      } else {
-                        setDiaSeleccionadoAuditoria(celda);
-                      }
+                      setDiaSeleccionadoAuditoria(celda);
                     }}
                     style={{ cursor: tieneRegistros ? 'pointer' : 'default' }}
-                    title={tieneRegistros ? `${celda.registros.length} registro(s) el ${celda.fechaIso}${tieneModificados ? ' • Contiene registros modificados' : ''} (Toca para ver detalles)` : celda.fechaIso}
+                    title={tieneRegistros ? `${celda.registros.length} registro(s) el ${celda.fechaIso}${tieneModificadosPendientes ? ' • Modificación pendiente de revisión' : (tieneModificadosRevisados ? ' • Modificación revisada por RRHH' : '')} (Toca para ver detalles)` : celda.fechaIso}
                   >
                     <div className="cell-top-bar">
                       <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
                         <span className="cell-day-number">{celda.diaNumero}</span>
-                        {tieneModificados && (
-                          <span className="cell-mod-badge" title="Este día contiene registros que fueron modificados">
+                        {tieneModificadosPendientes && (
+                          <span className="cell-mod-badge" title="Este día contiene registros con modificaciones pendientes de revisión">
                             ✏️
+                          </span>
+                        )}
+                        {tieneModificadosRevisados && (
+                          <span className="cell-mod-badge-reviewed" title="Modificación revisada por RRHH">
+                            ✓
                           </span>
                         )}
                       </div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
                         {celda.esHoy && <span className="cell-today-dot" title="Hoy" />}
-                        {tieneRegistros && (
+                        {puedeEditarCosto && tieneRegistros && (
                           <input
                             type="checkbox"
                             className="calendar-day-checkbox"
@@ -1302,7 +1456,8 @@ export default function OtherEmployeesHistoryView({
                       {celda.registros.slice(0, 3).map((r, idx) => {
                         const lug = r.tipo_ocf || r.lugar || 'Oficina';
                         const badgeClass = getBadgeClassLugar(lug, r.servicio);
-                        const fueMod = r.fue_modificado === 1 || r.modificado === 1;
+                        const fueModPendiente = r.modificacion_pendiente === 1 || (r.fue_modificado === 1 && r.modificacion_revisada !== 1);
+                        const fueModRevisado = !fueModPendiente && r.modificacion_revisada === 1;
                         let labelText = lug;
                         if (lug === 'Franco Obra' || r.servicio?.toLowerCase().includes('franco de obra')) {
                           labelText = 'F. Obra';
@@ -1318,20 +1473,18 @@ export default function OtherEmployeesHistoryView({
                         return (
                           <div
                             key={r.id || idx}
-                            className={`cell-event-pill ${badgeClass} ${fueMod ? 'cell-event-modified' : ''}`}
+                            className={`cell-event-pill ${badgeClass} ${fueModPendiente ? 'cell-event-modified' : ''} ${fueModRevisado ? 'cell-event-modified-reviewed' : ''}`}
                             onClick={(e) => {
                               e.stopPropagation();
-                              if (puedeModificarRegistro(usuario, r)) {
-                                setRegistroEditando({ ...r });
-                              } else {
-                                setDiaSeleccionadoAuditoria(celda);
-                              }
+                              setDiaSeleccionadoAuditoria(celda);
                             }}
-                            title={`${lug} - ${r.servicio} (${r.horas} hs)${fueMod ? ' • ✏️ REGISTRO MODIFICADO' : ''}${r.detalle_modificacion ? ' • ' + r.detalle_modificacion : ''} • ${puedeModificarRegistro(usuario, r) ? 'Clic para editar o eliminar' : 'Solo lectura'}`}
+                            title={`${lug} - ${r.servicio} (${r.horas} hs)${fueModPendiente ? ' • ✏️ MODIFICADO (Pendiente revisión)' : (fueModRevisado ? ' • ✓ Modificación revisada' : '')}${r.detalle_modificacion ? ' • ' + r.detalle_modificacion : ''} • Toca para ver detalle`}
                           >
-                            {fueMod && <span className="pill-mod-icon" title="Modificado">✏️</span>}
+                            {fueModPendiente && <span className="pill-mod-icon" title="Modificado (Pendiente)">✏️</span>}
+                            {fueModRevisado && <span className="pill-mod-reviewed-icon" title="Modificado (Revisado)">✓</span>}
                             <span className="cell-event-label">{labelText}</span>
-                            {fueMod && <span className="pill-mod-tag">MOD</span>}
+                            {fueModPendiente && <span className="pill-mod-tag">MOD</span>}
+                            {fueModRevisado && <span className="pill-mod-reviewed-tag">REV</span>}
                           </div>
                         );
                       })}
@@ -1356,8 +1509,9 @@ export default function OtherEmployeesHistoryView({
                 <span className="legend-item"><span className="legend-color-box badge-modalidad-franco-obra-trabajado" /> Franco Obra Trab.</span>
                 <span className="legend-item"><span className="legend-color-box badge-modalidad-feriado-trabajado" /> Feriado Trab.</span>
                 <span className="legend-item"><span className="legend-color-box badge-modalidad-vacaciones" /> Vacaciones</span>
-                <span className="legend-item"><span className="legend-color-box badge-modalidad-licencia" /> Licencia</span>
-                <span className="legend-item"><span className="legend-mod-indicator">✏️ MOD</span> Modificado</span>
+                <span className="legend-item"><span className="legend-item"><span className="legend-color-box badge-modalidad-licencia" /> Licencia</span></span>
+                <span className="legend-item"><span className="legend-mod-indicator">✏️ MOD</span> Modif. Pendiente</span>
+                <span className="legend-item"><span className="legend-mod-reviewed-indicator">✓ REV</span> Modif. Revisada</span>
               </div>
             </div>
           </div>
@@ -1650,16 +1804,100 @@ export default function OtherEmployeesHistoryView({
                         {item.horas > 0 ? `${item.horas} hs` : '0 hs'}
                       </span>
                       {Boolean(item.fue_modificado || item.modificado) && (
-                        <div style={{ marginTop: '4px', background: '#fef3c7', border: '1px solid #f59e0b', borderRadius: '4px', padding: '4px 6px' }}>
-                          <span style={{ fontSize: '10px', fontWeight: 700, color: '#b45309', display: 'flex', alignItems: 'center', gap: '3px' }}>
-                            ✏️ REGISTRO MODIFICADO
-                          </span>
-                          {item.detalle_modificacion && (
-                            <span style={{ fontSize: '11px', color: '#92400e', display: 'block', marginTop: '2px' }}>
-                              {item.detalle_modificacion}
-                            </span>
-                          )}
-                        </div>
+                        item.modificacion_revisada === 1 && item.modificacion_pendiente !== 1 ? (
+                          <div style={{ marginTop: '6px', background: '#f0fdf4', border: '1px solid #86efac', borderRadius: '6px', padding: '6px 10px' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', flexWrap: 'wrap' }}>
+                              <span style={{ fontSize: '11px', fontWeight: 600, color: '#166534', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                ✓ Modificación revisada por RRHH
+                              </span>
+                              <button
+                                type="button"
+                                className="btn-comparativa-action"
+                                style={{
+                                  background: '#7c3aed',
+                                  color: '#ffffff',
+                                  border: 'none',
+                                  borderRadius: '5px',
+                                  padding: '3px 8px',
+                                  fontSize: '11px',
+                                  fontWeight: 700,
+                                  cursor: 'pointer',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: '4px'
+                                }}
+                                onClick={() => abrirComparativa(item)}
+                                title="Ver panel comparativo antes / después"
+                              >
+                                ⚖️ Ver Comparativa
+                              </button>
+                            </div>
+                            {item.detalle_modificacion && (
+                              <span style={{ fontSize: '11px', color: '#15803d', display: 'block', marginTop: '2px' }}>
+                                {item.detalle_modificacion}
+                              </span>
+                            )}
+                          </div>
+                        ) : (
+                          <div style={{ marginTop: '6px', background: '#fffbeb', border: '1px solid #f59e0b', borderRadius: '6px', padding: '8px 10px' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', flexWrap: 'wrap' }}>
+                              <span style={{ fontSize: '11px', fontWeight: 700, color: '#b45309', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                ✏️ MODIFICACIÓN PENDIENTE DE REVISIÓN
+                              </span>
+                              <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                                <button
+                                  type="button"
+                                  className="btn-comparativa-action"
+                                  style={{
+                                    background: '#7c3aed',
+                                    color: '#ffffff',
+                                    border: 'none',
+                                    borderRadius: '5px',
+                                    padding: '4px 8px',
+                                    fontSize: '11px',
+                                    fontWeight: 700,
+                                    cursor: 'pointer',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '4px'
+                                  }}
+                                  onClick={() => abrirComparativa(item)}
+                                  title="Ver comparativa dividida antes y después"
+                                >
+                                  ⚖️ Comparativa
+                                </button>
+                                <button
+                                  type="button"
+                                  className="btn-mark-reviewed"
+                                  style={{
+                                    background: '#10b981',
+                                    color: '#ffffff',
+                                    border: 'none',
+                                    borderRadius: '5px',
+                                    padding: '4px 10px',
+                                    fontSize: '11px',
+                                    fontWeight: 700,
+                                    cursor: 'pointer',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '4px',
+                                    boxShadow: '0 1px 3px rgba(16, 185, 129, 0.3)'
+                                  }}
+                                  disabled={marcandoRevisadoId === (item.id_asistencia || item.id)}
+                                  onClick={() => handleMarcarRevisado(item)}
+                                  title="Marcar como revisado para que no vuelva a aparecer la alerta"
+                                >
+                                  {marcandoRevisadoId === (item.id_asistencia || item.id) ? 'Guardando...' : '✓ Marcar como Revisado'}
+                                </button>
+                              </div>
+                            </div>
+                            {item.detalle_modificacion && (
+                              <span style={{ fontSize: '11px', color: '#92400e', display: 'block', marginTop: '4px', lineHeight: 1.3 }}>
+                                {item.detalle_modificacion}
+                              </span>
+                            )}
+                          </div>
+                        )
                       )}
                     </div>
                     <div style={{ display: 'flex', gap: '4px', flexShrink: 0, alignItems: 'center' }}>
@@ -1941,18 +2179,20 @@ export default function OtherEmployeesHistoryView({
                 />
               </div>
 
-              <div className="form-group-clean">
-                <label className="form-label-clean">Tipo de Costo (RRHH):</label>
-                <select
-                  className="form-select form-select-clean"
-                  value={registroEditando.tipo_costo || ''}
-                  onChange={(e) => setRegistroEditando({ ...registroEditando, tipo_costo: e.target.value })}
-                >
-                  <option value="">-- Sin Asignar --</option>
-                  <option value="Oficina">Oficina</option>
-                  <option value="Campo">Campo</option>
-                </select>
-              </div>
+              {puedeEditarCosto && (
+                <div className="form-group-clean">
+                  <label className="form-label-clean">Tipo de Costo (RRHH / Aplicaciones):</label>
+                  <select
+                    className="form-select form-select-clean"
+                    value={registroEditando.tipo_costo || ''}
+                    onChange={(e) => setRegistroEditando({ ...registroEditando, tipo_costo: e.target.value })}
+                  >
+                    <option value="">-- Sin Asignar --</option>
+                    <option value="Oficina">Oficina</option>
+                    <option value="Campo">Campo</option>
+                  </select>
+                </div>
+              )}
 
               <div className="modal-actions" style={{ justifyContent: 'space-between' }}>
                 <button
@@ -2045,6 +2285,288 @@ export default function OtherEmployeesHistoryView({
               >
                 {eliminando ? 'Eliminando...' : 'Sí, Eliminar Registro'}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* [FN-02.04] Panel Flotante Dividido Comparativo de Modificaciones */}
+      {comparativaModificacion && (
+        <div className="modal-backdrop">
+          <div className="modal-box modal-comparativa-box">
+            {/* Cabecera */}
+            <div className="modal-header">
+              <div className="comparativa-header-info">
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                  <span className="modal-title" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    ⚖️ Auditoría de Modificación
+                  </span>
+                  <span className="comparativa-colab-badge">
+                    {comparativaModificacion.registro?.empleado || 'Colaborador'}
+                  </span>
+                  {comparativaModificacion.modActiva?.revisado === 1 || comparativaModificacion.registro?.modificacion_revisada === 1 ? (
+                    <span className="status-badge badge-modificado-revisado">
+                      ✓ Revisado por RRHH
+                    </span>
+                  ) : (
+                    <span className="status-badge badge-modificado">
+                      ✏️ Pendiente de Revisión
+                    </span>
+                  )}
+                </div>
+                <div className="comparativa-header-meta">
+                  <span>
+                    📅 Reporte: <strong>{comparativaModificacion.registro?.fecha}</strong> {comparativaModificacion.registro?.dia_semana ? `(${comparativaModificacion.registro?.dia_semana})` : ''}
+                  </span>
+                  {comparativaModificacion.modActiva?.quien_modifica && (
+                    <span>
+                      👤 Modificado por: <strong>{comparativaModificacion.modActiva.quien_modifica}</strong>
+                    </span>
+                  )}
+                  {comparativaModificacion.modActiva?.fecha_hora_modificaciones && (
+                    <span>
+                      🕒 Fecha cambio: <strong>{comparativaModificacion.modActiva.fecha_hora_modificaciones}</strong>
+                    </span>
+                  )}
+                </div>
+              </div>
+              <button
+                type="button"
+                className="modal-close"
+                onClick={() => setComparativaModificacion(null)}
+                title="Cerrar panel comparativo"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Selector de iteraciones de modificación si hay más de 1 */}
+            {comparativaModificacion.modificaciones && comparativaModificacion.modificaciones.length > 1 && (
+              <div className="comparativa-timeline-bar">
+                <span className="timeline-title">Versiones registradas:</span>
+                <div className="timeline-chips">
+                  {comparativaModificacion.modificaciones.map((m, idx) => {
+                    const esActiva = (comparativaModificacion.indiceActivo === idx) ||
+                      (comparativaModificacion.modActiva?.id_modificacion === m.id_modificacion);
+                    return (
+                      <button
+                        key={m.id_modificacion || idx}
+                        type="button"
+                        className={`timeline-chip ${esActiva ? 'chip-active' : ''}`}
+                        onClick={() => handleCambiarModificacionActiva(idx)}
+                      >
+                        Cambio #{idx + 1} ({m.fecha_hora_modificaciones?.split(' ')[1] || m.fecha_hora_modificaciones || 'Rev'})
+                        {idx === comparativaModificacion.modificaciones.length - 1 && ' (Último)'}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Contenedor Dividido (Split View) */}
+            <div className="comparativa-body">
+              {(() => {
+                const reg = comparativaModificacion.registro || {};
+                const mod = comparativaModificacion.modActiva || {};
+                const tieneMod = Boolean(mod.id_modificacion || mod.quien_modifica);
+
+                const tipoAntes = tieneMod ? (mod.tipo_antes || 'Sin tipo') : 'Original';
+                const tipoDespues = tieneMod ? (mod.tipo_despues || 'Sin tipo') : (reg.tipo_ocf || reg.lugar || 'Oficina');
+
+                const horasAntes = tieneMod ? Number(mod.horas_antes || 0) : 0;
+                const horasDespues = tieneMod ? Number(mod.horas_despues || 0) : Number(reg.horas || 0);
+
+                const servAntes = tieneMod ? (mod.servicio_antes || 'Tiempo dedicado al Área') : 'Tiempo previo';
+                const servDespues = tieneMod ? (mod.servicio_despues || 'Tiempo dedicado al Área') : (reg.servicio || '');
+
+                const badgeAntes = getBadgeClassLugar(tipoAntes, servAntes);
+                const badgeDespues = getBadgeClassLugar(tipoDespues, servDespues);
+
+                const diffHoras = Number((horasDespues - horasAntes).toFixed(2));
+                const cambioTipo = tipoAntes !== tipoDespues;
+                const cambioHoras = horasAntes !== horasDespues;
+                const cambioServ = servAntes !== servDespues;
+
+                return (
+                  <>
+                    <div className="comparativa-split-grid">
+                      {/* LADO IZQUIERDO: ANTERIOR A LA MODIFICACIÓN */}
+                      <div className="comparativa-panel panel-antes">
+                        <div className="panel-side-badge badge-antes-tag">
+                          <span>⬅️ ANTERIOR A LA MODIFICACIÓN</span>
+                        </div>
+                        <div className="comparativa-field-group">
+                          <label className="comparativa-field-label">Modalidad / Ubicación</label>
+                          <div className="comparativa-field-content">
+                            <span className={`modalidad-pill ${badgeAntes}`} style={{ fontSize: '13px', padding: '4px 10px' }}>
+                              {tipoAntes}
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="comparativa-field-group">
+                          <label className="comparativa-field-label">Horas Computadas</label>
+                          <div className="comparativa-hours-card hours-card-before">
+                            <span className="hours-number">{horasAntes}</span>
+                            <span className="hours-unit">hs</span>
+                          </div>
+                        </div>
+
+                        <div className="comparativa-field-group">
+                          <label className="comparativa-field-label">Proyecto / Servicio</label>
+                          <div className="comparativa-service-box">
+                            {servAntes}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* CENTRO: INDICADOR DE CAMBIO */}
+                      <div className="comparativa-center-divider">
+                        <div className="divider-arrow-circle" title="Transformación del registro">
+                          ➔
+                        </div>
+                        <div className="divider-metrics">
+                          {cambioHoras && (
+                            <span className={`diff-delta-badge ${diffHoras > 0 ? 'delta-positive' : 'delta-negative'}`}>
+                              {diffHoras > 0 ? `+${diffHoras} hs` : `${diffHoras} hs`}
+                            </span>
+                          )}
+                          {!cambioHoras && (
+                            <span className="diff-delta-badge delta-neutral">
+                              = 0 hs
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* LADO DERECHO: POSTERIOR A LA MODIFICACIÓN */}
+                      <div className="comparativa-panel panel-despues">
+                        <div className="panel-side-badge badge-despues-tag">
+                          <span>POSTERIOR A LA MODIFICACIÓN ➡️</span>
+                        </div>
+
+                        <div className="comparativa-field-group">
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                            <label className="comparativa-field-label">Modalidad / Ubicación</label>
+                            {cambioTipo && (
+                              <span className="chip-cambio-alerta" title="La modalidad fue alterada">
+                                Cambió
+                              </span>
+                            )}
+                          </div>
+                          <div className="comparativa-field-content">
+                            <span className={`modalidad-pill ${badgeDespues} ${cambioTipo ? 'pill-highlight-changed' : ''}`} style={{ fontSize: '13px', padding: '4px 10px' }}>
+                              {tipoDespues}
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="comparativa-field-group">
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                            <label className="comparativa-field-label">Horas Computadas</label>
+                            {cambioHoras && (
+                              <span className="chip-cambio-alerta" title="La cantidad de horas fue alterada">
+                                {diffHoras > 0 ? `+${diffHoras} hs` : `${diffHoras} hs`}
+                              </span>
+                            )}
+                          </div>
+                          <div className={`comparativa-hours-card hours-card-after ${cambioHoras ? 'hours-card-changed' : ''}`}>
+                            <span className="hours-number">{horasDespues}</span>
+                            <span className="hours-unit">hs</span>
+                          </div>
+                        </div>
+
+                        <div className="comparativa-field-group">
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                            <label className="comparativa-field-label">Proyecto / Servicio</label>
+                            {cambioServ && (
+                              <span className="chip-cambio-alerta" title="El proyecto o servicio fue alterado">
+                                Reasignado
+                              </span>
+                            )}
+                          </div>
+                          <div className={`comparativa-service-box ${cambioServ ? 'service-box-changed' : ''}`}>
+                            {servDespues}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Resumen de auditoría */}
+                    <div className="comparativa-summary-footer">
+                      <div className="summary-left">
+                        <div className="summary-title">Resumen de Cambios:</div>
+                        <ul className="summary-bullets">
+                          {cambioTipo ? (
+                            <li>Modalidad cambió de <strong>{tipoAntes}</strong> a <strong>{tipoDespues}</strong></li>
+                          ) : (
+                            <li className="bullet-neutral">Modalidad sin cambios ({tipoDespues})</li>
+                          )}
+                          {cambioHoras ? (
+                            <li>Jornada modificada de <strong>{horasAntes} hs</strong> a <strong>{horasDespues} hs</strong> (variación de <strong>{diffHoras > 0 ? `+${diffHoras}` : diffHoras} hs</strong>)</li>
+                          ) : (
+                            <li className="bullet-neutral">Carga horaria idéntica ({horasDespues} hs)</li>
+                          )}
+                          {cambioServ ? (
+                            <li>Proyecto cambiado de "<em>{servAntes}</em>" a "<em>{servDespues}</em>"</li>
+                          ) : (
+                            <li className="bullet-neutral">Proyecto/Servicio sin cambios</li>
+                          )}
+                        </ul>
+                      </div>
+                    </div>
+                  </>
+                );
+              })()}
+            </div>
+
+            {/* Pie de acciones del panel flotante */}
+            <div className="modal-actions" style={{ justifyContent: 'space-between', padding: '16px 20px', background: 'var(--bg-surface-elevated, #f8fafc)', borderTop: '1px solid var(--border-subtle)' }}>
+              <div>
+                {(comparativaModificacion.modActiva?.revisado !== 1 && comparativaModificacion.registro?.modificacion_revisada !== 1) ? (
+                  <button
+                    type="button"
+                    className="btn-mark-reviewed-big"
+                    onClick={handleMarcarRevisadoDesdeComparativa}
+                    disabled={marcandoRevisadoId === (comparativaModificacion.registro?.id_asistencia || comparativaModificacion.registro?.id)}
+                  >
+                    {marcandoRevisadoId === (comparativaModificacion.registro?.id_asistencia || comparativaModificacion.registro?.id)
+                      ? 'Guardando revisión...'
+                      : '✓ Marcar como Revisado por RRHH'}
+                  </button>
+                ) : (
+                  <span className="reviewed-success-text" style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '13px', fontWeight: 600, color: '#166534', background: '#dcfce7', border: '1px solid #86efac', padding: '6px 12px', borderRadius: '6px' }}>
+                    ✓ Modificación auditada y revisada por RRHH
+                  </span>
+                )}
+              </div>
+
+              <div style={{ display: 'flex', gap: '8px' }}>
+                {puedeModificarRegistro(usuario, comparativaModificacion.registro) && (
+                  <button
+                    type="button"
+                    className="btn-action-ghost"
+                    style={{ fontSize: '12px', padding: '6px 12px' }}
+                    onClick={() => {
+                      const reg = { ...comparativaModificacion.registro };
+                      setComparativaModificacion(null);
+                      setRegistroEditando(reg);
+                    }}
+                    title="Realizar una nueva edición sobre este registro"
+                  >
+                    ✏️ Editar Registro
+                  </button>
+                )}
+                <button
+                  type="button"
+                  className="modal-btn-cancel"
+                  style={{ minWidth: '80px' }}
+                  onClick={() => setComparativaModificacion(null)}
+                >
+                  Cerrar
+                </button>
+              </div>
             </div>
           </div>
         </div>

@@ -271,7 +271,10 @@ export default function HistoryView({ onVolver, tema, onNuevoReporte, usuario, o
       });
 
       if (res && res.exito) {
-        setMensajeSync({ tipo: 'exito', texto: 'Reporte modificado y programado para sincronización.' });
+        setMensajeSync({
+          tipo: 'exito',
+          texto: 'Reporte modificado exitosamente. Sincronizando con Google Sheets en segundo plano (~3-5 seg)... No es necesario presionar Subir.'
+        });
         setRegistroEditando(null);
         await cargarHistorial();
       } else {
@@ -481,20 +484,25 @@ export default function HistoryView({ onVolver, tema, onNuevoReporte, usuario, o
           )}
 
           {pendientesCount > 0 && (
-            <button
-              type="button"
-              className={isRpg ? 'rpg-wood-btn' : 'btn-sync'}
-              onClick={ejecutarSincronizacion}
-              disabled={sincronizando}
-              title="Sincronizar reportes pendientes con Google Sheets"
-            >
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M3 12a9 9 0 0 1 15-6.7L21 8" />
-                <path d="M3 22v-6h6" />
-                <path d="M21 12a9 9 0 0 1-15 6.7L3 16" />
-              </svg>
-              <span>{sincronizando ? 'Enviando...' : `Subir (${pendientesCount})`}</span>
-            </button>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span className="sync-auto-helper" title="La aplicación sincroniza en segundo plano automáticamente">
+                <span className="sync-dot-pulse" /> Sincronización automática activa (~3-5s)
+              </span>
+              <button
+                type="button"
+                className={isRpg ? 'rpg-wood-btn' : 'btn-sync'}
+                onClick={ejecutarSincronizacion}
+                disabled={sincronizando}
+                title="Sincronizar reportes pendientes inmediatamente con Google Sheets (No requerido: se sincroniza solo)"
+              >
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M3 12a9 9 0 0 1 15-6.7L21 8" />
+                  <path d="M3 22v-6h6" />
+                  <path d="M21 12a9 9 0 0 1-15 6.7L3 16" />
+                </svg>
+                <span>{sincronizando ? 'Enviando...' : `Subir ahora (${pendientesCount})`}</span>
+              </button>
+            </div>
           )}
 
           <button

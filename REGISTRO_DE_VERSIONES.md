@@ -4,6 +4,40 @@ Historial cronológico de cambios, nuevas características y mejoras aplicadas a
 
 ---
 
+## [1.8.0] - 2026-09-30
+
+### 🛡️ Panel Comparativo de Modificaciones, Restricción de Costos y Sincronización Proactiva
+- **Panel Flotante Dividido Comparativo de Modificaciones (`[FN-02.04]`)**:
+  - Diseñado panel modal panorámico dividido (split view) que confronta lado a lado los datos del registro:
+    - **Lado Izquierdo (Anterior)**: Modalidad previa (`tipo_antes`), carga horaria (`horas_antes`) y proyecto/área (`servicio_antes`).
+    - **Divisor Central**: Flecha de transformación con delta métrico de horas calculadas (`+hs`, `-hs` o `0 hs`).
+    - **Lado Derecho (Posterior)**: Modalidad modificada (`tipo_despues`), jornada actualizada (`horas_despues`) y proyecto reasignado (`servicio_despues`), con etiquetas de alerta en cada campo que haya sufrido alteraciones.
+  - Trazabilidad y auditoría de la tabla `1_1_modificaciones_realizadas`: muestra colaborador responsable de la modificación, fecha/hora exacta, historial de iteraciones mediante chips de línea de tiempo y resumen ejecutivo de cambios.
+  - Accesos directos integrados: botón **"⚖️ Comparativa"** en tarjetas de la lista izquierda, botón en el modal del día de calendario y apertura automática al hacer clic en las notificaciones del banner superior.
+  - Acciones directas dentro del panel: **"✓ Marcar como Revisado por RRHH"** y **"✏️ Editar Registro"**.
+- **Restricción de Tipo de Costo (Exclusivo RRHH y Aplicaciones - `[FN-04.05]`)**:
+  - En el Panel de Control de Empleados (`OtherEmployeesHistoryView`), solo el personal con rol de RRHH (Justina Bertolozzi) o Área de Aplicaciones / Admin (Iván Valentin) tiene permiso para visualizar y editar el tipo de costo.
+  - Ocultamiento condicional de:
+    - Barra flotante de asignación masiva de costo sobre el calendario (`calendar-floating-cost-toolbar`).
+    - Checkboxes de selección por día en las celdas del calendario.
+    - Barra de selección masiva en la columna izquierda (`bulk-selection-toolbar`).
+    - Checkboxes de selección en las tarjetas individuales de la columna izquierda.
+    - Badges informativos de costo (`badge-costo-campo` / `badge-costo-oficina`).
+    - Campo selector de `tipo_costo` en el formulario de edición de asistencia.
+  - Protección de seguridad en backend: validación estricta de credenciales en `actualizar_tipo_costo_masivo`.
+- **Opción de Marcar como "Revisado" para RRHH**:
+  - Incorporado botón interactivo **"✓ Marcar como Revisado"** tanto en el modal de detalle diario como en las tarjetas y el panel comparativo.
+  - Al marcar como revisado, se actualiza `revisado = 1` en la tabla `modificaciones_realizadas` y se dispara el evento reactivo `catalogos-actualizados`, descartando la alerta en la vista activa, en el banner global y en la tarjeta de `HomeView`.
+  - Distinción visual dual en calendario y eventos:
+    - **Modificaciones pendientes**: indicador ámbar parpadeante (`✏️ MOD`).
+    - **Modificaciones revisadas**: etiqueta y badge verde suave (`✓ REV`).
+- **Transparencia y Tiempo de Espera en Sincronización con Google Sheets (`[FN-01.07]`)**:
+  - Al cargar o modificar un reporte en `CheckForm`, se muestra una tarjeta de progreso con cuenta regresiva animada (~4 seg): *"Sincronizando con Google Sheets... No es necesario presionar 'Subir'"*, evitando clics repetitivos innecesarios.
+  - En la barra de herramientas de `HistoryView` y `OtherEmployeesHistoryView`, cuando existen registros con `sincronizado = 0`, se incorpora un indicador visual de fondo (`sync-dot-pulse` y texto explicativo) informando que la sincronización automática está activa.
+  - Al concluir la subida en segundo plano en el hilo demonio, el backend despacha automáticamente el evento `catalogos-actualizados`, refrescando la interfaz y cambiando el estado a "Sincronizado" sin recarga manual.
+
+---
+
 ## [1.7.0] - 2026-09-30
 
 ### 🔔 Notificaciones de Modificaciones para RRHH y Distinción Visual en Calendario

@@ -29,7 +29,9 @@ Expone métodos invocables desde el frontend de React a través del objeto globa
   - **Día de la semana y Feriado**: Computa el día (`lunes`, `martes`, etc.) y marca `SI`/`NO` según el calendario de `0_no_laborales`.
   - Dispara la sincronización en segundo plano con Google Sheets.
 - **`modificar_registro(self, datos: dict)`**:
-  Actualiza un reporte previamente registrado en el historial (fecha, modalidad, proyecto/servicio, horas), recalculando día de semana y feriado, y reprogramando la sincronización in-place en Google Sheets.
+  Actualiza un reporte previamente registrado en el historial (fecha, modalidad, proyecto/servicio, horas), recalculando día de semana y feriado, y reprogramando la sincronización reactiva en segundo plano con Google Sheets.
+- **`marcar_modificacion_por_asistencia_revisada(self, id_asistencia: str)`**:
+  Marca todas las modificaciones de una jornada como leídas/revisadas por RRHH (`revisado = 1`), eliminando las alertas visuales y badges ámbar en calendario y panel principal.
 - **`obtener_historial(self)`**:
   Recupera los últimos reportes del usuario activo. Comprueba contra Google Sheets y depura registros que hayan sido borrados de la hoja remota para evitar inconsistencias.
 - **`obtener_todos_usuarios(self)`**:

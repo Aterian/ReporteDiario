@@ -49,6 +49,7 @@ from database import (
     obtener_resumen_modificaciones,
     obtener_notificaciones_modificaciones,
     marcar_modificacion_revisada,
+    marcar_modificacion_por_asistencia_revisada,
     marcar_todas_modificaciones_revisadas,
     obtener_estado_diario_empleados,
     obtener_actividad_dia_anterior
@@ -227,6 +228,15 @@ def puede_acceder_roster(usuario: dict | None) -> bool:
 def puede_ver_historial_otros(usuario: dict | None) -> bool:
     return es_area_rrhh(usuario) or es_area_nucleo(usuario) or es_ivan_valentin(usuario)
 
+def es_area_aplicaciones(usuario: dict | None) -> bool:
+    if not usuario:
+        return False
+    area = (usuario.get("area") or "").strip().upper()
+    return area in ("A", "APLICACIONES") or es_ivan_valentin(usuario)
+
+def puede_gestionar_tipo_costo(usuario: dict | None) -> bool:
+    return es_area_rrhh(usuario) or es_area_aplicaciones(usuario)
+
 def puede_modificar_registro_empleado(usuario: dict | None, empleado_registro: str, id_empleado_reg: str = "") -> bool:
     if not usuario:
         return False
@@ -251,6 +261,21 @@ class ApiPuente:
 
     def set_ventana(self, ventana):
         self._ventana = ventana
+
+    def _disparar_sync_segundo_plano(self):
+        """Dispara sincronización en segundo plano con Google Sheets y emite catalogos-actualizados a la UI."""
+        def _tarea():
+            try:
+                sincronizar_pendientes()
+            except Exception as e:
+                print(f"[SyncAsync] Error en sincronización de fondo: {e}")
+            finally:
+                if self._ventana:
+                    try:
+                        self._ventana.evaluate_js("window.dispatchEvent(new CustomEvent('catalogos-actualizados'));")
+                    except Exception as err_js:
+                        pass
+        threading.Thread(target=_tarea, daemon=True).start()
 
     def minimizar_a_bandeja(self):
         """Oculta la ventana y la mantiene en el área de notificación (System Tray)."""
@@ -815,7 +840,7 @@ class ApiPuente:
                     tipo_costo=tipo_costo
                 )
 
-        threading.Thread(target=sincronizar_pendientes, daemon=True).start()
+        self._disparar_sync_segundo_plano()
         cant_dias = len(fechas_a_cargar)
         msj = f"Reporte registrado correctamente ({cant_dias} día{'s' if cant_dias > 1 else ''})."
         return {"exito": True, "mensaje": msj}
@@ -923,7 +948,7 @@ class ApiPuente:
             quien_modifica=quien_modifica
         )
         if ok:
-            threading.Thread(target=sincronizar_pendientes, daemon=True).start()
+            self._disparar_sync_segundo_plano()
             return {"exito": True, "mensaje": "Reporte modificado exitosamente."}
         return {"exito": False, "error": "No se encontró el registro a modificar en la base local."}
 
@@ -952,6 +977,11 @@ class ApiPuente:
         marcar_modificacion_revisada(id_modificacion)
         return {"exito": True}
 
+    def marcar_modificacion_por_asistencia_revisada(self, id_asistencia: str):
+        """Marca todas las modificaciones de una asistencia como revisadas por RRHH."""
+        marcar_modificacion_por_asistencia_revisada(id_asistencia)
+        return {"exito": True}
+
     def marcar_todas_modificaciones_revisadas(self):
         """Marca todas las modificaciones pendientes como leídas."""
         marcar_todas_modificaciones_revisadas()
@@ -964,6 +994,10 @@ class ApiPuente:
     # [FN-03.05] Asignación masiva de tipo_costo (Oficina / Campo)
     def actualizar_tipo_costo_masivo(self, datos_o_ids, tipo_costo: str = None):
         """Aplica en lote el tipo de costo ('Oficina' | 'Campo' | '') a una lista de registros y sincroniza."""
+        sesion = obtener_sesion_activa()
+        if not puede_gestionar_tipo_costo(sesion):
+            return {"exito": False, "error": "Acceso denegado: Solo RRHH y Aplicaciones tienen permiso para ver o editar el tipo de costo."}
+
         if isinstance(datos_o_ids, dict):
             ids = datos_o_ids.get("ids_asistencia") or datos_o_ids.get("ids") or []
             costo = str(datos_o_ids.get("tipo_costo", "")).strip()
@@ -977,7 +1011,7 @@ class ApiPuente:
             return {"exito": False, "error": "No se seleccionaron registros para asignar costo."}
 
         afectados = actualizar_tipo_costo_lote(ids, costo)
-        threading.Thread(target=sincronizar_pendientes, daemon=True).start()
+        self._disparar_sync_segundo_plano()
         return {
             "exito": True,
             "mensaje": f"Se asignó tipo de costo '{costo or 'Sin asignar'}' a {afectados} registro(s).",
@@ -1295,7 +1329,7 @@ class ApiPuente:
                     )
 
             if disparar_sync:
-                threading.Thread(target=sincronizar_pendientes, daemon=True).start()
+                self._disparar_sync_segundo_plano()
 
             return res
         except Exception as e:
@@ -1317,7 +1351,7 @@ class ApiPuente:
                 resultados.append(r)
             
             # Una sola sincronización segura en segundo plano para todo el lote
-            threading.Thread(target=sincronizar_pendientes, daemon=True).start()
+            self._disparar_sync_segundo_plano()
             
             todos_ok = all(r and r.get("exito") for r in resultados)
             return {"exito": todos_ok, "resultados": resultados}
@@ -1491,7 +1525,7 @@ def obtener_icono_tray():
     return crear_icono_calendario(64)
 
 
-APP_VERSION = "1.7.0"
+APP_VERSION = "1.8.0"
 
 _mutex_instancia = None
 

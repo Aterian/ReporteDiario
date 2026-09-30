@@ -199,14 +199,8 @@ export default function App() {
     }
   };
 
-  const handleIrACalendarioModificacion = async (notif) => {
+  const handleIrACalendarioModificacion = (notif) => {
     if (!notif) return;
-    try {
-      await api.marcarModificacionRevisada(notif.id_modificacion);
-    } catch (e) {
-      console.error(e);
-    }
-    setNotificacionesModificaciones(prev => prev.filter(n => n.id_modificacion !== notif.id_modificacion));
     setNavegacionAuditoria({
       empleado: notif.empleado,
       fecha: notif.fecha,

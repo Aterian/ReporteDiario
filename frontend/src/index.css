@@ -9928,3 +9928,543 @@ html, body {
   line-height: 1;
 }
 
+/* =========================================================================
+   [FN-02.02] Distinción Visual para Modificaciones Revisadas por RRHH
+   ========================================================================= */
+
+.calendar-cell.cell-has-modified-reviewed {
+  border-color: rgba(16, 185, 129, 0.4) !important;
+  background-color: rgba(16, 185, 129, 0.035) !important;
+}
+
+.cell-mod-badge-reviewed {
+  font-size: 10px;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1px 4px;
+  background: rgba(16, 185, 129, 0.18);
+  border-radius: 3px;
+  color: #059669;
+  font-weight: 700;
+}
+
+[data-theme="dark"] .cell-mod-badge-reviewed {
+  background: rgba(16, 185, 129, 0.25);
+  color: #34d399;
+}
+
+.cell-event-pill.cell-event-modified-reviewed {
+  border: 1.5px solid #10b981 !important;
+  box-shadow: 0 1px 3px rgba(16, 185, 129, 0.2);
+  position: relative;
+  font-weight: 600;
+}
+
+.pill-mod-reviewed-icon {
+  font-size: 9px;
+  margin-right: 2px;
+  color: #059669;
+  font-weight: 800;
+  flex-shrink: 0;
+}
+
+.pill-mod-reviewed-tag {
+  font-size: 8px;
+  font-weight: 800;
+  background: #10b981;
+  color: #ffffff;
+  padding: 0 3px;
+  border-radius: 2px;
+  margin-left: auto;
+  line-height: 1.2;
+  letter-spacing: 0.3px;
+  flex-shrink: 0;
+}
+
+.status-badge.badge-modificado-revisado {
+  background: #ecfdf5;
+  color: #065f46;
+  border: 1px solid #a7f3d0;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+
+[data-theme="dark"] .status-badge.badge-modificado-revisado {
+  background: #064e3b30;
+  color: #6ee7b7;
+  border-color: #059669;
+}
+
+.legend-mod-reviewed-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  font-size: 9px;
+  font-weight: 800;
+  background: #10b981;
+  color: #ffffff;
+  padding: 1px 4px;
+  border-radius: 3px;
+  line-height: 1;
+}
+
+/* =========================================================================
+   [FN-01.07] Indicador de Sincronización Automática con Google Sheets
+   ========================================================================= */
+
+.sync-auto-helper {
+  font-size: 11px;
+  color: var(--text-muted);
+  background: var(--bg-surface-elevated, rgba(0, 0, 0, 0.04));
+  border: 1px dashed var(--border-subtle);
+  border-radius: 6px;
+  padding: 4px 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.sync-dot-pulse {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background-color: #10b981;
+  box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7);
+  animation: syncPulseAnim 1.8s infinite;
+}
+
+@keyframes syncPulseAnim {
+  0% {
+    transform: scale(0.95);
+    box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7);
+  }
+  70% {
+    transform: scale(1);
+    box-shadow: 0 0 0 5px rgba(16, 185, 129, 0);
+  }
+  100% {
+    transform: scale(0.95);
+    box-shadow: 0 0 0 0 rgba(16, 185, 129, 0);
+  }
+}
+
+.sync-progress-alert {
+  background: #ecfdf5 !important;
+  border: 1px solid #10b981 !important;
+  border-radius: 8px !important;
+  padding: 10px 14px !important;
+  margin-bottom: 12px !important;
+}
+
+[data-theme="dark"] .sync-progress-alert {
+  background: #064e3b30 !important;
+  border-color: #059669 !important;
+}
+
+.sync-pulse-spinner {
+  width: 18px;
+  height: 18px;
+  border: 2.5px solid rgba(16, 185, 129, 0.25);
+  border-top-color: #10b981;
+  border-radius: 50%;
+  animation: spinnerRotate 0.8s linear infinite;
+  flex-shrink: 0;
+}
+
+/* =========================================================================
+   [FN-02.04] Panel Flotante Dividido Comparativo de Modificaciones (RRHH)
+   ========================================================================= */
+
+.modal-comparativa-box {
+  max-width: 860px !important;
+  width: 95vw !important;
+  border-radius: 12px !important;
+  overflow: hidden !important;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.25) !important;
+}
+
+.comparativa-header-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.comparativa-colab-badge {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-primary);
+  background: var(--bg-surface-hover);
+  border: 1px solid var(--border-subtle);
+  padding: 2px 8px;
+  border-radius: 6px;
+}
+
+.comparativa-header-meta {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  flex-wrap: wrap;
+}
+
+.comparativa-timeline-bar {
+  background: var(--bg-surface-elevated, #f1f5f9);
+  border-bottom: 1px solid var(--border-subtle);
+  padding: 8px 16px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  overflow-x: auto;
+}
+
+.timeline-title {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  white-space: nowrap;
+}
+
+.timeline-chips {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.timeline-chip {
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: 14px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.timeline-chip:hover {
+  border-color: #7c3aed;
+  color: #7c3aed;
+}
+
+.timeline-chip.chip-active {
+  background: #7c3aed;
+  border-color: #6d28d9;
+  color: #ffffff;
+  box-shadow: 0 1px 3px rgba(124, 58, 237, 0.3);
+}
+
+.comparativa-body {
+  padding: 18px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  max-height: 70vh;
+  overflow-y: auto;
+}
+
+.comparativa-split-grid {
+  display: grid;
+  grid-template-columns: 1fr 44px 1fr;
+  gap: 12px;
+  align-items: stretch;
+}
+
+@media (max-width: 768px) {
+  .comparativa-split-grid {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+}
+
+.comparativa-panel {
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: 10px;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  position: relative;
+}
+
+.comparativa-panel.panel-antes {
+  background: #fafafa;
+  border-color: #e5e7eb;
+}
+
+[data-theme="dark"] .comparativa-panel.panel-antes {
+  background: #181b22;
+  border-color: #2e3440;
+}
+
+.comparativa-panel.panel-despues {
+  background: #faf5ff;
+  border-color: #ddd6fe;
+}
+
+[data-theme="dark"] .comparativa-panel.panel-despues {
+  background: #241a38;
+  border-color: #4c1d95;
+}
+
+.panel-side-badge {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+}
+
+.badge-antes-tag {
+  background: #e5e7eb;
+  color: #4b5563;
+}
+
+[data-theme="dark"] .badge-antes-tag {
+  background: #374151;
+  color: #d1d5db;
+}
+
+.badge-despues-tag {
+  background: #ede9fe;
+  color: #6d28d9;
+}
+
+[data-theme="dark"] .badge-despues-tag {
+  background: #5b21b6;
+  color: #ede9fe;
+}
+
+.comparativa-field-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.comparativa-field-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+
+.comparativa-field-content {
+  display: flex;
+  align-items: center;
+  min-height: 28px;
+}
+
+.comparativa-hours-card {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: var(--bg-surface-elevated, #ffffff);
+  border: 1px solid var(--border-subtle);
+  width: fit-content;
+  min-width: 90px;
+}
+
+.comparativa-hours-card .hours-number {
+  font-size: 22px;
+  font-weight: 900;
+  line-height: 1;
+  color: var(--text-primary);
+}
+
+.comparativa-hours-card .hours-unit {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.hours-card-changed {
+  border-color: #8b5cf6;
+  background: #f5f3ff;
+  box-shadow: 0 0 0 2px rgba(139, 92, 246, 0.15);
+}
+
+[data-theme="dark"] .hours-card-changed {
+  background: #2e1065;
+  border-color: #a78bfa;
+}
+
+.comparativa-service-box {
+  background: var(--bg-surface-elevated, #ffffff);
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  line-height: 1.35;
+  min-height: 38px;
+}
+
+.service-box-changed {
+  border-color: #8b5cf6;
+  background: #f5f3ff;
+  box-shadow: 0 0 0 2px rgba(139, 92, 246, 0.15);
+}
+
+[data-theme="dark"] .service-box-changed {
+  background: #2e1065;
+  border-color: #a78bfa;
+}
+
+.chip-cambio-alerta {
+  font-size: 10px;
+  font-weight: 800;
+  color: #7c3aed;
+  background: #ede9fe;
+  border: 1px solid #ddd6fe;
+  padding: 1px 6px;
+  border-radius: 4px;
+}
+
+[data-theme="dark"] .chip-cambio-alerta {
+  background: #5b21b6;
+  color: #ede9fe;
+  border-color: #7c3aed;
+}
+
+.pill-highlight-changed {
+  box-shadow: 0 0 0 2px #8b5cf6 !important;
+}
+
+.comparativa-center-divider {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+@media (max-width: 768px) {
+  .comparativa-center-divider {
+    flex-direction: row;
+    padding: 6px 0;
+  }
+}
+
+.divider-arrow-circle {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: #7c3aed;
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  font-weight: 900;
+  box-shadow: 0 2px 6px rgba(124, 58, 237, 0.35);
+}
+
+.diff-delta-badge {
+  font-size: 11px;
+  font-weight: 800;
+  padding: 2px 6px;
+  border-radius: 6px;
+  white-space: nowrap;
+}
+
+.delta-positive {
+  background: #dcfce7;
+  color: #15803d;
+  border: 1px solid #86efac;
+}
+
+.delta-negative {
+  background: #fee2e2;
+  color: #b91c1c;
+  border: 1px solid #fca5a5;
+}
+
+.delta-neutral {
+  background: #f3f4f6;
+  color: #6b7280;
+  border: 1px solid #e5e7eb;
+}
+
+.comparativa-summary-footer {
+  background: var(--bg-surface-elevated, #f8fafc);
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  padding: 12px 14px;
+}
+
+.summary-title {
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--text-primary);
+  margin-bottom: 6px;
+}
+
+.summary-bullets {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.bullet-neutral {
+  color: var(--text-muted);
+}
+
+.btn-mark-reviewed-big {
+  background: #10b981;
+  color: #ffffff;
+  border: none;
+  border-radius: 6px;
+  padding: 8px 16px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 4px rgba(16, 185, 129, 0.3);
+}
+
+.btn-mark-reviewed-big:hover {
+  background: #059669;
+  transform: translateY(-1px);
+  box-shadow: 0 3px 6px rgba(16, 185, 129, 0.4);
+}
+
+.btn-mark-reviewed-big:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.btn-comparativa-action {
+  transition: all 0.2s ease;
+}
+
+.btn-comparativa-action:hover {
+  filter: brightness(1.1);
+  transform: translateY(-1px);
+}
+
+
+

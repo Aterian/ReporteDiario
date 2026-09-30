@@ -88,6 +88,7 @@ const mockApi = {
     ultima_modificacion: null
   }),
   obtener_modificaciones_recientes: async (limite = 30) => [],
+  marcar_modificacion_por_asistencia_revisada: async (idAsistencia) => ({ exito: true }),
   actualizar_tipo_costo_masivo: async (idsAsistencia = [], tipoCosto = '') => ({
     exito: true,
     actualizados: idsAsistencia.length
@@ -259,6 +260,14 @@ export const api = {
     const bridge = await getApi();
     if (bridge.marcar_modificacion_revisada) {
       return await bridge.marcar_modificacion_revisada(idModificacion);
+    }
+    return { exito: true };
+  },
+
+  async marcarModificacionPorAsistenciaRevisada(idAsistencia) {
+    const bridge = await getApi();
+    if (bridge.marcar_modificacion_por_asistencia_revisada) {
+      return await bridge.marcar_modificacion_por_asistencia_revisada(idAsistencia);
     }
     return { exito: true };
   },

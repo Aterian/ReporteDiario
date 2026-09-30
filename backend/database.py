@@ -918,7 +918,7 @@ def _enriquecer_registros_con_modificaciones(cursor, registros: list) -> list:
         cursor.execute(f"""
             SELECT id_modificacion, id_asistencia, tipo_antes, tipo_despues,
                    horas_antes, horas_despues, servicio_antes, servicio_despues,
-                   fecha_hora_modificaciones, quien_modifica
+                   fecha_hora_modificaciones, quien_modifica, COALESCE(revisado, 0) as revisado
             FROM modificaciones_realizadas
             WHERE id_asistencia IN ({placeholders})
             ORDER BY fecha_hora_modificaciones ASC
@@ -935,6 +935,9 @@ def _enriquecer_registros_con_modificaciones(cursor, registros: list) -> list:
         if mods or r.get("modificado") == 1:
             r["fue_modificado"] = 1
             r["modificaciones"] = mods
+            pendientes = [m for m in mods if m.get("revisado") != 1]
+            r["modificacion_pendiente"] = 1 if (pendientes or (not mods and r.get("modificado") == 1)) else 0
+            r["modificacion_revisada"] = 1 if (mods and not pendientes) else 0
             if mods:
                 ult = mods[-1]
                 t_ant = ult.get("tipo_antes") or "Sin tipo"
@@ -943,14 +946,17 @@ def _enriquecer_registros_con_modificaciones(cursor, registros: list) -> list:
                 h_desp = ult.get("horas_despues") or 0
                 quien = ult.get("quien_modifica") or "Colaborador"
                 fh = ult.get("fecha_hora_modificaciones") or ""
+                rev_tag = " (Revisado)" if r["modificacion_revisada"] == 1 else " (Pendiente revisión)"
                 r["detalle_modificacion"] = (
-                    f"Modificado por {quien} ({fh}): {t_ant} ({h_ant} hs) -> {t_desp} ({h_desp} hs)"
+                    f"Modificado por {quien} ({fh}): {t_ant} ({h_ant} hs) -> {t_desp} ({h_desp} hs){rev_tag}"
                 )
             else:
                 r["detalle_modificacion"] = "Registro modificado"
         else:
             r["fue_modificado"] = 0
             r["modificaciones"] = []
+            r["modificacion_pendiente"] = 0
+            r["modificacion_revisada"] = 0
             r["detalle_modificacion"] = ""
     return registros
 
@@ -1389,6 +1395,20 @@ def marcar_modificacion_revisada(id_modificacion: str):
             SET revisado = 1
             WHERE id_modificacion = ?
         """, (id_modificacion,))
+        conn.commit()
+
+# [FN-02.02] Marcar todas las modificaciones de una asistencia como revisadas
+def marcar_modificacion_por_asistencia_revisada(id_asistencia: str):
+    """Marca todas las modificaciones de una asistencia como leídas o revisadas por RRHH."""
+    if not id_asistencia:
+        return
+    with obtener_conexion() as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            UPDATE modificaciones_realizadas
+            SET revisado = 1
+            WHERE id_asistencia = ?
+        """, (str(id_asistencia),))
         conn.commit()
 
 # [FN-02.02] Marcar todas las modificaciones pendientes como revisadas
