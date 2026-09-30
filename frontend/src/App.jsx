@@ -21,6 +21,8 @@ export default function App() {
   const [toastRefresco, setToastRefresco] = useState(null);
   const [notificacionesModificaciones, setNotificacionesModificaciones] = useState([]);
   const [navegacionAuditoria, setNavegacionAuditoria] = useState(null);
+  const [actualizacion, setActualizacion] = useState(null);
+  const [actualizando, setActualizando] = useState(false);
   const fileInputRef = useRef(null);
 
   const [tema, setTema] = useState(() => {
@@ -164,6 +166,39 @@ export default function App() {
     }
   }, [vistaActiva, usuario]);
 
+  // [FN-03.06] Comprobar si hay actualizaciones disponibles en segundo plano desde GitHub Releases
+  const comprobarUpdate = async () => {
+    try {
+      const res = await api.verificarActualizacion();
+      if (res && res.actualizacion_disponible) {
+        setActualizacion(res);
+      }
+    } catch (err) {
+      // Silencioso si no hay conexión o no está configurado
+    }
+  };
+
+  useEffect(() => {
+    comprobarUpdate();
+    const intervalUpdate = setInterval(comprobarUpdate, 15 * 60 * 1000);
+    return () => clearInterval(intervalUpdate);
+  }, []);
+
+  const handleActualizar = async () => {
+    if (!actualizacion?.url_descarga) return;
+    setActualizando(true);
+    try {
+      const res = await api.aplicarActualizacion(actualizacion.url_descarga);
+      if (res && !res.exito) {
+        alert('No se pudo aplicar la actualización: ' + (res.error || 'Error desconocido'));
+        setActualizando(false);
+      }
+    } catch (err) {
+      alert('Error al actualizar: ' + err.message);
+      setActualizando(false);
+    }
+  };
+
   const handleIrACalendarioModificacion = async (notif) => {
     if (!notif) return;
     try {
@@ -218,6 +253,7 @@ export default function App() {
     setRefrescando(true);
     setToastRefresco({ tipo: 'cargando', mensaje: 'Sincronizando información de Google Sheets...' });
     try {
+      comprobarUpdate();
       const res = await api.refrescarCatalogos();
       if (res && res.exito) {
         setToastRefresco({ tipo: 'exito', mensaje: res.mensaje || 'Información actualizada correctamente.' });
@@ -422,6 +458,38 @@ export default function App() {
         <div className={`refresh-toast-banner ${toastRefresco.tipo}`}>
           <span>{toastRefresco.mensaje}</span>
           <button type="button" onClick={() => setToastRefresco(null)}>✕</button>
+        </div>
+      )}
+
+      {/* Cartel de Actualización Disponible */}
+      {actualizacion && (
+        <div className="update-banner">
+          <div className="update-content">
+            <div className="update-title">
+              <span>🚀</span> Actualización disponible: v{actualizacion.version_nueva}
+            </div>
+            <div className="update-notes">
+              {actualizacion.notas || 'Nueva versión con mejoras y correcciones disponible.'}
+            </div>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <button
+              type="button"
+              className="btn-update"
+              disabled={actualizando}
+              onClick={handleActualizar}
+            >
+              {actualizando ? 'Descargando...' : 'Actualizar ahora'}
+            </button>
+            <button
+              type="button"
+              className="reminder-close"
+              onClick={() => setActualizacion(null)}
+              title="Ignorar aviso"
+            >
+              ✕
+            </button>
+          </div>
         </div>
       )}
 
