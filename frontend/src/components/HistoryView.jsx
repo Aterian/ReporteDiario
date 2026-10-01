@@ -1218,7 +1218,7 @@ export default function HistoryView({ onVolver, tema, onNuevoReporte, usuario, o
             <div className="rpg-banner-body">
               <div className="rpg-banner-heading-wrap">
                 <div className="rpg-illuminated-box">H</div>
-                <h1 className="rpg-banner-main-title">ANALES DE MISIONES Y CRÓNICAS</h1>
+                <h1 className="rpg-banner-main-title">ISTORIAL DE MISIONES Y CRÓNICAS</h1>
               </div>
               <span className="rpg-banner-subtitle">LIBRO DE REGISTRO HISTÓRICO • GREMIO INGEAP</span>
             </div>
