@@ -44,6 +44,36 @@ const TIPOS_LICENCIA = [
   'Licencia - Otra'
 ];
 
+// [FN-06.04] Categorización de registro según las 5 categorías oficiales de liquidación de RRHH
+export const categorizarRegistroLiquidacion = (r) => {
+  if (!r) return 'oficina';
+  const lugLower = (r.tipo_ocf || r.lugar || '').trim().toLowerCase();
+  const srv = (r.servicio || '').trim();
+  const srvLower = srv.toLowerCase();
+  const hrs = Number(r.horas) || 0;
+  const esFer = (r.feriado || '').toUpperCase() === 'SI';
+  const tipoCosto = (r.tipo_costo || '').trim();
+
+  const esFrancoObraTrab = (
+    lugLower === 'franco obra trabajado' ||
+    (lugLower === 'franco trabajado' && (tipoCosto === 'Campo' || esFrancoDeObra(r))) ||
+    ((lugLower === 'franco' || lugLower === 'franco obra' || lugLower === 'franco de obra') && hrs > 0 && (tipoCosto === 'Campo' || esFrancoDeObra(r)))
+  );
+
+  if (esFrancoObraTrab) return 'franco_obra_trab';
+
+  const esFrancoOficTrab = (
+    lugLower === 'franco ofic trabajado' ||
+    lugLower === 'franco trabajado' ||
+    ((lugLower === 'franco' || lugLower === 'franco de oficina') && hrs > 0 && (srvLower.includes('trabajado') || tipoCosto === 'Oficina' || esServicioAreaInterna(srv)))
+  );
+
+  if (esFrancoOficTrab) return 'franco_ofic_trab';
+  if (lugLower === 'feriado trabajado' || (esFer && hrs > 0)) return 'feriado_trab';
+  if (esFrancoDeObra(r) || ['campaña / campo', 'campo', 'obra', 'roster'].includes(lugLower)) return 'obra';
+  return 'oficina';
+};
+
 export default function OtherEmployeesHistoryView({
   usuario,
   onVolver,
@@ -731,87 +761,6 @@ export default function OtherEmployeesHistoryView({
     'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
   ];
 
-  // Cálculo de conteos para la calculadora de liquidación (Exactamente 5 categorías oficiales)
-  // Regla de RRHH: Francos normales cuentan como oficina, francos de obra cuentan como obra,
-  // y se dividen los francos trabajados en franco de obra trabajado y franco de oficina trabajado
-  const conteosLiquidacion = useMemo(() => {
-    const anio = fechaCalendario.getFullYear();
-    const mesStr = String(fechaCalendario.getMonth() + 1).padStart(2, '0');
-    const prefijoMes = `${anio}-${mesStr}`;
-
-    const fechasOficina = new Set();
-    const fechasObra = new Set();
-    const fechasFrancoObraTrabajado = new Set();
-    const fechasFrancoOficTrabajado = new Set();
-    const fechasFeriadoTrabajado = new Set();
-
-    registrosEmpleadoAuditar.forEach(r => {
-      if (!r.fecha || !r.fecha.startsWith(prefijoMes)) return;
-      const f = r.fecha.trim();
-      const lug = (r.tipo_ocf || r.lugar || '').trim();
-      const lugLower = lug.toLowerCase();
-      const srv = (r.servicio || '').trim();
-      const srvLower = srv.toLowerCase();
-      const hrs = Number(r.horas) || 0;
-      const esFer = (r.feriado || '').toUpperCase() === 'SI';
-      const tipoCosto = (r.tipo_costo || '').trim();
-
-      const esFrancoObraTrab = (
-        lugLower === 'franco obra trabajado' ||
-        (lugLower === 'franco trabajado' && (tipoCosto === 'Campo' || esFrancoDeObra(r))) ||
-        ((lugLower === 'franco' || lugLower === 'franco obra' || lugLower === 'franco de obra') && hrs > 0 && (tipoCosto === 'Campo' || esFrancoDeObra(r)))
-      );
-
-      const esFrancoOficTrab = !esFrancoObraTrab && (
-        lugLower === 'franco ofic trabajado' ||
-        lugLower === 'franco trabajado' ||
-        ((lugLower === 'franco' || lugLower === 'franco de oficina') && hrs > 0 && (srvLower.includes('trabajado') || tipoCosto === 'Oficina' || esServicioAreaInterna(srv)))
-      );
-
-      // 1. Franco de obra trabajado
-      if (esFrancoObraTrab) {
-        fechasFrancoObraTrabajado.add(f);
-      }
-      // 2. Franco de oficina trabajado
-      else if (esFrancoOficTrab) {
-        fechasFrancoOficTrabajado.add(f);
-      }
-      // 3. Feriado trabajado
-      else if (lugLower === 'feriado trabajado' || (esFer && hrs > 0)) {
-        fechasFeriadoTrabajado.add(f);
-      }
-      // 4. Franco de Obra -> Computa como Día de Campo / Obra
-      else if (esFrancoDeObra(r)) {
-        fechasObra.add(f);
-      }
-      // 5. Franco normal o con servicio de áreas internas -> Computa como Día de Oficina
-      else if (
-        lugLower === 'franco' ||
-        lugLower === 'franco de oficina' ||
-        srvLower.includes('franco de oficina') ||
-        (lugLower === 'franco' && esServicioAreaInterna(srv))
-      ) {
-        fechasOficina.add(f);
-      }
-      // 6. Obra / Campo habitual
-      else if (['campaña / campo', 'campo', 'obra', 'roster'].includes(lugLower)) {
-        fechasObra.add(f);
-      }
-      // 7. Oficina habitual
-      else if (['oficina', 'home office'].includes(lugLower)) {
-        fechasOficina.add(f);
-      }
-    });
-
-    return {
-      diasOficina: fechasOficina.size,
-      diasObra: fechasObra.size,
-      diasFrancoObraTrabajado: fechasFrancoObraTrabajado.size,
-      diasFrancoOficTrabajado: fechasFrancoOficTrabajado.size,
-      diasFeriadoTrabajado: fechasFeriadoTrabajado.size
-    };
-  }, [registrosEmpleadoAuditar, fechaCalendario]);
-
   // [FN-06.04] Registros seleccionados para liquidación:
   // Si hay días seleccionados en el calendario o registros seleccionados en tabla, toma esos;
   // de lo contrario, toma todos los registros del mes activo en el calendario.
@@ -829,56 +778,34 @@ export default function OtherEmployeesHistoryView({
     return registrosEmpleadoAuditar.filter(r => r.fecha && r.fecha.startsWith(prefijoMes));
   }, [registrosEmpleadoAuditar, fechaCalendario, diasSeleccionadosCalendario, seleccionados]);
 
-  // [FN-06.04] Liquidación directa a partir de la columna costo_dia
-  const liquidacionPorCostoDia = useMemo(() => {
-    let subtotalOfi = 0;
-    let subtotalObra = 0;
-    let subtotalFrancoObraTrab = 0;
-    let subtotalFrancoOficTrab = 0;
-    let subtotalFeriadoTrab = 0;
-    let sumaTotal = 0;
+  // [FN-06.04] Cálculo de días detectados para la calculadora de liquidación
+  // Regla estricta: un registro por día si son del mismo tipo (dos registros de oficina en proyectos distintos
+  // cuentan como 1 solo día de oficina para costo); si tiene oficina y campo en el mismo día, se cuentan ambos.
+  const conteosLiquidacion = useMemo(() => {
+    const fechasOficina = new Set();
+    const fechasObra = new Set();
+    const fechasFrancoObraTrabajado = new Set();
+    const fechasFrancoOficTrabajado = new Set();
+    const fechasFeriadoTrabajado = new Set();
 
     registrosParaLiquidar.forEach(r => {
-      const c = Number(r.costo_dia) || 0;
-      sumaTotal += c;
-      const lugLower = (r.tipo_ocf || r.lugar || '').trim().toLowerCase();
-      const srvLower = (r.servicio || '').trim().toLowerCase();
-      const hrs = Number(r.horas) || 0;
-      const esFer = (r.feriado || '').toUpperCase() === 'SI';
-      const tipoCosto = (r.tipo_costo || '').trim();
+      if (!r.fecha) return;
+      const f = r.fecha.trim();
+      const cat = categorizarRegistroLiquidacion(r);
 
-      const esFrancoObraTrab = (
-        lugLower === 'franco obra trabajado' ||
-        (lugLower === 'franco trabajado' && (tipoCosto === 'Campo' || esFrancoDeObra(r))) ||
-        ((lugLower === 'franco' || lugLower === 'franco obra' || lugLower === 'franco de obra') && hrs > 0 && (tipoCosto === 'Campo' || esFrancoDeObra(r)))
-      );
-
-      const esFrancoOficTrab = !esFrancoObraTrab && (
-        lugLower === 'franco ofic trabajado' ||
-        lugLower === 'franco trabajado' ||
-        ((lugLower === 'franco' || lugLower === 'franco de oficina') && hrs > 0 && (srvLower.includes('trabajado') || tipoCosto === 'Oficina' || esServicioAreaInterna(r.servicio)))
-      );
-
-      if (esFrancoObraTrab) {
-        subtotalFrancoObraTrab += c;
-      } else if (esFrancoOficTrab) {
-        subtotalFrancoOficTrab += c;
-      } else if (lugLower === 'feriado trabajado' || (esFer && hrs > 0)) {
-        subtotalFeriadoTrab += c;
-      } else if (esFrancoDeObra(r) || ['campaña / campo', 'campo', 'obra', 'roster'].includes(lugLower)) {
-        subtotalObra += c;
-      } else {
-        subtotalOfi += c;
-      }
+      if (cat === 'oficina') fechasOficina.add(f);
+      else if (cat === 'obra') fechasObra.add(f);
+      else if (cat === 'franco_obra_trab') fechasFrancoObraTrabajado.add(f);
+      else if (cat === 'franco_ofic_trab') fechasFrancoOficTrabajado.add(f);
+      else if (cat === 'feriado_trab') fechasFeriadoTrabajado.add(f);
     });
 
     return {
-      total: Math.round(sumaTotal * 100) / 100,
-      subtotalOfi: Math.round(subtotalOfi * 100) / 100,
-      subtotalObra: Math.round(subtotalObra * 100) / 100,
-      subtotalFrancoObraTrab: Math.round(subtotalFrancoObraTrab * 100) / 100,
-      subtotalFrancoOficTrab: Math.round(subtotalFrancoOficTrab * 100) / 100,
-      subtotalFeriadoTrab: Math.round(subtotalFeriadoTrab * 100) / 100
+      diasOficina: fechasOficina.size,
+      diasObra: fechasObra.size,
+      diasFrancoObraTrabajado: fechasFrancoObraTrabajado.size,
+      diasFrancoOficTrabajado: fechasFrancoOficTrabajado.size,
+      diasFeriadoTrabajado: fechasFeriadoTrabajado.size
     };
   }, [registrosParaLiquidar]);
 
@@ -912,31 +839,15 @@ export default function OtherEmployeesHistoryView({
     ? Math.max(0, parseFloat(diasFeriadoManual))
     : conteosLiquidacion.diasFeriadoTrabajado;
 
-  const usaCostoDiaDirecto = !hayModoManual && liquidacionPorCostoDia.total > 0;
+  const subtotalOficina = Math.round(cantDiasOficina * (tarifas.precioOficina || 0) * 100) / 100;
+  const subtotalObra = Math.round(cantDiasObra * (tarifas.precioObra || 0) * 100) / 100;
+  const subtotalFrancoObra = Math.round(cantDiasFrancoObra * (tarifas.precioFrancoObraTrabajado || 0) * 100) / 100;
+  const subtotalFrancoOfic = Math.round(cantDiasFrancoOfic * (tarifas.precioFrancoOficTrabajado || 0) * 100) / 100;
+  const subtotalFeriado = Math.round(cantDiasFeriadoTrabajado * (tarifas.precioFeriadoTrabajado || 0) * 100) / 100;
 
-  const subtotalOficina = usaCostoDiaDirecto
-    ? liquidacionPorCostoDia.subtotalOfi
-    : cantDiasOficina * (tarifas.precioOficina || 0);
+  const totalLiquidar = Math.round((subtotalOficina + subtotalObra + subtotalFrancoObra + subtotalFrancoOfic + subtotalFeriado) * 100) / 100;
 
-  const subtotalObra = usaCostoDiaDirecto
-    ? liquidacionPorCostoDia.subtotalObra
-    : cantDiasObra * (tarifas.precioObra || 0);
-
-  const subtotalFrancoObra = usaCostoDiaDirecto
-    ? liquidacionPorCostoDia.subtotalFrancoObraTrab
-    : cantDiasFrancoObra * (tarifas.precioFrancoObraTrabajado || 0);
-
-  const subtotalFrancoOfic = usaCostoDiaDirecto
-    ? liquidacionPorCostoDia.subtotalFrancoOficTrab
-    : cantDiasFrancoOfic * (tarifas.precioFrancoOficTrabajado || 0);
-
-  const subtotalFeriado = usaCostoDiaDirecto
-    ? liquidacionPorCostoDia.subtotalFeriadoTrab
-    : cantDiasFeriadoTrabajado * (tarifas.precioFeriadoTrabajado || 0);
-
-  const totalLiquidar = usaCostoDiaDirecto
-    ? liquidacionPorCostoDia.total
-    : (subtotalOficina + subtotalObra + subtotalFrancoObra + subtotalFrancoOfic + subtotalFeriado);
+  const totalDiasComputados = cantDiasOficina + cantDiasObra + cantDiasFrancoObra + cantDiasFrancoOfic + cantDiasFeriadoTrabajado;
 
   const formatMoneda = (val) => {
     return new Intl.NumberFormat('es-AR', {
@@ -956,23 +867,79 @@ export default function OtherEmployeesHistoryView({
       const mesStr = String(fechaCalendario.getMonth() + 1).padStart(2, '0');
       const prefijoMes = `${anio}-${mesStr}`;
 
-      const registrosMes = registrosEmpleadoAuditar
+      const registrosMes = registrosParaLiquidar
         .filter(r => r.fecha && r.fecha.startsWith(prefijoMes))
         .sort((a, b) => (a.fecha || '').localeCompare(b.fecha || ''));
 
-      // 1. Proyectos imputados
-      const mapaProyectos = new Map();
+      // Tarifas efectivas por categoría
+      const getTarifaEfectiva = (cat) => {
+        if (cat === 'oficina') return cantDiasOficina > 0 ? subtotalOficina / cantDiasOficina : (tarifas.precioOficina || 0);
+        if (cat === 'obra') return cantDiasObra > 0 ? subtotalObra / cantDiasObra : (tarifas.precioObra || 0);
+        if (cat === 'franco_obra_trab') return cantDiasFrancoObra > 0 ? subtotalFrancoObra / cantDiasFrancoObra : (tarifas.precioFrancoObraTrabajado || 0);
+        if (cat === 'franco_ofic_trab') return cantDiasFrancoOfic > 0 ? subtotalFrancoOfic / cantDiasFrancoOfic : (tarifas.precioFrancoOficTrabajado || 0);
+        if (cat === 'feriado_trab') return cantDiasFeriadoTrabajado > 0 ? subtotalFeriado / cantDiasFeriadoTrabajado : (tarifas.precioFeriadoTrabajado || 0);
+        return 0;
+      };
+
+      // 1. Agrupar registros por fecha para distribuir costos proporcionalmente entre proyectos del mismo día
+      const mapaPorFecha = new Map();
       registrosMes.forEach(r => {
-        const srv = (r.servicio || 'Sin servicio').trim();
-        const hrs = Number(r.horas) || 0;
-        const cDia = Number(r.costo_dia) || 0;
-        if (!mapaProyectos.has(srv)) {
-          mapaProyectos.set(srv, { proyecto: srv, diasSet: new Set(), horas: 0, monto: 0 });
-        }
-        const item = mapaProyectos.get(srv);
-        if (r.fecha) item.diasSet.add(r.fecha);
-        item.horas += hrs;
-        item.monto += cDia;
+        const f = r.fecha || '';
+        if (!mapaPorFecha.has(f)) mapaPorFecha.set(f, []);
+        mapaPorFecha.get(f).push(r);
+      });
+
+      const mapaProyectos = new Map();
+      const registrosDetalle = [];
+
+      mapaPorFecha.forEach((regsDia, fechaStr) => {
+        // Agrupar registros del día por categoría
+        const regsPorCat = new Map();
+        regsDia.forEach(r => {
+          const cat = categorizarRegistroLiquidacion(r);
+          if (!regsPorCat.has(cat)) regsPorCat.set(cat, []);
+          regsPorCat.get(cat).push(r);
+        });
+
+        regsPorCat.forEach((regsCat, cat) => {
+          const tarifaCat = getTarifaEfectiva(cat);
+          const totHrsCat = regsCat.reduce((sum, r) => sum + (Number(r.horas) || 0), 0);
+          let acumuladoDiaCat = 0.0;
+
+          regsCat.forEach((r, idx) => {
+            const hrs = Number(r.horas) || 0;
+            let share = 0.0;
+            if (idx === regsCat.length - 1) {
+              share = Math.round((tarifaCat - acumuladoDiaCat) * 100) / 100;
+            } else {
+              if (totHrsCat > 0) {
+                share = Math.round(tarifaCat * (hrs / totHrsCat) * 100) / 100;
+              } else {
+                share = Math.round((tarifaCat / regsCat.length) * 100) / 100;
+              }
+              acumuladoDiaCat += share;
+            }
+
+            const srv = (r.servicio || 'Sin servicio').trim();
+            if (!mapaProyectos.has(srv)) {
+              mapaProyectos.set(srv, { proyecto: srv, diasSet: new Set(), horas: 0, monto: 0 });
+            }
+            const itemP = mapaProyectos.get(srv);
+            itemP.diasSet.add(fechaStr);
+            itemP.horas += hrs;
+            itemP.monto += share;
+
+            registrosDetalle.push({
+              fecha: r.fecha || '',
+              dia_semana: r.dia_semana || '',
+              tipo_ocf: obtenerEtiquetaModalidad(r),
+              servicio: srv,
+              horas: hrs,
+              tipo_costo: r.tipo_costo || (cat === 'obra' || cat === 'franco_obra_trab' ? 'Campo' : 'Oficina'),
+              costo_dia: share
+            });
+          });
+        });
       });
 
       const proyectosImputados = Array.from(mapaProyectos.values()).map(p => ({
@@ -1015,17 +982,6 @@ export default function OtherEmployeesHistoryView({
           subtotal: subtotalFeriado
         }
       ].filter(c => c.dias > 0 || c.subtotal > 0 || c.tarifa_diaria > 0);
-
-      // 3. Registros de detalle cronológico
-      const registrosDetalle = registrosMes.map(r => ({
-        fecha: r.fecha || '',
-        dia_semana: r.dia_semana || '',
-        tipo_ocf: obtenerEtiquetaModalidad(r),
-        servicio: r.servicio || '',
-        horas: Number(r.horas) || 0,
-        tipo_costo: r.tipo_costo || '',
-        costo_dia: Number(r.costo_dia) || 0
-      }));
 
       const datosInforme = {
         empleado: empActual?.nombre || empleadoAuditar,
@@ -1846,9 +1802,9 @@ export default function OtherEmployeesHistoryView({
                   </span>
                 </div>
               <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
-                <span style={{ fontSize: '11px', padding: '3px 8px', borderRadius: '12px', background: usaCostoDiaDirecto ? '#dcfce7' : '#fef3c7', color: usaCostoDiaDirecto ? '#15803d' : '#b45309', fontWeight: 600 }}>
-                  {usaCostoDiaDirecto
-                    ? `⚡ Directo de columna costo_dia (${registrosParaLiquidar.length} reg.)`
+                <span style={{ fontSize: '11px', padding: '3px 8px', borderRadius: '12px', background: !hayModoManual ? '#dcfce7' : '#fef3c7', color: !hayModoManual ? '#15803d' : '#b45309', fontWeight: 600 }}>
+                  {!hayModoManual
+                    ? `⚡ Cálculo automático (${totalDiasComputados} d)`
                     : '✏️ Modo manual / excepciones'}
                 </span>
                 {hayModoManual && (
@@ -1863,9 +1819,9 @@ export default function OtherEmployeesHistoryView({
                       setDiasFrancoOficManual('');
                       setDiasFeriadoManual('');
                     }}
-                    title="Restablecer todos los campos al cálculo automático directo de costo_dia"
+                    title="Restablecer todos los campos al cálculo automático oficial"
                   >
-                    ↺ Restablecer a costo_dia auto
+                    ↺ Restablecer a cálculo auto
                   </button>
                 )}
                 <button
@@ -2168,9 +2124,9 @@ export default function OtherEmployeesHistoryView({
                   {diasSeleccionadosCalendario && diasSeleccionadosCalendario.size > 0 && ` (${diasSeleccionadosCalendario.size} días seleccionados en calendario)`}
                   {seleccionados && seleccionados.size > 0 && ` (${seleccionados.size} registros seleccionados)`}
                 </span>
-                <span style={{ fontSize: '11px', color: usaCostoDiaDirecto ? '#16a34a' : 'var(--text-secondary)', marginTop: '2px', display: 'block' }}>
-                  {usaCostoDiaDirecto
-                    ? `✓ Calculado sumando directamente importes de columna costo_dia (${registrosParaLiquidar.length} registros).`
+                <span style={{ fontSize: '11px', color: !hayModoManual ? '#16a34a' : 'var(--text-secondary)', marginTop: '2px', display: 'block' }}>
+                  {!hayModoManual
+                    ? '✓ Calculado automáticamente (1 registro por día para el mismo tipo; computa ambos si combina oficina y campo).'
                     : 'Recálculo manual aplicado según días y tarifas configuradas.'}
                 </span>
               </div>

@@ -958,7 +958,15 @@ class ApiPuente:
                 )
             # Caso 4: Múltiples proyectos provistos en datos['proyectos']
             elif isinstance(proyectos, list) and len(proyectos) > 0:
+                tot_hrs_proys = 0.0
                 for item in proyectos:
+                    if isinstance(item, dict):
+                        try:
+                            tot_hrs_proys += float(item.get("horas", 8))
+                        except (ValueError, TypeError):
+                            tot_hrs_proys += 8.0
+
+                for i, item in enumerate(proyectos):
                     if isinstance(item, dict):
                         srv = str(item.get("servicio", "Tiempo dedicado al Área")).strip()
                         if not srv:
@@ -971,13 +979,21 @@ class ApiPuente:
                         id_proy = str(item.get("id_proyecto", "")).strip() or obtener_id_proyecto(srv)
                         fer_val = str(datos.get("feriado", "NO")).strip()
 
-                        t_costo, c_dia = calcular_costo_dia_asistencia(
+                        t_costo, c_dia_base = calcular_costo_dia_asistencia(
                             tipo_ocf=lugar,
                             servicio=srv,
                             feriado=fer_val,
                             empleado=empleado,
                             tipo_costo=tipo_costo
                         )
+
+                        if len(proyectos) > 1:
+                            if tot_hrs_proys > 0:
+                                c_dia = round(c_dia_base * (hrs / tot_hrs_proys), 2)
+                            else:
+                                c_dia = round(c_dia_base / len(proyectos), 2)
+                        else:
+                            c_dia = c_dia_base
 
                         guardar_registro_asistencia(
                             id_asistencia=str(uuid.uuid4()),
@@ -1340,7 +1356,7 @@ class ApiPuente:
         return obtener_ultimos_registros(
             empleado=sesion.get("nombre", ""),
             usuario_mail=sesion.get("mail", ""),
-            limite=35
+            limite=5000
         )
 
     def verificar_registro_hoy(self):
@@ -1787,7 +1803,7 @@ def obtener_icono_tray():
     return crear_icono_calendario(64)
 
 
-APP_VERSION = "1.12.0"
+APP_VERSION = "1.13.0"
 
 _mutex_instancia = None
 

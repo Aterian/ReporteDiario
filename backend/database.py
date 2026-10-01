@@ -1273,8 +1273,8 @@ def guardar_registro_historial(fecha: str, lugar: str, servicio: str, jornada: s
         sincronizado=sincronizado
     )
 
-def obtener_ultimos_registros(empleado: str = "", usuario_mail: str = "", limite: int = 30):
-    """Retorna los últimos reportes cargados para la pantalla de historial filtrando por usuario."""
+def obtener_ultimos_registros(empleado: str = "", usuario_mail: str = "", limite: int = 5000):
+    """Retorna los reportes históricos del empleado filtrando por usuario, ordenados cronológicamente."""
     with obtener_conexion() as conn:
         cursor = conn.cursor()
         emp_clean = (empleado or "").strip()
@@ -1309,7 +1309,7 @@ def obtener_ultimos_registros(empleado: str = "", usuario_mail: str = "", limite
                 FROM historial 
                 WHERE (usuario_mail != '' AND LOWER(usuario_mail) = LOWER(?))
                    OR (empleado != '' AND LOWER(empleado) = LOWER(?))
-                ORDER BY id DESC 
+                ORDER BY fecha DESC, id DESC 
                 LIMIT ?
             """, (mail_clean, emp_clean, limite))
         else:
@@ -1339,11 +1339,11 @@ def obtener_ultimos_registros(empleado: str = "", usuario_mail: str = "", limite
                     sincronizado,
                     creado_en
                 FROM historial 
-                ORDER BY id DESC 
+                ORDER BY fecha DESC, id DESC 
                 LIMIT ?
             """, (limite,))
-        filas = cursor.fetchall()
-        return [dict(f) for f in filas]
+        filas = [dict(f) for f in cursor.fetchall()]
+        return _enriquecer_registros_con_modificaciones(cursor, filas)
 
 def usuario_registro_hoy(empleado: str = "", usuario_mail: str = "") -> bool:
     """Verifica si el empleado ya completó al menos un registro para la fecha actual."""

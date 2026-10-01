@@ -264,3 +264,14 @@
   1. Exclusivo para Justina Bertolozzi e Iván Valentin (`puedeVerCalculadoraLiquidacion`).
   2. Hoja 'Resumen Liquidación': datos de colaborador, desglose de las 5 categorías, total general y tabla de proyectos imputados.
   3. Hoja 'Detalle Diario': cronograma detallado día a día de las jornadas del mes.
+
+## [FN-06.06] Unificación de Cómputo de Liquidación y Sincronización Completa de Historial
+- **Módulo**: [MOD-06] Gestión de Roster y Asistencia RRHH
+- **Flujo Operativo**: Sincroniza la totalidad de registros históricos personales sin truncamiento de límite y unifica la calculadora de liquidación para computar 1 registro por día para un mismo tipo (e.g. 2 registros de oficina) y computar ambos tipos si coexisten oficina y campo en la misma jornada.
+- **Tablas afectadas**: `historial`.
+- **Reglas de negocio e invariantes**:
+  1. `obtener_ultimos_registros` ampliado a límite 5000 ordenado por `fecha DESC, id DESC` con enriquecimiento de modificaciones, eliminando discrepancias con la vista de supervisión.
+  2. Mismo tipo en el mismo día (e.g. 2 proyectos de oficina): computa como 1 solo día de esa categoría para el cálculo de costo.
+  3. Tipos distintos en el mismo día (e.g. oficina y campo): se computan ambos conceptos íntegros en la liquidación.
+  4. En exportación a Excel, los costos diarios compartidos por proyectos del mismo tipo se distribuyen proporcionalmente según horas trabajadas, garantizando cuadratura contable exacta.
+

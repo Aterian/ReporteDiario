@@ -2,6 +2,25 @@
 
 Historial cronológico de cambios, nuevas características y mejoras aplicadas al sistema **Check Diario Ingeap**.
 
+## [1.13.0] - 2026-10-01
+
+### ⚖️ Unificación de Vistas de Historial y Cómputo de Costos en Calculadora de Liquidación
+- **Sincronización Total del Historial Personal (`[FN-06.06]`)**:
+  - Corrección en `obtener_ultimos_registros` (`backend/database.py` y `backend/main.py`): el límite anterior de 35 registros truncaba los días anteriores de colaboradores activos con múltiples registros diarios o historial extendido, provocando que días del mes en curso (como los primeros días de septiembre) no aparecieran en el calendario personal de `HistoryView.jsx` mientras sí se visualizaban en la auditoría de `OtherEmployeesHistoryView.jsx`.
+  - Se amplió el límite a 5000 registros, se ordenó estrictamente por `fecha DESC, id DESC` y se integró el enriquecimiento de auditoría de modificaciones (`_enriquecer_registros_con_modificaciones`), garantizando paridad exacta de datos entre vistas.
+- **Regla Estricta de Liquidación por Tipo y Día (`[FN-06.06]`)**:
+  - Se unificó el cálculo de la Calculadora de Liquidación para cumplir con la regla de negocio:
+    - *Mismo tipo en el mismo día*: múltiples registros con la misma modalidad o tipo de costo (ej. 2 proyectos de oficina como Inventario y Aplicaciones) computan como **1 solo día** de esa categoría para el cálculo salarial.
+    - *Tipos distintos en el mismo día*: si coexisten registros de modalidades combinadas (ej. oficina y campo en la misma jornada), **se computan ambos conceptos** de manera independiente para la liquidación.
+  - Corrección del modo automático: se eliminó la sobreescritura errónea que sumaba de forma lineal la columna `costo_dia` de registros fragmentados duplicando costos diarios. Ahora los subtotales reflejan rigurosamente `cant_dias * tarifa_diaria`.
+- **Distribución Proporcional de Costos en Exportación Excel (`[FN-06.05]`)**:
+  - En la generación del informe de Excel (`handleDescargarInformeLiquidacion` y `liquidacion_export.py`), cuando un colaborador imputa horas a múltiples proyectos dentro de la misma categoría en un mismo día, la tarifa diaria se distribuye proporcionalmente entre los proyectos en función de las horas trabajadas.
+  - Se garantiza cuadratura matemática perfecta entre la tabla de conceptos generales, el total a liquidar, el monto imputado por proyecto y el detalle cronológico diario.
+- **Asignación Proporcional en Registro Multiproyecto (`[FN-01.09]`)**:
+  - En `guardar_check_diario` (`backend/main.py`), al guardar reportes diarios con múltiples proyectos en un solo paso, la columna `costo_dia` se almacena repartida proporcionalmente según las horas de cada proyecto sin inflar el importe del día.
+
+---
+
 ## [1.12.0] - 2026-10-01
 
 ### 📑 Informes de Liquidación Ejecutivos, Fracciones de 0.5 Días, Francos Discriminados y Selector Enum de Servicios
