@@ -292,7 +292,8 @@ export default function OtherEmployeesHistoryView({
     if (empleadoAuditar) {
       setDiasOficinaManual('');
       setDiasCampoManual('');
-      setDiasFrancoManual('');
+      setDiasFrancoObraManual('');
+      setDiasFrancoOficManual('');
       setDiasFeriadoManual('');
       setDiasSeleccionadosCalendario(new Set());
       cargarAuditoriaEmpleado(empleadoAuditar, fechaCalendario);
