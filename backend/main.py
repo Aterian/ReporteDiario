@@ -520,11 +520,19 @@ class ApiPuente:
 
         # Proyectos filtrados por el área indicada (ej: 'I', 'A', 'M', 'S', 'VYM')
         # Para el área SIG ('S'), se incluyen proyectos de su área ('S') y de Aplicaciones ('A')
-        areas_permitidas = ["S", "A"] if area_filtro in ["S", "SIG"] else [area_filtro]
+        # Para Ingeniería ('I') y Mensura ('M'), se incluyen proyectos activos de ambas áreas ('I' y 'M') por trabajo conjunto
+        if area_filtro in ["S", "SIG"]:
+            areas_permitidas = {"S", "SIG", "A", "APLICACIONES"}
+        elif area_filtro in ["I", "INGENIERIA", "INGENIERÍA", "M", "MENSURA"]:
+            areas_permitidas = {"I", "INGENIERIA", "INGENIERÍA", "M", "MENSURA"}
+        else:
+            areas_permitidas = {area_filtro}
+
         proyectos_filtrados = []
         vistos_area = set()
         for p in proyectos:
-            if p.get("area", "").strip().upper() in areas_permitidas and p.get("denominacion"):
+            area_p = p.get("area", "").strip().upper()
+            if area_p in areas_permitidas and p.get("denominacion"):
                 nom = p["denominacion"].strip()
                 if nom not in vistos_area:
                     vistos_area.add(nom)

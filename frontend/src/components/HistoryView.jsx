@@ -553,7 +553,7 @@ export default function HistoryView({ onVolver, tema, onNuevoReporte, usuario, o
               <div className="parchment-header-row" style={{ padding: '8px 14px 4px 14px', marginBottom: 0 }}>
                 <div className="parchment-title-group">
                   <QuillIcon size={16} color="#78350f" />
-                  <h3 className="parchment-title">ANALES DE MISIONES</h3>
+                  <h3 className="parchment-title">HISTORIAL DE MISIONES</h3>
                 </div>
                 <span className="parchment-date">{registrosFiltrados.length} Registros</span>
               </div>

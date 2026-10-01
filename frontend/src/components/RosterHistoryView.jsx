@@ -5,6 +5,7 @@ import { puedeAccederRoster } from '../utils/permissions';
 // [MOD-06] RosterHistoryView
 export default function RosterHistoryView({ usuario, onVolver, onNuevoRoster, tema }) {
   const isDark = tema === 'dark';
+  const isRpg = tema === 'rpg';
 
   if (!puedeAccederRoster(usuario)) {
     return (
@@ -253,14 +254,14 @@ export default function RosterHistoryView({ usuario, onVolver, onNuevoRoster, te
     });
   }, [rosters, filtrarTablaPorProyecto, proyectoSeleccionado, filtroEmpleado]);
 
-  return (
-    <div className={`roster-history-container ${isDark ? 'dark-theme' : ''}`}>
+  const contenidoPrincipal = (
+    <>
       {/* Barra de navegación superior */}
       <div className="roster-top-nav">
         <div className="roster-top-nav-left">
           <button
             type="button"
-            className="btn-roster-back"
+            className={isRpg ? 'rpg-wood-btn' : 'btn-roster-back'}
             onClick={onVolver}
             title="Volver al Menú Principal"
           >
@@ -270,8 +271,8 @@ export default function RosterHistoryView({ usuario, onVolver, onNuevoRoster, te
             Volver al Menú
           </button>
           <div className="roster-header-title">
-            <span className="roster-title-badge">RRHH</span>
-            <h2>Historial y Exportación de Rosters</h2>
+            <span className="roster-title-badge">{isRpg ? 'REINO • ARCHIVOS' : 'RRHH'}</span>
+            <h2>{isRpg ? 'Archivos de Campañas y Roster del Reino' : 'Historial y Exportación de Rosters'}</h2>
           </div>
         </div>
 
@@ -279,7 +280,7 @@ export default function RosterHistoryView({ usuario, onVolver, onNuevoRoster, te
           {/* Botón Refrescar: Sincroniza y depura registros de Sheets y BD local */}
           <button
             type="button"
-            className={`btn-roster-refresh ${refrescando ? 'btn-refresh-spinning' : ''}`}
+            className={isRpg ? `rpg-wood-btn ${refrescando ? 'btn-refresh-spinning' : ''}` : `btn-roster-refresh ${refrescando ? 'btn-refresh-spinning' : ''}`}
             onClick={handleRefrescar}
             disabled={refrescando || cargando}
             title="Refrescar y sincronizar con Google Sheets"
@@ -299,19 +300,19 @@ export default function RosterHistoryView({ usuario, onVolver, onNuevoRoster, te
               <polyline points="1 20 1 14 7 14" />
               <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
             </svg>
-            {refrescando ? 'Sincronizando...' : 'Refrescar'}
+            {refrescando ? (isRpg ? 'Sintonizando oráculos...' : 'Sincronizando...') : (isRpg ? 'Consultar Oráculo' : 'Refrescar')}
           </button>
 
           <button
             type="button"
-            className="btn-go-new-roster"
+            className={isRpg ? 'rpg-wood-btn' : 'btn-go-new-roster'}
             onClick={onNuevoRoster}
           >
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
               <line x1="12" y1="5" x2="12" y2="19" />
               <line x1="5" y1="12" x2="19" y2="12" />
             </svg>
-            Cargar Nuevo Roster
+            {isRpg ? 'Decretar Guardias' : 'Cargar Nuevo Roster'}
           </button>
         </div>
       </div>
@@ -380,7 +381,7 @@ export default function RosterHistoryView({ usuario, onVolver, onNuevoRoster, te
             <div className="history-download-action">
               <button
                 type="button"
-                className="btn-download-excel"
+                className={isRpg ? 'rpg-wood-btn' : 'btn-download-excel'}
                 disabled={exportando || !proyectoSeleccionado}
                 onClick={handleExportarExcel}
                 title="Descargar archivo Excel oficial con 3 hojas para el proyecto seleccionado"
@@ -388,7 +389,7 @@ export default function RosterHistoryView({ usuario, onVolver, onNuevoRoster, te
                 {exportando ? (
                   <>
                     <div className="spinner-mini"></div>
-                    Generando archivo Excel...
+                    {isRpg ? 'Transcribiendo pergamino...' : 'Generando archivo Excel...'}
                   </>
                 ) : (
                   <>
@@ -397,7 +398,7 @@ export default function RosterHistoryView({ usuario, onVolver, onNuevoRoster, te
                       <polyline points="7 10 12 15 17 10" />
                       <line x1="12" y1="15" x2="12" y2="3" />
                     </svg>
-                    Descargar Archivo .xlsx
+                    {isRpg ? 'Descargar Códice .xlsx' : 'Descargar Archivo .xlsx'}
                   </>
                 )}
               </button>
@@ -685,6 +686,47 @@ export default function RosterHistoryView({ usuario, onVolver, onNuevoRoster, te
           </div>
         </div>
       )}
+    </>
+  );
+
+  // En modo RPG: envuelto dentro del Tablón de Madera de la Taberna con herrajes y estandarte curvado
+  if (isRpg) {
+    return (
+      <div className="rpg-board-viewport rpg-roster-history-viewport">
+        <div className="rpg-notice-board">
+          {/* Herrajes de hierro forjado en las 4 esquinas */}
+          <div className="rpg-iron-bracket top-left" />
+          <div className="rpg-iron-bracket top-right" />
+          <div className="rpg-iron-bracket bottom-left" />
+          <div className="rpg-iron-bracket bottom-right" />
+
+          {/* Estandarte de Pergamino Curvado */}
+          <div className="rpg-curved-banner">
+            <div className="rpg-banner-scroll-roll left" />
+            <div className="rpg-banner-body">
+              <div className="rpg-banner-heading-wrap">
+                <div className="rpg-illuminated-box">A</div>
+                <h1 className="rpg-banner-main-title">ARCHIVOS DE CAMPAÑA Y TURNOS</h1>
+              </div>
+              <span className="rpg-banner-subtitle">
+                REGISTRO HISTÓRICO DE GUARDIAS Y EXPEDICIONES DEL GREMIO
+              </span>
+            </div>
+            <div className="rpg-banner-scroll-roll right" />
+          </div>
+
+          <div className="roster-history-container rpg-roster-history-content">
+            {contenidoPrincipal}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // En modo Normal / Corporativo
+  return (
+    <div className={`roster-history-container ${isDark ? 'dark-theme' : ''}`}>
+      {contenidoPrincipal}
     </div>
   );
 }

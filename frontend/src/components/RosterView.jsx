@@ -5,6 +5,7 @@ import { puedeAccederRoster } from '../utils/permissions';
 // [MOD-05] RosterView
 export default function RosterView({ usuario, onVolver, tema }) {
   const isDark = tema === 'dark';
+  const isRpg = tema === 'rpg';
 
   if (!puedeAccederRoster(usuario)) {
     return (
@@ -535,25 +536,25 @@ export default function RosterView({ usuario, onVolver, tema }) {
     'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
   ];
 
-  return (
-    <div className={`roster-view-container ${isDark ? 'dark-theme' : ''}`}>
+  const contenidoPrincipal = (
+    <>
       {/* Barra superior de la vista de Roster */}
       <div className="roster-top-nav">
         <div className="roster-top-nav-left">
           <button
             type="button"
-            className="btn-roster-back"
+            className={isRpg ? 'rpg-wood-btn' : 'btn-roster-back'}
             onClick={onVolver}
-            title="Volver al menú principal"
+            title={isRpg ? 'Regresar a la Taberna' : 'Volver al menú principal'}
           >
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
               <polyline points="15 18 9 12 15 6" />
             </svg>
-            Volver al Menú
+            {isRpg ? 'Taberna' : 'Volver al Menú'}
           </button>
           <div className="roster-header-title">
-            <span className="roster-title-badge">RRHH</span>
-            <h2>Gestión y Carga de Rosters</h2>
+            <span className="roster-title-badge">{isRpg ? 'GREMIO' : 'RRHH'}</span>
+            <h2>{isRpg ? 'Decreto de Guardias y Expediciones (Roster)' : 'Gestión y Carga de Rosters'}</h2>
           </div>
         </div>
 
@@ -561,7 +562,7 @@ export default function RosterView({ usuario, onVolver, tema }) {
           {/* Botón Refrescar: Sincroniza y depura registros de Sheets y BD local */}
           <button
             type="button"
-            className={`btn-roster-refresh ${refrescando ? 'btn-refresh-spinning' : ''}`}
+            className={isRpg ? 'rpg-wood-btn' : `btn-roster-refresh ${refrescando ? 'btn-refresh-spinning' : ''}`}
             onClick={handleRefrescar}
             disabled={refrescando || cargandoRosters || limpiando}
             title="Refrescar y sincronizar con Google Sheets"
@@ -581,13 +582,13 @@ export default function RosterView({ usuario, onVolver, tema }) {
               <polyline points="1 20 1 14 7 14" />
               <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
             </svg>
-            {refrescando ? 'Sincronizando...' : 'Refrescar'}
+            {refrescando ? 'Sincronizando...' : (isRpg ? 'Consultar Oráculo' : 'Refrescar')}
           </button>
 
           {/* Botón Limpiar: Purga datos locales y descarga directamente de Google Sheets */}
           <button
             type="button"
-            className="btn-roster-refresh"
+            className={isRpg ? 'rpg-wood-btn' : 'btn-roster-refresh'}
             onClick={handleLimpiarLocalYDescargar}
             disabled={refrescando || cargandoRosters || limpiando}
             title="Eliminar registros locales y descargar registros oficiales desde Google Sheets para evitar duplicados"
@@ -605,13 +606,13 @@ export default function RosterView({ usuario, onVolver, tema }) {
             >
               <path d="M3 6h18m-2 0v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6m3 0V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
             </svg>
-            {limpiando ? 'Limpiando...' : 'Limpiar'}
+            {limpiando ? 'Purgando...' : (isRpg ? 'Purgar Anales' : 'Limpiar')}
           </button>
 
           {/* NUEVO: Botón para exportar Excel directo desde esta ventana */}
           <button
             type="button"
-            className="btn-export-excel-header"
+            className={isRpg ? 'rpg-wood-btn' : 'btn-export-excel-header'}
             disabled={exportandoExcel}
             onClick={abrirModalExportar}
             title={`Descargar archivo Excel oficial por proyecto de ${nombresMeses[mesGantt]} ${anioGantt}`}
@@ -628,7 +629,7 @@ export default function RosterView({ usuario, onVolver, tema }) {
                   <polyline points="7 10 12 15 17 10" />
                   <line x1="12" y1="15" x2="12" y2="3" />
                 </svg>
-                Descargar Excel ({nombresMeses[mesGantt]})
+                {isRpg ? `Exportar Pergamino (${nombresMeses[mesGantt]})` : `Descargar Excel (${nombresMeses[mesGantt]})`}
               </>
             )}
           </button>
@@ -636,7 +637,7 @@ export default function RosterView({ usuario, onVolver, tema }) {
           {/* Botón para Mostrar / Esconder Calendario Gantt */}
           <button
             type="button"
-            className={`btn-toggle-gantt ${!mostrarCalendario ? 'gantt-hidden' : ''}`}
+            className={`${isRpg ? 'rpg-wood-btn' : 'btn-toggle-gantt'} ${!mostrarCalendario ? 'gantt-hidden' : ''}`}
             onClick={() => setMostrarCalendario(prev => !prev)}
             title={mostrarCalendario ? 'Ocultar calendario y centrar formulario' : 'Mostrar calendario Gantt'}
           >
@@ -1514,6 +1515,47 @@ export default function RosterView({ usuario, onVolver, tema }) {
           </div>
         </div>
       )}
+    </>
+  );
+
+  // En modo RPG: envuelto dentro del Tablón de Madera de la Taberna con herrajes y estandarte curvado
+  if (isRpg) {
+    return (
+      <div className="rpg-board-viewport rpg-roster-viewport">
+        <div className="rpg-notice-board">
+          {/* Herrajes de hierro forjado en las 4 esquinas */}
+          <div className="rpg-iron-bracket top-left" />
+          <div className="rpg-iron-bracket top-right" />
+          <div className="rpg-iron-bracket bottom-left" />
+          <div className="rpg-iron-bracket bottom-right" />
+
+          {/* Estandarte de Pergamino Curvado */}
+          <div className="rpg-curved-banner">
+            <div className="rpg-banner-scroll-roll left" />
+            <div className="rpg-banner-body">
+              <div className="rpg-banner-heading-wrap">
+                <div className="rpg-illuminated-box">R</div>
+                <h1 className="rpg-banner-main-title">DECRETO DE GUARDIAS Y EXPEDICIONES</h1>
+              </div>
+              <span className="rpg-banner-subtitle">
+                TABLÓN DE ASIGNACIÓN DE TURNOS • GREMIO INGEAP
+              </span>
+            </div>
+            <div className="rpg-banner-scroll-roll right" />
+          </div>
+
+          <div className="roster-view-container rpg-roster-content">
+            {contenidoPrincipal}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // En modo Normal / Corporativo
+  return (
+    <div className={`roster-view-container ${isDark ? 'dark-theme' : ''}`}>
+      {contenidoPrincipal}
     </div>
   );
 }

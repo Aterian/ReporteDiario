@@ -196,3 +196,36 @@
 - **Reglas de negocio e invariantes**:
   1. Modo automático calcula el total sumando `costo_dia` de los registros seleccionados del colaborador.
   2. Modo manual disponible para ajustar días/tarifas de excepciones con botón de reinicio al cálculo automático.
+
+## [FN-04.09] Permisos Exclusivos de Calculadora de Liquidación
+- **Módulo**: [MOD-04] Control de Permisos y Roles
+- **Flujo Operativo**: Restringe la visibilidad y operación de la calculadora de liquidación salarial dentro del historial de colaboradores únicamente a Justina Bertolozzi e Iván Valentin.
+- **Tablas afectadas**: `historial`.
+- **Reglas de negocio e invariantes**:
+  1. Acceso a calculadora condicionado estrictamente a `esJustinaBertolozzi(usuario) || esIvanValentin(usuario)`.
+  2. Ocultamiento total del componente y textos asociados para cualquier otro perfil de usuario.
+
+## [FN-01.09] Asignación Manual de Horas en Proyecto Único
+- **Módulo**: [MOD-01] Registro de Asistencia Diaria
+- **Flujo Operativo**: Permite alternar a jornada personalizada y ajustar manualmente las horas imputadas aun cuando el usuario selecciona un único proyecto en el formulario diario.
+- **Tablas afectadas**: `historial`.
+- **Reglas de negocio e invariantes**:
+  1. La barra de división de jornada se muestra activa desde `proyectosSeleccionados.length >= 1`.
+  2. En modo personalizado para 1 proyecto, se envían y persisten las horas manuales configuradas sin forzar 8 hs fijas.
+
+## [FN-05.02] Modo RPG Medieval Exclusivo para Área de Aplicaciones
+- **Módulo**: [MOD-05] Modo Aventura RPG
+- **Flujo Operativo**: Adapta la interfaz de Historial de Otros Empleados, Roster e Historial de Roster con marcos de tablón de madera, herrajes de hierro forjado, estandarte de pergamino y tipografía Cinzel, restringiendo el modo RPG exclusivamente al Área de Aplicaciones.
+- **Tablas afectadas**: `sesion`.
+- **Reglas de negocio e invariantes**:
+  1. Acceso y conmutación al tema RPG reservado exclusivamente para colaboradores con `area === 'A'` o `esIvanValentin(usuario)`.
+  2. Sanitización automática a tema oscuro (`dark`) para cualquier otro usuario.
+  3. Navegación directa en el Tablón de la Taberna hacia Crónicas de Compañeros y Decreto de Guardias.
+
+## [FN-01.10] Catálogo Conjunto de Proyectos para Ingeniería y Mensura
+- **Módulo**: [MOD-01] Registro de Asistencia Diaria
+- **Flujo Operativo**: Retorna en el catálogo de proyectos activos los proyectos pertenecientes tanto a Ingeniería como a Mensura cuando un colaborador de cualquiera de estas dos áreas registra su check diario.
+- **Tablas afectadas**: `0_proyectos`, `proyectos_cache`.
+- **Reglas de negocio e invariantes**:
+  1. Solicitudes con `area = 'I'` o `area = 'M'` retornan la unión de proyectos activos de áreas `I` y `M`.
+  2. Facilita la imputación en proyectos de colaboración conjunta sin requerir cambio de filtro manual.

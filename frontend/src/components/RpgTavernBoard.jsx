@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { getTituloRpg } from '../utils/rpgTitles';
 import { api } from '../services/apiBridge';
+import { puedeVerHistorialOtros, puedeAccederRoster } from '../utils/permissions';
 
 // Iconos vectoriales medievales para garantizar renderizado perfecto sin depender de compatibilidad de emojis
 const QuillIcon = ({ size = 16, color = "#6b4317" }) => (
@@ -47,7 +48,17 @@ const ShieldIcon = ({ size = 15, color = "#6b4317" }) => (
   </svg>
 );
 
-export default function RpgTavernBoard({ usuario, onNuevoReporte, onVerHistorial, onAvatarClick }) {
+export default function RpgTavernBoard({
+  usuario,
+  onNuevoReporte,
+  onVerHistorial,
+  onAvatarClick,
+  onHistorialOtrosEmpleados,
+  onNuevoRoster,
+  onHistorialRoster
+}) {
+  const puedeOtros = puedeVerHistorialOtros(usuario);
+  const puedeRoster = puedeAccederRoster(usuario);
   const [diasRegistrados, setDiasRegistrados] = useState(new Set());
 
   // Fecha actual
@@ -260,6 +271,30 @@ export default function RpgTavernBoard({ usuario, onNuevoReporte, onVerHistorial
             >
               📖 Abrir Tomo de Crónicas (Historial)
             </button>
+
+            {puedeOtros && onHistorialOtrosEmpleados && (
+              <button 
+                type="button" 
+                className="rpg-parchment-btn-sec"
+                style={{ marginTop: '6px' }}
+                onClick={onHistorialOtrosEmpleados}
+                title="Auditoría y misiones de todos los colaboradores del gremio"
+              >
+                👥 Crónicas de Compañeros (Otros Empleados)
+              </button>
+            )}
+
+            {puedeRoster && onHistorialRoster && (
+              <button 
+                type="button" 
+                className="rpg-parchment-btn-sec"
+                style={{ marginTop: '6px' }}
+                onClick={onHistorialRoster}
+                title="Archivos de guardias y asignación de turnos"
+              >
+                🛡️ Decreto de Guardias y Roster
+              </button>
+            )}
           </div>
 
           {/* PERGAMINO 3: CALENDARIO MENSUAL DE REGISTROS (REEMPLAZA EXP) */}
@@ -337,6 +372,16 @@ export default function RpgTavernBoard({ usuario, onNuevoReporte, onVerHistorial
             <button type="button" className="rpg-wood-btn" onClick={onVerHistorial}>
               📖 Crónicas
             </button>
+            {puedeOtros && onHistorialOtrosEmpleados && (
+              <button type="button" className="rpg-wood-btn" onClick={onHistorialOtrosEmpleados} title="Ver auditoría y misiones de todos los colaboradores">
+                👥 Aventureros
+              </button>
+            )}
+            {puedeRoster && onHistorialRoster && (
+              <button type="button" className="rpg-wood-btn" onClick={onHistorialRoster} title="Ver decreto y archivos de guardias y turnos">
+                🛡️ Roster Reino
+              </button>
+            )}
             <button type="button" className="rpg-wood-btn" onClick={onAvatarClick}>
               👤 Mi Héroe
             </button>

@@ -49,6 +49,10 @@ const mockApi = {
       const filtradosSig = todos.filter(t => t.includes('-S-') || t.includes('-A-'));
       return filtradosSig.length > 0 ? filtradosSig : todos;
     }
+    if (['I', 'INGENIERIA', 'INGENIERÍA', 'M', 'MENSURA'].includes(area.toUpperCase())) {
+      const filtradosIM = todos.filter(t => t.includes('-I-') || t.includes('-M-'));
+      return filtradosIM.length > 0 ? filtradosIM : todos;
+    }
     const cod = `-${area.toUpperCase()}-`;
     const filtrados = todos.filter(t => t.includes(cod));
     return filtrados.length > 0 ? filtrados : todos;

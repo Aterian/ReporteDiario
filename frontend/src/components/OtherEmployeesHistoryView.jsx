@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { api } from '../services/apiBridge';
-import { puedeVerHistorialOtros, puedeModificarRegistro, puedeGestionarTipoCosto, puedeVerModificaciones, esAreaNucleo } from '../utils/permissions';
+import { puedeVerHistorialOtros, puedeModificarRegistro, puedeGestionarTipoCosto, puedeVerModificaciones, esAreaNucleo, puedeVerCalculadoraLiquidacion } from '../utils/permissions';
 import { esServicioAreaInterna, esFrancoDeObra, obtenerEtiquetaModalidad } from '../utils/francoUtils';
+import { getTituloRpg } from '../utils/rpgTitles';
 
 // [MOD-03] OtherEmployeesHistoryView
 
@@ -94,6 +95,7 @@ export default function OtherEmployeesHistoryView({
   const esSoloLecturaNucleo = esAreaNucleo(usuario);
   const puedeVerModif = puedeVerModificaciones(usuario);
   const puedeEditarCosto = !esSoloLecturaNucleo && puedeGestionarTipoCosto(usuario);
+  const puedeVerLiquidacion = puedeVerCalculadoraLiquidacion(usuario);
 
   // Cantidad manual de días para las 4 categorías de liquidación (RRHH)
   const [diasOficinaManual, setDiasOficinaManual] = useState('');
@@ -902,34 +904,38 @@ export default function OtherEmployeesHistoryView({
 
   const pendientesCount = registros.filter(r => r.sincronizado === 0).length;
 
-  return (
-    <div className={`view-content other-history-container ${isRpg ? 'rpg-board-viewport' : ''}`}>
+  const contenidoPrincipal = (
+    <>
       {/* Barra superior de navegación */}
       <div className="view-header-bar other-history-header">
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           {onVolver && (
-            <button type="button" className="btn-back" onClick={onVolver}>
+            <button type="button" className={isRpg ? 'rpg-wood-btn' : 'btn-back'} onClick={onVolver}>
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                 <polyline points="15 18 9 12 15 6" />
               </svg>
-              <span>Inicio</span>
+              <span>{isRpg ? 'Taberna' : 'Inicio'}</span>
             </button>
           )}
 
           {onVerMiHistorial && (
-            <button type="button" className="btn-action-ghost" onClick={onVerMiHistorial}>
+            <button type="button" className={isRpg ? 'rpg-wood-btn' : 'btn-action-ghost'} onClick={onVerMiHistorial}>
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                 <circle cx="12" cy="12" r="10" />
                 <polyline points="12 6 12 12 14 14" />
               </svg>
-              <span>Mi Historial</span>
+              <span>{isRpg ? 'Mi Libro' : 'Mi Historial'}</span>
             </button>
           )}
 
           <div className="other-history-title-block">
-            <span className="other-history-title">Panel de Control de Empleados (RRHH)</span>
+            <span className="other-history-title">
+              {isRpg ? '🏰 Cuartel General • Crónicas de Aventureros' : 'Panel de Control de Empleados (RRHH)'}
+            </span>
             <span className="other-history-subtitle">
-              Auditoría integral de asistencia • Registros de RRHH • Calculadora de Liquidación
+              {isRpg
+                ? (`📜 Anales de la Compañía • Historial de Aventureros${puedeVerLiquidacion ? ' • Reparto de Botín' : ''}`)
+                : (`Auditoría integral de asistencia • Registros de RRHH${puedeVerLiquidacion ? ' • Calculadora de Liquidación' : ''}`)}
             </span>
           </div>
         </div>
@@ -942,7 +948,7 @@ export default function OtherEmployeesHistoryView({
               </span>
               <button
                 type="button"
-                className="btn-sync"
+                className={isRpg ? 'rpg-wood-btn' : 'btn-sync'}
                 onClick={ejecutarSincronizacion}
                 disabled={sincronizando}
                 title="Sincronizar cambios pendientes inmediatamente con Google Sheets (No requerido: se sincroniza solo)"
@@ -952,14 +958,14 @@ export default function OtherEmployeesHistoryView({
                   <path d="M3 22v-6h6" />
                   <path d="M21 12a9 9 0 0 1-15 6.7L3 16" />
                 </svg>
-                <span>{sincronizando ? 'Enviando...' : `Subir ahora (${pendientesCount})`}</span>
+                <span>{sincronizando ? 'Enviando...' : (isRpg ? `Sellar Hojas (${pendientesCount})` : `Subir ahora (${pendientesCount})`)}</span>
               </button>
             </div>
           )}
 
           <button
             type="button"
-            className="btn-refresh"
+            className={isRpg ? 'rpg-wood-btn' : 'btn-refresh'}
             onClick={async () => {
               setCargando(true);
               try {
@@ -991,12 +997,12 @@ export default function OtherEmployeesHistoryView({
               <polyline points="1 20 1 14 7 14" />
               <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
             </svg>
-            Refrescar
+            {isRpg ? 'Consultar Oráculo' : 'Refrescar'}
           </button>
 
           <button
             type="button"
-            className="btn-refresh"
+            className={isRpg ? 'rpg-wood-btn' : 'btn-refresh'}
             onClick={handleLimpiarLocalYDescargar}
             disabled={cargando || sincronizando || limpiando}
             title="Eliminar registros locales y descargar directamente desde Google Sheets para evitar duplicados"
@@ -1014,7 +1020,7 @@ export default function OtherEmployeesHistoryView({
             >
               <path d="M3 6h18m-2 0v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6m3 0V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
             </svg>
-            {limpiando ? 'Limpiando...' : 'Limpiar'}
+            {limpiando ? 'Purgando...' : (isRpg ? 'Purgar Anales' : 'Limpiar')}
           </button>
         </div>
       </div>
@@ -1035,7 +1041,9 @@ export default function OtherEmployeesHistoryView({
         <div className="other-left-panel">
           <div className="other-panel-header">
             <div className="other-panel-title-row">
-              <span className="other-panel-title">Listado de registros</span>
+              <span className="other-panel-title">
+                {isRpg ? '📜 Registro de Expediciones' : 'Listado de registros'}
+              </span>
               <span className="other-count-badge">{registrosFiltrados.length}</span>
             </div>
 
@@ -1047,7 +1055,7 @@ export default function OtherEmployeesHistoryView({
                 </svg>
                 <input
                   type="text"
-                  placeholder="Buscar por proyecto, lugar o fecha..."
+                  placeholder={isRpg ? 'Buscar en los anales por misión, lugar o fecha...' : 'Buscar por proyecto, lugar o fecha...'}
                   className="form-input form-input-sm search-field"
                   value={filtroTexto}
                   onChange={(e) => setFiltroTexto(e.target.value)}
@@ -1058,7 +1066,9 @@ export default function OtherEmployeesHistoryView({
               </div>
 
               <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <span style={{ fontSize: '11px', color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>Empleado:</span>
+                <span style={{ fontSize: '11px', color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>
+                  {isRpg ? 'Aventurero:' : 'Empleado:'}
+                </span>
                 <select
                   className="form-select form-select-sm"
                   style={{ width: '100%', height: '30px', fontSize: '12px' }}
@@ -1070,7 +1080,7 @@ export default function OtherEmployeesHistoryView({
                   }}
                   title="Filtrar listado por empleado"
                 >
-                  <option value="">Todos los empleados</option>
+                  <option value="">{isRpg ? 'Todos los aventureros' : 'Todos los empleados'}</option>
                   {empleados.map(u => (
                     <option key={u.dni || u.nombre} value={u.nombre}>
                       {u.nombre}
@@ -1223,6 +1233,11 @@ export default function OtherEmployeesHistoryView({
                             </div>
                             <div className="other-user-meta">
                               <span className="other-user-name">{item.empleado || 'Sin empleado'}</span>
+                              {isRpg && (
+                                <span className="rpg-card-role-chip" style={{ fontSize: '10px', color: '#f59e0b', display: 'block', fontWeight: 600 }}>
+                                  {getTituloRpg(item.empleado)}
+                                </span>
+                              )}
                               {item.cargado_por && (
                                 <span className="other-user-sub">
                                   Cargado por: <strong>{item.cargado_por}</strong>
@@ -1389,7 +1404,7 @@ export default function OtherEmployeesHistoryView({
                   <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
                   <circle cx="12" cy="7" r="4" />
                 </svg>
-                <span>Auditar empleado:</span>
+                <span>{isRpg ? 'Aventurero a auditar:' : 'Auditar empleado:'}</span>
               </label>
               <select
                 className="form-select form-select-clean audit-select-field"
@@ -1406,6 +1421,11 @@ export default function OtherEmployeesHistoryView({
                   </option>
                 ))}
               </select>
+              {isRpg && empleadoAuditar && (
+                <span style={{ fontSize: '11px', color: '#f59e0b', fontWeight: 600, display: 'block', marginTop: '2px' }}>
+                  {getTituloRpg(empleadoAuditar)}
+                </span>
+              )}
             </div>
 
             <div className="calendar-month-controls">
@@ -1430,7 +1450,7 @@ export default function OtherEmployeesHistoryView({
               </button>
               <button
                 type="button"
-                className="calendar-today-btn"
+                className={isRpg ? 'rpg-wood-btn' : 'calendar-today-btn'}
                 onClick={irAHoy}
               >
                 Hoy
@@ -1625,17 +1645,22 @@ export default function OtherEmployeesHistoryView({
           </div>
 
           {/* =========================================================================
-              CALCULADORA DE LIQUIDACIÓN DEBAJO DEL CALENDARIO
+              CALCULADORA DE LIQUIDACIÓN DEBAJO DEL CALENDARIO (Exclusivo Justina e Iván)
               ========================================================================= */}
-          <div className="liquidation-card">
-            <div className="liquidation-card-header">
-              <div className="liquidation-card-title">
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                  <rect x="2" y="4" width="20" height="16" rx="2" />
-                  <line x1="2" y1="10" x2="22" y2="10" />
-                </svg>
-                <span>Calculadora de Liquidación • {empleadoAuditar || 'Empleado'} ({nombresMeses[fechaCalendario.getMonth()]} {fechaCalendario.getFullYear()})</span>
-              </div>
+          {puedeVerLiquidacion && (
+            <div className={`liquidation-card ${isRpg ? 'rpg-liquidation-card' : ''}`}>
+              <div className="liquidation-card-header">
+                <div className="liquidation-card-title">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="2" y="4" width="20" height="16" rx="2" />
+                    <line x1="2" y1="10" x2="22" y2="10" />
+                  </svg>
+                  <span>
+                    {isRpg
+                      ? `💰 Reparto de Botín y Recompensas • ${empleadoAuditar || 'Aventurero'}`
+                      : `Calculadora de Liquidación • ${empleadoAuditar || 'Empleado'}`} ({nombresMeses[fechaCalendario.getMonth()]} {fechaCalendario.getFullYear()})
+                  </span>
+                </div>
               <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
                 <span style={{ fontSize: '11px', padding: '3px 8px', borderRadius: '12px', background: usaCostoDiaDirecto ? '#dcfce7' : '#fef3c7', color: usaCostoDiaDirecto ? '#15803d' : '#b45309', fontWeight: 600 }}>
                   {usaCostoDiaDirecto
@@ -1887,11 +1912,12 @@ export default function OtherEmployeesHistoryView({
                 </span>
               </div>
               <div className="liq-total-amount-box">
-                <span className="liq-total-amount-label">TOTAL A LIQUIDAR</span>
+                <span className="liq-total-amount-label">{isRpg ? 'TESORO TOTAL A LIQUIDAR' : 'TOTAL A LIQUIDAR'}</span>
                 <span className="liq-total-amount-value">{formatMoneda(totalLiquidar)}</span>
               </div>
             </div>
           </div>
+          )}
         </div>
       </div>
 
@@ -2708,6 +2734,47 @@ export default function OtherEmployeesHistoryView({
           </div>
         </div>
       )}
+    </>
+  );
+
+  // En modo RPG: envuelto dentro del Tablón de Madera de la Taberna con herrajes y estandarte curvado
+  if (isRpg) {
+    return (
+      <div className="rpg-board-viewport rpg-other-history-viewport">
+        <div className="rpg-notice-board">
+          {/* Herrajes de hierro forjado en las 4 esquinas */}
+          <div className="rpg-iron-bracket top-left" />
+          <div className="rpg-iron-bracket top-right" />
+          <div className="rpg-iron-bracket bottom-left" />
+          <div className="rpg-iron-bracket bottom-right" />
+
+          {/* Estandarte de Pergamino Curvado */}
+          <div className="rpg-curved-banner">
+            <div className="rpg-banner-scroll-roll left" />
+            <div className="rpg-banner-body">
+              <div className="rpg-banner-heading-wrap">
+                <div className="rpg-illuminated-box">A</div>
+                <h1 className="rpg-banner-main-title">CRÓNICAS DE AVENTUREROS • GREMIO INGEAP</h1>
+              </div>
+              <span className="rpg-banner-subtitle">
+                LIBRO DE COMPAÑÍA • AUDITORÍA DE MISIONES Y RECOMPENSAS
+              </span>
+            </div>
+            <div className="rpg-banner-scroll-roll right" />
+          </div>
+
+          <div className="view-content other-history-container rpg-other-history-content">
+            {contenidoPrincipal}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // En modo Normal / Corporativo
+  return (
+    <div className="view-content other-history-container">
+      {contenidoPrincipal}
     </div>
   );
 }

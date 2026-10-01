@@ -101,4 +101,9 @@ export const puedeVerActividadAyer = (usuario) => {
   return esAreaNucleo(usuario) || esAreaAplicaciones(usuario) || esJustinaBertolozzi(usuario);
 };
 
+// [FN-04.09] Permisos de Calculadora de Liquidación (Exclusivo Justina Bertolozzi e Iván Valentin)
+export const puedeVerCalculadoraLiquidacion = (usuario) => {
+  return esJustinaBertolozzi(usuario) || esIvanValentin(usuario);
+};
+
 

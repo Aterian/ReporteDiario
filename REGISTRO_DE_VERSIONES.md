@@ -4,6 +4,26 @@ Historial cronológico de cambios, nuevas características y mejoras aplicadas a
 
 ---
 
+## [1.11.0] - 2026-10-01
+
+### 🛡️ Restricción de Permisos de Liquidación, Asignación Manual Uniproyecto, Modo RPG Medieval para Aplicaciones y Catálogo Unificado I+M
+- **Permisos de Calculadora de Liquidación (`[FN-04.09]`)**:
+  - Restringida la visualización y operación de la Calculadora de Liquidación salarial exclusivamente a `Justina Bertolozzi` e `Iván Valentin`.
+  - La tarjeta de liquidación y los subtítulos orientativos se ocultan por completo para cualquier otro perfil o rol de usuario en el historial.
+- **Asignación Manual de Horas en Proyecto Único (`[FN-01.09]`)**:
+  - En el formulario de registro diario (`CheckForm.jsx`), al seleccionar un único proyecto ahora se habilita la barra de alternancia de jornada (`Jornada estándar` vs `Asignar horas manuales`).
+  - Permite a los colaboradores definir jornadas personalizadas con fracciones de hora (ej: 4 hs, 6 hs, etc.) para un solo proyecto sin forzar 8 hs fijas.
+- **Modo RPG Medieval Exclusivo para el Área de Aplicaciones (`[FN-05.02]`)**:
+  - Se adaptaron al estilo RPG Medieval las vistas del Historial de Otros Empleados (`OtherEmployeesHistoryView.jsx`), Roster de Guardias (`RosterView.jsx`) e Historial de Roster (`RosterHistoryView.jsx`), envolviéndolas en el Tablón de Madera de la Taberna con herrajes de hierro forjado, estandarte curvado de pergamino, títulos honoríficos dinámicos (`getTituloRpg`) y tipografía Cinzel.
+  - La paleta y texturas de pergamino iluminado se extienden a la calculadora de liquidación y tablas de auditoría/Gantt.
+  - Restricción estricta de tema: El tema RPG queda habilitado exclusivamente para el personal del Área de Aplicaciones (`A`) e Iván Valentin. Para cualquier otro usuario que intente seleccionarlo o lo tenga persistido, se sanitiza automáticamente a modo oscuro (`dark`).
+  - Navegación bidireccional desde el Tablón de la Taberna (`RpgTavernBoard.jsx`) hacia Crónicas de Compañeros y Decreto de Guardias.
+- **Catálogo Unificado de Proyectos para Ingeniería y Mensura (`[FN-01.10]`)**:
+  - Al cargar o registrar reportes diarios para colaboradores de Ingeniería (`I`) o Mensura (`M`), el catálogo de proyectos activos retorna conjuntamente los proyectos de ambas áreas (`I` y `M`), facilitando la imputación de horas en proyectos donde ambos equipos trabajan de manera coordinada.
+  - El selector de proyectos en el cliente categoriza el grupo bajo la etiqueta descriptiva *"📁 Proyectos Activos (Ingeniería y Mensura)"*.
+
+---
+
 ## [1.10.0] - 2026-10-01
 
 ### 💼 Modificaciones visuales menores y ajustes para RRHH

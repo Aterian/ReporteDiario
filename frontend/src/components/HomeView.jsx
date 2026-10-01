@@ -25,6 +25,9 @@ export default function HomeView({
         onNuevoReporte={onNuevoReporte}
         onVerHistorial={onVerHistorial}
         onAvatarClick={onAvatarClick}
+        onHistorialOtrosEmpleados={onHistorialOtrosEmpleados}
+        onNuevoRoster={onNuevoRoster}
+        onHistorialRoster={onHistorialRoster}
       />
     );
   }

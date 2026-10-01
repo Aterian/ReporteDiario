@@ -306,7 +306,10 @@ export default function CheckForm({ onRegistroGuardado, onVolver, tema }) {
     if (modoDivision === 'equitativo') {
       return esCampañaOCampo ? horasCampoCalculadas : 8;
     }
-    const total = proyectosSeleccionados.reduce((acc, p) => acc + (Number(horasPorProyecto[p]) || 0), 0);
+    const total = proyectosSeleccionados.reduce((acc, p) => {
+      const val = horasPorProyecto[p] !== undefined ? Number(horasPorProyecto[p]) : getHorasEquitativas();
+      return acc + (isNaN(val) ? 0 : val);
+    }, 0);
     return Math.round(total * 10) / 10;
   };
 
@@ -469,13 +472,14 @@ export default function CheckForm({ onRegistroGuardado, onVolver, tema }) {
               servicio: p,
               horas: h
             }));
+            payload.horas = horasCampoCalculadas;
           } else {
             payload.proyectos = proyectosSeleccionados.map(p => ({
               servicio: p,
-              horas: Number(horasPorProyecto[p]) || 0
+              horas: horasPorProyecto[p] !== undefined ? Number(horasPorProyecto[p]) : Number((horasCampoCalculadas / proyectosSeleccionados.length).toFixed(2))
             }));
+            payload.horas = getTotalHoras();
           }
-          payload.horas = horasCampoCalculadas;
         } else {
           if (modoDivision === 'equitativo') {
             const h = getHorasEquitativas();
@@ -483,12 +487,18 @@ export default function CheckForm({ onRegistroGuardado, onVolver, tema }) {
               servicio: p,
               horas: h
             }));
+            payload.horas = h * proyectosSeleccionados.length;
           } else {
             payload.proyectos = proyectosSeleccionados.map(p => ({
               servicio: p,
-              horas: Number(horasPorProyecto[p]) || 0
+              horas: horasPorProyecto[p] !== undefined ? Number(horasPorProyecto[p]) : getHorasEquitativas()
             }));
+            payload.horas = getTotalHoras();
           }
+        }
+        if (proyectosSeleccionados.length === 1) {
+          payload.servicio = proyectosSeleccionados[0];
+          payload.proyecto = proyectosSeleccionados[0];
         }
       }
 
@@ -1121,7 +1131,7 @@ export default function CheckForm({ onRegistroGuardado, onVolver, tema }) {
                     </option>
                   )}
 
-                  <optgroup label="📁 Proyectos Activos">
+                  <optgroup label={(areaActiva === 'I' || areaActiva === 'M' || areaActiva === 'INGENIERIA' || areaActiva === 'MENSURA') ? "📁 Proyectos Activos (Ingeniería y Mensura)" : "📁 Proyectos Activos"}>
                     {serviciosDisponibles.map((srv) => (
                       <option key={srv} value={srv}>
                         {srv}
@@ -1202,22 +1212,28 @@ export default function CheckForm({ onRegistroGuardado, onVolver, tema }) {
               ) : (
                 /* CASO B: Proyectos o Múltiples Áreas seleccionadas */
                 <div className="projects-active-wrapper">
-                  {/* Selector de modo si son 2 o más ítems */}
-                  {proyectosSeleccionados.length >= 2 && (
+                  {/* Selector de modo para 1 o más proyectos/áreas */}
+                  {proyectosSeleccionados.length >= 1 && (
                     <div className="division-toggle-bar">
                       <button
                         type="button"
                         className={`division-toggle-btn ${modoDivision === 'equitativo' ? 'active' : ''}`}
                         onClick={() => setModoDivision('equitativo')}
                       >
-                        {isRpg ? '⚖️ Reparto de Botín (8 hs)' : '⚖️ Dividir equitativo (8 hs)'}
+                        {proyectosSeleccionados.length === 1
+                          ? (isRpg ? '⚖️ Jornada Estándar (8 hs)' : `⚖️ Jornada estándar (${esCampañaOCampo ? horasCampoCalculadas : 8} hs)`)
+                          : (isRpg ? '⚖️ Reparto de Botín (8 hs)' : '⚖️ Dividir equitativo (8 hs)')
+                        }
                       </button>
                       <button
                         type="button"
                         className={`division-toggle-btn ${modoDivision === 'personalizado' ? 'active' : ''}`}
                         onClick={() => setModoDivision('personalizado')}
                       >
-                        {isRpg ? '🗡️ Puntos de Esfuerzo' : '✏️ Ajustar por ítem'}
+                        {proyectosSeleccionados.length === 1
+                          ? (isRpg ? '🗡️ Horas Manuales' : '✏️ Asignar horas manuales')
+                          : (isRpg ? '🗡️ Puntos de Esfuerzo' : '✏️ Ajustar por ítem')
+                        }
                       </button>
                     </div>
                   )}

@@ -8310,6 +8310,251 @@ html, body {
 }
 
 /* ==========================================================================
+   MODO RPG: ADAPTACIÓN DE HISTORIAL DE EMPLEADOS, ROSTER Y ARCHIVOS (APLICACIONES)
+   ========================================================================== */
+
+/* Viewports extendidos con marco de Tablón de la Taberna */
+.rpg-other-history-viewport,
+.rpg-roster-viewport,
+.rpg-roster-history-viewport {
+  width: 100%;
+  max-width: 1440px;
+  margin: 0 auto;
+  padding: 8px 12px 28px 12px;
+  box-sizing: border-box;
+}
+
+.rpg-other-history-viewport .rpg-notice-board,
+.rpg-roster-viewport .rpg-notice-board,
+.rpg-roster-history-viewport .rpg-notice-board {
+  max-width: 100% !important;
+  min-height: calc(100vh - 84px);
+  display: flex;
+  flex-direction: column;
+  padding: 12px 14px 14px 14px;
+}
+
+/* Scroll interno suave y refinado para el contenido dentro del tablón */
+.rpg-other-history-content,
+.rpg-roster-content,
+.rpg-roster-history-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* Tarjetas y Contenedores estilo Pergamino Antiguo */
+.rpg-other-history-content .other-history-header,
+.rpg-other-history-content .liquidation-card,
+.rpg-other-history-content .audit-panel-header,
+.rpg-other-history-content .audit-calendar-wrapper,
+.rpg-other-history-content .other-record-card,
+.rpg-roster-content .roster-panel-card,
+.rpg-roster-content .roster-table-card,
+.rpg-roster-history-content .history-export-card,
+.rpg-roster-history-content .history-table-card {
+  background: #fbf2dc !important;
+  background-image: radial-gradient(circle at 50% 50%, rgba(255, 255, 255, 0.55) 0%, rgba(206, 172, 114, 0.22) 100%) !important;
+  border: 1.5px solid #b89758 !important;
+  border-radius: 8px !important;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.65) !important;
+  color: #2b1d0c !important;
+}
+
+/* Tipografía de títulos de pergamino medieval */
+.rpg-other-history-content h2,
+.rpg-other-history-content h3,
+.rpg-other-history-content h4,
+.rpg-roster-content h2,
+.rpg-roster-content h3,
+.rpg-roster-content h4,
+.rpg-roster-history-content h2,
+.rpg-roster-history-content h3,
+.rpg-roster-history-content h4,
+.rpg-other-history-content .liquidation-card-title,
+.rpg-other-history-content .other-employee-badge,
+.rpg-roster-content .roster-table-title,
+.rpg-roster-history-content .history-table-header h3 {
+  font-family: 'Cinzel', serif !important;
+  font-weight: 800 !important;
+  color: #3b220c !important;
+  letter-spacing: 0.5px;
+}
+
+/* Badges y chips de rol RPG */
+.rpg-card-role-chip {
+  font-family: 'Cinzel', serif;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+}
+
+/* Tarjeta individual de reporte de empleado en RPG */
+.rpg-other-history-content .other-record-card {
+  border-left: 4px solid #b45309 !important;
+}
+.rpg-other-history-content .other-record-card:hover {
+  border-color: #d97706 !important;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.5) !important;
+}
+.rpg-other-history-content .other-user-name {
+  color: #2b1d0c !important;
+  font-weight: 700 !important;
+}
+.rpg-other-history-content .other-user-sub {
+  color: #785324 !important;
+}
+.rpg-other-history-content .other-card-actions {
+  border-top-color: #d4b880 !important;
+}
+
+/* Calculadora de Liquidación en Modo Pergamino */
+.rpg-other-history-content .liquidation-card {
+  border-color: #c9aa6d !important;
+}
+.rpg-other-history-content .liquidation-item {
+  background: rgba(255, 255, 255, 0.65) !important;
+  border: 1px solid #d4b880 !important;
+  color: #2b1d0c !important;
+}
+.rpg-other-history-content .liq-label {
+  color: #451a03 !important;
+  font-weight: 700 !important;
+}
+.rpg-other-history-content .liq-input {
+  background: rgba(255, 255, 255, 0.95) !important;
+  border: 1.5px solid #b89758 !important;
+  color: #2b1d0c !important;
+  font-weight: 800 !important;
+}
+.rpg-other-history-content .liquidation-total-banner {
+  background: linear-gradient(135deg, #78350f 0%, #451a03 100%) !important;
+  border: 2px solid #d97706 !important;
+  color: #fef3c7 !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.2) !important;
+}
+.rpg-other-history-content .liquidation-total-banner .liq-total-subtitle {
+  color: #fde68a !important;
+}
+.rpg-other-history-content .liquidation-total-banner .liq-total-period {
+  color: #ffffff !important;
+  font-family: 'Cinzel', serif !important;
+}
+.rpg-other-history-content .liquidation-total-banner .liq-total-amount-label {
+  color: #fcd34d !important;
+  font-family: 'Cinzel', serif !important;
+}
+.rpg-other-history-content .liquidation-total-banner .liq-total-amount-value {
+  color: #fbbf24 !important;
+  font-family: 'Cinzel', serif !important;
+  text-shadow: 0 0 10px rgba(251, 191, 36, 0.4);
+}
+
+/* Calendario de Auditoría dentro del Tablón */
+.rpg-other-history-content .audit-calendar-wrapper {
+  padding: 12px !important;
+}
+.rpg-other-history-content .audit-calendar-header {
+  border-bottom: 1px dashed #b89758 !important;
+  padding-bottom: 8px !important;
+}
+.rpg-other-history-content .calendar-nav-btn {
+  background: linear-gradient(180deg, #5c381e 0%, #3e2210 100%) !important;
+  border: 1px solid #8c582f !important;
+  color: #fef3c7 !important;
+}
+
+/* Roster: Gantt Table y Tablas de Historial en modo pergamino/madera */
+.rpg-roster-content .gantt-table th,
+.rpg-roster-history-content .roster-history-table th {
+  background: #3e2210 !important;
+  color: #fef3c7 !important;
+  border: 1px solid #6b3e1c !important;
+  font-family: 'Cinzel', serif !important;
+  font-weight: 700 !important;
+  font-size: 11px !important;
+  letter-spacing: 0.5px;
+}
+.rpg-roster-content .gantt-th-emp,
+.rpg-roster-content .gantt-th-totales {
+  background: #341c0c !important;
+  color: #fbbf24 !important;
+}
+.rpg-roster-content .gantt-table td,
+.rpg-roster-history-content .roster-history-table td {
+  border: 1px solid #d4b880 !important;
+  color: #2b1d0c !important;
+  background: rgba(255, 255, 255, 0.6) !important;
+}
+.rpg-roster-content .gantt-table tr:hover td,
+.rpg-roster-history-content .roster-history-table tr:hover td {
+  background: rgba(254, 243, 199, 0.9) !important;
+}
+.rpg-roster-content .gantt-emp-cell {
+  background: rgba(251, 242, 220, 0.95) !important;
+  font-weight: 700 !important;
+}
+
+/* Pestañas de Roster */
+.rpg-roster-content .roster-tab-btn {
+  font-family: 'Cinzel', serif !important;
+  font-weight: 700 !important;
+  border: 1.5px solid #8c582f !important;
+  background: rgba(255, 255, 255, 0.6) !important;
+  color: #5c381e !important;
+}
+.rpg-roster-content .roster-tab-btn.active {
+  background: linear-gradient(180deg, #744625 0%, #451a03 100%) !important;
+  color: #fef3c7 !important;
+  border-color: #d97706 !important;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4) !important;
+}
+
+/* Inputs, Selects y Filtros dentro de las vistas RPG */
+.rpg-other-history-content input,
+.rpg-other-history-content select,
+.rpg-roster-content input,
+.rpg-roster-content select,
+.rpg-roster-history-content input,
+.rpg-roster-history-content select {
+  background: rgba(255, 255, 255, 0.9) !important;
+  border: 1.5px solid #c9aa6d !important;
+  color: #2b1d0c !important;
+  border-radius: 6px !important;
+}
+.rpg-other-history-content input:focus,
+.rpg-other-history-content select:focus,
+.rpg-roster-content input:focus,
+.rpg-roster-content select:focus,
+.rpg-roster-history-content input:focus,
+.rpg-roster-history-content select:focus {
+  border-color: #d97706 !important;
+  box-shadow: 0 0 8px rgba(217, 119, 6, 0.35) !important;
+}
+
+/* Modales en modo RPG */
+[data-theme='rpg'] .roster-modal-content,
+[data-theme='rpg'] .modal-box {
+  background: #fbf2dc !important;
+  background-image: radial-gradient(circle at 50% 50%, rgba(255, 255, 255, 0.6) 0%, rgba(206, 172, 114, 0.25) 100%) !important;
+  border: 2px solid #8c6a38 !important;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.85) !important;
+  color: #2b1d0c !important;
+}
+[data-theme='rpg'] .modal-header,
+[data-theme='rpg'] .roster-modal-header {
+  background: rgba(212, 184, 128, 0.35) !important;
+  border-bottom: 1px dashed #b89758 !important;
+}
+[data-theme='rpg'] .modal-header h3,
+[data-theme='rpg'] .roster-modal-header h3 {
+  font-family: 'Cinzel', serif !important;
+  font-weight: 800 !important;
+  color: #3b220c !important;
+}
+
+/* ==========================================================================
    ORGANIZACIÓN RESPONSIVA PANTALLA COMPLETA - DOS BLOQUES VERTICALES
    ========================================================================== */
 @media (min-width: 640px) {

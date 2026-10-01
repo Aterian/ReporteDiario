@@ -9,7 +9,7 @@ import OtherEmployeesHistoryView from './components/OtherEmployeesHistoryView';
 import RosterView from './components/RosterView';
 import RosterHistoryView from './components/RosterHistoryView';
 import ErrorBoundary from './components/ErrorBoundary';
-import { puedeAccederRoster, puedeVerHistorialOtros, puedeVerModificaciones } from './utils/permissions';
+import { puedeAccederRoster, puedeVerHistorialOtros, puedeVerModificaciones, esAreaAplicaciones } from './utils/permissions';
 
 // [MOD-00] App Principal
 export default function App() {
@@ -63,18 +63,17 @@ export default function App() {
     localStorage.setItem('ingeap_theme', tema);
   }, [tema]);
 
-  const esUsuarioApp = Boolean(
-    usuario && (
-      (usuario.area || '').trim().toUpperCase() === 'A' ||
-      (usuario.nombre || '').toLowerCase().includes('iván') ||
-      (usuario.nombre || '').toLowerCase().includes('ivan') ||
-      (usuario.nombre || '').toLowerCase().includes('canavesio') ||
-      String(usuario.dni || '').trim() === '45059000'
-    )
-  );
+  const esAplicaciones = esAreaAplicaciones(usuario);
+
+  // [FN-04.05] Mantener modo RPG EXCLUSIVAMENTE para el Área de Aplicaciones
+  useEffect(() => {
+    if (usuario && !esAplicaciones && tema === 'rpg') {
+      setTema('dark');
+    }
+  }, [usuario, esAplicaciones, tema]);
 
   const toggleTema = () => {
-    if (esUsuarioApp) {
+    if (esAplicaciones) {
       setTema(prev => {
         if (prev === 'light') return 'dark';
         if (prev === 'dark') return 'rpg';
@@ -424,7 +423,7 @@ export default function App() {
               tema === 'light'
                 ? 'Cambiar a Tema Oscuro'
                 : tema === 'dark'
-                ? (esUsuarioApp ? 'Cambiar a Modo Aventura RPG (Quest)' : 'Cambiar a Tema Claro')
+                ? (esAplicaciones ? 'Cambiar a Modo Aventura RPG (Quest)' : 'Cambiar a Tema Claro')
                 : 'Cambiar a Tema Claro'
             }
           >
