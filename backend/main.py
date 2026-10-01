@@ -52,7 +52,8 @@ from database import (
     marcar_modificacion_por_asistencia_revisada,
     marcar_todas_modificaciones_revisadas,
     obtener_estado_diario_empleados,
-    obtener_actividad_dia_anterior
+    obtener_actividad_dia_anterior,
+    obtener_costos_empleado
 )
 from roster_export import generar_excel_roster_mes
 from sheets_service import (
@@ -251,6 +252,129 @@ def puede_modificar_registro_empleado(usuario: dict | None, empleado_registro: s
     es_propio = (emp_reg and nombre_u and emp_reg == nombre_u) or \
                 (id_reg and (id_reg == id_u or id_reg == dni_u))
     return bool(es_propio)
+
+# [FN-04.06] Permisos exclusivos de auditoría de modificaciones (Justina Bertolozzi e Iván Valentin)
+def puede_ver_modificaciones(usuario: dict | None) -> bool:
+    if not usuario:
+        return False
+    return es_justina_bertolozzi(usuario) or es_ivan_valentin(usuario)
+
+# [FN-04.07] Permisos de acceso al módulo de Actividad de ayer (Núcleo, Aplicaciones y Justina Bertolozzi)
+def puede_ver_actividad_ayer(usuario: dict | None) -> bool:
+    if not usuario:
+        return False
+    return es_area_nucleo(usuario) or es_area_aplicaciones(usuario) or es_justina_bertolozzi(usuario)
+
+# [FN-06.04] Mapeo de áreas internas corporativas
+AREAS_INTERNAS_NORM = {
+    "vym", "ventas", "marketing", "aplicaciones", "administracion", "administración",
+    "rrhh", "cyf", "inventario", "i+d", "general", "cd", "núcleo", "nucleo",
+    "sig", "ingeniería", "ingenieria", "mensura", "oficina", "of.tecnica"
+}
+
+def es_servicio_area_interna(servicio: str) -> bool:
+    if not servicio:
+        return True
+    s = str(servicio).strip().lower()
+    if s.startswith("dedicado al área") or s.startswith("dedicado al area"):
+        return True
+    if s.startswith("franco de oficina") or s == "franco":
+        return True
+    return any(s == a or s == f"área {a}" or s == f"area {a}" for a in AREAS_INTERNAS_NORM)
+
+# [FN-06.04] Cálculo de costo_dia y asignación de tipo_costo según reglas estrictas de RRHH
+def calcular_costo_dia_asistencia(
+    tipo_ocf: str,
+    servicio: str,
+    feriado: str,
+    empleado: str,
+    tipo_costo: str = ""
+) -> tuple[str, float]:
+    """
+    Calcula (tipo_costo, costo_dia) según las 7 reglas oficiales de liquidación de RRHH:
+    1. Día Ordinario de Oficina: tipo_costo = 'Oficina', costo_dia = costo_dia_ofi
+    2. Día Ordinario de Campo: tipo_costo = 'Campo', costo_dia = costo_dia_obra
+    3. Franco de Oficina: tipo_costo = 'Oficina', costo_dia = costo_dia_ofi
+    4. Franco de Obra: tipo_costo = 'Campo', costo_dia = costo_dia_obra
+    5. Franco de Oficina Trabajado: tipo_costo = 'Oficina', costo_dia = costo_dia_ofi * 1.5
+    6. Franco de Obra Trabajado: tipo_costo = 'Campo', costo_dia = costo_dia_obra * 1.5
+    7. Feriado Trabajado: costo_dia = costo_base * 2.0 (+100% sobre base que corresponda)
+    """
+    c_ofi, c_obra = obtener_costos_empleado(empleado)
+    lug_norm = (tipo_ocf or "").strip().lower()
+    serv_str = str(servicio or "").strip()
+    es_fer = (str(feriado or "").strip().upper() == "SI") or (lug_norm == "feriado trabajado")
+    costo_forzado = (tipo_costo or "").strip().capitalize() if (tipo_costo or "").strip().lower() in ["oficina", "campo"] else ""
+
+    # Días no computables de costo
+    if lug_norm in ["vacaciones", "licencia"]:
+        return (costo_forzado or "Oficina"), 0.0
+
+    # Determinar categoría y tipo_costo base
+    if lug_norm in ["franco ofic trabajado", "franco de oficina trabajado"]:
+        costo_tipo = "Oficina"
+        base = c_ofi
+        factor = 1.5
+    elif lug_norm in ["franco obra trabajado", "franco de obra trabajado"]:
+        costo_tipo = "Campo"
+        base = c_obra
+        factor = 1.5
+    elif lug_norm == "franco trabajado":
+        if es_servicio_area_interna(serv_str):
+            costo_tipo = "Oficina"
+            base = c_ofi
+        else:
+            costo_tipo = "Campo"
+            base = c_obra
+        factor = 1.5
+    elif lug_norm in ["franco", "franco de oficina", "franco oficina"]:
+        if es_servicio_area_interna(serv_str):
+            costo_tipo = "Oficina"
+            base = c_ofi
+        else:
+            costo_tipo = "Campo"
+            base = c_obra
+        factor = 1.0
+    elif lug_norm in ["franco obra", "franco de obra"]:
+        costo_tipo = "Campo"
+        base = c_obra
+        factor = 1.0
+    elif lug_norm in ["campo", "campaña", "campaña / campo", "campana", "obra", "roster"]:
+        costo_tipo = "Campo"
+        base = c_obra
+        factor = 1.0
+    elif lug_norm in ["oficina", "home office"]:
+        costo_tipo = "Oficina"
+        base = c_ofi
+        factor = 1.0
+    else:
+        # Default según costo_forzado o servicio
+        if costo_forzado == "Campo":
+            costo_tipo = "Campo"
+            base = c_obra
+        elif costo_forzado == "Oficina":
+            costo_tipo = "Oficina"
+            base = c_ofi
+        elif es_servicio_area_interna(serv_str):
+            costo_tipo = "Oficina"
+            base = c_ofi
+        else:
+            costo_tipo = "Campo"
+            base = c_obra
+        factor = 1.0
+
+    # Si se forzó un tipo_costo específico, respetar su base
+    if costo_forzado:
+        costo_tipo = costo_forzado
+        base = c_ofi if costo_tipo == "Oficina" else c_obra
+
+    # Regla 7: Feriado Trabajado (+100% sobre el valor base original que corresponda)
+    if es_fer:
+        costo_calc = round(base * 2.0, 2)
+    else:
+        costo_calc = round(base * factor, 2)
+
+    return costo_tipo, costo_calc
 
 
 class ApiPuente:
@@ -581,13 +705,21 @@ class ApiPuente:
                 proy_asignado = str(datos.get("proyecto") or datos.get("servicio") or "").strip()
                 if proy_asignado.lower().startswith("franco de obra - "):
                     proy_asignado = proy_asignado[17:].strip()
-                id_proy = str(datos.get("id_proyecto", "")).strip() or (obtener_id_proyecto(proy_asignado) if proy_asignado else "")
+                srv_franco = proy_asignado or "Franco"
+                id_proy = str(datos.get("id_proyecto", "")).strip() or (obtener_id_proyecto(srv_franco) if srv_franco else "")
+                t_costo, c_dia = calcular_costo_dia_asistencia(
+                    tipo_ocf="Franco Obra",
+                    servicio=srv_franco,
+                    feriado=str(datos.get("feriado", "NO")),
+                    empleado=empleado,
+                    tipo_costo=tipo_costo
+                )
                 guardar_registro_asistencia(
                     id_asistencia=str(uuid.uuid4()),
                     empleado=empleado,
                     fecha=dia_f,
                     tipo_ocf="Franco",
-                    servicio=proy_asignado or "Franco",
+                    servicio=srv_franco,
                     horas=0.0,
                     instrumental="",
                     usuario_mail=usuario_mail,
@@ -598,7 +730,8 @@ class ApiPuente:
                     id_proyecto=id_proy,
                     hora_inicio="",
                     hora_fin="",
-                    tipo_costo=tipo_costo
+                    tipo_costo=t_costo,
+                    costo_dia=c_dia
                 )
             # Caso: Franco Obra Trabajado (computa hs, nro servicio)
             elif es_franco_obra_trabajado:
@@ -607,13 +740,21 @@ class ApiPuente:
                     hrs = float(datos.get("horas", 8.0))
                 except Exception:
                     hrs = 8.0
-                id_proy = str(datos.get("id_proyecto", "")).strip() or (obtener_id_proyecto(proy_asignado) if proy_asignado else "")
+                srv_franco = proy_asignado or "Franco Obra Trabajado"
+                id_proy = str(datos.get("id_proyecto", "")).strip() or (obtener_id_proyecto(srv_franco) if srv_franco else "")
+                t_costo, c_dia = calcular_costo_dia_asistencia(
+                    tipo_ocf="Franco Obra Trabajado",
+                    servicio=srv_franco,
+                    feriado=str(datos.get("feriado", "NO")),
+                    empleado=empleado,
+                    tipo_costo=tipo_costo
+                )
                 guardar_registro_asistencia(
                     id_asistencia=str(uuid.uuid4()),
                     empleado=empleado,
                     fecha=dia_f,
                     tipo_ocf="Franco Obra Trabajado",
-                    servicio=proy_asignado or "Franco Obra Trabajado",
+                    servicio=srv_franco,
                     horas=hrs,
                     instrumental="",
                     usuario_mail=usuario_mail,
@@ -624,7 +765,8 @@ class ApiPuente:
                     id_proyecto=id_proy,
                     hora_inicio="",
                     hora_fin="",
-                    tipo_costo=tipo_costo
+                    tipo_costo=t_costo,
+                    costo_dia=c_dia
                 )
             # Caso: Franco Ofic Trabajado (computa hs, nro servicio / area)
             elif es_franco_ofic_trabajado or es_franco_trabajado_gen:
@@ -634,6 +776,13 @@ class ApiPuente:
                 except Exception:
                     hrs = 8.0
                 id_proy = str(datos.get("id_proyecto", "")).strip() or obtener_id_proyecto(srv)
+                t_costo, c_dia = calcular_costo_dia_asistencia(
+                    tipo_ocf="Franco Ofic Trabajado",
+                    servicio=srv,
+                    feriado=str(datos.get("feriado", "NO")),
+                    empleado=empleado,
+                    tipo_costo=tipo_costo
+                )
                 guardar_registro_asistencia(
                     id_asistencia=str(uuid.uuid4()),
                     empleado=empleado,
@@ -650,7 +799,8 @@ class ApiPuente:
                     id_proyecto=id_proy,
                     hora_inicio="",
                     hora_fin="",
-                    tipo_costo=tipo_costo
+                    tipo_costo=t_costo,
+                    costo_dia=c_dia
                 )
             # Caso: Franco normal / de oficina (0 hs, servicio = area para nucleo, rrhh, aplicaciones, vym)
             elif es_franco_normal:
@@ -675,6 +825,13 @@ class ApiPuente:
                     if srv_area.lower() in ["franco", "franco de oficina"]:
                         srv_area = "Área"
 
+                t_costo, c_dia = calcular_costo_dia_asistencia(
+                    tipo_ocf="Franco",
+                    servicio=srv_area,
+                    feriado=str(datos.get("feriado", "NO")),
+                    empleado=empleado,
+                    tipo_costo=tipo_costo
+                )
                 guardar_registro_asistencia(
                     id_asistencia=str(uuid.uuid4()),
                     empleado=empleado,
@@ -691,7 +848,8 @@ class ApiPuente:
                     id_proyecto="",
                     hora_inicio="",
                     hora_fin="",
-                    tipo_costo=tipo_costo
+                    tipo_costo=t_costo,
+                    costo_dia=c_dia
                 )
             # Caso: Feriado Trabajado (computa hs, nro servicio)
             elif es_feriado_trabajado:
@@ -701,6 +859,13 @@ class ApiPuente:
                     hrs = 8.0
                 srv_fer = str(datos.get("proyecto") or datos.get("servicio") or "Feriado Trabajado").strip()
                 id_proy = str(datos.get("id_proyecto", "")).strip() or obtener_id_proyecto(srv_fer)
+                t_costo, c_dia = calcular_costo_dia_asistencia(
+                    tipo_ocf="Feriado Trabajado",
+                    servicio=srv_fer,
+                    feriado="SI",
+                    empleado=empleado,
+                    tipo_costo=tipo_costo
+                )
                 guardar_registro_asistencia(
                     id_asistencia=str(uuid.uuid4()),
                     empleado=empleado,
@@ -718,10 +883,18 @@ class ApiPuente:
                     id_proyecto=id_proy,
                     hora_inicio="",
                     hora_fin="",
-                    tipo_costo=tipo_costo
+                    tipo_costo=t_costo,
+                    costo_dia=c_dia
                 )
             # Caso: Vacaciones (0 hs, vacaciones)
             elif es_vacaciones:
+                t_costo, c_dia = calcular_costo_dia_asistencia(
+                    tipo_ocf="Vacaciones",
+                    servicio="Vacaciones",
+                    feriado="NO",
+                    empleado=empleado,
+                    tipo_costo=tipo_costo
+                )
                 guardar_registro_asistencia(
                     id_asistencia=str(uuid.uuid4()),
                     empleado=empleado,
@@ -738,12 +911,20 @@ class ApiPuente:
                     id_proyecto="",
                     hora_inicio="",
                     hora_fin="",
-                    tipo_costo=tipo_costo
+                    tipo_costo=t_costo,
+                    costo_dia=c_dia
                 )
             # Caso: Licencia (0 hs, tipos de licencia)
             elif es_licencia:
                 tipo_lic = str(datos.get("tipo_licencia") or datos.get("servicio") or "Licencia").strip()
                 desc_lic = tipo_lic if tipo_lic.lower().startswith("licencia") else f"Licencia - {tipo_lic}"
+                t_costo, c_dia = calcular_costo_dia_asistencia(
+                    tipo_ocf="Licencia",
+                    servicio=desc_lic,
+                    feriado="NO",
+                    empleado=empleado,
+                    tipo_costo=tipo_costo
+                )
                 guardar_registro_asistencia(
                     id_asistencia=str(uuid.uuid4()),
                     empleado=empleado,
@@ -760,7 +941,8 @@ class ApiPuente:
                     id_proyecto="",
                     hora_inicio="",
                     hora_fin="",
-                    tipo_costo=tipo_costo
+                    tipo_costo=t_costo,
+                    costo_dia=c_dia
                 )
             # Caso 4: Múltiples proyectos provistos en datos['proyectos']
             elif isinstance(proyectos, list) and len(proyectos) > 0:
@@ -775,6 +957,15 @@ class ApiPuente:
                             hrs = 8.0
 
                         id_proy = str(item.get("id_proyecto", "")).strip() or obtener_id_proyecto(srv)
+                        fer_val = str(datos.get("feriado", "NO")).strip()
+
+                        t_costo, c_dia = calcular_costo_dia_asistencia(
+                            tipo_ocf=lugar,
+                            servicio=srv,
+                            feriado=fer_val,
+                            empleado=empleado,
+                            tipo_costo=tipo_costo
+                        )
 
                         guardar_registro_asistencia(
                             id_asistencia=str(uuid.uuid4()),
@@ -786,13 +977,15 @@ class ApiPuente:
                             instrumental="",
                             usuario_mail=usuario_mail,
                             fecha_hora=fecha_hora,
+                            feriado=fer_val,
                             sincronizado=False,
                             cargado_por=cargado_por,
                             id_empleado=id_empleado,
                             id_proyecto=id_proy,
                             hora_inicio=hora_inicio,
                             hora_fin=hora_fin,
-                            tipo_costo=tipo_costo
+                            tipo_costo=t_costo,
+                            costo_dia=c_dia
                         )
             # Caso 5: Sin proyectos seleccionados (Tiempo dedicado al Área u Oficina/Home/Campo directo)
             else:
@@ -806,6 +999,15 @@ class ApiPuente:
                         hrs = 8.0
 
                 id_proy = str(datos.get("id_proyecto", "")).strip() or obtener_id_proyecto(srv_area)
+                fer_val = str(datos.get("feriado", "NO")).strip()
+
+                t_costo, c_dia = calcular_costo_dia_asistencia(
+                    tipo_ocf=lugar,
+                    servicio=srv_area,
+                    feriado=fer_val,
+                    empleado=empleado,
+                    tipo_costo=tipo_costo
+                )
 
                 guardar_registro_asistencia(
                     id_asistencia=str(uuid.uuid4()),
@@ -817,13 +1019,15 @@ class ApiPuente:
                     instrumental="",
                     usuario_mail=usuario_mail,
                     fecha_hora=fecha_hora,
+                    feriado=fer_val,
                     sincronizado=False,
                     cargado_por=cargado_por,
                     id_empleado=id_empleado,
                     id_proyecto=id_proy,
                     hora_inicio=hora_inicio,
                     hora_fin=hora_fin,
-                    tipo_costo=tipo_costo
+                    tipo_costo=t_costo,
+                    costo_dia=c_dia
                 )
 
         self._disparar_sync_segundo_plano()
@@ -907,6 +1111,15 @@ class ApiPuente:
         if not fecha or not lugar or not servicio:
             return {"exito": False, "error": "Todos los campos son obligatorios para modificar el reporte."}
 
+        feriado_val = str(datos.get("feriado", "")).strip()
+        t_costo, c_dia = calcular_costo_dia_asistencia(
+            tipo_ocf=lugar,
+            servicio=servicio,
+            feriado=feriado_val,
+            empleado=empleado,
+            tipo_costo=tipo_costo
+        )
+
         ok = actualizar_registro_asistencia(
             id_registro=id_reg,
             fecha=fecha,
@@ -919,7 +1132,8 @@ class ApiPuente:
             usuario_mail=usuario_mail,
             hora_inicio=hora_inicio,
             hora_fin=hora_fin,
-            tipo_costo=tipo_costo,
+            tipo_costo=t_costo,
+            costo_dia=c_dia,
             quien_modifica=quien_modifica
         )
         if ok:
@@ -934,36 +1148,57 @@ class ApiPuente:
 
     # [FN-02.02] Resumen de Modificaciones para Alertas y Badges en RRHH
     def obtener_resumen_modificaciones(self):
-        """Retorna conteo total y modificaciones recientes para alertas visuales."""
+        """Retorna conteo total y modificaciones recientes para alertas visuales (exclusivo Justina Bertolozzi e Iván Valentin)."""
+        sesion = obtener_sesion_activa()
+        if not puede_ver_modificaciones(sesion):
+            return {"no_revisadas": 0, "ultimas_24h": 0, "total": 0}
         return obtener_resumen_modificaciones()
 
     # [FN-02.01] Modificaciones recientes para auditoría
     def obtener_modificaciones_recientes(self, limite: int = 50):
-        """Retorna la lista de modificaciones de auditoría registradas."""
+        """Retorna la lista de modificaciones de auditoría registradas (exclusivo Justina Bertolozzi e Iván Valentin)."""
+        sesion = obtener_sesion_activa()
+        if not puede_ver_modificaciones(sesion):
+            return []
         return obtener_modificaciones_recientes(limite)
 
     # [FN-02.02] Notificaciones y avisos de modificaciones para RRHH
     def obtener_notificaciones_modificaciones(self, solo_no_revisadas: bool = True):
-        """Retorna las modificaciones pendientes de revisión para avisar a RRHH."""
+        """Retorna las modificaciones pendientes de revisión para avisar a RRHH (exclusivo Justina Bertolozzi e Iván Valentin)."""
+        sesion = obtener_sesion_activa()
+        if not puede_ver_modificaciones(sesion):
+            return []
         return obtener_notificaciones_modificaciones(solo_no_revisadas)
 
     def marcar_modificacion_revisada(self, id_modificacion: str):
-        """Marca una modificación como vista/revisada por RRHH."""
+        """Marca una modificación como vista/revisada (exclusivo Justina Bertolozzi e Iván Valentin)."""
+        sesion = obtener_sesion_activa()
+        if not puede_ver_modificaciones(sesion):
+            return {"exito": False, "error": "Acceso denegado"}
         marcar_modificacion_revisada(id_modificacion)
         return {"exito": True}
 
     def marcar_modificacion_por_asistencia_revisada(self, id_asistencia: str):
-        """Marca todas las modificaciones de una asistencia como revisadas por RRHH."""
+        """Marca todas las modificaciones de una asistencia como revisadas (exclusivo Justina Bertolozzi e Iván Valentin)."""
+        sesion = obtener_sesion_activa()
+        if not puede_ver_modificaciones(sesion):
+            return {"exito": False, "error": "Acceso denegado"}
         marcar_modificacion_por_asistencia_revisada(id_asistencia)
         return {"exito": True}
 
     def marcar_todas_modificaciones_revisadas(self):
-        """Marca todas las modificaciones pendientes como leídas."""
+        """Marca todas las modificaciones pendientes como leídas (exclusivo Justina Bertolozzi e Iván Valentin)."""
+        sesion = obtener_sesion_activa()
+        if not puede_ver_modificaciones(sesion):
+            return {"exito": False, "error": "Acceso denegado"}
         marcar_todas_modificaciones_revisadas()
         return {"exito": True}
 
     def verificar_nuevas_modificaciones_sheets(self):
-        """Descarga de Google Sheets cualquier nueva modificación en 1_1_modificaciones_realizadas."""
+        """Descarga de Google Sheets cualquier nueva modificación en 1_1_modificaciones_realizadas (exclusivo Justina Bertolozzi e Iván Valentin)."""
+        sesion = obtener_sesion_activa()
+        if not puede_ver_modificaciones(sesion):
+            return {"nuevas": 0, "mensaje": "Sin permisos."}
         return descargar_modificaciones_desde_sheets()
 
     # [FN-03.05] Asignación masiva de tipo_costo (Oficina / Campo)
@@ -978,7 +1213,7 @@ class ApiPuente:
             costo = str(datos_o_ids.get("tipo_costo", "")).strip()
         elif isinstance(datos_o_ids, (list, tuple)):
             ids = list(datos_o_ids)
-            costo = str(tipo_costo or "").strip()
+            costo = (tipo_costo or "").strip()
         else:
             return {"exito": False, "error": "Datos inválidos para asignación de costo."}
 
@@ -1011,9 +1246,9 @@ class ApiPuente:
 
     # [FN-06.05] Actividad de ayer estilo usuarios conectados
     def obtener_actividad_dia_anterior(self):
-        """Retorna el estado de asistencia de todos los colaboradores para el día anterior (ayer)."""
+        """Retorna el estado de asistencia de todos los colaboradores para el día anterior (exclusivo Núcleo, Aplicaciones y Justina Bertolozzi)."""
         sesion = obtener_sesion_activa()
-        if not puede_ver_historial_otros(sesion):
+        if not puede_ver_actividad_ayer(sesion):
             return {"fecha": "", "total": 0, "enviados": 0, "pendientes": 0, "usuarios": []}
         return obtener_actividad_dia_anterior()
 
@@ -1500,7 +1735,7 @@ def obtener_icono_tray():
     return crear_icono_calendario(64)
 
 
-APP_VERSION = "1.9.0"
+APP_VERSION = "1.10.0"
 
 _mutex_instancia = None
 

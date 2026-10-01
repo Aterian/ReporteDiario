@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { api } from '../services/apiBridge';
+import { puedeVerModificaciones } from '../utils/permissions';
 
 // [FN-06.02] Widget de Actividad de Ayer (Estilo Usuarios Conectados)
 export default function DailyStatusWidget({ usuario }) {
@@ -14,7 +15,9 @@ export default function DailyStatusWidget({ usuario }) {
   const [filtro, setFiltro] = useState('todos'); // 'todos' | 'pendientes' | 'enviados'
   const [busqueda, setBusqueda] = useState('');
 
-  // Modificaciones auditadas
+  const puedeVerModif = puedeVerModificaciones(usuario);
+
+  // Modificaciones auditadas (Exclusivo Justina Bertolozzi e Iván Valentin)
   const [resumenModificaciones, setResumenModificaciones] = useState(null);
   const [modalModificacionesOpen, setModalModificacionesOpen] = useState(false);
   const [modificacionesRecientes, setModificacionesRecientes] = useState([]);
@@ -35,6 +38,7 @@ export default function DailyStatusWidget({ usuario }) {
   };
 
   const cargarResumenModificaciones = async () => {
+    if (!puedeVerModif) return;
     try {
       const resumen = await api.obtenerResumenModificaciones();
       if (resumen) {
@@ -47,17 +51,21 @@ export default function DailyStatusWidget({ usuario }) {
 
   useEffect(() => {
     cargarActividad();
-    cargarResumenModificaciones();
+    if (puedeVerModif) {
+      cargarResumenModificaciones();
+    }
 
     const handleCatalogos = () => {
       cargarActividad();
-      cargarResumenModificaciones();
+      if (puedeVerModif) {
+        cargarResumenModificaciones();
+      }
     };
     window.addEventListener('catalogos-actualizados', handleCatalogos);
     return () => {
       window.removeEventListener('catalogos-actualizados', handleCatalogos);
     };
-  }, []);
+  }, [puedeVerModif]);
 
   const handleVerModificaciones = async () => {
     setModalModificacionesOpen(true);
@@ -108,8 +116,8 @@ export default function DailyStatusWidget({ usuario }) {
 
   return (
     <div className="daily-status-widget-container connected-widget-compact">
-      {/* Alerta/Badge sutil de Modificaciones de Auditoría */}
-      {resumenModificaciones && (resumenModificaciones.ultimas_24h > 0 || resumenModificaciones.total_modificaciones > 0) && (
+      {/* Alerta/Badge sutil de Modificaciones de Auditoría (Exclusivo Justina Bertolozzi e Iván Valentin) */}
+      {puedeVerModif && resumenModificaciones && (resumenModificaciones.ultimas_24h > 0 || resumenModificaciones.total_modificaciones > 0) && (
         <div className="audit-modification-banner-compact" onClick={handleVerModificaciones} title="Clic para ver historial de modificaciones">
           <span className="audit-bell-icon">🔔</span>
           <span className="audit-banner-text-compact">
@@ -266,7 +274,7 @@ export default function DailyStatusWidget({ usuario }) {
       </div>
 
       {/* Modal de Auditoría de Modificaciones */}
-      {modalModificacionesOpen && (
+      {puedeVerModif && modalModificacionesOpen && (
         <div className="modal-backdrop">
           <div className="modal-box" style={{ maxWidth: '640px', width: '92%' }}>
             <div className="modal-header">

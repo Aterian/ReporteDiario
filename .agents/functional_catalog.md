@@ -153,5 +153,46 @@
   2. Removidos los atributos `min` y `max` restrictivos del selector de fechas en `CheckForm`.
   3. Eliminadas las validaciones de límite temporal en los métodos `guardar_check_diario` y `modificar_registro` del backend.
 
+## [FN-01.08] Integración con Cálculo de Sueldos y Mapeo de Costos
+- **Módulo**: [MOD-01] Registro de Asistencia Diaria
+- **Flujo Operativo**: Conecta a la hoja 'CALCULO DE SUELDOS' (`1rBLHa44JeBlqtkUfKg6WO1EFdiChhvgUTng8GpZQdJo`, tabla `sueldos_empleados`) y vincula a cada colaborador por `id_origen` con `0_usuarios`, persistiendo `costo_dia_ofi` y `costo_dia_obra` en caché SQLite (`usuarios_cache`).
+- **Tablas afectadas**: `usuarios_cache`, `sueldos_empleados`, `0_usuarios`.
+- **Reglas de negocio e invariantes**:
+  1. Relación obligatoria por `id_origen` entre `0_usuarios` y `sueldos_empleados`.
+  2. Parseo robusto de importes con símbolos de moneda y separadores de miles/decimales.
+  3. Valores por defecto 0.0 si un usuario no cuenta con registro salarial en la hoja.
 
+## [FN-06.04] Reglas de Negocio y Cálculo de 'costo_dia'
+- **Módulo**: [MOD-06] Gestión de Roster y Asistencia RRHH
+- **Flujo Operativo**: Calcula de manera automatizada el valor de `costo_dia` (columna 18 / R de `1_asistencia_informada` y SQLite `historial`) al registrar o modificar asistencias y en asignaciones de lote.
+- **Tablas afectadas**: `historial`, `1_asistencia_informada`.
+- **Reglas de negocio e invariantes**:
+  1. Oficina: `costo_dia = costo_dia_ofi`. Campo: `costo_dia = costo_dia_obra`.
+  2. Franco con área interna: `tipo_costo = 'Oficina'`, `costo_dia = costo_dia_ofi`. Franco con obra: `tipo_costo = 'Campo'`, `costo_dia = costo_dia_obra`.
+  3. Franco Oficina Trabajado: `tipo_costo = 'Oficina'`, `costo_dia = costo_dia_ofi * 1.5`. Franco Obra Trabajado: `tipo_costo = 'Campo'`, `costo_dia = costo_dia_obra * 1.5`.
+  4. Feriado Trabajado (`feriado == 'SI'`): duplica la tarifa base correspondiente (`costo_base * 2.0`). Redondeo estricto a 2 decimales.
 
+## [FN-04.06] Segregación de Permisos para Auditoría, Núcleo y Actividad de Ayer
+- **Módulo**: [MOD-04] Control de Permisos y Roles
+- **Flujo Operativo**: Aplica restricciones de seguridad tanto en backend (FastAPI) como en frontend (React) según el rol y área del usuario autenticado.
+- **Tablas afectadas**: `1_1_modificaciones_realizadas`, `modificaciones_realizadas`, `historial`.
+- **Reglas de negocio e invariantes**:
+  1. Auditoría y alertas de modificaciones (`1_1_modificaciones_realizadas`) exclusivas para Justina Bertolozzi e Iván Valentin.
+  2. Área Núcleo (`"N"`) posee acceso de solo lectura en historial de otros empleados (sin botones de edición, borrado ni asignación masiva de costo).
+  3. Módulo "Actividad de ayer" visible y ejecutable únicamente para Área Núcleo (`"N"`), Área Aplicaciones (`"A"`) y Justina Bertolozzi.
+
+## [FN-04.07] Controles Visuales de Zoom y Placeholder DNI
+- **Módulo**: [MOD-04] Control de Permisos y Roles
+- **Flujo Operativo**: Agrega control de escalado dinámico en la cabecera (90% a 120%) con persistencia local y actualiza el texto instructivo en la pantalla de autenticación.
+- **Tablas afectadas**: N/A.
+- **Reglas de negocio e invariantes**:
+  1. Placeholder de DNI establecido en "99999999".
+  2. Escalado CSS global vía `document.documentElement.style.zoom` conservado en `localStorage`.
+
+## [FN-04.08] Liquidación Automatizada por 'costo_dia' para RRHH
+- **Módulo**: [MOD-06] Gestión de Roster y Asistencia RRHH
+- **Flujo Operativo**: La calculadora de liquidación suma directamente los importes calculados en la columna `costo_dia` de los registros seleccionados, manteniendo la capacidad de sobreescritura manual para excepciones.
+- **Tablas afectadas**: `historial`.
+- **Reglas de negocio e invariantes**:
+  1. Modo automático calcula el total sumando `costo_dia` de los registros seleccionados del colaborador.
+  2. Modo manual disponible para ajustar días/tarifas de excepciones con botón de reinicio al cálculo automático.

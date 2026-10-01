@@ -91,3 +91,14 @@ export const puedeGestionarTipoCosto = (usuario) => {
   return esAreaRRHH(usuario) || esAreaAplicaciones(usuario);
 };
 
+// [FN-04.06] Visualización de auditoría y notificaciones de modificaciones (Justina Bertolozzi e Iván Valentin)
+export const puedeVerModificaciones = (usuario) => {
+  return esJustinaBertolozzi(usuario) || esIvanValentin(usuario);
+};
+
+// [FN-04.07] Acceso al módulo de Actividad de ayer (Núcleo, Aplicaciones y Justina Bertolozzi)
+export const puedeVerActividadAyer = (usuario) => {
+  return esAreaNucleo(usuario) || esAreaAplicaciones(usuario) || esJustinaBertolozzi(usuario);
+};
+
+

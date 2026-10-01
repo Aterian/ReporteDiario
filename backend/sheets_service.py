@@ -30,7 +30,11 @@ def recurso_path(ruta_relativa: str) -> str:
 RUTA_CONFIG_USER = os.path.join(obtener_directorio_datos(), "config.json")
 RUTA_CONFIG_BUNDLE = recurso_path("config.json")
 
-# [FN-03.05] Esquema de 17 columnas de la tabla 1_asistencia_informada
+# [FN-01.08] Configuración de la segunda hoja: CALCULO DE SUELDOS
+ID_HOJA_SUELDOS_DEFAULT = "1rBLHa44JeBlqtkUfKg6WO1EFdiChhvgUTng8GpZQdJo"
+TABLA_SUELDOS = "sueldos_empleados"
+
+# [FN-03.05] Esquema de 18 columnas de la tabla 1_asistencia_informada
 COLUMNAS_ESQUEMA = [
     "id_asistencia",
     "empleado",
@@ -48,7 +52,8 @@ COLUMNAS_ESQUEMA = [
     "id_empleado",
     "id_proyecto",
     "cargado_por",
-    "tipo_costo"
+    "tipo_costo",
+    "costo_dia"
 ]
 
 # [FN-02.01] Esquema de 10 columnas de la tabla 1_1_modificaciones_realizadas (Auditoría)
@@ -204,8 +209,8 @@ def obtener_hoja_trabajo(spreadsheet_id: str = "", sheet_name: str = ""):
                 ws.append_row(COLUMNAS_ESQUEMA, value_input_option=ValueInputOption.user_entered)
             else:
                 headers_limpios = [c.strip().lower() for c in fila_1]
-                if "hora_inicio" not in headers_limpios or "tipo_costo" not in headers_limpios:
-                    ws.update(range_name="A1:Q1", values=[COLUMNAS_ESQUEMA], value_input_option=ValueInputOption.user_entered)
+                if "hora_inicio" not in headers_limpios or "tipo_costo" not in headers_limpios or "costo_dia" not in headers_limpios:
+                    ws.update(range_name="A1:R1", values=[COLUMNAS_ESQUEMA], value_input_option=ValueInputOption.user_entered)
         elif es_hoja_modificaciones:
             fila_1 = ws.row_values(1)
             if not fila_1 or len(fila_1) == 0:
@@ -311,6 +316,10 @@ def construir_fila_asistencia(registro: dict, headers: list | None = None) -> li
     hora_ini = str(registro.get("hora_inicio", "")).strip()
     hora_fin = str(registro.get("hora_fin", "")).strip()
     costo = str(registro.get("tipo_costo", "")).strip()
+    try:
+        costo_dia_val = round(float(registro.get("costo_dia", 0.0) or 0.0), 2)
+    except (ValueError, TypeError):
+        costo_dia_val = 0.0
 
     mapa_valores = {
         "id_asistencia": uid,
@@ -329,7 +338,8 @@ def construir_fila_asistencia(registro: dict, headers: list | None = None) -> li
         "id_empleado": str(registro.get("id_empleado", "")),
         "id_proyecto": str(registro.get("id_proyecto", "")),
         "cargado_por": carg_por,
-        "tipo_costo": costo
+        "tipo_costo": costo,
+        "costo_dia": costo_dia_val
     }
 
     if not headers:
@@ -656,10 +666,79 @@ def obtener_proyectos_remotos(spreadsheet_id: str = "") -> list:
         return []
 
 
+def parse_currency(val) -> float:
+    """Convierte cadenas monetarias con símbolos, comas y puntos a flotante limpio."""
+    if val is None:
+        return 0.0
+    if isinstance(val, (int, float)):
+        return float(val)
+    s = re.sub(r"[^\d.,-]", "", str(val).strip())
+    if not s:
+        return 0.0
+    if "," in s and "." in s:
+        if s.rfind(",") > s.rfind("."):
+            s = s.replace(".", "").replace(",", ".")
+        else:
+            s = s.replace(",", "")
+    elif "," in s:
+        parts = s.split(",")
+        if len(parts) == 2 and len(parts[1]) in (1, 2):
+            s = s.replace(",", ".")
+        else:
+            s = s.replace(",", "")
+    try:
+        return float(s)
+    except (ValueError, TypeError):
+        return 0.0
+
+
+# [FN-01.08] Obtener sueldos y costos diarios desde la hoja CALCULO DE SUELDOS
+def obtener_sueldos_remotos(spreadsheet_id: str = "") -> dict:
+    """
+    Lee la tabla 'sueldos_empleados' de la hoja 'CALCULO DE SUELDOS' (ID: 1rBLHa44JeBlqtkUfKg6WO1EFdiChhvgUTng8GpZQdJo).
+    Retorna diccionario indexado por id_origen:
+    { id_origen: {'empleado': ..., 'costo_dia_ofi': float, 'costo_dia_obra': float} }
+    """
+    try:
+        cfg = cargar_configuracion()
+        sp_id = spreadsheet_id or cfg.get("spreadsheet_sueldos_id", ID_HOJA_SUELDOS_DEFAULT)
+        gc, _ = obtener_cliente()
+        sh = gc.open_by_key(sp_id)
+        ws = sh.worksheet(TABLA_SUELDOS)
+        filas = ws.get_all_values()
+        if not filas or len(filas) < 2:
+            return {}
+
+        headers = [str(h).strip().lower() for h in filas[0]]
+        idx_id_orig = headers.index("id_origen") if "id_origen" in headers else 0
+        idx_emp = headers.index("empleado") if "empleado" in headers else 1
+        idx_ofi = headers.index("costo_dia_ofi") if "costo_dia_ofi" in headers else -1
+        idx_obra = headers.index("costo_dia_obra") if "costo_dia_obra" in headers else -1
+
+        res = {}
+        for f in filas[1:]:
+            id_orig = str(f[idx_id_orig]).strip() if len(f) > idx_id_orig else ""
+            if not id_orig:
+                continue
+            emp = str(f[idx_emp]).strip() if len(f) > idx_emp else ""
+            c_ofi = parse_currency(f[idx_ofi]) if (idx_ofi >= 0 and len(f) > idx_ofi) else 0.0
+            c_obra = parse_currency(f[idx_obra]) if (idx_obra >= 0 and len(f) > idx_obra) else 0.0
+            res[id_orig] = {
+                "empleado": emp,
+                "costo_dia_ofi": c_ofi,
+                "costo_dia_obra": c_obra
+            }
+        print(f"[Sheets] {len(res)} registros de sueldos cargados desde '{TABLA_SUELDOS}'.")
+        return res
+    except Exception as e:
+        print(f"[Sheets] Error al obtener sueldos remotos: {e}")
+        return {}
+
+
 def obtener_usuarios_remotos(spreadsheet_id: str = "") -> list:
     """
-    Lee los usuarios autorizados de la pestaña '0_usuarios'.
-    Retorna lista de diccionarios: [{'id_usuario': ..., 'id_origen': ..., 'nombre': ..., 'email': ..., 'area': ..., 'dni': ...}, ...]
+    Lee los usuarios autorizados de la pestaña '0_usuarios' y los cruza con 'sueldos_empleados' mediante 'id_origen'.
+    Retorna lista de diccionarios: [{'id_usuario': ..., 'id_origen': ..., 'nombre': ..., 'email': ..., 'area': ..., 'dni': ..., 'costo_dia_ofi': ..., 'costo_dia_obra': ...}, ...]
     """
     try:
         sh, _ = obtener_hoja_trabajo(spreadsheet_id=spreadsheet_id, sheet_name="0_usuarios")
@@ -667,6 +746,9 @@ def obtener_usuarios_remotos(spreadsheet_id: str = "") -> list:
         filas = ws_u.get_all_values()
         if not filas or len(filas) < 2:
             return []
+
+        # Obtener mapeo de sueldos por id_origen
+        sueldos_map = obtener_sueldos_remotos()
 
         headers = [str(h).strip().lower() for h in filas[0]]
         idx_nombre = headers.index("nombre") if "nombre" in headers else 1
@@ -684,6 +766,11 @@ def obtener_usuarios_remotos(spreadsheet_id: str = "") -> list:
             email = f[idx_email].strip() if len(f) > idx_email else ""
             id_u = f[idx_id_u].strip() if len(f) > idx_id_u else ""
             id_orig = f[idx_id_orig].strip() if (idx_id_orig >= 0 and len(f) > idx_id_orig) else ""
+
+            info_sueldo = sueldos_map.get(id_orig, {})
+            costo_ofi = float(info_sueldo.get("costo_dia_ofi", 0.0) or 0.0)
+            costo_obra = float(info_sueldo.get("costo_dia_obra", 0.0) or 0.0)
+
             if nom and dni:
                 usuarios.append({
                     "id_usuario": id_u,
@@ -691,7 +778,9 @@ def obtener_usuarios_remotos(spreadsheet_id: str = "") -> list:
                     "nombre": nom,
                     "email": email,
                     "area": area,
-                    "dni": dni
+                    "dni": dni,
+                    "costo_dia_ofi": costo_ofi,
+                    "costo_dia_obra": costo_obra
                 })
         return usuarios
     except Exception as e:
@@ -746,6 +835,7 @@ def sincronizar_desde_sheets_hacia_local(spreadsheet_id: str = "") -> dict:
         idx_h_ini = headers.index("hora_inicio") if "hora_inicio" in headers else -1
         idx_h_fin = headers.index("hora_fin") if "hora_fin" in headers else -1
         idx_costo = headers.index("tipo_costo") if "tipo_costo" in headers else -1
+        idx_costo_dia = headers.index("costo_dia") if "costo_dia" in headers else -1
 
         # Recopilar todos los id_asistencia válidos presentes en Google Sheets
         uids_en_sheets = {str(f[idx_id_asist]).strip() for f in filas[1:] if len(f) > idx_id_asist and str(f[idx_id_asist]).strip()}
@@ -787,6 +877,7 @@ def sincronizar_desde_sheets_hacia_local(spreadsheet_id: str = "") -> dict:
                 h_ini = str(f[idx_h_ini]).strip() if (idx_h_ini >= 0 and len(f) > idx_h_ini) else ""
                 h_fin = str(f[idx_h_fin]).strip() if (idx_h_fin >= 0 and len(f) > idx_h_fin) else ""
                 costo = str(f[idx_costo]).strip() if (idx_costo >= 0 and len(f) > idx_costo) else ""
+                costo_dia = parse_currency(f[idx_costo_dia]) if (idx_costo_dia >= 0 and len(f) > idx_costo_dia) else 0.0
                 inst = str(f[idx_inst]).strip() if len(f) > idx_inst else ""
                 mail = str(f[idx_mail]).strip() if len(f) > idx_mail else ""
                 fh = str(f[idx_fh]).strip() if len(f) > idx_fh else ""
@@ -802,7 +893,7 @@ def sincronizar_desde_sheets_hacia_local(spreadsheet_id: str = "") -> dict:
                     cursor.execute("""
                         UPDATE historial SET
                             empleado = ?, fecha = ?, tipo_ocf = ?, servicio = ?,
-                            horas = ?, hora_inicio = ?, hora_fin = ?, tipo_costo = ?,
+                            horas = ?, hora_inicio = ?, hora_fin = ?, tipo_costo = ?, costo_dia = ?,
                             instrumental = ?, usuario_mail = ?, fecha_hora = ?,
                             lugar = ?, jornada = ?, dia_semana = ?, feriado = ?,
                             modificado = 0, sincronizado = 1, id_empleado = ?, id_proyecto = ?,
@@ -810,7 +901,7 @@ def sincronizar_desde_sheets_hacia_local(spreadsheet_id: str = "") -> dict:
                         WHERE id_asistencia = ?
                     """, (
                         emp, f_str, tipo, serv,
-                        hrs, h_ini, h_fin, costo,
+                        hrs, h_ini, h_fin, costo, costo_dia,
                         inst, mail, fh,
                         tipo, f"{hrs} hs" if hrs > 0 else tipo, dia_s, fer,
                         id_e, id_p, carg_por, uid
@@ -820,14 +911,14 @@ def sincronizar_desde_sheets_hacia_local(spreadsheet_id: str = "") -> dict:
                     cursor.execute("""
                         INSERT INTO historial (
                             id_asistencia, empleado, fecha, tipo_ocf, servicio,
-                            horas, hora_inicio, hora_fin, tipo_costo, instrumental, usuario_mail, fecha_hora,
+                            horas, hora_inicio, hora_fin, tipo_costo, costo_dia, instrumental, usuario_mail, fecha_hora,
                             lugar, jornada, dia_semana, feriado, modificado, sincronizado,
                             cargado_por, id_empleado, id_proyecto
                         )
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 1, ?, ?, ?)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 1, ?, ?, ?)
                     """, (
                         uid, emp, f_str, tipo, serv,
-                        hrs, h_ini, h_fin, costo, inst, mail, fh,
+                        hrs, h_ini, h_fin, costo, costo_dia, inst, mail, fh,
                         tipo, f"{hrs} hs" if hrs > 0 else tipo, dia_s, fer,
                         carg_por, id_e, id_p
                     ))

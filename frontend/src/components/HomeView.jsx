@@ -2,7 +2,7 @@ import React from 'react';
 import RpgTavernBoard from './RpgTavernBoard';
 import DailyStatusWidget from './DailyStatusWidget';
 import { getTituloRpg } from '../utils/rpgTitles';
-import { puedeAccederRoster, puedeVerHistorialOtros } from '../utils/permissions';
+import { puedeAccederRoster, puedeVerHistorialOtros, puedeVerModificaciones, puedeVerActividadAyer } from '../utils/permissions';
 
 // [MOD-01] HomeView
 export default function HomeView({
@@ -31,10 +31,11 @@ export default function HomeView({
 
   const isRpg = false;
   const areaUpper = (usuario?.area || '').toUpperCase().trim();
-  const esRRHHoAplicaciones = areaUpper === 'RRHH' || areaUpper === 'A' || areaUpper === 'APLICACIONES' || (usuario?.nombre || '').toLowerCase().includes('valentin');
   const puedeRoster = puedeAccederRoster(usuario);
   const puedeOtros = puedeVerHistorialOtros(usuario);
-  const tieneModulosGestion = puedeRoster || puedeOtros;
+  const puedeVerAyer = puedeVerActividadAyer(usuario);
+  const puedeVerModif = puedeVerModificaciones(usuario);
+  const tieneModulosGestion = puedeRoster || puedeOtros || puedeVerAyer;
 
   const getFechaFormateada = () => {
     const hoy = new Date();
@@ -308,8 +309,8 @@ export default function HomeView({
               )}
             </div>
 
-            {/* [FN-02.02] Alerta y avisos de modificaciones pendientes para RRHH */}
-            {notificacionesModificaciones && notificacionesModificaciones.length > 0 && (
+            {/* [FN-02.02] Alerta y avisos de modificaciones pendientes (Exclusivo Justina Bertolozzi e Iván Valentin) */}
+            {puedeVerModif && notificacionesModificaciones && notificacionesModificaciones.length > 0 && (
               <div className="home-modificaciones-card">
                 <div className="home-mod-card-header">
                   <div className="home-mod-card-title">
@@ -360,8 +361,8 @@ export default function HomeView({
               </div>
             )}
 
-            {/* Widget de Control de Estado Diario (Actividad de ayer) ubicado debajo de las opciones de RRHH */}
-            {esRRHHoAplicaciones && (
+            {/* [FN-06.05] Widget de Actividad de ayer (Exclusivo Núcleo, Aplicaciones y Justina Bertolozzi) */}
+            {puedeVerAyer && (
               <DailyStatusWidget usuario={usuario} />
             )}
           </div>

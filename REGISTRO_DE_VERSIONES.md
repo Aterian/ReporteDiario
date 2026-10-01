@@ -4,6 +4,37 @@ Historial cronológico de cambios, nuevas características y mejoras aplicadas a
 
 ---
 
+## [1.10.0] - 2026-10-01
+
+### 💼 Modificaciones visuales menores y ajustes para RRHH
+- **Integración con Hoja 'CÁLCULO DE SUELDOS' y Mapeo de Costos Diarios (`[FN-01.08]`)**:
+  - Conexión e introspección a la hoja de Google Sheets adicional `"CALCULO DE SUELDOS"` (ID: `1rBLHa44JeBlqtkUfKg6WO1EFdiChhvgUTng8GpZQdJo`, tabla: `sueldos_empleados`).
+  - Mapeo relacional entre colaboradores (`0_usuarios`) y tarifas salariales mediante la clave de enlace `id_origen`.
+  - Almacenamiento y persistencia en caché local SQLite (`usuarios_cache`) de las tarifas diarias `costo_dia_ofi` (oficina) y `costo_dia_obra` (campo/obra).
+- **Reglas Estrictas de Negocio y Liquidación de `costo_dia` (`[FN-06.04]`)**:
+  - Incorporación de la columna `costo_dia` (columna 18 / R en `1_asistencia_informada` y en tabla local `historial`).
+  - Cálculo algorítmico automatizado en backend y frontend para altas y modificaciones según 7 reglas de asignación:
+    1. *Día Ordinario de Oficina*: `tipo_costo = 'Oficina'`, `costo_dia = costo_dia_ofi`.
+    2. *Día Ordinario de Campo*: `tipo_costo = 'Campo'`, `costo_dia = costo_dia_obra`.
+    3. *Franco de Oficina*: `tipo_ocf == 'Franco'` y servicio interno (`vym`, `aplicaciones`, `administracion`, etc.) ➔ `tipo_costo = 'Oficina'`, `costo_dia = costo_dia_ofi`.
+    4. *Franco de Obra*: `tipo_ocf == 'Franco'` y servicio u obra ➔ `tipo_costo = 'Campo'`, `costo_dia = costo_dia_obra`.
+    5. *Franco de Oficina Trabajado*: `tipo_ocf == 'Franco Ofic Trabajado'` ➔ `tipo_costo = 'Oficina'`, recargo +50% (`costo_dia_ofi * 1.5`).
+    6. *Franco de Obra Trabajado*: `tipo_ocf == 'Franco Obra Trabajado'` ➔ `tipo_costo = 'Campo'`, recargo +50% (`costo_dia_obra * 1.5`).
+    7. *Feriado Trabajado*: `feriado == 'SI'` ➔ recargo +100% (`costo_base * 2.0`) sobre la tarifa base de oficina o de obra correspondiente.
+  - Precisión numérica con redondeo a 2 decimales para sincronización bidireccional limpia con Google Sheets.
+- **Segregación de Permisos y Control de Acceso (`[FN-04.06]`)**:
+  - *Auditoría y Alertas de Modificaciones (`1_1_modificaciones_realizadas`)*: Visualización, panel comparativo, banners y consultas restringidas de forma exclusiva a `Justina Bertolozzi` e `Iván Valentin`. Bloqueo tanto a nivel frontend como en endpoints backend con validación de credenciales.
+  - *Área Núcleo (Permisos de Solo Lectura)*: Colaboradores del Área Núcleo (`"N"`) acceden al historial de otros empleados exclusivamente con permisos de visualización/lectura, eliminando botones de edición, borrado y asignación masiva de costos.
+  - *Módulo 'Actividad de ayer'*: Visibilidad y consulta del widget en el menú principal restringido a colaboradores del Área Núcleo (`"N"`), Área de Aplicaciones (`"A"`) y `Justina Bertolozzi`.
+- **Mejoras en la Experiencia de Usuario e Interfaz React (`[FN-04.07]`)**:
+  - *Login*: Actualizado placeholder del campo DNI a `"99999999"`.
+  - *Control de Zoom Accesible*: Incorporado selector de escalado visual (`A-`, nivel porcentual interactivo, `A+`) en el encabezado general con rangos `90%`, `100%`, `110%` y `120%`, aplicando CSS nativo sobre `document.documentElement.style.zoom` y persistencia en `localStorage`.
+- **Calculadora de Liquidación de RRHH Mejorada (`[FN-04.08]`)**:
+  - La calculadora suma de forma directa y nativa los importes registrados en `costo_dia` para el período seleccionado.
+  - Conserva intacto el modo de asignación manual de días y valores para excepciones y recálculos personalizados, con botón para restablecer a cálculo automático por costo día.
+
+---
+
 ## [1.9.0] - 2026-09-30
 
 ### 📅 Libertad de Selección de Fechas en Registro Diario

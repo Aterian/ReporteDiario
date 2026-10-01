@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { api } from '../services/apiBridge';
-import { puedeVerHistorialOtros, puedeModificarRegistro, puedeGestionarTipoCosto } from '../utils/permissions';
+import { puedeVerHistorialOtros, puedeModificarRegistro, puedeGestionarTipoCosto, puedeVerModificaciones, esAreaNucleo } from '../utils/permissions';
 import { esServicioAreaInterna, esFrancoDeObra, obtenerEtiquetaModalidad } from '../utils/francoUtils';
 
 // [MOD-03] OtherEmployeesHistoryView
@@ -90,7 +90,10 @@ export default function OtherEmployeesHistoryView({
   const [diasSeleccionadosCalendario, setDiasSeleccionadosCalendario] = useState(new Set());
   const [marcandoRevisadoId, setMarcandoRevisadoId] = useState(null);
   const [comparativaModificacion, setComparativaModificacion] = useState(null);
-  const puedeEditarCosto = puedeGestionarTipoCosto(usuario);
+  // [FN-04.06] Controles de permisos según rol y área
+  const esSoloLecturaNucleo = esAreaNucleo(usuario);
+  const puedeVerModif = puedeVerModificaciones(usuario);
+  const puedeEditarCosto = !esSoloLecturaNucleo && puedeGestionarTipoCosto(usuario);
 
   // Cantidad manual de días para las 4 categorías de liquidación (RRHH)
   const [diasOficinaManual, setDiasOficinaManual] = useState('');
@@ -124,6 +127,29 @@ export default function OtherEmployeesHistoryView({
       console.error(e);
     }
   };
+
+  // Colaborador actualmente seleccionado para auditar
+  const empActual = useMemo(() => {
+    if (!empleadoAuditar || !Array.isArray(empleados)) return null;
+    const n = empleadoAuditar.trim().toLowerCase();
+    return empleados.find(e => (e.nombre || '').trim().toLowerCase() === n);
+  }, [empleadoAuditar, empleados]);
+
+  // [FN-01.02] Pre-cargar tarifas con los costos reales de nómina del empleado si existen
+  useEffect(() => {
+    if (empActual) {
+      const cOfi = Number(empActual.costo_dia_ofi) || 0;
+      const cObra = Number(empActual.costo_dia_obra) || 0;
+      if (cOfi > 0 || cObra > 0) {
+        setTarifas(prev => ({
+          precioOficina: cOfi > 0 ? cOfi : prev.precioOficina,
+          precioObra: cObra > 0 ? cObra : prev.precioObra,
+          precioFrancoTrabajado: cOfi > 0 ? Math.round(cOfi * 1.5 * 100) / 100 : (cObra > 0 ? Math.round(cObra * 1.5 * 100) / 100 : prev.precioFrancoTrabajado),
+          precioFeriadoTrabajado: cObra > 0 ? Math.round(cObra * 2.0 * 100) / 100 : (cOfi > 0 ? Math.round(cOfi * 2.0 * 100) / 100 : prev.precioFeriadoTrabajado)
+        }));
+      }
+    }
+  }, [empActual]);
 
   const cargarDatos = async () => {
     setCargando(true);
@@ -730,6 +756,72 @@ export default function OtherEmployeesHistoryView({
     };
   }, [registrosEmpleadoAuditar, fechaCalendario]);
 
+  // [FN-06.04] Registros seleccionados para liquidación:
+  // Si hay días seleccionados en el calendario o registros seleccionados en tabla, toma esos;
+  // de lo contrario, toma todos los registros del mes activo en el calendario.
+  const registrosParaLiquidar = useMemo(() => {
+    const anio = fechaCalendario.getFullYear();
+    const mesStr = String(fechaCalendario.getMonth() + 1).padStart(2, '0');
+    const prefijoMes = `${anio}-${mesStr}`;
+
+    if (diasSeleccionadosCalendario && diasSeleccionadosCalendario.size > 0) {
+      return registrosEmpleadoAuditar.filter(r => r.fecha && diasSeleccionadosCalendario.has(r.fecha));
+    }
+    if (seleccionados && seleccionados.size > 0) {
+      return registrosEmpleadoAuditar.filter(r => seleccionados.has(r.id || r.id_asistencia));
+    }
+    return registrosEmpleadoAuditar.filter(r => r.fecha && r.fecha.startsWith(prefijoMes));
+  }, [registrosEmpleadoAuditar, fechaCalendario, diasSeleccionadosCalendario, seleccionados]);
+
+  // [FN-06.04] Liquidación directa a partir de la columna costo_dia
+  const liquidacionPorCostoDia = useMemo(() => {
+    let subtotalOfi = 0;
+    let subtotalObra = 0;
+    let subtotalFrancoTrab = 0;
+    let subtotalFeriadoTrab = 0;
+    let sumaTotal = 0;
+
+    registrosParaLiquidar.forEach(r => {
+      const c = Number(r.costo_dia) || 0;
+      sumaTotal += c;
+      const lugLower = (r.tipo_ocf || r.lugar || '').trim().toLowerCase();
+      const srvLower = (r.servicio || '').trim().toLowerCase();
+      const hrs = Number(r.horas) || 0;
+      const esFer = (r.feriado || '').toUpperCase() === 'SI';
+
+      if (
+        lugLower === 'franco ofic trabajado' ||
+        lugLower === 'franco obra trabajado' ||
+        srvLower === 'franco trabajado' ||
+        (lugLower === 'franco' && hrs > 0 && srvLower.includes('trabajado'))
+      ) {
+        subtotalFrancoTrab += c;
+      } else if (lugLower === 'feriado trabajado' || (esFer && hrs > 0)) {
+        subtotalFeriadoTrab += c;
+      } else if (esFrancoDeObra(r) || ['campaña / campo', 'campo', 'obra', 'roster'].includes(lugLower)) {
+        subtotalObra += c;
+      } else {
+        subtotalOfi += c;
+      }
+    });
+
+    return {
+      total: Math.round(sumaTotal * 100) / 100,
+      subtotalOfi: Math.round(subtotalOfi * 100) / 100,
+      subtotalObra: Math.round(subtotalObra * 100) / 100,
+      subtotalFrancoTrab: Math.round(subtotalFrancoTrab * 100) / 100,
+      subtotalFeriadoTrab: Math.round(subtotalFeriadoTrab * 100) / 100
+    };
+  }, [registrosParaLiquidar]);
+
+  // Indicador de modo manual o excepción
+  const hayModoManual = (
+    diasOficinaManual !== '' ||
+    diasCampoManual !== '' ||
+    diasFrancoManual !== '' ||
+    diasFeriadoManual !== ''
+  );
+
   // Cantidad efectiva para cada categoría (con soporte de ingreso manual y botón de retorno automático)
   const cantDiasOficina = (diasOficinaManual !== '' && !isNaN(Number(diasOficinaManual)))
     ? Math.max(0, Number(diasOficinaManual))
@@ -747,11 +839,27 @@ export default function OtherEmployeesHistoryView({
     ? Math.max(0, Number(diasFeriadoManual))
     : conteosLiquidacion.diasFeriadoTrabajado;
 
-  const subtotalOficina = cantDiasOficina * (tarifas.precioOficina || 0);
-  const subtotalObra = cantDiasObra * (tarifas.precioObra || 0);
-  const subtotalFranco = cantDiasFrancoTrabajado * (tarifas.precioFrancoTrabajado || 0);
-  const subtotalFeriado = cantDiasFeriadoTrabajado * (tarifas.precioFeriadoTrabajado || 0);
-  const totalLiquidar = subtotalOficina + subtotalObra + subtotalFranco + subtotalFeriado;
+  const usaCostoDiaDirecto = !hayModoManual && liquidacionPorCostoDia.total > 0;
+
+  const subtotalOficina = usaCostoDiaDirecto
+    ? liquidacionPorCostoDia.subtotalOfi
+    : cantDiasOficina * (tarifas.precioOficina || 0);
+
+  const subtotalObra = usaCostoDiaDirecto
+    ? liquidacionPorCostoDia.subtotalObra
+    : cantDiasObra * (tarifas.precioObra || 0);
+
+  const subtotalFranco = usaCostoDiaDirecto
+    ? liquidacionPorCostoDia.subtotalFrancoTrab
+    : cantDiasFrancoTrabajado * (tarifas.precioFrancoTrabajado || 0);
+
+  const subtotalFeriado = usaCostoDiaDirecto
+    ? liquidacionPorCostoDia.subtotalFeriadoTrab
+    : cantDiasFeriadoTrabajado * (tarifas.precioFeriadoTrabajado || 0);
+
+  const totalLiquidar = usaCostoDiaDirecto
+    ? liquidacionPorCostoDia.total
+    : (subtotalOficina + subtotalObra + subtotalFranco + subtotalFeriado);
 
   const formatMoneda = (val) => {
     return new Intl.NumberFormat('es-AR', {
@@ -1202,7 +1310,7 @@ export default function OtherEmployeesHistoryView({
                           📅 Calendario
                         </button>
 
-                        {Boolean(item.fue_modificado || item.modificado || (item.modificaciones && item.modificaciones.length > 0)) && (
+                        {puedeVerModif && Boolean(item.fue_modificado || item.modificado || (item.modificaciones && item.modificaciones.length > 0)) && (
                           <button
                             type="button"
                             className="btn-card-action btn-comparativa-action"
@@ -1214,7 +1322,7 @@ export default function OtherEmployeesHistoryView({
                           </button>
                         )}
 
-                        {(item.modificacion_pendiente === 1 || (Boolean(item.fue_modificado || item.modificado) && item.modificacion_revisada !== 1)) && (
+                        {puedeVerModif && (item.modificacion_pendiente === 1 || (Boolean(item.fue_modificado || item.modificado) && item.modificacion_revisada !== 1)) && (
                           <button
                             type="button"
                             className="btn-card-action"
@@ -1227,7 +1335,7 @@ export default function OtherEmployeesHistoryView({
                           </button>
                         )}
 
-                        {puedeModificarRegistro(usuario, item) ? (
+                        {!esSoloLecturaNucleo && puedeModificarRegistro(usuario, item) ? (
                           <>
                             <button
                               type="button"
@@ -1256,7 +1364,7 @@ export default function OtherEmployeesHistoryView({
                             </button>
                           </>
                         ) : (
-                          <span className="badge-solo-lectura" title="Solo Justina Bertolozzi e Iván Valentin pueden modificar registros de otros empleados">
+                          <span className="badge-solo-lectura" title="Solo lectura">
                             🔒 Solo lectura
                           </span>
                         )}
@@ -1528,9 +1636,29 @@ export default function OtherEmployeesHistoryView({
                 </svg>
                 <span>Calculadora de Liquidación • {empleadoAuditar || 'Empleado'} ({nombresMeses[fechaCalendario.getMonth()]} {fechaCalendario.getFullYear()})</span>
               </div>
-              <span className="liquidation-help">
-                Francos normales computan como oficina y francos de obra computan como obra. Asigna tarifas y francos trabajados:
-              </span>
+              <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+                <span style={{ fontSize: '11px', padding: '3px 8px', borderRadius: '12px', background: usaCostoDiaDirecto ? '#dcfce7' : '#fef3c7', color: usaCostoDiaDirecto ? '#15803d' : '#b45309', fontWeight: 600 }}>
+                  {usaCostoDiaDirecto
+                    ? `⚡ Directo de columna costo_dia (${registrosParaLiquidar.length} reg.)`
+                    : '✏️ Modo manual / excepciones'}
+                </span>
+                {hayModoManual && (
+                  <button
+                    type="button"
+                    className="btn-action-ghost"
+                    style={{ padding: '2px 8px', fontSize: '11px', color: 'var(--color-primary, #cc3333)' }}
+                    onClick={() => {
+                      setDiasOficinaManual('');
+                      setDiasCampoManual('');
+                      setDiasFrancoManual('');
+                      setDiasFeriadoManual('');
+                    }}
+                    title="Restablecer todos los campos al cálculo automático directo de costo_dia"
+                  >
+                    ↺ Restablecer a costo_dia auto
+                  </button>
+                )}
+              </div>
             </div>
 
             <div className="liquidation-grid">
@@ -1747,7 +1875,16 @@ export default function OtherEmployeesHistoryView({
             <div className="liquidation-total-banner">
               <div className="liq-total-info">
                 <span className="liq-total-subtitle">Liquidación total correspondiente a {empleadoAuditar || 'empleado'}:</span>
-                <span className="liq-total-period">{nombresMeses[fechaCalendario.getMonth()]} {fechaCalendario.getFullYear()}</span>
+                <span className="liq-total-period">
+                  {nombresMeses[fechaCalendario.getMonth()]} {fechaCalendario.getFullYear()}
+                  {diasSeleccionadosCalendario && diasSeleccionadosCalendario.size > 0 && ` (${diasSeleccionadosCalendario.size} días seleccionados en calendario)`}
+                  {seleccionados && seleccionados.size > 0 && ` (${seleccionados.size} registros seleccionados)`}
+                </span>
+                <span style={{ fontSize: '11px', color: usaCostoDiaDirecto ? '#16a34a' : 'var(--text-secondary)', marginTop: '2px', display: 'block' }}>
+                  {usaCostoDiaDirecto
+                    ? `✓ Calculado sumando directamente importes de columna costo_dia (${registrosParaLiquidar.length} registros).`
+                    : 'Recálculo manual aplicado según días y tarifas configuradas.'}
+                </span>
               </div>
               <div className="liq-total-amount-box">
                 <span className="liq-total-amount-label">TOTAL A LIQUIDAR</span>
@@ -1803,7 +1940,7 @@ export default function OtherEmployeesHistoryView({
                       <span style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>
                         {item.horas > 0 ? `${item.horas} hs` : '0 hs'}
                       </span>
-                      {Boolean(item.fue_modificado || item.modificado) && (
+                      {puedeVerModif && Boolean(item.fue_modificado || item.modificado) && (
                         item.modificacion_revisada === 1 && item.modificacion_pendiente !== 1 ? (
                           <div style={{ marginTop: '6px', background: '#f0fdf4', border: '1px solid #86efac', borderRadius: '6px', padding: '6px 10px' }}>
                             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', flexWrap: 'wrap' }}>
@@ -1901,7 +2038,7 @@ export default function OtherEmployeesHistoryView({
                       )}
                     </div>
                     <div style={{ display: 'flex', gap: '4px', flexShrink: 0, alignItems: 'center' }}>
-                      {puedeModificarRegistro(usuario, item) ? (
+                      {!esSoloLecturaNucleo && puedeModificarRegistro(usuario, item) ? (
                         <>
                           <button
                             type="button"
@@ -1927,7 +2064,7 @@ export default function OtherEmployeesHistoryView({
                           </button>
                         </>
                       ) : (
-                        <span className="badge-solo-lectura" title="Solo Justina Bertolozzi e Iván Valentin pueden modificar registros de otros empleados">
+                        <span className="badge-solo-lectura" title="Solo lectura">
                           🔒 Solo lectura
                         </span>
                       )}

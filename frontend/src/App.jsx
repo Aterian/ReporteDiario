@@ -9,7 +9,7 @@ import OtherEmployeesHistoryView from './components/OtherEmployeesHistoryView';
 import RosterView from './components/RosterView';
 import RosterHistoryView from './components/RosterHistoryView';
 import ErrorBoundary from './components/ErrorBoundary';
-import { puedeAccederRoster, puedeVerHistorialOtros } from './utils/permissions';
+import { puedeAccederRoster, puedeVerHistorialOtros, puedeVerModificaciones } from './utils/permissions';
 
 // [MOD-00] App Principal
 export default function App() {
@@ -28,6 +28,35 @@ export default function App() {
   const [tema, setTema] = useState(() => {
     return localStorage.getItem('ingeap_theme') || 'light';
   });
+
+  // [FN-04.08] Control de Zoom y persistencia local
+  const [zoom, setZoom] = useState(() => {
+    const guardado = localStorage.getItem('ingeap_zoom');
+    return guardado ? Number(guardado) : 100;
+  });
+
+  useEffect(() => {
+    document.documentElement.style.zoom = `${zoom}%`;
+    localStorage.setItem('ingeap_zoom', String(zoom));
+  }, [zoom]);
+
+  const nivelesZoom = [90, 100, 110, 120];
+  const aumentarZoom = () => {
+    setZoom(prev => {
+      const idx = nivelesZoom.indexOf(prev);
+      if (idx !== -1 && idx < nivelesZoom.length - 1) return nivelesZoom[idx + 1];
+      if (prev < 120) return Math.min(prev + 10, 120);
+      return prev;
+    });
+  };
+  const disminuirZoom = () => {
+    setZoom(prev => {
+      const idx = nivelesZoom.indexOf(prev);
+      if (idx > 0) return nivelesZoom[idx - 1];
+      if (prev > 90) return Math.max(prev - 10, 90);
+      return prev;
+    });
+  };
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', tema);
@@ -112,9 +141,9 @@ export default function App() {
     };
   }, []);
 
-  // [FN-02.02] Monitoreo y carga de notificaciones de modificaciones para RRHH
+  // [FN-02.02] Monitoreo y carga de notificaciones de modificaciones (Exclusivo Justina Bertolozzi e Iván Valentin)
   useEffect(() => {
-    if (!usuario || !puedeVerHistorialOtros(usuario)) {
+    if (!usuario || !puedeVerModificaciones(usuario)) {
       setNotificacionesModificaciones([]);
       return;
     }
@@ -419,6 +448,37 @@ export default function App() {
               </svg>
             )}
           </button>
+
+          {/* [FN-04.08] Control de Zoom Accesible */}
+          <div className="header-zoom-group" title="Ajustar zoom de pantalla">
+            <button
+              type="button"
+              className="btn-zoom"
+              onClick={disminuirZoom}
+              disabled={zoom <= 90}
+              title="Reducir zoom (A-)"
+              aria-label="Reducir zoom"
+            >
+              A-
+            </button>
+            <span
+              className="zoom-indicator"
+              onClick={() => setZoom(100)}
+              title="Restablecer zoom al 100%"
+            >
+              {zoom}%
+            </span>
+            <button
+              type="button"
+              className="btn-zoom"
+              onClick={aumentarZoom}
+              disabled={zoom >= 120}
+              title="Aumentar zoom (A+)"
+              aria-label="Aumentar zoom"
+            >
+              A+
+            </button>
+          </div>
 
           <button
             type="button"

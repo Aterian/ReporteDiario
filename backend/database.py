@@ -123,6 +123,8 @@ def inicializar_bd():
                 area TEXT DEFAULT '',
                 dni TEXT NOT NULL,
                 id_origen TEXT DEFAULT '',
+                costo_dia_ofi REAL DEFAULT 0.0,
+                costo_dia_obra REAL DEFAULT 0.0,
                 actualizado_en TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """)
@@ -136,6 +138,10 @@ def inicializar_bd():
             cursor.execute("ALTER TABLE usuarios_cache ADD COLUMN mail TEXT DEFAULT ''")
         if "email" not in cols_usr:
             cursor.execute("ALTER TABLE usuarios_cache ADD COLUMN email TEXT DEFAULT ''")
+        if "costo_dia_ofi" not in cols_usr:
+            cursor.execute("ALTER TABLE usuarios_cache ADD COLUMN costo_dia_ofi REAL DEFAULT 0.0")
+        if "costo_dia_obra" not in cols_usr:
+            cursor.execute("ALTER TABLE usuarios_cache ADD COLUMN costo_dia_obra REAL DEFAULT 0.0")
 
         # Tabla de caché para días no laborales (0_no_laborales)
         cursor.execute("""
@@ -159,6 +165,7 @@ def inicializar_bd():
                 hora_inicio TEXT DEFAULT '',
                 hora_fin TEXT DEFAULT '',
                 tipo_costo TEXT DEFAULT '',
+                costo_dia REAL DEFAULT 0.0,
                 instrumental TEXT DEFAULT '',
                 usuario_mail TEXT DEFAULT '',
                 fecha_hora TEXT DEFAULT '',
@@ -192,6 +199,8 @@ def inicializar_bd():
             cursor.execute("ALTER TABLE historial ADD COLUMN hora_fin TEXT DEFAULT ''")
         if "tipo_costo" not in columnas_hist:
             cursor.execute("ALTER TABLE historial ADD COLUMN tipo_costo TEXT DEFAULT ''")
+        if "costo_dia" not in columnas_hist:
+            cursor.execute("ALTER TABLE historial ADD COLUMN costo_dia REAL DEFAULT 0.0")
         if "instrumental" not in columnas_hist:
             cursor.execute("ALTER TABLE historial ADD COLUMN instrumental TEXT DEFAULT ''")
         if "usuario_mail" not in columnas_hist:
@@ -327,7 +336,7 @@ def obtener_area_por_dni(dni: str) -> str:
     return ""
 
 def guardar_usuarios_cache(usuarios: list):
-    """Actualiza la lista de usuarios autorizados en la base local."""
+    """Actualiza la lista de usuarios autorizados en la base local incluyendo costos diarios."""
     if usuarios is None:
         return
     with obtener_conexion() as conn:
@@ -336,25 +345,60 @@ def guardar_usuarios_cache(usuarios: list):
         for u in usuarios:
             id_u = str(u.get("id_usuario", "")).strip() or str(uuid.uuid4())
             id_orig = str(u.get("id_origen", "")).strip()
+            c_ofi = float(u.get("costo_dia_ofi", 0.0) or 0.0)
+            c_obra = float(u.get("costo_dia_obra", 0.0) or 0.0)
             cursor.execute("""
-                INSERT INTO usuarios_cache (id_usuario, nombre, email, area, dni, id_origen, actualizado_en)
-                VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+                INSERT INTO usuarios_cache (id_usuario, nombre, email, area, dni, id_origen, costo_dia_ofi, costo_dia_obra, actualizado_en)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
             """, (
                 id_u,
                 str(u.get("nombre", "")).strip(),
                 str(u.get("email", "") or u.get("mail", "")).strip(),
                 str(u.get("area", "")).strip(),
                 str(u.get("dni", "")).strip(),
-                id_orig
+                id_orig,
+                c_ofi,
+                c_obra
             ))
         conn.commit()
 
 def obtener_usuarios_cache() -> list:
-    """Retorna los usuarios autorizados almacenados en caché local."""
+    """Retorna los usuarios autorizados almacenados en caché local con sus costos diarios."""
     with obtener_conexion() as conn:
         cursor = conn.cursor()
-        cursor.execute("SELECT id_usuario, nombre, email, area, dni, id_origen FROM usuarios_cache ORDER BY nombre ASC")
+        cursor.execute("SELECT id_usuario, nombre, email, area, dni, id_origen, costo_dia_ofi, costo_dia_obra FROM usuarios_cache ORDER BY nombre ASC")
         return [dict(f) for f in cursor.fetchall()]
+
+def _normalizar_texto(texto: str) -> str:
+    import unicodedata
+    if not texto:
+        return ""
+    t = unicodedata.normalize("NFD", str(texto).strip().lower())
+    return "".join(c for c in t if unicodedata.category(c) != "Mn")
+
+def obtener_costos_empleado(nombre_o_dni: str) -> tuple[float, float]:
+    """Retorna (costo_dia_ofi, costo_dia_obra) para un colaborador desde usuarios_cache."""
+    if not nombre_o_dni:
+        return 0.0, 0.0
+    val_norm = _normalizar_texto(nombre_o_dni)
+    val_raw = str(nombre_o_dni).strip()
+    with obtener_conexion() as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT costo_dia_ofi, costo_dia_obra FROM usuarios_cache
+            WHERE dni = ? OR nombre = ? LIMIT 1
+        """, (val_raw, val_raw))
+        r = cursor.fetchone()
+        if r:
+            return float(r["costo_dia_ofi"] or 0.0), float(r["costo_dia_obra"] or 0.0)
+        
+        cursor.execute("SELECT nombre, dni, costo_dia_ofi, costo_dia_obra FROM usuarios_cache")
+        for u in cursor.fetchall():
+            nom_norm = _normalizar_texto(u["nombre"])
+            dni_raw = str(u["dni"] or "").strip()
+            if dni_raw == val_raw or (nom_norm and (nom_norm == val_norm or nom_norm in val_norm or val_norm in nom_norm)):
+                return float(u["costo_dia_ofi"] or 0.0), float(u["costo_dia_obra"] or 0.0)
+    return 0.0, 0.0
 
 def guardar_proyectos_cache(proyectos: list):
     """Actualiza la lista de proyectos activos en la base local."""
@@ -718,11 +762,12 @@ def guardar_registro_asistencia(
     id_proyecto: str = "",
     hora_inicio: str = "",
     hora_fin: str = "",
-    tipo_costo: str = ""
+    tipo_costo: str = "",
+    costo_dia: float = 0.0
 ):
     """
-    Inserta una fila de asistencia con las columnas exactas de Google Sheets (17 columnas):
-    id_asistencia, empleado, fecha, tipo_ocf, servicio, hora_inicio, hora_fin, horas, instrumental, usuario_mail, fecha_hora, dia_semana, feriado, id_empleado, id_proyecto, cargado_por, tipo_costo
+    Inserta una fila de asistencia con las columnas exactas de Google Sheets (18 columnas):
+    id_asistencia, empleado, fecha, tipo_ocf, servicio, hora_inicio, hora_fin, horas, instrumental, usuario_mail, fecha_hora, dia_semana, feriado, id_empleado, id_proyecto, cargado_por, tipo_costo, costo_dia
     """
     uid = id_asistencia or str(uuid.uuid4())
     ts = fecha_hora or datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -733,17 +778,18 @@ def guardar_registro_asistencia(
     emp_id = id_empleado or obtener_id_empleado(empleado)
     proy_id = id_proyecto or obtener_id_proyecto(servicio)
     carg_por = (cargado_por or empleado or "").strip()
+    costo_dia_num = round(float(costo_dia or 0.0), 2)
 
     with obtener_conexion() as conn:
         cursor = conn.cursor()
         cursor.execute("""
             INSERT INTO historial (
                 id_asistencia, empleado, fecha, tipo_ocf, servicio, 
-                horas, hora_inicio, hora_fin, tipo_costo, instrumental, usuario_mail, fecha_hora, 
+                horas, hora_inicio, hora_fin, tipo_costo, costo_dia, instrumental, usuario_mail, fecha_hora, 
                 lugar, jornada, dia_semana, feriado, modificado, sincronizado,
                 cargado_por, id_empleado, id_proyecto
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             uid,
             empleado,
@@ -754,6 +800,7 @@ def guardar_registro_asistencia(
             hora_inicio,
             hora_fin,
             tipo_costo,
+            costo_dia_num,
             instrumental,
             usuario_mail,
             ts,
@@ -785,7 +832,8 @@ def actualizar_registro_asistencia(
     hora_inicio: str = "",
     hora_fin: str = "",
     tipo_costo: str = "",
-    quien_modifica: str = ""
+    quien_modifica: str = "",
+    costo_dia: float = None
 ) -> bool:
     """
     Actualiza un reporte de asistencia existente en historial, registra la auditoría
@@ -799,7 +847,7 @@ def actualizar_registro_asistencia(
         cursor = conn.cursor()
         cursor.execute("""
             SELECT id, id_asistencia, empleado, id_empleado, id_proyecto, usuario_mail, 
-                   tipo_ocf, horas, servicio, hora_inicio, hora_fin, tipo_costo
+                   tipo_ocf, horas, servicio, hora_inicio, hora_fin, tipo_costo, costo_dia
             FROM historial WHERE id = ?
         """, (id_registro,))
         row_ant = cursor.fetchone()
@@ -874,6 +922,10 @@ def actualizar_registro_asistencia(
         if tipo_costo:
             query += ", tipo_costo = ?"
             params.append(tipo_costo)
+
+        if costo_dia is not None:
+            query += ", costo_dia = ?"
+            params.append(round(float(costo_dia), 2))
 
         if empleado:
             query += ", empleado = ?, id_empleado = ?, usuario_mail = ?"
@@ -979,6 +1031,7 @@ def obtener_historial_otros_empleados(usuario_rrhh: str = "", filtro_empleado: s
                 COALESCE(hora_inicio, '') as hora_inicio,
                 COALESCE(hora_fin, '') as hora_fin,
                 COALESCE(tipo_costo, '') as tipo_costo,
+                COALESCE(costo_dia, 0.0) as costo_dia,
                 COALESCE(instrumental, '') as instrumental,
                 COALESCE(usuario_mail, '') as usuario_mail,
                 COALESCE(fecha_hora, creado_en) as fecha_hora,
@@ -1122,6 +1175,7 @@ def obtener_todos_registros_empleado(empleado: str, mes_anio: str = "") -> list:
                 COALESCE(hora_inicio, '') as hora_inicio,
                 COALESCE(hora_fin, '') as hora_fin,
                 COALESCE(tipo_costo, '') as tipo_costo,
+                COALESCE(costo_dia, 0.0) as costo_dia,
                 COALESCE(instrumental, '') as instrumental,
                 COALESCE(usuario_mail, '') as usuario_mail,
                 COALESCE(fecha_hora, creado_en) as fecha_hora,
@@ -1166,6 +1220,7 @@ def obtener_pendientes_sincronizacion():
                 COALESCE(hora_inicio, '') as hora_inicio,
                 COALESCE(hora_fin, '') as hora_fin,
                 COALESCE(tipo_costo, '') as tipo_costo,
+                COALESCE(costo_dia, 0.0) as costo_dia,
                 COALESCE(instrumental, '') as instrumental,
                 COALESCE(usuario_mail, '') as usuario_mail,
                 COALESCE(fecha_hora, creado_en) as fecha_hora,
@@ -1238,6 +1293,7 @@ def obtener_ultimos_registros(empleado: str = "", usuario_mail: str = "", limite
                     COALESCE(hora_inicio, '') as hora_inicio,
                     COALESCE(hora_fin, '') as hora_fin,
                     COALESCE(tipo_costo, '') as tipo_costo,
+                    COALESCE(costo_dia, 0.0) as costo_dia,
                     COALESCE(instrumental, '') as instrumental,
                     COALESCE(usuario_mail, '') as usuario_mail,
                     COALESCE(fecha_hora, creado_en) as fecha_hora,
@@ -1269,6 +1325,7 @@ def obtener_ultimos_registros(empleado: str = "", usuario_mail: str = "", limite
                     COALESCE(hora_inicio, '') as hora_inicio,
                     COALESCE(hora_fin, '') as hora_fin,
                     COALESCE(tipo_costo, '') as tipo_costo,
+                    COALESCE(costo_dia, 0.0) as costo_dia,
                     COALESCE(instrumental, '') as instrumental,
                     COALESCE(usuario_mail, '') as usuario_mail,
                     COALESCE(fecha_hora, creado_en) as fecha_hora,
@@ -1314,7 +1371,7 @@ def usuario_registro_hoy(empleado: str = "", usuario_mail: str = "") -> bool:
 
 # [FN-03.05] Asignación masiva de tipo_costo para registros de asistencia
 def actualizar_tipo_costo_lote(ids_asistencia: list, tipo_costo: str) -> int:
-    """Actualiza en lote la columna tipo_costo para los registros indicados en SQLite y los marca para sync."""
+    """Actualiza en lote la columna tipo_costo y recalcula costo_dia para los registros indicados en SQLite."""
     if not ids_asistencia:
         return 0
     with obtener_conexion() as conn:
@@ -1323,12 +1380,44 @@ def actualizar_tipo_costo_lote(ids_asistencia: list, tipo_costo: str) -> int:
         total_modificados = 0
         for item_id in ids_asistencia:
             cursor.execute("""
+                SELECT id, id_asistencia, empleado, tipo_ocf, servicio, feriado, horas
+                FROM historial
+                WHERE id_asistencia = ? OR id = ?
+            """, (str(item_id), item_id if str(item_id).isdigit() else -1))
+            fila = cursor.fetchone()
+            if not fila:
+                continue
+
+            emp = fila["empleado"] or ""
+            tipo_ocf = (fila["tipo_ocf"] or "").strip()
+            fer = (fila["feriado"] or "").strip().upper()
+            c_ofi, c_obra = obtener_costos_empleado(emp)
+
+            if val == "Oficina":
+                base = c_ofi
+            elif val == "Campo":
+                base = c_obra
+            else:
+                base = 0.0
+
+            if base > 0:
+                if fer == "SI":
+                    nuevo_costo = round(base * 2.0, 2)
+                elif tipo_ocf.lower() in ["franco ofic trabajado", "franco de oficina trabajado", "franco obra trabajado", "franco de obra trabajado"]:
+                    nuevo_costo = round(base * 1.5, 2)
+                else:
+                    nuevo_costo = round(base, 2)
+            else:
+                nuevo_costo = 0.0
+
+            cursor.execute("""
                 UPDATE historial
                 SET tipo_costo = ?,
+                    costo_dia = ?,
                     sincronizado = 0,
                     modificado = 1
                 WHERE id_asistencia = ? OR id = ?
-            """, (val, str(item_id), item_id if str(item_id).isdigit() else -1))
+            """, (val, nuevo_costo, str(item_id), item_id if str(item_id).isdigit() else -1))
             total_modificados += cursor.rowcount
         conn.commit()
         return total_modificados
