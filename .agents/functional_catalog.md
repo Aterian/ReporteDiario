@@ -229,3 +229,38 @@
 - **Reglas de negocio e invariantes**:
   1. Solicitudes con `area = 'I'` o `area = 'M'` retornan la unión de proyectos activos de áreas `I` y `M`.
   2. Facilita la imputación en proyectos de colaboración conjunta sin requerir cambio de filtro manual.
+
+## [FN-03.05] Deduplicación Remota Estricta por Identificador Único
+- **Módulo**: [MOD-03] Sincronización Remota Google Sheets
+- **Flujo Operativo**: La rutina de depuración y deduplicación remota valida la unicidad de filas basándose exclusivamente en el `id_asistencia` único, preservando registros válidos de jornadas fragmentadas en el mismo proyecto.
+- **Tablas afectadas**: `historial`, hoja remota `1_asistencia_informada`.
+- **Reglas de negocio e invariantes**:
+  1. No se consideran duplicados registros con igual `(empleado, fecha, servicio)` si poseen distinto `id_asistencia`.
+  2. Permite jornadas multi-turno en el mismo proyecto (ej. 4 hs mañana y 4 hs tarde).
+
+## [FN-02.04] Edición en Historial con Selector Enum de Servicios
+- **Módulo**: [MOD-02] Historial y Auditoría
+- **Flujo Operativo**: Sustituye la entrada abierta de texto por selectores enum desplegables sincronizados con los catálogos oficiales de proyectos y áreas corporativas en los modales de edición del historial.
+- **Tablas afectadas**: `historial`.
+- **Reglas de negocio e invariantes**:
+  1. Licencias: opciones limitadas a tipos oficiales (`Médica`, `Examen`, etc.).
+  2. Modalidad Campo / Roster / Franco Obra: selector exclusivo de proyectos activos.
+  3. Modalidad Oficina / Franco / Vacaciones: selector ordenado de áreas corporativas y proyectos.
+
+## [FN-04.10] Liquidación con Fracciones de 0.5 Días y Desglose de Francos
+- **Módulo**: [MOD-04] Control de Permisos y Roles
+- **Flujo Operativo**: Habilita incrementos decimales de 0.5 días en la asignación manual de RRHH y desglosa el cálculo de francos trabajados entre Franco de Obra y Franco de Oficina.
+- **Tablas afectadas**: `historial`.
+- **Reglas de negocio e invariantes**:
+  1. Incrementos manuales en pasos de `0.5` (`step="0.5"`) para todas las categorías.
+  2. Franco de Obra Trabajado: tasa del 150% del día de obra/campo (`costo_dia_obra * 1.5`).
+  3. Franco de Oficina Trabajado: tasa del 150% del día de oficina (`costo_dia_ofi * 1.5`).
+
+## [FN-06.05] Exportación de Informe de Liquidación en Excel
+- **Módulo**: [MOD-06] Gestión de Roster y Asistencia RRHH
+- **Flujo Operativo**: Permite a los responsables de RRHH generar y descargar un archivo Excel institucional con el informe detallado de liquidación salarial del empleado auditado.
+- **Tablas afectadas**: `historial`.
+- **Reglas de negocio e invariantes**:
+  1. Exclusivo para Justina Bertolozzi e Iván Valentin (`puedeVerCalculadoraLiquidacion`).
+  2. Hoja 'Resumen Liquidación': datos de colaborador, desglose de las 5 categorías, total general y tabla de proyectos imputados.
+  3. Hoja 'Detalle Diario': cronograma detallado día a día de las jornadas del mes.

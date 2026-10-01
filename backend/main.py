@@ -56,6 +56,7 @@ from database import (
     obtener_costos_empleado
 )
 from roster_export import generar_excel_roster_mes
+from liquidacion_export import generar_excel_informe_liquidacion
 from sheets_service import (
     sincronizar_pendientes,
     probar_conexion,
@@ -224,6 +225,9 @@ def es_area_nucleo(usuario: dict | None) -> bool:
     return area == "N"
 
 def puede_acceder_roster(usuario: dict | None) -> bool:
+    return es_justina_bertolozzi(usuario) or es_ivan_valentin(usuario)
+
+def puede_ver_calculadora_liquidacion(usuario: dict | None) -> bool:
     return es_justina_bertolozzi(usuario) or es_ivan_valentin(usuario)
 
 def puede_ver_historial_otros(usuario: dict | None) -> bool:
@@ -1714,6 +1718,46 @@ class ApiPuente:
             print(f"[Rosters] Error al exportar Excel: {e}")
             return {"exito": False, "error": str(e)}
 
+    def exportar_informe_liquidacion(self, datos_informe: dict):
+        """Genera y descarga el informe Excel de liquidación para el empleado auditado por RRHH."""
+        sesion = obtener_sesion_activa()
+        if not puede_ver_calculadora_liquidacion(sesion):
+            return {"exito": False, "error": "Acceso denegado: Solo Justina Bertolozzi e Iván Valentin pueden exportar informes de liquidación."}
+
+        if not isinstance(datos_informe, dict):
+            return {"exito": False, "error": "Datos de informe inválidos."}
+
+        try:
+            empleado = str(datos_informe.get("empleado") or "Colaborador").strip()
+            nombre_mes = str(datos_informe.get("nombre_mes") or "Mes").strip()
+            anio = str(datos_informe.get("anio") or datetime.now().year)
+
+            import re
+            emp_slug = re.sub(r'[\\/*?:"<>|]', "", empleado).strip().replace(" ", "_")
+            nombre_sugerido = f"Liquidacion_{emp_slug}_{nombre_mes}_{anio}.xlsx"
+
+            ruta_destino = None
+            if self._ventana:
+                try:
+                    dialog_mode = getattr(getattr(webview, 'FileDialog', object), 'SAVE', getattr(webview, 'SAVE_DIALOG', 0))
+                    res = self._ventana.create_file_dialog(
+                        dialog_mode,
+                        save_filename=nombre_sugerido,
+                        file_types=('Archivos de Excel (*.xlsx)', 'Todos los archivos (*.*)')
+                    )
+                    if res:
+                        ruta_destino = res if isinstance(res, str) else res[0]
+                except Exception as err_dialog:
+                    print(f"[Liquidacion] Error en create_file_dialog: {err_dialog}")
+
+            if not ruta_destino:
+                return {"exito": False, "cancelado": True}
+
+            return generar_excel_informe_liquidacion(datos_informe, ruta_destino)
+        except Exception as e:
+            print(f"[Liquidacion] Error al exportar informe de liquidación: {e}")
+            return {"exito": False, "error": str(e)}
+
 
 
 def recurso_path(ruta_relativa: str) -> str:
@@ -1743,7 +1787,7 @@ def obtener_icono_tray():
     return crear_icono_calendario(64)
 
 
-APP_VERSION = "1.11.0"
+APP_VERSION = "1.12.0"
 
 _mutex_instancia = None
 

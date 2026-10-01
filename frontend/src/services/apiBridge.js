@@ -70,6 +70,10 @@ const mockApi = {
     alert(`[Modo Simulado] Se exportaría el Excel para "${proyecto || 'Todos'}" del mes ${mes}/${anio}.`);
     return { exito: true, mensaje: 'Excel generado (modo simulado).' };
   },
+  exportar_informe_liquidacion: async (datosInforme) => {
+    alert(`[Modo Simulado] Se exportaría el Informe de Liquidación para "${datosInforme?.empleado || 'Colaborador'}".`);
+    return { exito: true, mensaje: 'Informe de liquidación generado (modo simulado).' };
+  },
   redimensionar_ventana: async () => ({ exito: true }),
   maximizar_ventana: async () => ({ exito: true }),
   restaurar_ventana: async () => ({ exito: true }),
@@ -356,6 +360,14 @@ export const api = {
     const bridge = await getApi();
     if (bridge.exportar_roster_excel) {
       return await bridge.exportar_roster_excel(anio, mes, proyecto);
+    }
+    return { exito: false, error: 'Función no disponible' };
+  },
+
+  async exportarInformeLiquidacion(datosInforme) {
+    const bridge = await getApi();
+    if (bridge.exportar_informe_liquidacion) {
+      return await bridge.exportar_informe_liquidacion(datosInforme);
     }
     return { exito: false, error: 'Función no disponible' };
   },

@@ -2,6 +2,25 @@
 
 Historial cronológico de cambios, nuevas características y mejoras aplicadas al sistema **Check Diario Ingeap**.
 
+## [1.12.0] - 2026-10-01
+
+### 📑 Informes de Liquidación Ejecutivos, Fracciones de 0.5 Días, Francos Discriminados y Selector Enum de Servicios
+- **Deduplicación Estricta por `id_asistencia` en Sincronización Remota (`[FN-03.05]`)**:
+  - Corrección en la deduplicación remota de `sheets_service.py` (`deduplicar_hoja_remota`): anteriormente agrupaba por tuplas `(empleado, fecha, servicio)`, descartando registros legítimos de jornadas divididas en el mismo proyecto (ej. 4 hs turno mañana y 4 hs turno tarde).
+  - La deduplicación ahora se basa estrictamente en el `id_asistencia` único. Se restauró el registro vespertino de 4 hs de Sergio Juarez tanto en Google Sheets como en la base de datos local SQLite.
+- **Edición en Historial con Selector Enum de Servicios (`[FN-02.04]`)**:
+  - En los modales de edición del historial personal (`HistoryView.jsx`) y de otros colaboradores (`OtherEmployeesHistoryView.jsx`), el campo de Servicio dejó de ser un input libre de texto y pasó a ser un `<select>` restringido y ordenado con las mismas opciones tipificadas del formulario de carga (proyectos activos, áreas internas y tipos de licencia).
+- **Calculadora de Liquidación: Incrementos de 0.5 Días y Desglose de Francos Trabajados (`[FN-04.10]`)**:
+  - Soporte para asignación manual con incrementos decimales de `0.5` (`step="0.5"`, ej. 6.5 días de oficina), recalculando de manera inmediata los costos y subtotales proporcionales.
+  - Se dividió la ventana de "Franco trabajado" en dos conceptos de costo independientes y precisos:
+    - *Franco de Obra Trabajado*: aplica tarifa al 150% del día de obra/campo (`costo_dia_obra * 1.5`).
+    - *Franco de Oficina Trabajado*: aplica tarifa al 150% del día de oficina (`costo_dia_ofi * 1.5`).
+- **Exportación de Informe de Liquidación para RRHH (`[FN-06.05]`)**:
+  - Se añadió el botón *"Descargar Informe"* en la cabecera de la calculadora de liquidación para que los responsables de RRHH (`Justina Bertolozzi` e `Iván Valentin`) puedan generar y guardar un archivo de Excel `.xlsx` corporativo estilizado con la paleta Ingeap (`#C81E2B`).
+  - El archivo incluye dos hojas:
+    1. *Resumen Liquidación*: Encabezado institucional, datos del colaborador (nombre, DNI, área, email), período, desglose de las 5 categorías computadas con tarifas y subtotales, importe total a liquidar y tabla de proyectos/tareas imputadas con días, horas y montos acumulados.
+    2. *Detalle Diario*: Auditoría cronológica completa del mes día por día (fecha, día de semana, modalidad, servicio, horas, tipo de costo e importe).
+
 ---
 
 ## [1.11.0] - 2026-10-01

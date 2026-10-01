@@ -967,32 +967,41 @@ def deduplicar_hoja_remota(spreadsheet_id: str = "") -> dict:
         idx_id = headers.index("id_asistencia") if "id_asistencia" in headers else 0
         idx_emp = headers.index("empleado") if "empleado" in headers else 1
         idx_fecha = headers.index("fecha") if "fecha" in headers else 2
-        idx_serv = headers.index("servicio") if "servicio" in headers else 4
+        idx_horas = headers.index("horas") if "horas" in headers else 7
+        idx_tipo = headers.index("tipo_ocf") if "tipo_ocf" in headers else 3
+        idx_fh = headers.index("fecha_hora") if "fecha_hora" in headers else 10
 
         vistos_id = set()
-        vistos_emp_fec_serv = set()
+        vistos_legacy = set()
         filas_a_borrar = []
 
-        # Recorremos de arriba a abajo para marcar duplicados (conservando la primera aparición)
+        # Recorremos de arriba a abajo para marcar duplicados verdaderos
         for r_idx, f in enumerate(filas[1:], start=2):
             uid = f[idx_id].strip() if len(f) > idx_id else ""
             emp = f[idx_emp].strip().lower() if len(f) > idx_emp else ""
             fec = f[idx_fecha].strip() if len(f) > idx_fecha else ""
             serv = f[idx_serv].strip().lower() if len(f) > idx_serv else ""
+            hrs = f[idx_horas].strip() if len(f) > idx_horas else ""
+            tipo = f[idx_tipo].strip().lower() if len(f) > idx_tipo else ""
+            fh = f[idx_fh].strip() if len(f) > idx_fh else ""
 
             es_duplicado = False
-            if uid and uid in vistos_id:
-                es_duplicado = True
-            elif emp and fec and serv and (emp, fec, serv) in vistos_emp_fec_serv:
-                es_duplicado = True
+            # 1. Duplicado exacto por id_asistencia (UUID primario)
+            if uid:
+                if uid in vistos_id:
+                    es_duplicado = True
+                else:
+                    vistos_id.add(uid)
+            # 2. Registros antiguos sin UUID: solo si coinciden exactamente todos los campos (emp, fec, serv, hrs, tipo, fh)
+            elif emp and fec and serv:
+                clave_legacy = (emp, fec, serv, hrs, tipo, fh)
+                if clave_legacy in vistos_legacy:
+                    es_duplicado = True
+                else:
+                    vistos_legacy.add(clave_legacy)
 
             if es_duplicado:
                 filas_a_borrar.append(r_idx)
-            else:
-                if uid:
-                    vistos_id.add(uid)
-                if emp and fec and serv:
-                    vistos_emp_fec_serv.add((emp, fec, serv))
 
         # Borramos de abajo hacia arriba para no alterar los índices de las filas superiores
         eliminados = 0

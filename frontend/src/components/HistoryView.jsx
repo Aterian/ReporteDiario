@@ -23,6 +23,30 @@ const CalendarRpgIcon = ({ size = 16, color = "#78350f" }) => (
   </svg>
 );
 
+const LISTADO_AREAS_CORPORATIVAS = [
+  'Aplicaciones',
+  'Ingeniería',
+  'Mensura',
+  'SIG',
+  'Administración',
+  'RRHH',
+  'CyF',
+  'Marketing',
+  'Inventario',
+  'I+D',
+  'Ventas',
+  'CD'
+];
+
+const TIPOS_LICENCIA = [
+  'Licencia - Médica',
+  'Licencia - Examen',
+  'Licencia - Fallecimiento',
+  'Licencia - Paternidad / Maternidad',
+  'Licencia - Mudanza',
+  'Licencia - Especial',
+  'Licencia - Otra'
+];
 
 export const getTagAutorInfo = (item, usuario) => {
   const cargadoPor = (item?.cargado_por || '').trim();
@@ -1029,18 +1053,23 @@ export default function HistoryView({ onVolver, tema, onNuevoReporte, usuario, o
                 })()}
               </div>
 
-              {/* Si es Licencia, detalle */}
+              {/* Si es Licencia: enum de tipos de licencia */}
               {(registroEditando.tipo_ocf === 'Licencia' || registroEditando.lugar === 'Licencia') ? (
                 <div className="form-group-clean">
                   <label className="form-label-clean">Tipo de Licencia:</label>
-                  <input
-                    type="text"
-                    className="form-input form-input-clean"
-                    value={registroEditando.servicio}
+                  <select
+                    className="form-select form-select-clean"
+                    value={registroEditando.servicio || 'Licencia - Médica'}
                     onChange={(e) => setRegistroEditando({ ...registroEditando, servicio: e.target.value })}
-                    placeholder="Ej: Médica, Especial, Examen..."
                     required
-                  />
+                  >
+                    {TIPOS_LICENCIA.map(tl => (
+                      <option key={tl} value={tl}>{tl}</option>
+                    ))}
+                    {registroEditando.servicio && !TIPOS_LICENCIA.includes(registroEditando.servicio) && (
+                      <option value={registroEditando.servicio}>{registroEditando.servicio}</option>
+                    )}
+                  </select>
                 </div>
               ) : (['Franco Obra', 'Franco de Obra', 'Franco Obra Trabajado', 'Feriado Trabajado', 'Campo', 'Campaña / Campo', 'Roster'].includes(registroEditando.tipo_ocf || registroEditando.lugar)) ? (
                 <div className="form-group-clean">
@@ -1057,46 +1086,82 @@ export default function HistoryView({ onVolver, tema, onNuevoReporte, usuario, o
                     required
                   >
                     <option value="">-- Seleccionar proyecto asignado --</option>
-                    {serviciosDisponibles.map((srv, idx) => (
-                      <option key={idx} value={srv}>{srv}</option>
-                    ))}
+                    <optgroup label="Proyectos Activos">
+                      {serviciosDisponibles.map((srv, idx) => (
+                        <option key={idx} value={srv}>{srv}</option>
+                      ))}
+                    </optgroup>
+                    {registroEditando.servicio && !serviciosDisponibles.includes(registroEditando.servicio) && (
+                      <option value={registroEditando.servicio}>{registroEditando.servicio}</option>
+                    )}
                   </select>
                 </div>
               ) : (registroEditando.tipo_ocf === 'Franco' || registroEditando.lugar === 'Franco') ? (
                 <div className="form-group-clean">
                   <label className="form-label-clean">Área / Asignación (Franco):</label>
-                  <input
-                    type="text"
-                    className="form-input form-input-clean"
+                  <select
+                    className="form-select form-select-clean"
                     value={registroEditando.servicio || ''}
                     onChange={(e) => setRegistroEditando({ ...registroEditando, servicio: e.target.value })}
-                    placeholder="Área del empleado (o proyecto si roster)"
                     required
-                  />
+                  >
+                    <option value="">-- Seleccionar asignación de Franco --</option>
+                    <optgroup label="Áreas Corporativas (Franco de Oficina)">
+                      {LISTADO_AREAS_CORPORATIVAS.map(a => (
+                        <option key={a} value={a}>{a}</option>
+                      ))}
+                    </optgroup>
+                    <optgroup label="Proyectos Activos (Franco de Obra)">
+                      {serviciosDisponibles.map((srv, idx) => (
+                        <option key={idx} value={srv}>{srv}</option>
+                      ))}
+                    </optgroup>
+                    {registroEditando.servicio &&
+                      !LISTADO_AREAS_CORPORATIVAS.includes(registroEditando.servicio) &&
+                      !serviciosDisponibles.includes(registroEditando.servicio) && (
+                        <option value={registroEditando.servicio}>{registroEditando.servicio}</option>
+                    )}
+                  </select>
                 </div>
               ) : (registroEditando.tipo_ocf === 'Vacaciones' || registroEditando.lugar === 'Vacaciones') ? (
                 <div className="form-group-clean">
                   <label className="form-label-clean">Detalle:</label>
-                  <input
-                    type="text"
-                    className="form-input form-input-clean"
-                    value={registroEditando.servicio || 'Vacaciones'}
+                  <select
+                    className="form-select form-select-clean"
+                    value="Vacaciones"
                     disabled
-                  />
+                  >
+                    <option value="Vacaciones">Vacaciones</option>
+                  </select>
                 </div>
               ) : (
                 <div className="form-group-clean">
-                  <label className="form-label-clean">Proyecto / Tarea:</label>
+                  <label className="form-label-clean">Proyecto / Tarea asignada:</label>
                   <select
                     className="form-select form-select-clean"
-                    value={registroEditando.servicio}
+                    value={registroEditando.servicio || 'Tiempo dedicado al Área'}
                     onChange={(e) => setRegistroEditando({ ...registroEditando, servicio: e.target.value })}
                     required
                   >
-                    <option value="Tiempo dedicado al Área">Tiempo dedicado al Área</option>
-                    {serviciosDisponibles.map((srv, idx) => (
-                      <option key={idx} value={srv}>{srv}</option>
-                    ))}
+                    <optgroup label="Tareas y Áreas Internas">
+                      <option value="Tiempo dedicado al Área">Tiempo dedicado al Área</option>
+                      <option value="Dedicado al área">Dedicado al área</option>
+                      {LISTADO_AREAS_CORPORATIVAS.map(a => (
+                        <option key={a} value={`Dedicado al área - ${a}`}>Dedicado al área - {a}</option>
+                      ))}
+                    </optgroup>
+                    <optgroup label="Proyectos Activos">
+                      {serviciosDisponibles.map((srv, idx) => (
+                        <option key={idx} value={srv}>{srv}</option>
+                      ))}
+                    </optgroup>
+                    {registroEditando.servicio &&
+                      registroEditando.servicio !== 'Tiempo dedicado al Área' &&
+                      registroEditando.servicio !== 'Dedicado al área' &&
+                      !LISTADO_AREAS_CORPORATIVAS.some(a => `Dedicado al área - ${a}` === registroEditando.servicio) &&
+                      !serviciosDisponibles.includes(registroEditando.servicio) && (
+                        <option value={registroEditando.servicio}>{registroEditando.servicio}</option>
+                    )}
                   </select>
                 </div>
               )}
