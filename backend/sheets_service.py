@@ -947,14 +947,66 @@ def sincronizar_desde_sheets_hacia_local(spreadsheet_id: str = "") -> dict:
         return {"exito": False, "error": str(e), "insertados": 0, "actualizados": 0, "eliminados": 0}
 
 
-
-
-def deduplicar_hoja_remota(spreadsheet_id: str = "") -> dict:
+def deduplicar_hoja_remota(filas_registros: list[dict] | None = None, spreadsheet_id: str = "") -> list[dict] | dict:
     """
-    Audita la pestaña '1_asistencia_informada' en Google Sheets y elimina filas duplicadas,
-    conservando únicamente la primera aparición de cada registro (por id_asistencia o par empleado-fecha).
-    Retorna la cantidad de filas duplicadas eliminadas.
+    Filtra una lista de registros de asistencia eliminando duplicados exactos,
+    pero preservando turnos múltiples del mismo empleado en el mismo día y proyecto
+    (por ejemplo: 4 horas a la mañana y 4 horas a la tarde).
+
+    Si filas_registros es None, audita la pestaña '1_asistencia_informada' en Google Sheets
+    y elimina directamente las filas duplicadas remotas.
     """
+    if filas_registros is not None:
+        registros_unicos = []
+        claves_vistas = set()
+
+        for registro in filas_registros:
+            # 1. Si el registro tiene un identificador único de asistencia (id_asistencia),
+            # lo usamos como criterio primario de unicidad.
+            id_asistencia = str(registro.get("id_asistencia", "")).strip()
+            
+            if id_asistencia:
+                clave_primaria = ("ID", id_asistencia)
+                if clave_primaria in claves_vistas:
+                    continue
+                claves_vistas.add(clave_primaria)
+                registros_unicos.append(registro)
+                continue
+
+            # 2. Si no cuenta con id_asistencia, generamos una tupla extendida.
+            # Incluir hora_inicio y hora_fin evita que se descarten turnos divididos.
+            empleado = str(registro.get("empleado", "")).strip().lower()
+            fecha = str(registro.get("fecha", "")).strip()
+            servicio = str(registro.get("servicio", "")).strip().lower()
+            lugar = str(registro.get("lugar", "") or registro.get("tipo_ocf", "")).strip().lower()
+            hora_inicio = str(registro.get("hora_inicio", "")).strip()
+            hora_fin = str(registro.get("hora_fin", "")).strip()
+            horas_totales = str(registro.get("horas_totales", "") or registro.get("horas", "")).strip()
+
+            # Si la fila está vacía, la omitimos
+            if not empleado and not fecha:
+                continue
+
+            clave_extendida = (
+                empleado,
+                fecha,
+                servicio,
+                lugar,
+                hora_inicio,
+                hora_fin,
+                horas_totales
+            )
+
+            # Si ya existe exactamente el mismo turno en ese mismo horario, es un duplicado real
+            if clave_extendida in claves_vistas:
+                continue
+
+            claves_vistas.add(clave_extendida)
+            registros_unicos.append(registro)
+
+        return registros_unicos
+
+    # Deduplicación remota directa sobre Google Sheets
     if not _sync_lock.acquire(blocking=True, timeout=60):
         return {"exito": False, "error": "Sincronización en curso. Reintente en unos momentos."}
     try:
@@ -967,43 +1019,36 @@ def deduplicar_hoja_remota(spreadsheet_id: str = "") -> dict:
         idx_id = headers.index("id_asistencia") if "id_asistencia" in headers else 0
         idx_emp = headers.index("empleado") if "empleado" in headers else 1
         idx_fecha = headers.index("fecha") if "fecha" in headers else 2
-        idx_horas = headers.index("horas") if "horas" in headers else 7
         idx_tipo = headers.index("tipo_ocf") if "tipo_ocf" in headers else 3
-        idx_fh = headers.index("fecha_hora") if "fecha_hora" in headers else 10
+        idx_serv = headers.index("servicio") if "servicio" in headers else 4
+        idx_horas = headers.index("horas") if "horas" in headers else 5
+        idx_hini = headers.index("hora_inicio") if "hora_inicio" in headers else -1
+        idx_hfin = headers.index("hora_fin") if "hora_fin" in headers else -1
 
-        vistos_id = set()
-        vistos_legacy = set()
+        claves_vistas = set()
         filas_a_borrar = []
 
-        # Recorremos de arriba a abajo para marcar duplicados verdaderos
         for r_idx, f in enumerate(filas[1:], start=2):
             uid = f[idx_id].strip() if len(f) > idx_id else ""
-            emp = f[idx_emp].strip().lower() if len(f) > idx_emp else ""
-            fec = f[idx_fecha].strip() if len(f) > idx_fecha else ""
-            serv = f[idx_serv].strip().lower() if len(f) > idx_serv else ""
-            hrs = f[idx_horas].strip() if len(f) > idx_horas else ""
-            tipo = f[idx_tipo].strip().lower() if len(f) > idx_tipo else ""
-            fh = f[idx_fh].strip() if len(f) > idx_fh else ""
-
-            es_duplicado = False
-            # 1. Duplicado exacto por id_asistencia (UUID primario)
             if uid:
-                if uid in vistos_id:
-                    es_duplicado = True
-                else:
-                    vistos_id.add(uid)
-            # 2. Registros antiguos sin UUID: solo si coinciden exactamente todos los campos (emp, fec, serv, hrs, tipo, fh)
-            elif emp and fec and serv:
-                clave_legacy = (emp, fec, serv, hrs, tipo, fh)
-                if clave_legacy in vistos_legacy:
-                    es_duplicado = True
-                else:
-                    vistos_legacy.add(clave_legacy)
+                clave = ("ID", uid)
+            else:
+                emp = f[idx_emp].strip().lower() if len(f) > idx_emp else ""
+                fec = f[idx_fecha].strip() if len(f) > idx_fecha else ""
+                tipo = f[idx_tipo].strip().lower() if len(f) > idx_tipo else ""
+                serv = f[idx_serv].strip().lower() if len(f) > idx_serv else ""
+                hrs = f[idx_horas].strip() if len(f) > idx_horas else ""
+                h_ini = f[idx_hini].strip() if (idx_hini >= 0 and len(f) > idx_hini) else ""
+                h_fin = f[idx_hfin].strip() if (idx_hfin >= 0 and len(f) > idx_hfin) else ""
+                if not emp and not fec:
+                    continue
+                clave = (emp, fec, serv, tipo, h_ini, h_fin, hrs)
 
-            if es_duplicado:
+            if clave in claves_vistas:
                 filas_a_borrar.append(r_idx)
+            else:
+                claves_vistas.add(clave)
 
-        # Borramos de abajo hacia arriba para no alterar los índices de las filas superiores
         eliminados = 0
         for r_num in reversed(filas_a_borrar):
             try:
@@ -1012,7 +1057,7 @@ def deduplicar_hoja_remota(spreadsheet_id: str = "") -> dict:
             except Exception as e_del:
                 print(f"[Sheets] Error al borrar fila duplicada {r_num}: {e_del}")
 
-        print(f"[Sheets] Deduplicación finalizada: {eliminados} fila(s) duplicada(s) eliminada(s).")
+        print(f"[Sheets] Deduplicación remota finalizada: {eliminados} fila(s) eliminada(s).")
         return {"exito": True, "eliminados": eliminados, "mensaje": f"Se eliminaron {eliminados} filas duplicadas de Google Sheets."}
     except Exception as e:
         print(f"[Sheets] Error en deduplicar_hoja_remota: {e}")
