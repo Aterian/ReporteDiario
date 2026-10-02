@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import { api } from '../services/apiBridge';
 import {
-  esIvanValentin,
   puedeCargarCampo,
   puedeUsarRangoFechas,
   puedeGestionarSubtiposFranco,
@@ -123,6 +122,7 @@ export default function CheckForm({ onRegistroGuardado, onVolver, tema }) {
   const puedeDelegarCarga = puedeCargarParaOtro(sesionUsuario);
   const permitirRango = puedeUsarRangoFechas(sesionUsuario);
   const puedeSubtiposFranco = puedeGestionarSubtiposFranco(sesionUsuario);
+  const esFrancoDirecto = !puedeSubtiposFranco;
 
   const empleadoActivoNombre = ((cargarParaOtro && usuarioSeleccionado)
     ? (usuarioSeleccionado.nombre || '')
@@ -430,7 +430,7 @@ export default function CheckForm({ onRegistroGuardado, onVolver, tema }) {
           payload.horas = Number(horasFrancoTrabajado || 8);
         } else {
           // Franco de oficina / normal (0 hs, servicio = area)
-          const areaFranco = esFrancoDirecto ? (MAPA_AREAS[areaActiva] || 'SIG') : areaNombreFinal;
+          const areaFranco = esFrancoDirecto ? (MAPA_AREAS[areaActiva] || areaNombreFinal || 'General') : areaNombreFinal;
           payload.lugar = 'Franco';
           payload.tipo_ocf = 'Franco';
           payload.servicio = areaFranco;
@@ -888,7 +888,7 @@ export default function CheckForm({ onRegistroGuardado, onVolver, tema }) {
                 {tipoFranco === 'Franco de Oficina' && (
                   <div className="franco-hours-box" style={{ background: 'var(--bg-surface)', padding: '10px 14px', borderRadius: '8px', border: '1px solid var(--border-subtle)', marginTop: '8px' }}>
                     <span style={{ fontSize: '12.5px', color: 'var(--text-secondary)' }}>
-                      Asignación: Se registrará en la columna de servicio el área <strong>{esFrancoDirecto ? (MAPA_AREAS[areaActiva] || 'SIG') : areaNombreFinal}</strong> con 0 hs computadas.
+                      Asignación: Se registrará en la columna de servicio el área <strong>{esFrancoDirecto ? (MAPA_AREAS[areaActiva] || areaNombreFinal || 'General') : areaNombreFinal}</strong> con 0 hs computadas.
                     </span>
                   </div>
                 )}
