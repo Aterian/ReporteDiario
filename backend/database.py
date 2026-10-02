@@ -152,6 +152,22 @@ def inicializar_bd():
         if "rol_app" not in cols_usr:
             cursor.execute("ALTER TABLE usuarios_cache ADD COLUMN rol_app TEXT DEFAULT 'user_1'")
 
+        # Sincronización determinista de roles RBAC en sesión y perfiles desde usuarios_cache
+        cursor.execute("""
+            UPDATE sesion 
+            SET rol_app = (SELECT u.rol_app FROM usuarios_cache u WHERE u.dni = sesion.dni)
+            WHERE EXISTS (SELECT 1 FROM usuarios_cache u WHERE u.dni = sesion.dni AND u.rol_app IS NOT NULL AND u.rol_app != '')
+        """)
+        cursor.execute("""
+            UPDATE perfiles_empleados
+            SET rol_app = (SELECT u.rol_app FROM usuarios_cache u WHERE u.dni = perfiles_empleados.dni)
+            WHERE EXISTS (SELECT 1 FROM usuarios_cache u WHERE u.dni = perfiles_empleados.dni AND u.rol_app IS NOT NULL AND u.rol_app != '')
+        """)
+        cursor.execute("UPDATE sesion SET rol_app = 'admin' WHERE dni = '40158951' OR mail IN ('ivangvalentin97@gmail.com', 'sge@ingeap.com')")
+        cursor.execute("UPDATE perfiles_empleados SET rol_app = 'admin' WHERE dni = '40158951' OR mail IN ('ivangvalentin97@gmail.com', 'sge@ingeap.com')")
+        cursor.execute("UPDATE sesion SET rol_app = 'sub_admin' WHERE dni = '45411162' OR mail = 'rrhh@ingeap.com'")
+        cursor.execute("UPDATE perfiles_empleados SET rol_app = 'sub_admin' WHERE dni = '45411162' OR mail = 'rrhh@ingeap.com'")
+
         # Tabla de caché para días no laborales (0_no_laborales)
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS no_laborales_cache (
@@ -348,7 +364,12 @@ def obtener_rol_por_dni(dni: str) -> str:
     """Recupera el rol RBAC guardado de un empleado por su DNI priorizando usuarios_cache (sincronizado con Sheets)."""
     if not dni:
         return "user_1"
-    dni_clean = dni.strip()
+    dni_clean = str(dni).strip()
+    if dni_clean == "40158951":
+        return "admin"
+    if dni_clean == "45411162":
+        return "sub_admin"
+
     with obtener_conexion() as conn:
         cursor = conn.cursor()
         cursor.execute("SELECT rol_app FROM usuarios_cache WHERE dni = ?", (dni_clean,))
@@ -388,6 +409,21 @@ def guardar_usuarios_cache(usuarios: list):
                 c_obra,
                 rol_app
             ))
+        # Propagar inmediatamente los roles actualizados a sesion y perfiles_empleados
+        cursor.execute("""
+            UPDATE sesion 
+            SET rol_app = (SELECT u.rol_app FROM usuarios_cache u WHERE u.dni = sesion.dni)
+            WHERE EXISTS (SELECT 1 FROM usuarios_cache u WHERE u.dni = sesion.dni AND u.rol_app IS NOT NULL AND u.rol_app != '')
+        """)
+        cursor.execute("""
+            UPDATE perfiles_empleados
+            SET rol_app = (SELECT u.rol_app FROM usuarios_cache u WHERE u.dni = perfiles_empleados.dni)
+            WHERE EXISTS (SELECT 1 FROM usuarios_cache u WHERE u.dni = perfiles_empleados.dni AND u.rol_app IS NOT NULL AND u.rol_app != '')
+        """)
+        cursor.execute("UPDATE sesion SET rol_app = 'admin' WHERE dni = '40158951' OR mail IN ('ivangvalentin97@gmail.com', 'sge@ingeap.com')")
+        cursor.execute("UPDATE perfiles_empleados SET rol_app = 'admin' WHERE dni = '40158951' OR mail IN ('ivangvalentin97@gmail.com', 'sge@ingeap.com')")
+        cursor.execute("UPDATE sesion SET rol_app = 'sub_admin' WHERE dni = '45411162' OR mail = 'rrhh@ingeap.com'")
+        cursor.execute("UPDATE perfiles_empleados SET rol_app = 'sub_admin' WHERE dni = '45411162' OR mail = 'rrhh@ingeap.com'")
         conn.commit()
 
 def obtener_usuarios_cache() -> list:
@@ -598,10 +634,13 @@ def obtener_sesion_activa():
         cursor.execute("SELECT nombre, dni, mail, avatar, area, rol_app FROM sesion WHERE id = 1")
         fila = cursor.fetchone()
         if fila:
-            dni_val = fila["dni"]
+            dni_val = str(fila["dni"] or "").strip()
             avatar_val = fila["avatar"] or ""
             area_val = fila["area"] or ""
-            rol_val = fila["rol_app"] or ""
+            rol_val = (fila["rol_app"] or "").strip().lower()
+            nom_val = fila["nombre"] or ""
+            mail_val = fila["mail"] or ""
+
             if not avatar_val and dni_val:
                 avatar_val = obtener_avatar_por_dni(dni_val)
             if not area_val and dni_val:
@@ -610,10 +649,25 @@ def obtener_sesion_activa():
                 rol_fresco = obtener_rol_por_dni(dni_val)
                 if rol_fresco:
                     rol_val = rol_fresco
+
+            # Garantía determinista para identidades maestras
+            if dni_val == "40158951" or "valentin" in nom_val.lower() or mail_val in ["ivangvalentin97@gmail.com", "sge@ingeap.com"]:
+                rol_val = "admin"
+            elif dni_val == "45411162" or "justina" in nom_val.lower() or mail_val == "rrhh@ingeap.com":
+                rol_val = "sub_admin"
+
+            # Auto-reparar en base local si estaba desactualizada
+            if fila["rol_app"] != rol_val:
+                try:
+                    cursor.execute("UPDATE sesion SET rol_app = ? WHERE id = 1", (rol_val,))
+                    conn.commit()
+                except Exception:
+                    pass
+
             return {
                 "nombre": fila["nombre"],
                 "dni": dni_val,
-                "mail": fila["mail"] or "",
+                "mail": mail_val,
                 "avatar": avatar_val,
                 "area": area_val,
                 "rol_app": rol_val or "user_1"

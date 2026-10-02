@@ -17,6 +17,11 @@ Historial cronológico de cambios, nuevas características y mejoras aplicadas a
 - **Validaciones de Seguridad en Backend (`backend/main.py`)**:
   - `guardar_check_diario`: denegación inmediata si `user_2` intenta registrar "Campo", forzado automático de Franco de Oficina para roles sin privilegios administrativos, y bloqueo de rangos de fechas o cargas delegadas no autorizadas.
   - Sincronización en caliente: `refrescar_catalogos_sheets` actualiza el rol en la sesión activa al detectar cambios de `rol_app` en Google Sheets.
+- **Correcciones de Interfaz y Estabilidad (`[FN-04.11-FIX]`)**:
+  - Corrección de `ReferenceError: esRRHH is not defined` en `CheckForm.jsx` reemplazando llamadas obsoletas por `puedeDelegarCarga` y `esAdminOSubAdmin`.
+  - Garantía de Precedencia Determinista: la resolución de roles en frontend (`permissions.js`) y backend (`main.py`, `database.py`, `sheets_service.py`) evalúa primero la identidad de los administradores y gestores (`esIvanValentin` -> `admin`, `esJustinaBertolozzi` -> `sub_admin`), evitando que sesiones locales preexistentes con valor por defecto `'user_1'` degraden la visualización completa de los módulos de la aplicación.
+  - Sincronización bidireccional en `guardar_usuarios_cache` que actualiza automáticamente `sesion.rol_app` y `perfiles_empleados.rol_app`.
+  - Habilitación de modalidades completas (`LUGARES_OPCIONES`) para `admin` y `sub_admin` en el modal de edición de `HistoryView.jsx`.
 
 ---
 

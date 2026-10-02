@@ -195,16 +195,16 @@ export default function CheckForm({ onRegistroGuardado, onVolver, tema }) {
     }
   }, [areaActiva]);
 
-  // Si RRHH activa la opción de cargar para otro, refrescar lista fresca de empleados
+  // Si admin/sub_admin activa la opción de cargar para otro, refrescar lista fresca de empleados
   useEffect(() => {
-    if (cargarParaOtro && esRRHH) {
+    if (cargarParaOtro && puedeDelegarCarga) {
       api.obtenerTodosUsuarios().then((listaU) => {
         if (Array.isArray(listaU) && listaU.length > 0) {
           setTodosUsuarios(listaU);
         }
-      }).catch(err => console.error('Error al actualizar usuarios para RRHH:', err));
+      }).catch(err => console.error('Error al actualizar usuarios para delegación:', err));
     }
-  }, [cargarParaOtro, esRRHH]);
+  }, [cargarParaOtro, puedeDelegarCarga]);
 
   // 2. Cargar lista de proyectos disponibles desde el backend
   useEffect(() => {
@@ -1090,7 +1090,7 @@ export default function CheckForm({ onRegistroGuardado, onVolver, tema }) {
                     </span>
                   </span>
 
-                  {esRRHH && (
+                  {esAdminOSubAdmin && (
                     <label className="range-toggle-label">
                       <input
                         type="checkbox"

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { api } from '../services/apiBridge';
-import { puedeVerHistorialOtros, puedeModificarRegistro } from '../utils/permissions';
+import { puedeVerHistorialOtros, puedeModificarRegistro, esAdmin, esSubAdmin, puedeCargarCampo } from '../utils/permissions';
 import { esServicioAreaInterna, obtenerEtiquetaModalidad } from '../utils/francoUtils';
 
 // [MOD-02] HistoryView
@@ -120,7 +120,7 @@ export default function HistoryView({ onVolver, tema, onNuevoReporte, usuario, o
   const [nombreMesFinesDeSemana, setNombreMesFinesDeSemana] = useState('');
 
   const areaUsuarioUpper = (usuario?.area || '').toUpperCase().trim();
-  const esRRHHoAplicaciones = areaUsuarioUpper === 'RRHH' || areaUsuarioUpper === 'A' || areaUsuarioUpper === 'APLICACIONES';
+  const esRRHHoAplicaciones = esAdmin(usuario) || esSubAdmin(usuario) || areaUsuarioUpper === 'RRHH' || areaUsuarioUpper === 'A' || areaUsuarioUpper === 'APLICACIONES';
 
   const handleAbrirModalFinesDeSemana = () => {
     const hoy = new Date();
@@ -973,27 +973,22 @@ export default function HistoryView({ onVolver, tema, onNuevoReporte, usuario, o
               <div className="form-group-clean">
                 <label className="form-label-clean">Modalidad / Lugar:</label>
                 {(() => {
-                  const esRRHHUsuario = (usuario?.area || '').toUpperCase() === 'RRHH';
-                  const esSoloOficinaEditando = !esRRHHUsuario && (
-                    (usuario?.area || '').toUpperCase() === 'S' ||
-                    (usuario?.area || '').toUpperCase() === 'SIG' ||
-                    (registroEditando?.area || '').toUpperCase() === 'S' ||
-                    (registroEditando?.area || '').toUpperCase() === 'SIG' ||
-                    (usuario?.nombre || '').toLowerCase().includes('camila llovio') ||
-                    (usuario?.nombre || '').toLowerCase().includes('llovio') ||
-                    (registroEditando?.empleado || '').toLowerCase().includes('camila llovio') ||
-                    (registroEditando?.empleado || '').toLowerCase().includes('llovio')
-                  );
-                  const esMensuraEditando = (usuario?.area || '').toUpperCase() === 'M' ||
+                  const esAdminOSubAdmin = esAdmin(usuario) || esSubAdmin(usuario);
+                  const esSoloOficinaEditando = !esAdminOSubAdmin && !puedeCargarCampo(usuario, registroEditando);
+                  const esMensuraEditando = !esAdminOSubAdmin && (
+                    (usuario?.area || '').toUpperCase() === 'M' ||
                     (usuario?.area || '').toUpperCase() === 'MENSURA' ||
                     (registroEditando?.area || '').toUpperCase() === 'M' ||
-                    (registroEditando?.area || '').toUpperCase() === 'MENSURA';
+                    (registroEditando?.area || '').toUpperCase() === 'MENSURA'
+                  );
 
-                  const opcionesModal = esSoloOficinaEditando
-                    ? ['Oficina', 'Franco']
-                    : esMensuraEditando
-                      ? ['Oficina', 'Campo', 'Franco', 'Vacaciones', 'Licencia']
-                      : LUGARES_OPCIONES;
+                  const opcionesModal = esAdminOSubAdmin
+                    ? LUGARES_OPCIONES
+                    : esSoloOficinaEditando
+                      ? ['Oficina', 'Franco']
+                      : esMensuraEditando
+                        ? ['Oficina', 'Campo', 'Franco', 'Vacaciones', 'Licencia']
+                        : LUGARES_OPCIONES;
 
                   return (
                     <select

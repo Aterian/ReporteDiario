@@ -287,3 +287,14 @@
   3. Tipos distintos en el mismo día (e.g. oficina y campo): se computan ambos conceptos íntegros en la liquidación.
   4. En exportación a Excel, los costos diarios compartidos por proyectos del mismo tipo se distribuyen proporcionalmente según horas trabajadas, garantizando cuadratura contable exacta.
 
+## [FN-04.11] Sistema de Control de Acceso y Roles de Usuario (RBAC)
+- **Módulo**: [MOD-04] Control de Permisos y Roles
+- **Flujo Operativo**: Regula la visibilidad de módulos y facultades operativas según el rol del usuario (`admin`, `sub_admin`, `core`, `user_1`, `user_2`) sincronizado desde la columna `rol_app` de Google Sheets `0_usuarios` con respaldo defensivo en base local.
+- **Tablas afectadas**: `sesion`, `perfiles_empleados`, `usuarios_cache`, `0_usuarios`.
+- **Reglas de negocio e invariantes**:
+  1. `admin`: Visibilidad total de todos los módulos (carga delegada, rangos de fechas, historial global con edición/eliminación, roster, calculadora salarial y revisión de modificaciones). Iván Valentín posee precedencia determinista a `admin`.
+  2. `sub_admin`: Módulos de RRHH completos (roster, calculadora, historial global mutable, revisión de modificaciones, carga delegada y rangos de fechas). Justina Bertolozzi posee precedencia determinista a `sub_admin`.
+  3. `core`: Actividad de ayer, selector de Campo habilitado y acceso de **solo lectura** al historial de otros colaboradores.
+  4. `user_1`: Registro propio y personal con selector de Campo habilitado. Francos computan y guardan automáticamente como franco de oficina (0 hs).
+  5. `user_2`: Registro propio restringido exclusivamente a modalidades de Oficina y Franco (**sin facultad de elegir Campo**). Francos guardan automáticamente como franco de oficina (0 hs).
+

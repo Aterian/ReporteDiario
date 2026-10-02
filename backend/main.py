@@ -197,19 +197,27 @@ def get_rol_usuario(usuario: dict | None) -> str:
     """Extrae y normaliza el rol RBAC del usuario (admin, sub_admin, core, user_1, user_2)."""
     if not usuario:
         return "user_2"
-    rol = str(usuario.get("rol_app") or "").strip().lower().replace(" ", "_")
-    if rol in ["admin", "sub_admin", "core", "user_1", "user_2"]:
-        return rol
-    if rol in ["administrador", "admin_general"]:
-        return "admin"
-    if rol in ["rrhh", "gestion"]:
-        return "sub_admin"
-    if rol in ["nucleo", "direccion"]:
-        return "core"
-    # Fallback retrocompatible por área/identidad
+    # 1. Garantía determinista por identidad de administradores y gestión clave
     if es_ivan_valentin(usuario):
         return "admin"
     if es_justina_bertolozzi(usuario):
+        return "sub_admin"
+
+    # 2. Extracción y normalización de rol_app explícito
+    rol = str(usuario.get("rol_app") or "").strip().lower().replace(" ", "_")
+    if rol in ["admin", "administrador", "admin_general"]:
+        return "admin"
+    if rol in ["sub_admin", "subadmin", "rrhh", "gestion"]:
+        return "sub_admin"
+    if rol in ["core", "nucleo", "direccion"]:
+        return "core"
+    if rol in ["user_1", "user1", "campo"]:
+        return "user_1"
+    if rol in ["user_2", "user2", "oficina"]:
+        return "user_2"
+
+    # 3. Fallback retrocompatible por área histórica
+    if es_area_rrhh(usuario):
         return "sub_admin"
     if es_area_nucleo(usuario):
         return "core"
@@ -674,7 +682,7 @@ class ApiPuente:
 
         sesion = obtener_sesion_activa()
         cargado_por = sesion["nombre"] if sesion else "Empleado"
-        rol_sesion = (sesion.get("rol_app") or "user_1").strip().lower() if sesion else "user_1"
+        rol_sesion = get_rol_usuario(sesion)
         es_admin_subadmin = rol_sesion in ["admin", "sub_admin"]
 
         # Carga delegada permitida exclusivamente para admin y sub_admin
