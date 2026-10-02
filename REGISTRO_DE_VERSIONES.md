@@ -2,6 +2,24 @@
 
 Historial cronológico de cambios, nuevas características y mejoras aplicadas al sistema **Check Diario Ingeap**.
 
+## [1.14.0] - 2026-10-02
+
+### 🛡️ Sistema de Control de Acceso y Roles de Usuario RBAC (`[FN-04.11]`)
+- **Implementación de Roles de Aplicación (`0_usuarios.rol_app`)**:
+  - Incorporación y sincronización de la columna `rol_app` desde la hoja `0_usuarios` de Google Sheets hacia la caché local SQLite (`usuarios_cache`, `sesion` y `perfiles_empleados`).
+  - Normalización determinista de roles con fallbacks defensivos por área o identidad histórica.
+- **Definición de Roles y Reglas de Visualización**:
+  - **`admin`**: Acceso integral y sin restricciones a todos los módulos del sistema (registro diario propio y delegado, historial personal y global, Roster, calculadora salarial, revisión de modificaciones, gestión de tipos de costo y rangos de fechas).
+  - **`sub_admin`**: Acceso a registro diario e historial personal, visualización de actividad de ayer y gestión completa de RRHH (planificación de Roster, calculadora de liquidación salarial, historial de otros colaboradores con edición y eliminación, y revisión de modificaciones).
+  - **`core`**: Acceso a registro diario e historial personal con facultad para elegir "Campo", widget de actividad de ayer y acceso de **solo lectura** al historial de otros colaboradores (sin edición, sin eliminación, sin calculadora salarial, sin gestión de tipos de costo ni revisión de modificaciones).
+  - **`user_1`**: Acceso a registro diario e historial personal con facultad para seleccionar jornada de "Campo". Los días "Franco" se computan y guardan automáticamente como franco de oficina (0 hs imputadas al área), ocultando subtipos avanzados.
+  - **`user_2`**: Acceso a registro diario e historial personal restringido estrictamente a modalidades de "Oficina" y "Franco" (**sin posibilidad de seleccionar "Campo"**). Los días "Franco" se computan y guardan automáticamente como franco de oficina (0 hs), ocultando subtipos avanzados.
+- **Validaciones de Seguridad en Backend (`backend/main.py`)**:
+  - `guardar_check_diario`: denegación inmediata si `user_2` intenta registrar "Campo", forzado automático de Franco de Oficina para roles sin privilegios administrativos, y bloqueo de rangos de fechas o cargas delegadas no autorizadas.
+  - Sincronización en caliente: `refrescar_catalogos_sheets` actualiza el rol en la sesión activa al detectar cambios de `rol_app` en Google Sheets.
+
+---
+
 ## [1.13.0] - 2026-10-01
 
 ### ⚖️ Unificación de Vistas de Historial y Cómputo de Costos en Calculadora de Liquidación

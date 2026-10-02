@@ -1,6 +1,14 @@
 import { useState, useEffect } from 'react';
 import { api } from '../services/apiBridge';
-import { esIvanValentin } from '../utils/permissions';
+import {
+  esIvanValentin,
+  puedeCargarCampo,
+  puedeUsarRangoFechas,
+  puedeGestionarSubtiposFranco,
+  puedeCargarParaOtro,
+  esAdmin,
+  esSubAdmin
+} from '../utils/permissions';
 
 const LUGARES_BASE = [
   { id: 'Oficina', label: 'Oficina', labelRpg: '🏰 Ciudadela (Oficina)', icon: 'M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z' },
@@ -109,7 +117,13 @@ export default function CheckForm({ onRegistroGuardado, onVolver, tema }) {
   // =========================================================================
   // VARIABLES DERIVADAS (Declaradas aquí para evitar errores TDZ antes de los hooks)
   // =========================================================================
-  const esRRHH = (sesionUsuario?.area || '').toUpperCase() === 'RRHH';
+  const esAdminUser = esAdmin(sesionUsuario);
+  const esSubAdminUser = esSubAdmin(sesionUsuario);
+  const esAdminOSubAdmin = esAdminUser || esSubAdminUser;
+  const puedeDelegarCarga = puedeCargarParaOtro(sesionUsuario);
+  const permitirRango = puedeUsarRangoFechas(sesionUsuario);
+  const puedeSubtiposFranco = puedeGestionarSubtiposFranco(sesionUsuario);
+
   const empleadoActivoNombre = ((cargarParaOtro && usuarioSeleccionado)
     ? (usuarioSeleccionado.nombre || '')
     : (sesionUsuario?.nombre || '')).trim();
@@ -117,19 +131,11 @@ export default function CheckForm({ onRegistroGuardado, onVolver, tema }) {
     ? (usuarioSeleccionado.area || '')
     : (sesionUsuario?.area || '')).trim().toUpperCase();
 
-  // [FN-01.06] Libertad de fechas: sin restricción semanal para ningún colaborador
-
-  // Empleados exclusivos de oficina: SIG ('S') y Camila Llovio (Ingeniería)
-  // NOTA: La limitación NO aplica si el registro lo carga RRHH (RRHH tiene permisos completos)
-  const esSoloOficina = !esRRHH && (
-    areaActiva === 'S' ||
-    areaActiva === 'SIG' ||
-    empleadoActivoNombre.toLowerCase().includes('camila llovio') ||
-    empleadoActivoNombre.toLowerCase().includes('llovio')
-  );
-
-  const esMensura = areaActiva === 'M' || areaActiva === 'MENSURA';
-  const esFrancoDirecto = esSoloOficina || esMensura;
+  // [RBAC] Reglas de Campo:
+  // - core, user_1, sub_admin y admin pueden registrar Campo
+  // - user_2 no puede registrar Campo por sí mismo
+  // - admin y sub_admin pueden registrar días de Campo para user_2 en carga delegada
+  const habilitadoCampo = puedeCargarCampo(sesionUsuario, cargarParaOtro ? usuarioSeleccionado : null);
 
   const esUsuarioAreaEspecial = ['N', 'RRHH', 'A', 'S'].includes(areaActiva);
   const areaNombreFinal = (esUsuarioAreaEspecial && areaElegida)
@@ -141,7 +147,6 @@ export default function CheckForm({ onRegistroGuardado, onVolver, tema }) {
   const esVacaciones = lugar === 'Vacaciones';
   const esLicencia = lugar === 'Licencia';
   const esSinProyectos = esFranco || esVacaciones || esLicencia || esFeriadoTrabajado;
-  const permitirRango = esSoloOficina ? false : (esCampañaOCampo || esRRHH);
 
   // 1. Cargar sesión de usuario
   useEffect(() => {
@@ -150,8 +155,7 @@ export default function CheckForm({ onRegistroGuardado, onVolver, tema }) {
         const estado = await api.obtenerEstadoSesion();
         if (estado && estado.usuario) {
           setSesionUsuario(estado.usuario);
-          const rolRRHH = (estado.usuario.area || '').toUpperCase() === 'RRHH';
-          if (rolRRHH) {
+          if (puedeCargarParaOtro(estado.usuario)) {
             const listaU = await api.obtenerTodosUsuarios();
             if (Array.isArray(listaU)) {
               setTodosUsuarios(listaU);
@@ -165,22 +169,18 @@ export default function CheckForm({ onRegistroGuardado, onVolver, tema }) {
     cargarSesion();
   }, []);
 
-  // Mantener consistencia de oficina exclusiva (Camila Llovio) y Franco directo (Mensura y Camila Llovio)
+  // Mantener consistencia de rol: forzar modalidades válidas si cambian los permisos
   useEffect(() => {
-    if (esSoloOficina) {
-      if (lugar !== 'Oficina' && lugar !== 'Franco') {
-        setLugar('Oficina');
-      }
-      if (usarRangoFechas) {
-        setUsarRangoFechas(false);
-      }
+    if (!habilitadoCampo && (lugar === 'Campo' || lugar === 'Campaña / Campo')) {
+      setLugar('Oficina');
     }
-    if (esFrancoDirecto) {
-      if (tipoFranco !== 'Franco de Oficina') {
-        setTipoFranco('Franco de Oficina');
-      }
+    if (!permitirRango && usarRangoFechas) {
+      setUsarRangoFechas(false);
     }
-  }, [esSoloOficina, esFrancoDirecto, lugar, tipoFranco, usarRangoFechas]);
+    if (!puedeSubtiposFranco && tipoFranco !== 'Franco de Oficina') {
+      setTipoFranco('Franco de Oficina');
+    }
+  }, [habilitadoCampo, permitirRango, puedeSubtiposFranco, lugar, tipoFranco, usarRangoFechas]);
 
   // Sincronizar sub-área elegida inicial según el área activa del usuario
   useEffect(() => {
@@ -623,8 +623,8 @@ export default function CheckForm({ onRegistroGuardado, onVolver, tema }) {
 
         <form onSubmit={handleSubmit} className="clean-form">
 
-          {/* GESTIÓN RRHH: Acordeón discreto */}
-          {esRRHH && (
+          {/* GESTIÓN ADMIN / SUB-ADMIN: Acordeón discreto para carga delegada */}
+          {puedeDelegarCarga && (
             <div className={`rrhh-card ${cargarParaOtro ? 'active' : ''}`}>
               <div className="rrhh-header" onClick={() => setCargarParaOtro(!cargarParaOtro)}>
                 <div className="rrhh-title">
@@ -634,7 +634,7 @@ export default function CheckForm({ onRegistroGuardado, onVolver, tema }) {
                     <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
                     <path d="M16 3.13a4 4 0 0 1 0 7.75" />
                   </svg>
-                  <span>Cargar reporte para otro empleado (RRHH)</span>
+                  <span>{isRpg ? '📜 Cargar Decreto para otro Compañero' : 'Cargar reporte para otro colaborador (Admin / Sub Admin)'}</span>
                 </div>
                 <input
                   type="checkbox"
@@ -755,9 +755,9 @@ export default function CheckForm({ onRegistroGuardado, onVolver, tema }) {
               </label>
 
               <div className="segmented-modalidad-grid">
-                {(esSoloOficina
-                  ? LUGARES_BASE.filter((i) => i.id === 'Oficina' || i.id === 'Franco')
-                  : (esRRHH ? [...LUGARES_BASE, ...LUGARES_RRHH] : LUGARES_BASE)
+                {(esAdminOSubAdmin
+                  ? (habilitadoCampo ? [...LUGARES_BASE, ...LUGARES_RRHH] : [...LUGARES_BASE.filter((i) => i.id !== 'Campo'), ...LUGARES_RRHH])
+                  : (habilitadoCampo ? LUGARES_BASE : LUGARES_BASE.filter((i) => i.id !== 'Campo'))
                 ).map((item) => {
                   const isSelected = lugar === item.id;
                   const isFrancoItem = item.id === 'Franco';
@@ -776,7 +776,7 @@ export default function CheckForm({ onRegistroGuardado, onVolver, tema }) {
                       }`}
                       onClick={() => {
                         setLugar(item.id);
-                        if (!esRRHH && item.id !== 'Campo' && item.id !== 'Campaña / Campo') {
+                        if (!permitirRango && item.id !== 'Campo' && item.id !== 'Campaña / Campo') {
                           setUsarRangoFechas(false);
                         }
                       }}
@@ -857,14 +857,14 @@ export default function CheckForm({ onRegistroGuardado, onVolver, tema }) {
               <div className="franco-serene-body" style={{ width: '100%' }}>
                 <h4>{isRpg ? 'Campamento en la Taberna del Reino' : 'Día de Descanso / Franco'}</h4>
                 <p>
-                  {esFrancoDirecto
-                    ? (isRpg ? 'Descanso de la Orden en la Ciudadela (0 hs imputadas al área).' : 'Franco de oficina (0 hs imputadas al área de adscripción).')
+                  {!puedeSubtiposFranco || esFrancoDirecto
+                    ? (isRpg ? 'Descanso de la Orden en la Ciudadela (0 hs imputadas al área de adscripción).' : 'Franco de oficina (0 hs imputadas al área de adscripción).')
                     : (isRpg ? 'Define la modalidad del franco a registrar:' : 'Selecciona la categoría de franco a registrar:')
                   }
                 </p>
 
-                {/* Sub-selector de Franco (Oculto para empleados con franco directo: Mensura y Camila Llovio) */}
-                {!esFrancoDirecto && (
+                {/* Sub-selector de Franco (Solo accesible para admin y sub_admin; no disponible para user_1, user_2 ni empleados con franco directo) */}
+                {puedeSubtiposFranco && !esFrancoDirecto && (
                   <div className="franco-subtypes-grid">
                   {[
                     { id: 'Franco de Oficina', label: 'Franco de oficina', desc: '0 hs • Imputa al área' },

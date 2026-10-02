@@ -1,5 +1,17 @@
 # Catálogo Funcional del Sistema
 
+## [FN-04.11] Sistema de Roles de Usuario RBAC y Matriz de Acceso
+- **Módulo**: [MOD-04] Control de Permisos y Roles
+- **Flujo Operativo**: Controla la visibilidad y operación de módulos mediante la columna `rol_app` (`admin`, `sub_admin`, `core`, `user_1`, `user_2`) sincronizada desde `0_usuarios`.
+- **Tablas afectadas**: `0_usuarios`, `usuarios_cache`, `sesion`, `perfiles_empleados`, `historial`, `rosters`.
+- **Reglas de negocio e invariantes**:
+  1. `admin`: acceso completo e irrestricto a toda la aplicación (propio y delegado, rosters, calculadora, auditoría, rangos).
+  2. `sub_admin`: registro propio e historial, actividad de ayer y gestión completa de RRHH (roster, calculadora, auditoría y modificación de otros).
+  3. `core`: registro propio e historial con Campo habilitado, actividad de ayer y acceso de **solo lectura** a historial de otros (sin edición, ni calculadora, ni rosters).
+  4. `user_1`: registro propio e historial con Campo habilitado. Francos automáticos de oficina sin opciones avanzadas.
+  5. `user_2`: registro propio e historial estrictamente sin Campo (solo Oficina y Franco). Francos automáticos de oficina sin opciones avanzadas.
+  6. Rango de fechas, carga delegada y tipos avanzados de franco reservados exclusivamente para `admin` y `sub_admin`.
+
 ## [FN-04.01] Control de Acceso y Visibilidad por Roles y Usuarios
 - **Módulo**: [MOD-04] Control de Permisos y Roles
 - **Flujo Operativo**: Restringe la visualización y carga de Roster exclusivamente a Justina Bertolozzi e Iván Valentin. Habilita la vista de historial de otros empleados para RRHH, Núcleo (área N) e Iván Valentin. Restringe la edición y eliminación de registros ajenos en el historial exclusivamente a Justina Bertolozzi e Iván Valentin.

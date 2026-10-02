@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { api } from '../services/apiBridge';
-import { puedeVerHistorialOtros, puedeModificarRegistro, puedeGestionarTipoCosto, puedeVerModificaciones, esAreaNucleo, puedeVerCalculadoraLiquidacion } from '../utils/permissions';
+import { puedeVerHistorialOtros, puedeModificarRegistro, puedeGestionarTipoCosto, puedeVerModificaciones, esAreaNucleo, puedeVerCalculadoraLiquidacion, esCore, puedeModificarHistorialOtros } from '../utils/permissions';
 import { esServicioAreaInterna, esFrancoDeObra, obtenerEtiquetaModalidad } from '../utils/francoUtils';
 import { getTituloRpg } from '../utils/rpgTitles';
 
@@ -146,10 +146,11 @@ export default function OtherEmployeesHistoryView({
   const [diasSeleccionadosCalendario, setDiasSeleccionadosCalendario] = useState(new Set());
   const [marcandoRevisadoId, setMarcandoRevisadoId] = useState(null);
   const [comparativaModificacion, setComparativaModificacion] = useState(null);
-  // [FN-04.06] Controles de permisos según rol y área
-  const esSoloLecturaNucleo = esAreaNucleo(usuario);
+  // [FN-04.11] Controles de permisos según rol RBAC
+  const esSoloLectura = esCore(usuario) || esAreaNucleo(usuario) || !puedeModificarHistorialOtros(usuario);
+  const esSoloLecturaNucleo = esSoloLectura; // Mantiene compatibilidad con chequeos existentes en la vista
   const puedeVerModif = puedeVerModificaciones(usuario);
-  const puedeEditarCosto = !esSoloLecturaNucleo && puedeGestionarTipoCosto(usuario);
+  const puedeEditarCosto = !esSoloLectura && puedeGestionarTipoCosto(usuario);
   const puedeVerLiquidacion = puedeVerCalculadoraLiquidacion(usuario);
 
   // Cantidad manual de días para las 5 categorías de liquidación (RRHH)

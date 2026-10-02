@@ -757,6 +757,7 @@ def obtener_usuarios_remotos(spreadsheet_id: str = "") -> list:
         idx_email = headers.index("email") if "email" in headers else (headers.index("mail") if "mail" in headers else 2)
         idx_id_u = headers.index("id_usuario") if "id_usuario" in headers else 0
         idx_id_orig = headers.index("id_origen") if "id_origen" in headers else -1
+        idx_rol = headers.index("rol_app") if "rol_app" in headers else (headers.index("rol") if "rol" in headers else -1)
 
         usuarios = []
         for f in filas[1:]:
@@ -766,6 +767,27 @@ def obtener_usuarios_remotos(spreadsheet_id: str = "") -> list:
             email = f[idx_email].strip() if len(f) > idx_email else ""
             id_u = f[idx_id_u].strip() if len(f) > idx_id_u else ""
             id_orig = f[idx_id_orig].strip() if (idx_id_orig >= 0 and len(f) > idx_id_orig) else ""
+            rol_raw = f[idx_rol].strip().lower().replace(" ", "_") if (idx_rol >= 0 and len(f) > idx_rol) else ""
+
+            # Normalización y asignación defensiva de roles RBAC
+            rol_norm = rol_raw
+            if not rol_norm:
+                if area.upper() == "RRHH" or dni == "45411162":
+                    rol_norm = "sub_admin"
+                elif dni == "40158951" or "valentin" in nom.lower():
+                    rol_norm = "admin"
+                elif area.upper() == "N":
+                    rol_norm = "core"
+                elif area.upper() in ["S", "SIG"] or "llovio" in nom.lower():
+                    rol_norm = "user_2"
+                else:
+                    rol_norm = "user_1"
+            elif rol_norm in ["administrador", "admin_general"]:
+                rol_norm = "admin"
+            elif rol_norm in ["rrhh", "gestion"]:
+                rol_norm = "sub_admin"
+            elif rol_norm in ["nucleo", "direccion"]:
+                rol_norm = "core"
 
             info_sueldo = sueldos_map.get(id_orig, {})
             costo_ofi = float(info_sueldo.get("costo_dia_ofi", 0.0) or 0.0)
@@ -780,7 +802,8 @@ def obtener_usuarios_remotos(spreadsheet_id: str = "") -> list:
                     "area": area,
                     "dni": dni,
                     "costo_dia_ofi": costo_ofi,
-                    "costo_dia_obra": costo_obra
+                    "costo_dia_obra": costo_obra,
+                    "rol_app": rol_norm
                 })
         return usuarios
     except Exception as e:

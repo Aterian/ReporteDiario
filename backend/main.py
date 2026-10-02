@@ -21,6 +21,7 @@ from database import (
     obtener_ultimos_registros,
     usuario_registro_hoy,
     obtener_area_por_dni,
+    obtener_rol_por_dni,
     guardar_usuarios_cache,
     obtener_usuarios_cache,
     guardar_proyectos_cache,
@@ -75,24 +76,24 @@ from sheets_service import (
 )
 
 
-# Lista predefinida de los empleados habilitados con sus correos oficiales y áreas por defecto
+# Lista predefinida de los empleados habilitados con sus correos oficiales, áreas y roles RBAC
 EMPLEADOS_AUTORIZADOS = [
-    {"nombre": "Sergio Juarez", "dni": "33357062", "mail": "sjuarez@ingeap.com", "area": "N"},
-    {"nombre": "Camila Llovio", "dni": "39695074", "mail": "cllovio@ingeap.com", "area": "I"},
-    {"nombre": "Nicolás Parajón", "dni": "35223765", "mail": "nparajon@ingeap.com", "area": "I"},
-    {"nombre": "Pablo Zanor", "dni": "30866202", "mail": "pzanor@ingeap.com", "area": "I"},
-    {"nombre": "Francisco Tibaldo", "dni": "31200004", "mail": "ftibaldo@ingeap.com", "area": "N"},
-    {"nombre": "Rocío Salim", "dni": "37880578", "mail": "rsalim@ingeap.com", "area": "M"},
-    {"nombre": "Daiana Ferrero", "dni": "37875017", "mail": "of.tecnica@ingeap.com", "area": "M"},
-    {"nombre": "Marco Regis", "dni": "38337660", "mail": "sge@ingeap.com", "area": "A"},
-    {"nombre": "Iván Valentin", "dni": "40158951", "mail": "ivangvalentin97@gmail.com", "area": "A"},
-    {"nombre": "Lionel Juarez", "dni": "43008805", "mail": "ljuarez@ingeap.com", "area": "A"},
-    {"nombre": "Santiago Destefanis", "dni": "36580770", "mail": "sdestefanis@ingeap.com", "area": "N"},
-    {"nombre": "Justina Bertolozzi", "dni": "45411162", "mail": "rrhh@ingeap.com", "area": "RRHH"},
-    {"nombre": "Alejandro Maglianesi", "dni": "32370731", "mail": "amaglianesi@ingeap.com", "area": "VYM"},
-    {"nombre": "Daiana Sanchez", "dni": "37546183", "mail": "marketing@ingeap.com", "area": "VYM"},
-    {"nombre": "Gabriel Canavesio", "dni": "45059000", "mail": "gabrielcanavesio17@gmail.com", "area": "S"},
-    {"nombre": "Renzo Polo", "dni": "35295498", "mail": "renzoepolo@ingeap.com", "area": "S"}
+    {"nombre": "Sergio Juarez", "dni": "33357062", "mail": "sjuarez@ingeap.com", "area": "N", "rol_app": "core"},
+    {"nombre": "Camila Llovio", "dni": "39695074", "mail": "cllovio@ingeap.com", "area": "I", "rol_app": "user_2"},
+    {"nombre": "Nicolás Parajón", "dni": "35223765", "mail": "nparajon@ingeap.com", "area": "I", "rol_app": "user_1"},
+    {"nombre": "Pablo Zanor", "dni": "30866202", "mail": "pzanor@ingeap.com", "area": "I", "rol_app": "user_1"},
+    {"nombre": "Francisco Tibaldo", "dni": "31200004", "mail": "ftibaldo@ingeap.com", "area": "N", "rol_app": "core"},
+    {"nombre": "Rocío Salim", "dni": "37880578", "mail": "rsalim@ingeap.com", "area": "M", "rol_app": "user_1"},
+    {"nombre": "Daiana Ferrero", "dni": "37875017", "mail": "of.tecnica@ingeap.com", "area": "M", "rol_app": "user_1"},
+    {"nombre": "Marco Regis", "dni": "38337660", "mail": "sge@ingeap.com", "area": "A", "rol_app": "user_1"},
+    {"nombre": "Iván Valentin", "dni": "40158951", "mail": "ivangvalentin97@gmail.com", "area": "A", "rol_app": "admin"},
+    {"nombre": "Lionel Juarez", "dni": "43008805", "mail": "ljuarez@ingeap.com", "area": "A", "rol_app": "user_1"},
+    {"nombre": "Santiago Destefanis", "dni": "36580770", "mail": "sdestefanis@ingeap.com", "area": "N", "rol_app": "core"},
+    {"nombre": "Justina Bertolozzi", "dni": "45411162", "mail": "rrhh@ingeap.com", "area": "RRHH", "rol_app": "sub_admin"},
+    {"nombre": "Alejandro Maglianesi", "dni": "32370731", "mail": "amaglianesi@ingeap.com", "area": "VYM", "rol_app": "user_1"},
+    {"nombre": "Daiana Sanchez", "dni": "37546183", "mail": "marketing@ingeap.com", "area": "VYM", "rol_app": "user_1"},
+    {"nombre": "Gabriel Canavesio", "dni": "45059000", "mail": "gabrielcanavesio17@gmail.com", "area": "S", "rol_app": "user_2"},
+    {"nombre": "Renzo Polo", "dni": "35295498", "mail": "renzoepolo@ingeap.com", "area": "S", "rol_app": "user_2"}
 ]
 
 # Proyectos de respaldo offline si aún no se sincronizó con Google Sheets
@@ -192,6 +193,31 @@ def _normalizar_texto(texto: str | None) -> str:
         return ""
     return unicodedata.normalize("NFD", texto.lower()).encode("ascii", "ignore").decode("utf-8").strip()
 
+def get_rol_usuario(usuario: dict | None) -> str:
+    """Extrae y normaliza el rol RBAC del usuario (admin, sub_admin, core, user_1, user_2)."""
+    if not usuario:
+        return "user_2"
+    rol = str(usuario.get("rol_app") or "").strip().lower().replace(" ", "_")
+    if rol in ["admin", "sub_admin", "core", "user_1", "user_2"]:
+        return rol
+    if rol in ["administrador", "admin_general"]:
+        return "admin"
+    if rol in ["rrhh", "gestion"]:
+        return "sub_admin"
+    if rol in ["nucleo", "direccion"]:
+        return "core"
+    # Fallback retrocompatible por área/identidad
+    if es_ivan_valentin(usuario):
+        return "admin"
+    if es_justina_bertolozzi(usuario):
+        return "sub_admin"
+    if es_area_nucleo(usuario):
+        return "core"
+    area = (usuario.get("area") or "").strip().upper()
+    if area in ["S", "SIG"] or "llovio" in _normalizar_texto(usuario.get("nombre")):
+        return "user_2"
+    return "user_1"
+
 def es_ivan_valentin(usuario: dict | None) -> bool:
     if not usuario:
         return False
@@ -224,28 +250,38 @@ def es_area_nucleo(usuario: dict | None) -> bool:
     area = (usuario.get("area") or "").strip().upper()
     return area == "N"
 
-def puede_acceder_roster(usuario: dict | None) -> bool:
-    return es_justina_bertolozzi(usuario) or es_ivan_valentin(usuario)
-
-def puede_ver_calculadora_liquidacion(usuario: dict | None) -> bool:
-    return es_justina_bertolozzi(usuario) or es_ivan_valentin(usuario)
-
-def puede_ver_historial_otros(usuario: dict | None) -> bool:
-    return es_area_rrhh(usuario) or es_area_nucleo(usuario) or es_ivan_valentin(usuario)
-
 def es_area_aplicaciones(usuario: dict | None) -> bool:
     if not usuario:
         return False
     area = (usuario.get("area") or "").strip().upper()
     return area in ("A", "APLICACIONES") or es_ivan_valentin(usuario)
 
+# [RBAC] Capacidades derivadas del rol asignado:
+def puede_acceder_roster(usuario: dict | None) -> bool:
+    return get_rol_usuario(usuario) in ("admin", "sub_admin")
+
+def puede_ver_calculadora_liquidacion(usuario: dict | None) -> bool:
+    return get_rol_usuario(usuario) in ("admin", "sub_admin")
+
+def puede_ver_historial_otros(usuario: dict | None) -> bool:
+    return get_rol_usuario(usuario) in ("admin", "sub_admin", "core")
+
+def puede_modificar_historial_otros(usuario: dict | None) -> bool:
+    return get_rol_usuario(usuario) in ("admin", "sub_admin")
+
 def puede_gestionar_tipo_costo(usuario: dict | None) -> bool:
-    return es_area_rrhh(usuario) or es_area_aplicaciones(usuario)
+    return get_rol_usuario(usuario) in ("admin", "sub_admin")
+
+def puede_ver_modificaciones(usuario: dict | None) -> bool:
+    return get_rol_usuario(usuario) in ("admin", "sub_admin")
+
+def puede_ver_actividad_ayer(usuario: dict | None) -> bool:
+    return get_rol_usuario(usuario) in ("admin", "sub_admin", "core")
 
 def puede_modificar_registro_empleado(usuario: dict | None, empleado_registro: str, id_empleado_reg: str = "") -> bool:
     if not usuario:
         return False
-    if es_justina_bertolozzi(usuario) or es_ivan_valentin(usuario):
+    if puede_modificar_historial_otros(usuario):
         return True
     nombre_u = _normalizar_texto(usuario.get("nombre"))
     emp_reg = _normalizar_texto(empleado_registro)
@@ -256,18 +292,6 @@ def puede_modificar_registro_empleado(usuario: dict | None, empleado_registro: s
     es_propio = (emp_reg and nombre_u and emp_reg == nombre_u) or \
                 (id_reg and (id_reg == id_u or id_reg == dni_u))
     return bool(es_propio)
-
-# [FN-04.06] Permisos exclusivos de auditoría de modificaciones (Justina Bertolozzi e Iván Valentin)
-def puede_ver_modificaciones(usuario: dict | None) -> bool:
-    if not usuario:
-        return False
-    return es_justina_bertolozzi(usuario) or es_ivan_valentin(usuario)
-
-# [FN-04.07] Permisos de acceso al módulo de Actividad de ayer (Núcleo, Aplicaciones y Justina Bertolozzi)
-def puede_ver_actividad_ayer(usuario: dict | None) -> bool:
-    if not usuario:
-        return False
-    return es_area_nucleo(usuario) or es_area_aplicaciones(usuario) or es_justina_bertolozzi(usuario)
 
 # [FN-06.04] Mapeo de áreas internas corporativas
 AREAS_INTERNAS_NORM = {
@@ -459,19 +483,24 @@ class ApiPuente:
             area_val = usuario_valido.get("area", "")
             if not area_val:
                 area_val = obtener_area_por_dni(dni_limpio)
+            rol_val = usuario_valido.get("rol_app", "")
+            if not rol_val:
+                rol_val = obtener_rol_por_dni(dni_limpio)
 
             guardar_sesion_activa(
                 nombre=usuario_valido["nombre"],
                 dni=usuario_valido["dni"],
                 mail=usuario_valido.get("mail", "") or usuario_valido.get("email", ""),
-                area=area_val
+                area=area_val,
+                rol_app=rol_val
             )
             sesion = obtener_sesion_activa()
             avatar_actual = sesion.get("avatar", "") if sesion else ""
             res_usuario = {
                 **usuario_valido,
                 "avatar": avatar_actual,
-                "area": sesion.get("area", "") if sesion else area_val
+                "area": sesion.get("area", "") if sesion else area_val,
+                "rol_app": sesion.get("rol_app", "") if sesion else rol_val
             }
             return {"exito": True, "usuario": res_usuario}
         
@@ -571,14 +600,20 @@ class ApiPuente:
                 if sesion:
                     dni_act = sesion.get("dni", "").strip()
                     u_match = next((u for u in u_remotos if str(u.get("dni", "")).strip() == dni_act), None)
-                    if u_match and u_match.get("area") and sesion.get("area") != u_match["area"]:
-                        guardar_sesion_activa(
-                            nombre=sesion.get("nombre", ""),
-                            dni=dni_act,
-                            mail=sesion.get("mail", ""),
-                            avatar=sesion.get("avatar", ""),
-                            area=u_match["area"]
-                        )
+                    if u_match:
+                        rol_remoto = (u_match.get("rol_app") or "").strip().lower()
+                        area_remota = (u_match.get("area") or "").strip()
+                        cambio_area = area_remota and sesion.get("area") != area_remota
+                        cambio_rol = rol_remoto and sesion.get("rol_app") != rol_remoto
+                        if cambio_area or cambio_rol:
+                            guardar_sesion_activa(
+                                nombre=sesion.get("nombre", ""),
+                                dni=dni_act,
+                                mail=sesion.get("mail", ""),
+                                avatar=sesion.get("avatar", ""),
+                                area=area_remota or sesion.get("area", ""),
+                                rol_app=rol_remoto or sesion.get("rol_app", "")
+                            )
 
             # 4. Descargar y actualizar días no laborales
             nl_remotos = obtener_no_laborales_remotos()
@@ -639,9 +674,11 @@ class ApiPuente:
 
         sesion = obtener_sesion_activa()
         cargado_por = sesion["nombre"] if sesion else "Empleado"
-        es_rrhh = sesion and sesion.get("area", "").strip().upper() == "RRHH"
+        rol_sesion = (sesion.get("rol_app") or "user_1").strip().lower() if sesion else "user_1"
+        es_admin_subadmin = rol_sesion in ["admin", "sub_admin"]
 
-        if es_rrhh and datos.get("empleado"):
+        # Carga delegada permitida exclusivamente para admin y sub_admin
+        if es_admin_subadmin and datos.get("empleado"):
             empleado = str(datos["empleado"]).strip()
             usuario_mail = str(datos.get("usuario_mail", "")).strip()
         else:
@@ -673,14 +710,44 @@ class ApiPuente:
         else:
             fechas_a_cargar = [fecha_inicio]
 
+        # [RBAC] Restricción de Rango de Fechas: Únicamente admin y sub_admin
+        if len(fechas_a_cargar) > 1 and not es_admin_subadmin:
+            return {
+                "exito": False,
+                "error": "Acceso denegado: Únicamente los roles admin y sub_admin tienen permitido utilizar rangos de fechas."
+            }
+
         # [FN-01.06] Libertad de fechas: cualquier colaborador puede registrar la fecha que requiera
         proyectos = datos.get("proyectos")
         lugar_norm = lugar.strip().lower()
 
-        # [FN-01.05] Normalización estricta de Campo
+        # [RBAC] Restricción de Campo para user_2:
+        # Los miembros de core, user_1, sub_admin y admin pueden registrar campo.
+        # user_2 no puede registrar campo por sí mismo.
+        # admin y sub_admin pueden registrar días de campo para user_2 en carga delegada.
         if lugar_norm in ["campo", "campaña", "campaña / campo", "campana"]:
+            if not es_admin_subadmin and rol_sesion == "user_2":
+                return {
+                    "exito": False,
+                    "error": "Acceso denegado: El rol user_2 no cuenta con permisos para registrar jornadas de Campo."
+                }
             lugar = "Campo"
             lugar_norm = "campo"
+
+        # [RBAC] Restricción de Subtipos de Franco:
+        # user_1, user_2 y core no gestionan tipos avanzados de franco; registran franco de oficina por defecto.
+        if not es_admin_subadmin:
+            if lugar_norm in ["franco", "franco de oficina", "franco oficina", "franco obra", "franco de obra", "franco ofic trabajado", "franco obra trabajado", "franco trabajado"]:
+                lugar = "Franco"
+                lugar_norm = "franco"
+                datos["tipo_franco"] = "Franco de Oficina"
+                datos["sub_franco"] = "Franco de Oficina"
+                datos["horas"] = 0.0
+            elif lugar_norm in ["feriado trabajado", "vacaciones", "licencia"]:
+                return {
+                    "exito": False,
+                    "error": "Acceso denegado: La modalidad seleccionada es exclusiva de gestión administrativa (admin/sub_admin)."
+                }
 
         hora_inicio = str(datos.get("hora_inicio", "")).strip() if lugar_norm == "campo" else ""
         hora_fin = str(datos.get("hora_fin", "")).strip() if lugar_norm == "campo" else ""
@@ -1803,7 +1870,7 @@ def obtener_icono_tray():
     return crear_icono_calendario(64)
 
 
-APP_VERSION = "1.13.0"
+APP_VERSION = "1.14.0"
 
 _mutex_instancia = None
 

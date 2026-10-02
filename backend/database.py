@@ -65,7 +65,8 @@ def inicializar_bd():
                 dni TEXT NOT NULL,
                 mail TEXT DEFAULT '',
                 avatar TEXT DEFAULT '',
-                area TEXT DEFAULT ''
+                area TEXT DEFAULT '',
+                rol_app TEXT DEFAULT 'user_1'
             )
         """)
 
@@ -78,6 +79,8 @@ def inicializar_bd():
             cursor.execute("ALTER TABLE sesion ADD COLUMN avatar TEXT DEFAULT ''")
         if "area" not in columnas_sesion:
             cursor.execute("ALTER TABLE sesion ADD COLUMN area TEXT DEFAULT ''")
+        if "rol_app" not in columnas_sesion:
+            cursor.execute("ALTER TABLE sesion ADD COLUMN rol_app TEXT DEFAULT 'user_1'")
 
         # Tabla de perfiles persistentes de empleados (para recordar avatares y áreas por DNI)
         cursor.execute("""
@@ -87,6 +90,7 @@ def inicializar_bd():
                 mail TEXT DEFAULT '',
                 avatar TEXT DEFAULT '',
                 area TEXT DEFAULT '',
+                rol_app TEXT DEFAULT 'user_1',
                 actualizado_en TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """)
@@ -96,6 +100,8 @@ def inicializar_bd():
         columnas_perfiles = [col["name"] for col in cursor.fetchall()]
         if "area" not in columnas_perfiles:
             cursor.execute("ALTER TABLE perfiles_empleados ADD COLUMN area TEXT DEFAULT ''")
+        if "rol_app" not in columnas_perfiles:
+            cursor.execute("ALTER TABLE perfiles_empleados ADD COLUMN rol_app TEXT DEFAULT 'user_1'")
 
         # Tabla de proyectos activos en caché (sincronizada desde 0_proyectos)
         cursor.execute("PRAGMA table_info(proyectos_cache)")
@@ -125,6 +131,7 @@ def inicializar_bd():
                 id_origen TEXT DEFAULT '',
                 costo_dia_ofi REAL DEFAULT 0.0,
                 costo_dia_obra REAL DEFAULT 0.0,
+                rol_app TEXT DEFAULT 'user_1',
                 actualizado_en TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """)
@@ -142,6 +149,8 @@ def inicializar_bd():
             cursor.execute("ALTER TABLE usuarios_cache ADD COLUMN costo_dia_ofi REAL DEFAULT 0.0")
         if "costo_dia_obra" not in cols_usr:
             cursor.execute("ALTER TABLE usuarios_cache ADD COLUMN costo_dia_obra REAL DEFAULT 0.0")
+        if "rol_app" not in cols_usr:
+            cursor.execute("ALTER TABLE usuarios_cache ADD COLUMN rol_app TEXT DEFAULT 'user_1'")
 
         # Tabla de caché para días no laborales (0_no_laborales)
         cursor.execute("""
@@ -335,8 +344,25 @@ def obtener_area_por_dni(dni: str) -> str:
             return fila_u["area"]
     return ""
 
+def obtener_rol_por_dni(dni: str) -> str:
+    """Recupera el rol RBAC guardado de un empleado por su DNI priorizando usuarios_cache (sincronizado con Sheets)."""
+    if not dni:
+        return "user_1"
+    dni_clean = dni.strip()
+    with obtener_conexion() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT rol_app FROM usuarios_cache WHERE dni = ?", (dni_clean,))
+        fila_u = cursor.fetchone()
+        if fila_u and fila_u["rol_app"]:
+            return fila_u["rol_app"]
+        cursor.execute("SELECT rol_app FROM perfiles_empleados WHERE dni = ?", (dni_clean,))
+        fila = cursor.fetchone()
+        if fila and fila["rol_app"]:
+            return fila["rol_app"]
+    return "user_1"
+
 def guardar_usuarios_cache(usuarios: list):
-    """Actualiza la lista de usuarios autorizados en la base local incluyendo costos diarios."""
+    """Actualiza la lista de usuarios autorizados en la base local incluyendo costos diarios y roles RBAC."""
     if usuarios is None:
         return
     with obtener_conexion() as conn:
@@ -347,9 +373,10 @@ def guardar_usuarios_cache(usuarios: list):
             id_orig = str(u.get("id_origen", "")).strip()
             c_ofi = float(u.get("costo_dia_ofi", 0.0) or 0.0)
             c_obra = float(u.get("costo_dia_obra", 0.0) or 0.0)
+            rol_app = str(u.get("rol_app", "")).strip().lower() or "user_1"
             cursor.execute("""
-                INSERT INTO usuarios_cache (id_usuario, nombre, email, area, dni, id_origen, costo_dia_ofi, costo_dia_obra, actualizado_en)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+                INSERT INTO usuarios_cache (id_usuario, nombre, email, area, dni, id_origen, costo_dia_ofi, costo_dia_obra, rol_app, actualizado_en)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
             """, (
                 id_u,
                 str(u.get("nombre", "")).strip(),
@@ -358,15 +385,16 @@ def guardar_usuarios_cache(usuarios: list):
                 str(u.get("dni", "")).strip(),
                 id_orig,
                 c_ofi,
-                c_obra
+                c_obra,
+                rol_app
             ))
         conn.commit()
 
 def obtener_usuarios_cache() -> list:
-    """Retorna los usuarios autorizados almacenados en caché local con sus costos diarios."""
+    """Retorna los usuarios autorizados almacenados en caché local con sus costos diarios y roles RBAC."""
     with obtener_conexion() as conn:
         cursor = conn.cursor()
-        cursor.execute("SELECT id_usuario, nombre, email, area, dni, id_origen, costo_dia_ofi, costo_dia_obra FROM usuarios_cache ORDER BY nombre ASC")
+        cursor.execute("SELECT id_usuario, nombre, email, area, dni, id_origen, costo_dia_ofi, costo_dia_obra, rol_app FROM usuarios_cache ORDER BY nombre ASC")
         return [dict(f) for f in cursor.fetchall()]
 
 def _normalizar_texto(texto: str) -> str:
@@ -564,25 +592,31 @@ def guardar_version_instalada(version: str):
 
 
 def obtener_sesion_activa():
-    """Devuelve los datos del empleado activo restaurando su avatar y área persistentes si están disponibles."""
+    """Devuelve los datos del empleado activo restaurando su avatar, área y rol persistentes si están disponibles."""
     with obtener_conexion() as conn:
         cursor = conn.cursor()
-        cursor.execute("SELECT nombre, dni, mail, avatar, area FROM sesion WHERE id = 1")
+        cursor.execute("SELECT nombre, dni, mail, avatar, area, rol_app FROM sesion WHERE id = 1")
         fila = cursor.fetchone()
         if fila:
             dni_val = fila["dni"]
             avatar_val = fila["avatar"] or ""
             area_val = fila["area"] or ""
+            rol_val = fila["rol_app"] or ""
             if not avatar_val and dni_val:
                 avatar_val = obtener_avatar_por_dni(dni_val)
             if not area_val and dni_val:
                 area_val = obtener_area_por_dni(dni_val)
+            if dni_val:
+                rol_fresco = obtener_rol_por_dni(dni_val)
+                if rol_fresco:
+                    rol_val = rol_fresco
             return {
                 "nombre": fila["nombre"],
                 "dni": dni_val,
                 "mail": fila["mail"] or "",
                 "avatar": avatar_val,
-                "area": area_val
+                "area": area_val,
+                "rol_app": rol_val or "user_1"
             }
         
         # Si la tabla sesion en SQLite está vacía, intentar restaurar desde el archivo de respaldo permanente
@@ -591,22 +625,26 @@ def obtener_sesion_activa():
                 with open(RUTA_SESION_BACKUP, "r", encoding="utf-8") as f:
                     datos = json.load(f)
                     if isinstance(datos, dict) and datos.get("dni") and datos.get("nombre"):
+                        rol_backup = datos.get("rol_app") or obtener_rol_por_dni(datos["dni"]) or "user_1"
+                        datos["rol_app"] = rol_backup
                         # Restaurar en SQLite para futuras consultas rápidas
                         cursor.execute("""
-                            INSERT INTO sesion (id, nombre, dni, mail, avatar, area)
-                            VALUES (1, ?, ?, ?, ?, ?)
+                            INSERT INTO sesion (id, nombre, dni, mail, avatar, area, rol_app)
+                            VALUES (1, ?, ?, ?, ?, ?, ?)
                             ON CONFLICT(id) DO UPDATE SET 
                                 nombre = excluded.nombre, 
                                 dni = excluded.dni,
                                 mail = excluded.mail,
                                 avatar = excluded.avatar,
-                                area = excluded.area
+                                area = excluded.area,
+                                rol_app = excluded.rol_app
                         """, (
                             datos["nombre"],
                             datos["dni"],
                             datos.get("mail", ""),
                             datos.get("avatar", ""),
-                            datos.get("area", "")
+                            datos.get("area", ""),
+                            rol_backup
                         ))
                         conn.commit()
                         return datos
@@ -615,8 +653,8 @@ def obtener_sesion_activa():
 
         return None
 
-def guardar_sesion_activa(nombre: str, dni: str, mail: str = "", avatar: str = "", area: str = ""):
-    """Registra la sesión del empleado restaurando su avatar y área persistente si ya tiene uno."""
+def guardar_sesion_activa(nombre: str, dni: str, mail: str = "", avatar: str = "", area: str = "", rol_app: str = ""):
+    """Registra la sesión del empleado restaurando su avatar, área y rol persistentes."""
     dni_limpio = dni.strip()
     avatar_final = avatar
     if not avatar_final:
@@ -624,31 +662,36 @@ def guardar_sesion_activa(nombre: str, dni: str, mail: str = "", avatar: str = "
     area_final = area
     if not area_final:
         area_final = obtener_area_por_dni(dni_limpio)
+    rol_final = rol_app
+    if not rol_final:
+        rol_final = obtener_rol_por_dni(dni_limpio)
 
     with obtener_conexion() as conn:
         cursor = conn.cursor()
         # Asegurar que el empleado esté registrado en perfiles_empleados
         cursor.execute("""
-            INSERT INTO perfiles_empleados (dni, nombre, mail, avatar, area, actualizado_en)
-            VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+            INSERT INTO perfiles_empleados (dni, nombre, mail, avatar, area, rol_app, actualizado_en)
+            VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
             ON CONFLICT(dni) DO UPDATE SET 
                 nombre = excluded.nombre,
                 mail = excluded.mail,
                 avatar = CASE WHEN excluded.avatar != '' THEN excluded.avatar ELSE perfiles_empleados.avatar END,
                 area = CASE WHEN excluded.area != '' THEN excluded.area ELSE perfiles_empleados.area END,
+                rol_app = CASE WHEN excluded.rol_app != '' THEN excluded.rol_app ELSE perfiles_empleados.rol_app END,
                 actualizado_en = CURRENT_TIMESTAMP
-        """, (dni_limpio, nombre.strip(), mail.strip(), avatar_final, area_final))
+        """, (dni_limpio, nombre.strip(), mail.strip(), avatar_final, area_final, rol_final))
 
         cursor.execute("""
-            INSERT INTO sesion (id, nombre, dni, mail, avatar, area)
-            VALUES (1, ?, ?, ?, ?, ?)
+            INSERT INTO sesion (id, nombre, dni, mail, avatar, area, rol_app)
+            VALUES (1, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(id) DO UPDATE SET 
                 nombre = excluded.nombre, 
                 dni = excluded.dni,
                 mail = excluded.mail,
                 avatar = excluded.avatar,
-                area = excluded.area
-        """, (nombre.strip(), dni_limpio, mail.strip(), avatar_final, area_final))
+                area = excluded.area,
+                rol_app = excluded.rol_app
+        """, (nombre.strip(), dni_limpio, mail.strip(), avatar_final, area_final, rol_final))
         conn.commit()
 
     # Respaldo permanente espejo en JSON
@@ -659,7 +702,8 @@ def guardar_sesion_activa(nombre: str, dni: str, mail: str = "", avatar: str = "
                 "dni": dni_limpio,
                 "mail": mail.strip(),
                 "avatar": avatar_final,
-                "area": area_final
+                "area": area_final,
+                "rol_app": rol_final
             }, f, ensure_ascii=False)
     except Exception as e:
         print(f"[Sesion] Aviso al guardar backup JSON: {e}")

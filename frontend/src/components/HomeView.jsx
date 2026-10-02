@@ -2,7 +2,7 @@ import React from 'react';
 import RpgTavernBoard from './RpgTavernBoard';
 import DailyStatusWidget from './DailyStatusWidget';
 import { getTituloRpg } from '../utils/rpgTitles';
-import { puedeAccederRoster, puedeVerHistorialOtros, puedeVerModificaciones, puedeVerActividadAyer } from '../utils/permissions';
+import { puedeAccederRoster, puedeVerHistorialOtros, puedeVerModificaciones, puedeVerActividadAyer, getEtiquetaRol } from '../utils/permissions';
 
 // [MOD-01] HomeView
 export default function HomeView({
@@ -102,6 +102,11 @@ export default function HomeView({
               {usuario.area && (
                 <span className="home-area-chip">
                   {isRpg ? `${getTituloRpg(usuario.nombre)} (Nv. 42)` : getNombreArea(usuario.area)}
+                </span>
+              )}
+              {!isRpg && (
+                <span className="home-area-chip" style={{ background: '#cc333315', color: '#cc3333', borderColor: '#cc333335', fontWeight: 600 }}>
+                  {getEtiquetaRol(usuario).badge}
                 </span>
               )}
             </div>

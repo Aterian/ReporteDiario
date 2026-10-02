@@ -549,7 +549,7 @@ export default function App() {
 
 
       {/* Cartel / Pop-up de Notificación para RRHH sobre Modificaciones en Registros */}
-      {puedeVerHistorialOtros(usuario) && notificacionesModificaciones.length > 0 && vistaActiva !== 'historial-otros' && (
+      {puedeVerModificaciones(usuario) && notificacionesModificaciones.length > 0 && vistaActiva !== 'historial-otros' && (
         <div className="rrhh-notification-banner">
           <div className="rrhh-notif-icon">
             <span style={{ fontSize: '18px' }}>🔔</span>
