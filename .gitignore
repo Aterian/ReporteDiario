@@ -33,8 +33,10 @@ backend/dist/*.exe
 build/
 dist/
 backend/venv/
+backend/venv*/
 backend/env/
 backend/build/
+backend/build*/
 backend/dist/
 backend/*.spec.bak
 __pycache__/
