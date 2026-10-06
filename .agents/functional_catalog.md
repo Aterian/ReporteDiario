@@ -1,5 +1,24 @@
 # Catálogo Funcional del Sistema
 
+## [FN-03.06] Obtener Conexión SQLite con Modo WAL y Timeout Concurrente
+- **Módulo**: [MOD-03] Sincronización y Persistencia Local
+- **Flujo Operativo**: Configura la apertura de conexiones SQLite aplicando journal_mode WAL, busy_timeout de 30 segundos y synchronous NORMAL para prevenir bloqueos por concurrencia entre hilos de interfaz y sincronización de fondo.
+- **Tablas afectadas**: Todas las tablas locales SQLite (`historial`, `rosters`, `sesion`, `perfiles_empleados`, etc.).
+- **Reglas de negocio e invariantes**:
+  1. Conexión instanciada siempre con `timeout = 30.0`.
+  2. Pragma `journal_mode = WAL;` para permitir lecturas concurrentes sin bloquear escrituras.
+  3. Pragma `busy_timeout = 30000;` para espera activa de cerrojos a nivel de driver C de SQLite.
+  4. Pragma `synchronous = NORMAL;` para optimizar I/O transaccional manteniendo integridad.
+
+## [FN-03.07] Reintento Defensivo para Operaciones con la Base de Datos
+- **Módulo**: [MOD-03] Sincronización y Persistencia Local
+- **Flujo Operativo**: Intercepta excepciones de tipo `sqlite3.OperationalError` que contengan "locked", ejecutando hasta 5 reintentos con backoff exponencial antes de propagar el error.
+- **Tablas afectadas**: `rosters`, `historial`.
+- **Reglas de negocio e invariantes**:
+  1. Solo reintenta ante excepciones operacionales con causa de bloqueo ("locked").
+  2. Aplica retardo progresivo `delay_base * (2 ** intento)` (máx. 5 intentos).
+  3. Envuelve las operaciones críticas de guardado y eliminación en Roster.
+
 ## [FN-04.11] Sistema de Roles de Usuario RBAC y Matriz de Acceso
 - **Módulo**: [MOD-04] Control de Permisos y Roles
 - **Flujo Operativo**: Controla la visibilidad y operación de módulos mediante la columna `rol_app` (`admin`, `sub_admin`, `core`, `user_1`, `user_2`) sincronizada desde `0_usuarios`.

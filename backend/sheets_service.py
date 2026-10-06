@@ -955,6 +955,9 @@ def sincronizar_desde_sheets_hacia_local(spreadsheet_id: str = "") -> dict:
                     existentes.add(uid)
                     insertados += 1
 
+                if (insertados + actualizados) % 150 == 0:
+                    conn.commit()
+
             conn.commit()
             try:
                 reconstruir_rosters_desde_historial()

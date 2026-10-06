@@ -158,7 +158,11 @@ export default function RosterView({ usuario, onVolver, tema }) {
         });
         await cargarRostersMes(anioGantt, mesGantt);
       } else {
-        alert(res?.error || 'Error al guardar la modificación.');
+        const errorMsg = res?.error || 'Error al guardar la modificación.';
+        const textoUsuario = errorMsg.toLowerCase().includes('locked')
+          ? 'La base de datos estaba ocupada sincronizando en segundo plano. Por favor, reintenta guardar en unos segundos.'
+          : errorMsg;
+        alert(textoUsuario);
       }
     } catch (err) {
       console.error(err);

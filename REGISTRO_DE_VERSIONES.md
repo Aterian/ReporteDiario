@@ -2,6 +2,22 @@
 
 Historial cronológico de cambios, nuevas características y mejoras aplicadas al sistema **Check Diario Ingeap**.
 
+## [1.14.1] - 2026-10-06
+
+### 🛠️ Concurrencia SQLite WAL, Timeouts Defensivos y Manejo de Bloqueos en Roster (`[FN-03.06]`, `[FN-03.07]`)
+- **Modo WAL y Pragma Busy Timeout en SQLite (`[FN-03.06]`)**:
+  - Habilitación de `PRAGMA journal_mode = WAL;` y `PRAGMA synchronous = NORMAL;` en `obtener_conexion()` (`backend/database.py`), desacoplando lectores de escritores y permitiendo lecturas concurrentes sin colisionar con operaciones de escritura.
+  - Configuración de `timeout = 30.0` en la llamada a `sqlite3.connect` y asignación de `PRAGMA busy_timeout = 30000;`, otorgando hasta 30 segundos de espera pasiva en cola nativa de SQLite antes de abortar transacciones.
+- **Mecanismo Defensivo de Reintentos con Backoff Exponencial (`[FN-03.07]`)**:
+  - Implementación de `ejecutar_con_reintentos_db` en `backend/database.py` para reintentar operaciones de escritura con retroceso exponencial ante excepciones transitorias `OperationalError: database is locked`.
+  - Encapsulación de `guardar_roster` (`_guardar_roster_interno`) y `eliminar_roster` (`_operacion_eliminar`) bajo `ejecutar_con_reintentos_db` en `backend/main.py`.
+- **Segmentación de Transacciones en Sincronización Remota (`backend/sheets_service.py`)**:
+  - Incorporación de commits intermedios por lotes de 150 registros en `sincronizar_desde_sheets_hacia_local`, liberando bloqueos exclusivos de escritura y evitando retención prolongada del cerrojo de base de datos durante sincronizaciones voluminosas.
+- **Normalización de Avisos en Interfaz de Roster (`frontend/src/components/RosterView.jsx`)**:
+  - Manejo de excepciones amigable para el operador de RRHH ante contención de base de datos, evitando alertas crudas del motor SQLite.
+
+---
+
 ## [1.14.0] - 2026-10-02
 
 ### 🛡️ Sistema de Control de Acceso y Roles de Usuario RBAC (`[FN-04.11]`)

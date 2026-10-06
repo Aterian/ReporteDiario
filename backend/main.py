@@ -32,6 +32,7 @@ from database import (
     guardar_registro_roster,
     obtener_rosters,
     eliminar_registro_roster,
+    ejecutar_con_reintentos_db,
     obtener_conexion,
     obtener_id_empleado,
     obtener_email_empleado,
@@ -1503,7 +1504,7 @@ class ApiPuente:
         if not puede_acceder_roster(sesion):
             return {"exito": False, "error": "Acceso denegado: El módulo de Roster solo puede ser gestionado por Justina Bertolozzi e Iván Valentin."}
 
-        try:
+        def _operacion():
             id_roster = str(datos.get("id") or "").strip()
             old_roster = None
             if id_roster:
@@ -1645,6 +1646,9 @@ class ApiPuente:
                 self._disparar_sync_segundo_plano()
 
             return res
+
+        try:
+            return ejecutar_con_reintentos_db(_operacion)
         except Exception as e:
             print(f"[Rosters] Error al guardar roster: {e}")
             return {"exito": False, "error": str(e)}
@@ -1715,7 +1719,7 @@ class ApiPuente:
         sesion = obtener_sesion_activa()
         if not puede_acceder_roster(sesion):
             return {"exito": False, "error": "Acceso denegado: Solo Justina Bertolozzi e Iván Valentin pueden eliminar rosters."}
-        try:
+        def _operacion_eliminar():
             if id_roster:
                 with obtener_conexion() as conn:
                     cursor = conn.cursor()
@@ -1762,6 +1766,9 @@ class ApiPuente:
                                 pass
             exito = eliminar_registro_roster(id_roster)
             return {"exito": exito}
+
+        try:
+            return ejecutar_con_reintentos_db(_operacion_eliminar)
         except Exception as e:
             return {"exito": False, "error": str(e)}
 
@@ -1878,7 +1885,7 @@ def obtener_icono_tray():
     return crear_icono_calendario(64)
 
 
-APP_VERSION = "1.14.0"
+APP_VERSION = "1.14.1"
 
 _mutex_instancia = None
 

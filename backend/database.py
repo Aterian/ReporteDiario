@@ -4,6 +4,7 @@ import sys
 import shutil
 import uuid
 import json
+import time
 from datetime import datetime, date
 from typing import TypedDict
 
@@ -46,11 +47,27 @@ if not os.path.exists(RUTA_DB_APPDATA):
 # RUTA_DB es SIEMPRE la ruta persistente en AppData (nunca temporal)
 RUTA_DB = RUTA_DB_APPDATA
 
+# [FN-03.06] Obtener conexion SQLite con modo WAL y timeout concurrente
 def obtener_conexion():
-    """Crea y retorna una conexión a la base de datos local SQLite."""
-    conn = sqlite3.connect(RUTA_DB)
+    """Crea y retorna una conexión a la base de datos local SQLite con soporte concurrente."""
+    conn = sqlite3.connect(RUTA_DB, timeout=30.0)
+    conn.execute("PRAGMA journal_mode = WAL;")
+    conn.execute("PRAGMA busy_timeout = 30000;")
+    conn.execute("PRAGMA synchronous = NORMAL;")
     conn.row_factory = sqlite3.Row
     return conn
+
+# [FN-03.07] Reintento defensivo para operaciones con la base de datos
+def ejecutar_con_reintentos_db(func, max_reintentos: int = 5, delay_base: float = 0.2):
+    """Ejecuta una función ante eventuales bloqueos de SQLite con backoff exponencial."""
+    for intento in range(max_reintentos):
+        try:
+            return func()
+        except sqlite3.OperationalError as e:
+            if "locked" in str(e).lower() and intento < max_reintentos - 1:
+                time.sleep(delay_base * (2 ** intento))
+                continue
+            raise
 
 def inicializar_bd():
     """Crea y actualiza las tablas necesarias para soportar el esquema de Google Sheets, sesión y perfiles."""
