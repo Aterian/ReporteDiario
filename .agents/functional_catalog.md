@@ -1,5 +1,16 @@
 # Catálogo Funcional del Sistema
 
+## [FN-01.11] Asignación Asistida de Fines de Semana a Franco en Historial Propio
+- **Módulo**: [MOD-01] Registro de Asistencia Diaria
+- **Flujo Operativo**: Permite a cualquier usuario logueado en su historial personal cargar automáticamente todos los sábados y domingos pendientes del mes en curso como Franco (Franco de Oficina, 0 hs) imputados a su área respectiva, guardando localmente en SQLite y disparando la sincronización remota hacia Google Sheets.
+- **Tablas afectadas**: `historial`, hoja remota `1_asistencia_informada`.
+- **Reglas de negocio e invariantes**:
+  1. Disponible universalmente para todos los roles activos (`admin`, `sub_admin`, `core`, `user_1`, `user_2`) exclusivamente en historial personal.
+  2. Los roles no administrativos computan invariablemente `tipo_ocf = 'Franco'`, `tipo_franco = 'Franco de Oficina'`, `horas = 0.0`.
+  3. El área de servicio se mapea dinámicamente (`MAPA_AREAS`) según el área del colaborador autenticado (`Mensura`, `SIG`, `Ingeniería`, `Núcleo`, `RRHH`, `Aplicaciones`, `Ventas y Marketing`).
+  4. Los fines de semana con registros preexistentes se preservan sin modificaciones.
+  5. En el backend, las cargas masivas con múltiples fechas solo se permiten a roles estándar si todas las fechas corresponden a sábados y domingos bajo modalidad Franco para su propio usuario.
+
 ## [FN-03.06] Obtener Conexión SQLite con Modo WAL y Timeout Concurrente
 - **Módulo**: [MOD-03] Sincronización y Persistencia Local
 - **Flujo Operativo**: Configura la apertura de conexiones SQLite aplicando journal_mode WAL, busy_timeout de 30 segundos y synchronous NORMAL para prevenir bloqueos por concurrencia entre hilos de interfaz y sincronización de fondo.

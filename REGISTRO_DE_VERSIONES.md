@@ -2,6 +2,22 @@
 
 Historial cronológico de cambios, nuevas características y mejoras aplicadas al sistema **Check Diario Ingeap**.
 
+## [1.15.0] - 2026-10-07
+
+### 📅 Asignación Asistida de Fines de Semana a Franco en Historial Propio para Todos los Roles (`[FN-01.11]`)
+- **Apertura Universal de la Acción en Historial Personal (`frontend/src/components/HistoryView.jsx`)**:
+  - Habilitación del botón "Fines de Semana a Franco" para todos los roles activos (`admin`, `sub_admin`, `core`, `user_1`, `user_2`) en la vista de historial propio.
+  - Eliminación de la restricción de visibilidad `esRRHHoAplicaciones` que limitaba la funcionalidad exclusivamente a personal de RRHH y Aplicaciones.
+- **Resolución Determinista y Dinámica de Área (`[FN-01.11]`)**:
+  - Implementación del diccionario semántico `MAPA_AREAS` en `HistoryView.jsx` contemplando códigos abreviados y denominaciones oficiales (`A` -> Aplicaciones, `N` -> Núcleo, `I` -> Ingeniería, `M` -> Mensura, `S` -> SIG, `RRHH` -> RRHH, `VYM` -> Ventas y Marketing).
+  - Imputación fiel del área de adscripción del colaborador en el modal informativo y en el payload del reporte (0 hs computadas a su respectiva área).
+- **Habilitación de Carga Asistida en Backend (`backend/main.py`)**:
+  - Adaptación de la validación de rangos de fechas en `guardar_check_diario` para autorizar la inserción en lote de múltiples fechas cuando correspondan a fines de semana (sábados y domingos) bajo modalidad `Franco` para el propio usuario en sesión.
+  - Preservación estricta de barreras de seguridad RBAC: bloqueo de rangos arbitrarios para días de semana en modalidades `Campo`, `Oficina`, `Vacaciones` o `Licencia` a roles sin facultades administrativas, e imposibilidad de mutar registros de otros colaboradores.
+  - Forzado transparente de modalidad `Franco de Oficina` (0.0 hs) para roles estándar (`core`, `user_1`, `user_2`), persistencia atómica en SQLite con `sincronizado = 0` y sincronización asíncrona hacia Google Sheets.
+
+---
+
 ## [1.14.1] - 2026-10-06
 
 ### 🛠️ Concurrencia SQLite WAL, Timeouts Defensivos y Manejo de Bloqueos en Roster (`[FN-03.06]`, `[FN-03.07]`)

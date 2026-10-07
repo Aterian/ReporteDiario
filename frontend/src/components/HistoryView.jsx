@@ -38,6 +38,24 @@ const LISTADO_AREAS_CORPORATIVAS = [
   'CD'
 ];
 
+const MAPA_AREAS = {
+  'A': 'Aplicaciones',
+  'APLICACIONES': 'Aplicaciones',
+  'N': 'Núcleo',
+  'NUCLEO': 'Núcleo',
+  'NÚCLEO': 'Núcleo',
+  'I': 'Ingeniería',
+  'INGENIERIA': 'Ingeniería',
+  'INGENIERÍA': 'Ingeniería',
+  'M': 'Mensura',
+  'MENSURA': 'Mensura',
+  'S': 'SIG',
+  'SIG': 'SIG',
+  'RRHH': 'RRHH',
+  'VYM': 'Ventas y Marketing',
+  'VENTAS Y MARKETING': 'Ventas y Marketing'
+};
+
 const TIPOS_LICENCIA = [
   'Licencia - Médica',
   'Licencia - Examen',
@@ -112,7 +130,7 @@ export default function HistoryView({ onVolver, tema, onNuevoReporte, usuario, o
     return new Date(hoy.getFullYear(), hoy.getMonth(), 1);
   });
 
-  // Estado para la carga asistida de fines de semana (RRHH y Aplicaciones)
+  // [FN-01.11] Carga asistida de fines de semana a Franco en historial propio
   const [modalFinesDeSemanaOpen, setModalFinesDeSemanaOpen] = useState(false);
   const [cargandoFinesDeSemana, setCargandoFinesDeSemana] = useState(false);
   const [finesDeSemanaPendientes, setFinesDeSemanaPendientes] = useState([]);
@@ -120,7 +138,7 @@ export default function HistoryView({ onVolver, tema, onNuevoReporte, usuario, o
   const [nombreMesFinesDeSemana, setNombreMesFinesDeSemana] = useState('');
 
   const areaUsuarioUpper = (usuario?.area || '').toUpperCase().trim();
-  const esRRHHoAplicaciones = esAdmin(usuario) || esSubAdmin(usuario) || areaUsuarioUpper === 'RRHH' || areaUsuarioUpper === 'A' || areaUsuarioUpper === 'APLICACIONES';
+  const areaDestino = MAPA_AREAS[areaUsuarioUpper] || usuario?.area || 'General';
 
   const handleAbrirModalFinesDeSemana = () => {
     const hoy = new Date();
@@ -174,7 +192,6 @@ export default function HistoryView({ onVolver, tema, onNuevoReporte, usuario, o
     setCargandoFinesDeSemana(true);
 
     try {
-      const areaDestino = areaUsuarioUpper === 'RRHH' ? 'RRHH' : 'Aplicaciones';
       const fechasArray = finesDeSemanaPendientes.map((f) => f.fecha);
 
       const payload = {
@@ -475,23 +492,21 @@ export default function HistoryView({ onVolver, tema, onNuevoReporte, usuario, o
             </button>
           )}
 
-          {esRRHHoAplicaciones && (
-            <button
-              type="button"
-              className={isRpg ? 'rpg-wood-btn' : 'btn-action-ghost'}
-              onClick={handleAbrirModalFinesDeSemana}
-              title="Cargar automáticamente los sábados y domingos del mes actual como Franco"
-              style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
-            >
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
-                <line x1="16" y1="2" x2="16" y2="6" />
-                <line x1="8" y1="2" x2="8" y2="6" />
-                <line x1="3" y1="10" x2="21" y2="10" />
-              </svg>
-              <span>{isRpg ? 'Descanso Fines de Semana' : 'Fines de Semana a Franco'}</span>
-            </button>
-          )}
+          <button
+            type="button"
+            className={isRpg ? 'rpg-wood-btn' : 'btn-action-ghost'}
+            onClick={handleAbrirModalFinesDeSemana}
+            title="Cargar automáticamente los sábados y domingos del mes actual como Franco"
+            style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+          >
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+              <line x1="16" y1="2" x2="16" y2="6" />
+              <line x1="8" y1="2" x2="8" y2="6" />
+              <line x1="3" y1="10" x2="21" y2="10" />
+            </svg>
+            <span>{isRpg ? 'Descanso Fines de Semana' : 'Fines de Semana a Franco'}</span>
+          </button>
 
           {onNuevoReporte && (
             <button
@@ -1218,7 +1233,7 @@ export default function HistoryView({ onVolver, tema, onNuevoReporte, usuario, o
 
             <div style={{ padding: '6px 0 16px 0' }}>
               <p style={{ fontSize: '0.9rem', color: 'var(--text-secondary, #94a3b8)', margin: '0 0 12px 0', lineHeight: 1.5 }}>
-                Se registrarán como <strong>Franco</strong> (0 hs imputadas a <strong>{areaUsuarioUpper === 'RRHH' ? 'RRHH' : 'Aplicaciones'}</strong>) los siguientes <strong>{finesDeSemanaPendientes.length}</strong> días de fin de semana que aún no poseen registro en <strong>{nombreMesFinesDeSemana}</strong>:
+                Se registrarán como <strong>Franco</strong> (0 hs imputadas a <strong>{areaDestino}</strong>) los siguientes <strong>{finesDeSemanaPendientes.length}</strong> días de fin de semana que aún no poseen registro en <strong>{nombreMesFinesDeSemana}</strong>:
               </p>
 
               <div className="weekend-pills-container">

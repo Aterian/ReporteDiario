@@ -719,16 +719,30 @@ class ApiPuente:
         else:
             fechas_a_cargar = [fecha_inicio]
 
-        # [RBAC] Restricción de Rango de Fechas: Únicamente admin y sub_admin
-        if len(fechas_a_cargar) > 1 and not es_admin_subadmin:
+        # [FN-01.06] Libertad de fechas: cualquier colaborador puede registrar la fecha que requiera
+        proyectos = datos.get("proyectos")
+        lugar_norm = lugar.strip().lower()
+
+        # [RBAC] [FN-01.11] Restricción de Rango de Fechas:
+        # Únicamente admin y sub_admin pueden utilizar rangos arbitrarios de fechas.
+        # Se permite la asignación masiva asistida de fines de semana a Franco en historial propio para todos los roles.
+        def _es_fin_de_semana(f_str: str) -> bool:
+            try:
+                return datetime.strptime(str(f_str).strip(), "%Y-%m-%d").weekday() in (5, 6)
+            except Exception:
+                return False
+
+        es_carga_fds_franco = (
+            lugar_norm in ["franco", "franco de oficina", "franco oficina"]
+            and bool(datos.get("fechas"))
+            and all(_es_fin_de_semana(f_str) for f_str in fechas_a_cargar)
+        )
+
+        if len(fechas_a_cargar) > 1 and not es_admin_subadmin and not es_carga_fds_franco:
             return {
                 "exito": False,
                 "error": "Acceso denegado: Únicamente los roles admin y sub_admin tienen permitido utilizar rangos de fechas."
             }
-
-        # [FN-01.06] Libertad de fechas: cualquier colaborador puede registrar la fecha que requiera
-        proyectos = datos.get("proyectos")
-        lugar_norm = lugar.strip().lower()
 
         # [RBAC] Restricción de Campo para user_2:
         # Los miembros de core, user_1, sub_admin y admin pueden registrar campo.
