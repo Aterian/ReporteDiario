@@ -2,6 +2,25 @@
 
 Historial cronológico de cambios, nuevas características y mejoras aplicadas al sistema **Check Diario Ingeap**.
 
+## [1.15.1] - 2026-10-07
+
+### 📝 Auditoría de Modificaciones Revisadas con 'OK' en Google Sheets y Desactivación Remota (`[FN-02.01]`, `[FN-02.02]`)
+- **Extensión del Esquema Remoto en Google Sheets (`backend/sheets_service.py`)**:
+  - Incorporación de la columna `revisado` como 11ª columna en `COLUMNAS_MODIFICACIONES` de la pestaña `1_1_modificaciones_realizadas`.
+  - Detección defensiva de la columna `revisado` al inspeccionar encabezados remotos e inserción automática si estuviera ausente.
+- **Sincronización de Marcado 'OK' al Marcar Modificaciones (`backend/sheets_service.py`, `backend/main.py`)**:
+  - Implementación de `actualizar_revisado_en_sheets(ids_modificacion)` utilizando actualizaciones en lote `batch_update` para escribir `'OK'` en la celda de la columna `revisado` correspondiente al ID de modificación auditado.
+  - Despacho en segundo plano asíncrono (`threading.Thread`) desde `marcar_modificacion_revisada`, `marcar_modificacion_por_asistencia_revisada` y `marcar_todas_modificaciones_revisadas` en `backend/main.py` para garantizar fluidez en la interfaz de usuario.
+  - Incorporación del valor `'OK'` (o vacío `""`) al insertar nuevas modificaciones pendientes en `sincronizar_modificaciones_pendientes`.
+- **Desactivación Automática de Notificaciones para el Resto de los Administradores (`backend/sheets_service.py`, `backend/main.py`)**:
+  - Actualización de `descargar_modificaciones_desde_sheets`: al descargar modificaciones periódicamente (o en refresco de catálogos), si una modificación existente registra `'OK'` remotamente, se actualiza la base local SQLite a `revisado = 1`.
+  - Como el endpoint `obtener_notificaciones_modificaciones` filtra exclusivamente registros con `revisado = 0`, la alerta y banner desaparece automáticamente de las sesiones de los demás administradores.
+- **Persistencia y Resiliencia Offline en SQLite (`backend/database.py`)**:
+  - Migración defensiva de la columna `revisado_sincronizado INTEGER DEFAULT 1` en la tabla `modificaciones_realizadas`.
+  - Helpers `obtener_modificaciones_pendientes_revisado` y `marcar_modificaciones_revisado_sincronizadas` para reintentar la subida a Google Sheets en ciclos de sincronización subsecuentes en caso de intermitencia de red.
+
+---
+
 ## [1.15.0] - 2026-10-07
 
 ### 📅 Asignación Asistida de Fines de Semana a Franco en Historial Propio para Todos los Roles (`[FN-01.11]`)

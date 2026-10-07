@@ -5,7 +5,7 @@ import re
 import threading
 _sync_lock = threading.Lock()
 import gspread
-from gspread.utils import ValueInputOption
+from gspread.utils import ValueInputOption, rowcol_to_a1
 from google.oauth2.service_account import Credentials
 from google.auth.exceptions import GoogleAuthError
 from database import (
@@ -19,7 +19,9 @@ from database import (
     es_fecha_feriado,
     normalizar_fecha_iso,
     obtener_modificaciones_pendientes,
-    marcar_modificaciones_sincronizadas
+    marcar_modificaciones_sincronizadas,
+    obtener_modificaciones_pendientes_revisado,
+    marcar_modificaciones_revisado_sincronizadas
 )
 
 def recurso_path(ruta_relativa: str) -> str:
@@ -56,7 +58,7 @@ COLUMNAS_ESQUEMA = [
     "costo_dia"
 ]
 
-# [FN-02.01] Esquema de 10 columnas de la tabla 1_1_modificaciones_realizadas (Auditoría)
+# [FN-02.01] Esquema de 11 columnas de la tabla 1_1_modificaciones_realizadas (Auditoría)
 COLUMNAS_MODIFICACIONES = [
     "id_modificacion",
     "id_asistencia",
@@ -67,7 +69,8 @@ COLUMNAS_MODIFICACIONES = [
     "servicio_antes",
     "servicio_despues",
     "fecha_hora_modificaciones",
-    "quien_modifica"
+    "quien_modifica",
+    "revisado"
 ]
 
 def cargar_configuracion():
@@ -189,7 +192,7 @@ def obtener_hoja_trabajo(spreadsheet_id: str = "", sheet_name: str = ""):
         elif s_name.strip().lower() == "1_1_modificaciones_realizadas":
             # [FN-02.01] Crear automáticamente la pestaña de auditoría si no existe en el libro
             try:
-                ws = sh.add_worksheet(title="1_1_modificaciones_realizadas", rows=1000, cols=10)
+                ws = sh.add_worksheet(title="1_1_modificaciones_realizadas", rows=1000, cols=11)
                 ws.append_row(COLUMNAS_MODIFICACIONES, value_input_option=ValueInputOption.user_entered)
             except Exception as e_add:
                 raise ValueError(f"No se pudo crear la pestaña '1_1_modificaciones_realizadas': {e_add}")
@@ -215,6 +218,15 @@ def obtener_hoja_trabajo(spreadsheet_id: str = "", sheet_name: str = ""):
             fila_1 = ws.row_values(1)
             if not fila_1 or len(fila_1) == 0:
                 ws.append_row(COLUMNAS_MODIFICACIONES, value_input_option=ValueInputOption.user_entered)
+            else:
+                headers_limpios = [c.strip().lower() for c in fila_1]
+                if "revisado" not in headers_limpios:
+                    col_idx_rev = len(fila_1) + 1
+                    try:
+                        celda_rev = rowcol_to_a1(1, col_idx_rev)
+                        ws.update(range_name=celda_rev, values=[["revisado"]], value_input_option=ValueInputOption.user_entered)
+                    except Exception as e_hrev:
+                        print(f"Aviso al agregar encabezado 'revisado': {e_hrev}")
     except Exception as e:
         print(f"Aviso al verificar encabezados: {e}")
 
@@ -352,12 +364,15 @@ def sincronizar_modificaciones_pendientes() -> dict:
     """Sube a la hoja '1_1_modificaciones_realizadas' de Google Sheets los registros de auditoría pendientes."""
     pendientes = obtener_modificaciones_pendientes()
     if not pendientes:
+        # Si no hay nuevas modificaciones por insertar, verificar si hay estados de 'revisado' pendientes por sincronizar
+        actualizar_revisado_en_sheets()
         return {"exito": True, "cantidad": 0}
     try:
         _, ws = obtener_hoja_trabajo(sheet_name="1_1_modificaciones_realizadas")
         filas = []
         ids_exitosos = []
         for p in pendientes:
+            rev_val = "OK" if int(p.get("revisado") or 0) == 1 else ""
             fila = [
                 str(p.get("id_modificacion", "")),
                 str(p.get("id_asistencia", "")),
@@ -368,7 +383,8 @@ def sincronizar_modificaciones_pendientes() -> dict:
                 str(p.get("servicio_antes", "")),
                 str(p.get("servicio_despues", "")),
                 str(p.get("fecha_hora_modificaciones", "")),
-                str(p.get("quien_modifica", ""))
+                str(p.get("quien_modifica", "")),
+                rev_val
             ]
             filas.append(fila)
             ids_exitosos.append(p["id_modificacion"])
@@ -376,24 +392,100 @@ def sincronizar_modificaciones_pendientes() -> dict:
         if filas:
             ws.append_rows(filas, value_input_option=ValueInputOption.user_entered)
             marcar_modificaciones_sincronizadas(ids_exitosos)
+            marcar_modificaciones_revisado_sincronizadas(ids_exitosos)
             print(f"[Sheets] Se registraron {len(filas)} modificaciones en '1_1_modificaciones_realizadas'.")
+
+        # Asegurar además que cualquier actualización previa de 'revisado' pendiente impacte
+        actualizar_revisado_en_sheets()
         return {"exito": True, "cantidad": len(filas)}
     except Exception as e:
         print(f"[Sheets] Error al sincronizar modificaciones en Google Sheets: {e}")
         return {"exito": False, "error": str(e)}
 
+# [FN-02.02] Sincronizar estado revisado ('OK') en Google Sheets '1_1_modificaciones_realizadas'
+def actualizar_revisado_en_sheets(ids_modificacion: list = None) -> dict:
+    """
+    Escribe 'OK' en la columna 'revisado' de la hoja '1_1_modificaciones_realizadas'
+    para las modificaciones indicadas o pendientes de sincronización.
+    """
+    if ids_modificacion is None:
+        ids_modificacion = obtener_modificaciones_pendientes_revisado()
+
+    if not ids_modificacion:
+        return {"exito": True, "actualizadas": 0}
+
+    ids_set = {str(x).strip() for x in ids_modificacion if str(x).strip()}
+    if not ids_set:
+        return {"exito": True, "actualizadas": 0}
+
+    try:
+        _, ws = obtener_hoja_trabajo(sheet_name="1_1_modificaciones_realizadas")
+        filas = ws.get_all_values()
+        if not filas or len(filas) < 1:
+            return {"exito": True, "actualizadas": 0}
+
+        headers = [str(h).strip().lower() for h in filas[0]]
+        idx_id_mod = headers.index("id_modificacion") if "id_modificacion" in headers else 0
+        if "revisado" in headers:
+            idx_revisado = headers.index("revisado")
+        else:
+            idx_revisado = len(headers)
+            try:
+                celda_head = rowcol_to_a1(1, idx_revisado + 1)
+                ws.update(range_name=celda_head, values=[["revisado"]], value_input_option=ValueInputOption.user_entered)
+            except Exception as e_h:
+                print(f"[Sheets] Aviso al insertar encabezado revisado: {e_h}")
+
+        col_revisado_num = idx_revisado + 1
+
+        updates_batch = []
+        ids_actualizados = []
+
+        for r_idx, f in enumerate(filas[1:], start=2):
+            id_m = str(f[idx_id_mod]).strip() if len(f) > idx_id_mod else ""
+            if id_m in ids_set:
+                curr_rev = str(f[idx_revisado]).strip().upper() if len(f) > idx_revisado else ""
+                if curr_rev != "OK":
+                    celda_a1 = rowcol_to_a1(r_idx, col_revisado_num)
+                    updates_batch.append({
+                        "range": celda_a1,
+                        "values": [["OK"]]
+                    })
+                ids_actualizados.append(id_m)
+
+        if updates_batch:
+            try:
+                ws.batch_update(updates_batch, value_input_option=ValueInputOption.user_entered)
+            except Exception as e_batch:
+                print(f"[Sheets] Batch update falló ({e_batch}), reintentando por celda...")
+                for item in updates_batch:
+                    try:
+                        ws.update(range_name=item["range"], values=item["values"], value_input_option=ValueInputOption.user_entered)
+                    except Exception as e_cell:
+                        print(f"[Sheets] Fallo en celda {item['range']}: {e_cell}")
+            print(f"[Sheets] Se marcaron {len(updates_batch)} modificaciones como 'OK' en '1_1_modificaciones_realizadas'.")
+
+        if ids_actualizados:
+            marcar_modificaciones_revisado_sincronizadas(ids_actualizados)
+
+        return {"exito": True, "actualizadas": len(updates_batch)}
+    except Exception as e:
+        print(f"[Sheets] Error al actualizar estado revisado en Google Sheets: {e}")
+        return {"exito": False, "error": str(e), "actualizadas": 0}
+
 # [FN-02.01] Descargar auditoría de modificaciones realizadas desde Google Sheets hacia local
 def descargar_modificaciones_desde_sheets(spreadsheet_id: str = "") -> dict:
     """
     Descarga las modificaciones de la hoja '1_1_modificaciones_realizadas' de Google Sheets,
-    e inserta en la base local las que aún no existan, permitiendo a RRHH recibir alertas y avisos
-    de cambios realizados por los colaboradores desde cualquier equipo.
+    e inserta en la base local las que aún no existan. Si una modificación ya existente fue
+    marcada con 'OK' en Google Sheets, actualiza la base local a revisado=1, desactivando la alerta
+    para todos los administradores.
     """
     try:
         sh, ws = obtener_hoja_trabajo(spreadsheet_id=spreadsheet_id, sheet_name="1_1_modificaciones_realizadas")
         filas = ws.get_all_values()
         if not filas or len(filas) < 2:
-            return {"exito": True, "nuevas": 0}
+            return {"exito": True, "nuevas": 0, "revisadas": 0}
 
         headers = [str(h).strip().lower() for h in filas[0]]
         idx_id_mod = headers.index("id_modificacion") if "id_modificacion" in headers else 0
@@ -406,17 +498,24 @@ def descargar_modificaciones_desde_sheets(spreadsheet_id: str = "") -> dict:
         idx_serv_desp = headers.index("servicio_despues") if "servicio_despues" in headers else 7
         idx_fh = headers.index("fecha_hora_modificaciones") if "fecha_hora_modificaciones" in headers else 8
         idx_quien = headers.index("quien_modifica") if "quien_modifica" in headers else 9
+        idx_revisado = headers.index("revisado") if "revisado" in headers else -1
 
         with obtener_conexion() as conn:
             cursor = conn.cursor()
-            cursor.execute("SELECT id_modificacion FROM modificaciones_realizadas")
-            existentes = {str(r["id_modificacion"]).strip() for r in cursor.fetchall()}
+            cursor.execute("SELECT id_modificacion, COALESCE(revisado, 0) as revisado FROM modificaciones_realizadas")
+            existentes = {str(r["id_modificacion"]).strip(): int(r["revisado"]) for r in cursor.fetchall()}
 
             nuevas = 0
+            actualizadas_revisadas = 0
             for f in filas[1:]:
                 id_m = str(f[idx_id_mod]).strip() if len(f) > idx_id_mod else ""
                 if not id_m:
                     continue
+
+                rev_str = str(f[idx_revisado]).strip().upper() if idx_revisado >= 0 and len(f) > idx_revisado else ""
+                esta_revisado_remoto = (rev_str in ["OK", "1", "TRUE", "SI"])
+                rev_int = 1 if esta_revisado_remoto else 0
+
                 if id_m not in existentes:
                     id_a = str(f[idx_id_asist]).strip() if len(f) > idx_id_asist else ""
                     t_ant = str(f[idx_tipo_ant]).strip() if len(f) > idx_tipo_ant else ""
@@ -438,19 +537,29 @@ def descargar_modificaciones_desde_sheets(spreadsheet_id: str = "") -> dict:
                         INSERT INTO modificaciones_realizadas (
                             id_modificacion, id_asistencia, tipo_antes, tipo_despues,
                             horas_antes, horas_despues, servicio_antes, servicio_despues,
-                            fecha_hora_modificaciones, quien_modifica, sincronizado, revisado
-                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 0)
-                    """, (id_m, id_a, t_ant, t_desp, h_ant, h_desp, s_ant, s_desp, fh, quien))
-                    existentes.add(id_m)
+                            fecha_hora_modificaciones, quien_modifica, sincronizado, revisado, revisado_sincronizado
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, 1)
+                    """, (id_m, id_a, t_ant, t_desp, h_ant, h_desp, s_ant, s_desp, fh, quien, rev_int))
+                    existentes[id_m] = rev_int
                     nuevas += 1
+                else:
+                    # El registro ya existía localmente: verificar si fue marcado como revisado ('OK') en Google Sheets
+                    if esta_revisado_remoto and existentes[id_m] != 1:
+                        cursor.execute("""
+                            UPDATE modificaciones_realizadas
+                            SET revisado = 1, revisado_sincronizado = 1
+                            WHERE id_modificacion = ?
+                        """, (id_m,))
+                        existentes[id_m] = 1
+                        actualizadas_revisadas += 1
 
             conn.commit()
-            if nuevas > 0:
-                print(f"[Sheets] Se descargaron {nuevas} nuevas modificaciones desde '1_1_modificaciones_realizadas'.")
-            return {"exito": True, "nuevas": nuevas}
+            if nuevas > 0 or actualizadas_revisadas > 0:
+                print(f"[Sheets] Modificaciones sincronizadas: {nuevas} nuevas, {actualizadas_revisadas} marcadas como revisadas ('OK').")
+            return {"exito": True, "nuevas": nuevas, "revisadas": actualizadas_revisadas}
     except Exception as e:
         print(f"[Sheets] Error al descargar modificaciones desde Google Sheets: {e}")
-        return {"exito": False, "error": str(e), "nuevas": 0}
+        return {"exito": False, "error": str(e), "nuevas": 0, "revisadas": 0}
 
 def sincronizar_pendientes() -> dict:
     """

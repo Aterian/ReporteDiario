@@ -277,15 +277,18 @@ def inicializar_bd():
                 quien_modifica TEXT NOT NULL,
                 sincronizado INTEGER DEFAULT 0,
                 revisado INTEGER DEFAULT 0,
+                revisado_sincronizado INTEGER DEFAULT 1,
                 creado_en TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """)
 
-        # Migración defensiva: asegurar columna revisado en modificaciones_realizadas
+        # Migración defensiva: asegurar columna revisado y revisado_sincronizado en modificaciones_realizadas
         cursor.execute("PRAGMA table_info(modificaciones_realizadas)")
         columnas_mods = [col[1] for col in cursor.fetchall()]
         if "revisado" not in columnas_mods:
             cursor.execute("ALTER TABLE modificaciones_realizadas ADD COLUMN revisado INTEGER DEFAULT 0")
+        if "revisado_sincronizado" not in columnas_mods:
+            cursor.execute("ALTER TABLE modificaciones_realizadas ADD COLUMN revisado_sincronizado INTEGER DEFAULT 1")
 
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_historial_fecha ON historial(fecha)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_historial_asistencia ON historial(id_asistencia)")
@@ -1588,39 +1591,75 @@ def obtener_notificaciones_modificaciones(solo_no_revisadas: bool = True) -> lis
         return [dict(r) for r in cursor.fetchall()]
 
 # [FN-02.02] Marcar modificación como revisada por RRHH
-def marcar_modificacion_revisada(id_modificacion: str):
+def marcar_modificacion_revisada(id_modificacion: str) -> list:
     """Marca una modificación como leída o revisada por RRHH para removerla de las alertas pendientes."""
     if not id_modificacion:
-        return
+        return []
     with obtener_conexion() as conn:
         cursor = conn.cursor()
         cursor.execute("""
             UPDATE modificaciones_realizadas
-            SET revisado = 1
+            SET revisado = 1, revisado_sincronizado = 0
             WHERE id_modificacion = ?
         """, (id_modificacion,))
         conn.commit()
+    return [id_modificacion]
 
 # [FN-02.02] Marcar todas las modificaciones de una asistencia como revisadas
-def marcar_modificacion_por_asistencia_revisada(id_asistencia: str):
+def marcar_modificacion_por_asistencia_revisada(id_asistencia: str) -> list:
     """Marca todas las modificaciones de una asistencia como leídas o revisadas por RRHH."""
     if not id_asistencia:
-        return
+        return []
     with obtener_conexion() as conn:
         cursor = conn.cursor()
-        cursor.execute("""
-            UPDATE modificaciones_realizadas
-            SET revisado = 1
-            WHERE id_asistencia = ?
-        """, (str(id_asistencia),))
-        conn.commit()
+        cursor.execute("SELECT id_modificacion FROM modificaciones_realizadas WHERE id_asistencia = ?", (str(id_asistencia),))
+        ids = [r["id_modificacion"] for r in cursor.fetchall()]
+        if ids:
+            cursor.execute("""
+                UPDATE modificaciones_realizadas
+                SET revisado = 1, revisado_sincronizado = 0
+                WHERE id_asistencia = ?
+            """, (str(id_asistencia),))
+            conn.commit()
+    return ids
 
 # [FN-02.02] Marcar todas las modificaciones pendientes como revisadas
-def marcar_todas_modificaciones_revisadas():
+def marcar_todas_modificaciones_revisadas() -> list:
     """Marca todas las modificaciones pendientes como revisadas."""
     with obtener_conexion() as conn:
         cursor = conn.cursor()
-        cursor.execute("UPDATE modificaciones_realizadas SET revisado = 1 WHERE COALESCE(revisado, 0) = 0")
+        cursor.execute("SELECT id_modificacion FROM modificaciones_realizadas WHERE COALESCE(revisado, 0) = 0")
+        ids = [r["id_modificacion"] for r in cursor.fetchall()]
+        if ids:
+            cursor.execute("UPDATE modificaciones_realizadas SET revisado = 1, revisado_sincronizado = 0 WHERE COALESCE(revisado, 0) = 0")
+            conn.commit()
+    return ids
+
+# [FN-02.02] Consultar modificaciones revisadas pendientes de sincronizar con Google Sheets
+def obtener_modificaciones_pendientes_revisado() -> list:
+    """Retorna los IDs de modificaciones marcadas como revisadas que aún no han impactado en Google Sheets."""
+    with obtener_conexion() as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT id_modificacion
+            FROM modificaciones_realizadas
+            WHERE revisado = 1 AND COALESCE(revisado_sincronizado, 1) = 0
+        """)
+        return [r["id_modificacion"] for r in cursor.fetchall()]
+
+# [FN-02.02] Marcar modificaciones revisadas como sincronizadas en Google Sheets
+def marcar_modificaciones_revisado_sincronizadas(ids_modificacion: list):
+    """Marca el estado revisado como sincronizado en Google Sheets (revisado_sincronizado = 1)."""
+    if not ids_modificacion:
+        return
+    with obtener_conexion() as conn:
+        cursor = conn.cursor()
+        placeholders = ",".join(["?"] * len(ids_modificacion))
+        cursor.execute(f"""
+            UPDATE modificaciones_realizadas
+            SET revisado_sincronizado = 1
+            WHERE id_modificacion IN ({placeholders})
+        """, ids_modificacion)
         conn.commit()
 
 # [FN-02.02] Resumen de modificaciones para alertas visuales y badges en RRHH
@@ -1649,7 +1688,7 @@ def obtener_modificaciones_pendientes() -> list:
         cursor.execute("""
             SELECT id_modificacion, id_asistencia, tipo_antes, tipo_despues,
                    horas_antes, horas_despues, servicio_antes, servicio_despues,
-                   fecha_hora_modificaciones, quien_modifica
+                   fecha_hora_modificaciones, quien_modifica, COALESCE(revisado, 0) as revisado
             FROM modificaciones_realizadas
             WHERE sincronizado = 0
             ORDER BY fecha_hora_modificaciones ASC

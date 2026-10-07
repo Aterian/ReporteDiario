@@ -326,5 +326,20 @@
   2. `sub_admin`: Módulos de RRHH completos (roster, calculadora, historial global mutable, revisión de modificaciones, carga delegada y rangos de fechas). Justina Bertolozzi posee precedencia determinista a `sub_admin`.
   3. `core`: Actividad de ayer, selector de Campo habilitado y acceso de **solo lectura** al historial de otros colaboradores.
   4. `user_1`: Registro propio y personal con selector de Campo habilitado. Francos computan y guardan automáticamente como franco de oficina (0 hs).
-  5. `user_2`: Registro propio restringido exclusivamente a modalidades de Oficina y Franco (**sin facultad de elegir Campo**). Francos guardan automáticamente como franco de oficina (0 hs).
+## [FN-02.01] Auditoría y Esquema Remoto de Modificaciones Realizadas
+- **Módulo**: [MOD-02] Auditoría y Trazabilidad de Modificaciones
+- **Flujo Operativo**: Registra deltas de cambios en asistencias tanto localmente como en la hoja remota Google Sheets `1_1_modificaciones_realizadas` bajo un esquema de 11 columnas con auditoría de estado.
+- **Tablas afectadas**: `modificaciones_realizadas`, hoja Google Sheets `1_1_modificaciones_realizadas`.
+- **Reglas de negocio e invariantes**:
+  1. Cada mutación sobre una jornada genera un UUID de auditoría con valores antes/después y responsable.
+  2. El esquema de 11 columnas incluye la columna `revisado` al final de la fila.
+  3. Toda nueva modificación inicia con `revisado = 0` y `revisado_sincronizado = 1` si fue insertada remotamente.
 
+## [FN-02.02] Sincronización de Modificaciones Revisadas ('OK') y Desactivación Remota
+- **Módulo**: [MOD-02] Auditoría y Trazabilidad de Modificaciones
+- **Flujo Operativo**: Cuando un administrador marca una modificación como revisada, se persiste `revisado = 1` en SQLite y se escribe 'OK' en la columna `revisado` de Google Sheets. El resto de los administradores detecta el 'OK' en el ciclo periódico y suprime la alerta automáticamente.
+- **Tablas afectadas**: `modificaciones_realizadas`, hoja Google Sheets `1_1_modificaciones_realizadas`.
+- **Reglas de negocio e invariantes**:
+  1. Acceso de revisión exclusivo para Justina Bertolozzi e Iván Valentin (`puedeVerModificaciones`).
+  2. La subida de 'OK' se ejecuta en lote asíncrono hacia Google Sheets con fallback celda por celda.
+  3. `descargar_modificaciones_desde_sheets` actualiza filas existentes con valor remoto 'OK', sincronizando el apagado del banner de notificación entre administradores.

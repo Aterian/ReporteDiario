@@ -73,7 +73,8 @@ from sheets_service import (
     sincronizar_desde_sheets_hacia_local,
     deduplicar_hoja_remota,
     limpiar_y_descargar_desde_sheets,
-    descargar_modificaciones_desde_sheets
+    descargar_modificaciones_desde_sheets,
+    actualizar_revisado_en_sheets
 )
 
 
@@ -179,6 +180,11 @@ def sincronizar_todo_desde_sheets(motivo: str = "inicio"):
 
         res_asist = sincronizar_desde_sheets_hacia_local()
         purgar_rosters_huerfanos()
+        try:
+            descargar_modificaciones_desde_sheets()
+            actualizar_revisado_en_sheets()
+        except Exception as e_mod_init:
+            print(f"[SyncGlobal] Aviso al sincronizar auditoría de modificaciones: {e_mod_init}")
         print(f"[SyncGlobal] Reconciliación ({motivo}) exitosa: {res_asist}")
         return True
     except Exception as e:
@@ -643,6 +649,13 @@ class ApiPuente:
 
             # 6. Purgar también cualquier registro de la tabla rosters cuyos días ya no existan en historial
             cant_rosters_del = purgar_rosters_huerfanos()
+
+            # 6.1 Sincronizar y descargar modificaciones de auditoría ('1_1_modificaciones_realizadas')
+            try:
+                descargar_modificaciones_desde_sheets()
+                actualizar_revisado_en_sheets()
+            except Exception as e_mod_sync:
+                print(f"[Refrescar] Aviso al sincronizar modificaciones de auditoría: {e_mod_sync}")
 
             cant_p = len(p_remotos) if p_remotos else 0
             cant_u = len(u_remotos) if u_remotos else 0
@@ -1289,27 +1302,33 @@ class ApiPuente:
         return obtener_notificaciones_modificaciones(solo_no_revisadas)
 
     def marcar_modificacion_revisada(self, id_modificacion: str):
-        """Marca una modificación como vista/revisada (exclusivo Justina Bertolozzi e Iván Valentin)."""
+        """Marca una modificación como vista/revisada y sincroniza 'OK' en Google Sheets (exclusivo Justina Bertolozzi e Iván Valentin)."""
         sesion = obtener_sesion_activa()
         if not puede_ver_modificaciones(sesion):
             return {"exito": False, "error": "Acceso denegado"}
-        marcar_modificacion_revisada(id_modificacion)
+        ids = marcar_modificacion_revisada(id_modificacion)
+        if ids:
+            threading.Thread(target=actualizar_revisado_en_sheets, args=(ids,), daemon=True).start()
         return {"exito": True}
 
     def marcar_modificacion_por_asistencia_revisada(self, id_asistencia: str):
-        """Marca todas las modificaciones de una asistencia como revisadas (exclusivo Justina Bertolozzi e Iván Valentin)."""
+        """Marca todas las modificaciones de una asistencia como revisadas y sincroniza 'OK' en Google Sheets (exclusivo Justina Bertolozzi e Iván Valentin)."""
         sesion = obtener_sesion_activa()
         if not puede_ver_modificaciones(sesion):
             return {"exito": False, "error": "Acceso denegado"}
-        marcar_modificacion_por_asistencia_revisada(id_asistencia)
+        ids = marcar_modificacion_por_asistencia_revisada(id_asistencia)
+        if ids:
+            threading.Thread(target=actualizar_revisado_en_sheets, args=(ids,), daemon=True).start()
         return {"exito": True}
 
     def marcar_todas_modificaciones_revisadas(self):
-        """Marca todas las modificaciones pendientes como leídas (exclusivo Justina Bertolozzi e Iván Valentin)."""
+        """Marca todas las modificaciones pendientes como leídas y sincroniza 'OK' en Google Sheets (exclusivo Justina Bertolozzi e Iván Valentin)."""
         sesion = obtener_sesion_activa()
         if not puede_ver_modificaciones(sesion):
             return {"exito": False, "error": "Acceso denegado"}
-        marcar_todas_modificaciones_revisadas()
+        ids = marcar_todas_modificaciones_revisadas()
+        if ids:
+            threading.Thread(target=actualizar_revisado_en_sheets, args=(ids,), daemon=True).start()
         return {"exito": True}
 
     def verificar_nuevas_modificaciones_sheets(self):
