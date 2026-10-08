@@ -30,6 +30,16 @@
   2. Turno Franco: el primer día (`fecha_desde`) toma tarifa de `bajada`. Los días restantes toman la tarifa de descanso habitual.
   3. Los importes se persisten en las columnas canónicas `costo_dia` y `tipo_costo` sin mutar el esquema de 17 columnas de `1_asistencia_informada`.
   4. La vista Gantt destaca Subida (`.bar-subida`, `⬆S`) y Bajada (`.bar-bajada`, `⬇B`).
+  5. En el formulario y modal de Gantt, las tarifas se presentan en tarjetas de solo lectura vinculadas automáticamente a `1_2_tarifas_roster`.
+
+## [FN-03.09] Filtrado Condicional de Colaboradores en Vista Gantt de Roster
+- **Módulo**: [MOD-03] Módulo de Roster y Tarifas
+- **Flujo Operativo**: Filtra la lista de colaboradores antes de renderizar la grilla mensual del Gantt, asegurando que solo aparezcan empleados del Área de Ingeniería o que tengan asignaciones activas en el período.
+- **Tablas afectadas**: `rosters`.
+- **Reglas de negocio e invariantes**:
+  1. Condición a: Colaboradores pertenecientes al Área de Ingeniería (`'I'`, `'Ingeniería'`, `'Ingenieria'`).
+  2. Condición b: Colaboradores que registren al menos una asignación activa cargada en la tabla de rosters para el mes/período visualizado.
+  3. Todo colaborador de otra área que carezca de asignaciones en el período es ocultado del Gantt.
 
 ## [FN-06.06] Calculadora de Liquidación Basada en Costo Día Asentado
 - **Módulo**: [MOD-06] Gestión de Nómina y Liquidación

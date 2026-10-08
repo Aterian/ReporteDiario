@@ -504,7 +504,19 @@ export const api = {
     if (bridge.actualizar_costo_dia_manual) {
       return await bridge.actualizar_costo_dia_manual(datos);
     }
+    if (bridge.guardar_costo_dia) {
+      return await bridge.guardar_costo_dia(datos);
+    }
     return { exito: true, mensaje: 'Actualizado en modo simulado.' };
+  },
+
+  // [FN-06.07] Guardar costo del día directamente
+  async guardarCostoDia(datos) {
+    const bridge = await getApi();
+    if (bridge.guardar_costo_dia) {
+      return await bridge.guardar_costo_dia(datos);
+    }
+    return await this.actualizarCostoDiaManual(datos);
   }
 };
 

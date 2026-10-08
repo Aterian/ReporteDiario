@@ -1463,6 +1463,8 @@ class ApiPuente:
 
         if area and isinstance(area, str) and area.strip().upper() != "TODOS":
             area_filtro = area.strip().upper()
+            if area_filtro in ["I", "INGENIERIA", "INGENIERÍA"]:
+                return [u for u in usuarios if (u.get("area") or "").strip().upper() in ["I", "INGENIERIA", "INGENIERÍA"]]
             return [u for u in usuarios if (u.get("area") or "").strip().upper() == area_filtro]
 
         return usuarios
@@ -2348,6 +2350,11 @@ def ejecutar_descarga_y_reinicio(url_descarga: str):
             self._disparar_sync_segundo_plano()
 
         return res
+
+    # [FN-06.07] Alias para actualizar_costo_dia_manual
+    def guardar_costo_dia(self, datos: dict):
+        """Alias de compatibilidad para actualizar_costo_dia_manual."""
+        return self.actualizar_costo_dia_manual(datos)
 
 
 def demonio_recordatorios(ventana, tray_icon):

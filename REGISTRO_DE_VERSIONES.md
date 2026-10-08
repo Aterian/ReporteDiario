@@ -33,6 +33,18 @@ Historial cronológico de cambios, nuevas características y mejoras aplicadas a
   - Cálculo automático de subtotales y total a liquidar fundamentado **únicamente en los valores asentados en la columna `costo_dia`** de los registros seleccionados.
   - Preservación íntegra de la sobreescritura manual de días y tarifas para excepciones operativas de RRHH.
 
+### 🛠️ Correcciones de Estabilidad en Roster y Liquidación (`[FN-03.08]`, `[FN-03.09]`, `[FN-06.06]`, `[FN-06.07]`)
+- **Tarifas de Roster en Modo Solo Lectura (`[FN-03.08]`)**:
+  - Eliminación total de inputs de edición manual de tarifas (`precioDia`, `precioDomingo`) tanto en el formulario principal como en el modal de edición de turnos del Gantt.
+  - Enlace automático contra `1_2_tarifas_roster` por `id_proyecto` y denominación, y presentación mediante tarjeta informativa de solo lectura (`.tariffs-readonly-card`).
+- **Filtrado Exclusivo de Colaboradores en Gantt (`[FN-03.09]`)**:
+  - Filtrado riguroso antes de renderizar la grilla: solo se listan quienes pertenezcan al Área de Ingeniería (`'I'`, `'Ingeniería'`, `'Ingenieria'`) o tengan turnos activos en el mes visualizado.
+  - Ocultamiento de colaboradores de otras áreas sin actividad planificada en el período.
+- **Deduplicación de `costo_dia` en Jornadas Multiproyecto (`[FN-06.06]`)**:
+  - Agrupación por clave `(fecha, categoría)` en el cómputo de la calculadora de liquidación y en el badge numérico de las celdas del calendario para computar el costo del día exactamente una vez por categoría, impidiendo sumas duplicadas cuando un colaborador registra múltiples proyectos en un mismo día.
+- **Reactividad Inmediata al Editar `costo_dia` en el Calendario (`[FN-06.07]`)**:
+  - Actualización optimista instantánea de los estados `registros`, `registrosEmpleadoAuditar` y `diaSeleccionadoAuditoria` tras resolver `actualizar_costo_dia_manual` / `guardar_costo_dia`, reflejando el nuevo valor en la celda del calendario de forma inmediata y cerrando el modal sin requerir recargar la vista.
+
 ### 📦 Empaquetado y Distribución de Ejecutables v1.16.0 (`[FN-00.01]`)
 - **Recompilación Integral de la Aplicación y del Instalador Autónomo**:
   - Generación del ejecutable principal `instalador/CheckDiarioIngeap.exe` (27.6 MB) que incluye los bundles compilados de producción de React + Vite en `backend/dist`.

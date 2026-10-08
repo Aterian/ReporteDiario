@@ -605,14 +605,45 @@ export default function OtherEmployeesHistoryView({
       });
 
       if (res && res.exito) {
+        // [FN-06.07] Reactividad inmediata: actualizar directamente el estado local de React
+        setRegistros(prev => prev.map(r => {
+          if ((r.id_asistencia && r.id_asistencia === idTarget) || (r.id && r.id === idTarget)) {
+            return { ...r, costo_dia: valorNum };
+          }
+          return r;
+        }));
+
+        setRegistrosEmpleadoAuditar(prev => prev.map(r => {
+          if ((r.id_asistencia && r.id_asistencia === idTarget) || (r.id && r.id === idTarget)) {
+            return { ...r, costo_dia: valorNum };
+          }
+          return r;
+        }));
+
+        if (diaSeleccionadoAuditoria) {
+          setDiaSeleccionadoAuditoria(prev => {
+            if (!prev) return null;
+            return {
+              ...prev,
+              registros: prev.registros.map(r => {
+                if ((r.id_asistencia && r.id_asistencia === idTarget) || (r.id && r.id === idTarget)) {
+                  return { ...r, costo_dia: valorNum };
+                }
+                return r;
+              })
+            };
+          });
+        }
+
         setMensajeSync({
           tipo: 'exito',
           texto: `Costo del día ($${valorNum.toLocaleString('es-AR')}) guardado para ${target.empleado} (${modalCostoDia.fecha}).`
         });
         setModalCostoDia(null);
-        await cargarDatos();
+        // Sincronización en segundo plano sin demorar la reactividad de pantalla
+        cargarDatos();
         if (empleadoAuditar) {
-          await cargarAuditoriaEmpleado(empleadoAuditar, fechaCalendario);
+          cargarAuditoriaEmpleado(empleadoAuditar, fechaCalendario);
         }
       } else {
         alert(res?.error || 'No se pudo guardar el costo del día.');
@@ -909,8 +940,31 @@ export default function OtherEmployeesHistoryView({
     ? Math.max(0, parseFloat(diasFeriadoManual))
     : conteosLiquidacion.diasFeriadoTrabajado;
 
-  // [FN-06.06] Suma de importes basada estrictamente en la columna costo_dia de los registros
+  // [FN-06.06] Suma de importes basada en costo_dia agrupado por (fecha, categoría)
+  // Regla estricta contra duplicación en jornadas multiproyecto:
+  // Si existen múltiples registros del mismo tipo en una misma fecha, se computa costo_dia una única vez.
+  // Si coexisten modalidades distintas en la misma fecha (ej. Oficina y Campo), se computa cada modalidad por separado.
   const sumasCostoDiaPorCategoria = useMemo(() => {
+    const mapaFechaCat = new Map();
+
+    registrosParaLiquidar.forEach(r => {
+      if (!r.fecha) return;
+      const f = r.fecha.trim();
+      const cat = categorizarRegistroLiquidacion(r);
+      const clave = `${f}__${cat}`;
+      const c = Number(r.costo_dia) || 0;
+
+      if (!mapaFechaCat.has(clave)) {
+        mapaFechaCat.set(clave, { cat, fecha: f, costo_dia: c });
+      } else {
+        // En caso de múltiples turnos en el mismo día y categoría, computar una única vez (tomando el valor mayor representativo)
+        const actual = mapaFechaCat.get(clave);
+        if (c > actual.costo_dia) {
+          actual.costo_dia = c;
+        }
+      }
+    });
+
     let sumOficina = 0;
     let sumObra = 0;
     let sumFrancoObra = 0;
@@ -918,16 +972,14 @@ export default function OtherEmployeesHistoryView({
     let sumFeriado = 0;
     let totalDirecto = 0;
 
-    registrosParaLiquidar.forEach(r => {
-      const c = Number(r.costo_dia) || 0;
-      totalDirecto += c;
-      const cat = categorizarRegistroLiquidacion(r);
-      if (cat === 'oficina') sumOficina += c;
-      else if (cat === 'obra') sumObra += c;
-      else if (cat === 'franco_obra_trab') sumFrancoObra += c;
-      else if (cat === 'franco_ofic_trab') sumFrancoOfic += c;
-      else if (cat === 'feriado_trab') sumFeriado += c;
-      else sumOficina += c;
+    mapaFechaCat.forEach(({ cat, costo_dia }) => {
+      totalDirecto += costo_dia;
+      if (cat === 'oficina') sumOficina += costo_dia;
+      else if (cat === 'obra') sumObra += costo_dia;
+      else if (cat === 'franco_obra_trab') sumFrancoObra += costo_dia;
+      else if (cat === 'franco_ofic_trab') sumFrancoOfic += costo_dia;
+      else if (cat === 'feriado_trab') sumFeriado += costo_dia;
+      else sumOficina += costo_dia;
     });
 
     return {
@@ -1808,7 +1860,16 @@ export default function OtherEmployeesHistoryView({
                 const tieneModificadosPendientes = celda.registros.some(r => r.modificacion_pendiente === 1 || (r.fue_modificado === 1 && r.modificacion_revisada !== 1));
                 const tieneModificadosRevisados = !tieneModificadosPendientes && celda.registros.some(r => r.modificacion_revisada === 1);
                 const esDestacada = diaDestacado === celda.fechaIso;
-                const costoDiaTotal = celda.registros.reduce((acc, r) => acc + (Number(r.costo_dia) || 0), 0);
+                // [FN-06.07] Agrupar por categoría para no duplicar costo en jornadas multiproyecto del mismo día
+                const mapaCostosCelda = new Map();
+                celda.registros.forEach(r => {
+                  const cat = categorizarRegistroLiquidacion(r);
+                  const c = Number(r.costo_dia) || 0;
+                  if (!mapaCostosCelda.has(cat) || c > mapaCostosCelda.get(cat)) {
+                    mapaCostosCelda.set(cat, c);
+                  }
+                });
+                const costoDiaTotal = Array.from(mapaCostosCelda.values()).reduce((acc, v) => acc + v, 0);
 
                 return (
                   <div

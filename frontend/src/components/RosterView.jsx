@@ -36,6 +36,7 @@ export default function RosterView({ usuario, onVolver, tema }) {
   // Catálogos
   const [proyectosDisponibles, setProyectosDisponibles] = useState([]);
   const [empleadosDisponibles, setEmpleadosDisponibles] = useState([]);
+  const [todosLosEmpleados, setTodosLosEmpleados] = useState([]);
   const [tarifasRoster, setTarifasRoster] = useState([]);
   const [cargandoCatalogos, setCargandoCatalogos] = useState(true);
 
@@ -65,7 +66,11 @@ export default function RosterView({ usuario, onVolver, tema }) {
     return tarifasRoster.find(t => {
       const nomT = (t.proyecto || '').trim().toLowerCase();
       const idP = (t.id_proyecto || '').trim().toLowerCase();
-      return nomT === pNorm || nomT.includes(pNorm) || pNorm.includes(nomT) || (idP && idP === pNorm);
+      return (idP && pNorm.includes(idP)) ||
+             (idP && idP === pNorm) ||
+             nomT === pNorm ||
+             nomT.includes(pNorm) ||
+             pNorm.includes(nomT);
     }) || null;
   }, [proyecto, tarifasRoster]);
 
@@ -73,6 +78,9 @@ export default function RosterView({ usuario, onVolver, tema }) {
     if (tarifaActual) {
       if (tarifaActual.dia_normal != null) setPrecioDia(String(tarifaActual.dia_normal));
       if (tarifaActual.domingo != null) setPrecioDomingo(String(tarifaActual.domingo));
+    } else {
+      setPrecioDia('0');
+      setPrecioDomingo('0');
     }
   }, [tarifaActual]);
 
@@ -118,6 +126,21 @@ export default function RosterView({ usuario, onVolver, tema }) {
     setModalEditar(true);
   };
 
+  // [FN-03.08] Tarifa oficial para el proyecto que se está editando en el modal de Gantt
+  const tarifaModalEdit = useMemo(() => {
+    if (!editProyecto || !tarifasRoster.length) return null;
+    const pNorm = editProyecto.trim().toLowerCase();
+    return tarifasRoster.find(t => {
+      const nomT = (t.proyecto || '').trim().toLowerCase();
+      const idP = (t.id_proyecto || '').trim().toLowerCase();
+      return (idP && pNorm.includes(idP)) ||
+             (idP && idP === pNorm) ||
+             nomT === pNorm ||
+             nomT.includes(pNorm) ||
+             pNorm.includes(nomT);
+    }) || null;
+  }, [editProyecto, tarifasRoster]);
+
   const handleEliminarTurnoGantt = async () => {
     if (!editId) return;
     if (!window.confirm(`¿Estás seguro de eliminar el registro de roster de ${editEmpleado}?`)) {
@@ -156,20 +179,19 @@ export default function RosterView({ usuario, onVolver, tema }) {
     }
     setGuardandoEdit(true);
     try {
-      const empObj = empleadosDisponibles.find(emp => emp.nombre === editEmpleado);
-      const tObj = tarifasRoster.find(t => (t.proyecto || '').trim().toLowerCase() === editProyecto.trim().toLowerCase());
+      const empObj = empleadosDisponibles.find(emp => emp.nombre === editEmpleado) || (todosLosEmpleados || []).find(emp => emp.nombre === editEmpleado);
       const res = await api.guardarRoster({
         id: editId,
         empleado: editEmpleado,
         dni: empObj ? empObj.dni : '',
         usuario_mail: empObj ? (empObj.mail || empObj.email || '') : '',
         proyecto: editProyecto,
-        id_proyecto: tObj ? tObj.id_proyecto : '',
+        id_proyecto: tarifaModalEdit ? tarifaModalEdit.id_proyecto : '',
         fecha_inicio: editFechaInicio,
         fecha_fin: editFechaFin,
         tipo: editTipo,
-        precio_dia: editTipo === 'Campo' ? Number(editPrecioDia) || 0 : 0,
-        precio_domingo: editTipo === 'Campo' ? Number(editPrecioDomingo) || 0 : 0
+        precio_dia: editTipo === 'Campo' ? (tarifaModalEdit ? Number(tarifaModalEdit.dia_normal) || 0 : Number(editPrecioDia) || 0) : 0,
+        precio_domingo: editTipo === 'Campo' ? (tarifaModalEdit ? Number(tarifaModalEdit.domingo) || 0 : Number(editPrecioDomingo) || 0) : 0
       });
       if (res && res.exito) {
         setModalEditar(false);
@@ -280,11 +302,12 @@ export default function RosterView({ usuario, onVolver, tema }) {
             }
           }
           if (Array.isArray(emps)) {
-            // Filtrado defensivo adicional por área 'I' (Ingeniería)
+            setTodosLosEmpleados(emps);
+            // Filtrado estricto por área 'I' (Ingeniería)
             const empsIngenieria = emps.filter(
-              (e) => (e.area || '').trim().toUpperCase() === 'I'
+              (e) => ['I', 'INGENIERÍA', 'INGENIERIA'].includes((e.area || '').trim().toUpperCase())
             );
-            setEmpleadosDisponibles(empsIngenieria.length > 0 ? empsIngenieria : emps);
+            setEmpleadosDisponibles(empsIngenieria);
           }
         }
       } catch (err) {
@@ -470,8 +493,8 @@ export default function RosterView({ usuario, onVolver, tema }) {
           fecha_inicio: fechaInicio,
           fecha_fin: fechaFin,
           tipo: tipo,
-          precio_dia: tipo === 'Campo' ? Number(precioDia) || 0 : 0,
-          precio_domingo: tipo === 'Campo' ? Number(precioDomingo) || 0 : 0
+          precio_dia: tipo === 'Campo' ? (tarifaActual ? Number(tarifaActual.dia_normal) || 0 : Number(precioDia) || 0) : 0,
+          precio_domingo: tipo === 'Campo' ? (tarifaActual ? Number(tarifaActual.domingo) || 0 : Number(precioDomingo) || 0) : 0
         };
       });
 
@@ -535,30 +558,65 @@ export default function RosterView({ usuario, onVolver, tema }) {
     return rostersPeriodo.filter(r => r.proyecto === filtroProyectoGantt);
   }, [rostersPeriodo, filtroProyectoGantt]);
 
-  // Agrupar los registros por Empleado e identificar todos los proyectos a los que pertenece
+  // [FN-03.09] Agrupar y filtrar colaboradores en Gantt: Ingeniería ('I') o con asignaciones activas
   const empleadosEnGantt = useMemo(() => {
     const mapa = {};
-    rostersFiltrados.forEach(r => {
-      const emp = r.empleado;
-      if (!mapa[emp]) {
-        mapa[emp] = {
-          nombre: emp,
-          dni: r.dni,
+
+    // 1. Condición a): Todos los colaboradores de Ingeniería ('I', 'Ingeniería', 'Ingenieria')
+    (empleadosDisponibles || []).forEach(emp => {
+      const nom = emp.nombre;
+      if (!nom) return;
+      const areaNorm = (emp.area || '').trim().toUpperCase();
+      const esIng = ['I', 'INGENIERÍA', 'INGENIERIA'].includes(areaNorm);
+      if (esIng) {
+        mapa[nom] = {
+          nombre: nom,
+          dni: emp.dni || '',
+          area: emp.area || 'I',
           proyectosMap: {},
           registros: []
         };
       }
+    });
+
+    // 2. Condición b): Colaboradores con asignaciones activas cargadas en este mes/período
+    rostersFiltrados.forEach(r => {
+      const emp = r.empleado;
+      if (!emp) return;
+
+      if (!mapa[emp]) {
+        const empRef = (todosLosEmpleados || []).find(e => e.nombre === emp);
+        mapa[emp] = {
+          nombre: emp,
+          dni: r.dni || (empRef ? empRef.dni : ''),
+          area: empRef ? empRef.area : (r.area || ''),
+          proyectosMap: {},
+          registros: []
+        };
+      }
+
       mapa[emp].registros.push(r);
       if (r.proyecto) {
         mapa[emp].proyectosMap[r.proyecto] = true;
       }
     });
 
-    return Object.values(mapa).map(empObj => ({
-      ...empObj,
-      proyectos: Object.keys(empObj.proyectosMap)
-    })).sort((a, b) => a.nombre.localeCompare(b.nombre));
-  }, [rostersFiltrados]);
+    // 3. Filtrar estrictamente: SOLO mostrar quienes cumplan:
+    // a) Pertenezcan al Área de Ingeniería ('I', 'Ingeniería' o 'Ingenieria')
+    // b) Tengan al menos una asignación activa cargada en la tabla de rosters para el mes/período visualizado
+    return Object.values(mapa)
+      .filter(empObj => {
+        const areaNorm = (empObj.area || '').trim().toUpperCase();
+        const esIngenieria = ['I', 'INGENIERÍA', 'INGENIERIA'].includes(areaNorm);
+        const tieneAsignacionesActivas = empObj.registros && empObj.registros.length > 0;
+        return esIngenieria || tieneAsignacionesActivas;
+      })
+      .map(empObj => ({
+        ...empObj,
+        proyectos: Object.keys(empObj.proyectosMap)
+      }))
+      .sort((a, b) => a.nombre.localeCompare(b.nombre));
+  }, [rostersFiltrados, empleadosDisponibles, todosLosEmpleados]);
 
   // Nombres de los meses en español
   const nombresMeses = [
@@ -902,48 +960,62 @@ export default function RosterView({ usuario, onVolver, tema }) {
                 </div>
               </div>
 
-              {/* 5. TARIFAS: PRECIO DÍA NORMAL Y PRECIO DOMINGO */}
+              {/* 5. TARIFAS ASIGNADAS AL PROYECTO (MODO SOLO LECTURA) */}
               {tipo === 'Campo' ? (
                 <div className="form-group-roster tariffs-container">
                   <label className="roster-label">
                     <span className="roster-label-num">5</span>
-                    <span>Tarifas a Liquidar por Día Trabajado</span>
+                    <span>Tarifas Oficiales Asignadas al Proyecto (Solo Lectura)</span>
                   </label>
-                  <div className="tariffs-inputs-row">
-                    <div className="tariff-input-box">
-                      <span className="tariff-title">Día Normal en Obra</span>
-                      <div className="input-currency-wrapper">
-                        <span className="currency-symbol">$</span>
-                        <input
-                          type="number"
-                          step="0.01"
-                          min="0"
-                          placeholder="0.00"
-                          value={precioDia}
-                          onChange={(e) => setPrecioDia(e.target.value)}
-                          className="roster-input tariff-input"
-                        />
+                  {tarifaActual ? (
+                    <div className="tariffs-readonly-card">
+                      <div className="tariffs-readonly-header">
+                        <div className="tariffs-readonly-title">
+                          <span style={{ fontSize: '14px' }}>🔒</span>
+                          <strong>Tarifas Reglamentarias ({tarifaActual.proyecto})</strong>
+                        </div>
+                        {tarifaActual.id_proyecto && (
+                          <span className="tariffs-readonly-id">ID: {tarifaActual.id_proyecto}</span>
+                        )}
+                      </div>
+                      <p className="tariffs-readonly-desc">
+                        Valores asignados automáticamente desde la hoja oficial <code>1_2_tarifas_roster</code> para este proyecto.
+                      </p>
+                      <div className="tariffs-readonly-grid">
+                        <div className="tariff-readonly-item">
+                          <span className="item-label">Día Normal en Obra</span>
+                          <span className="item-value">${Number(tarifaActual.dia_normal || 0).toLocaleString('es-AR', { minimumFractionDigits: 2 })}</span>
+                        </div>
+                        <div className="tariff-readonly-item highlight-domingo">
+                          <span className="item-label">Día Domingo (DOM)</span>
+                          <span className="item-value">${Number(tarifaActual.domingo || 0).toLocaleString('es-AR', { minimumFractionDigits: 2 })}</span>
+                        </div>
+                        <div className="tariff-readonly-item highlight-subida">
+                          <span className="item-label">⬆️ Subida (Inicio Campo)</span>
+                          <span className="item-value">${Number(tarifaActual.subida || 0).toLocaleString('es-AR', { minimumFractionDigits: 2 })}</span>
+                        </div>
+                        <div className="tariff-readonly-item highlight-bajada">
+                          <span className="item-label">⬇️ Bajada (Inicio Franco)</span>
+                          <span className="item-value">${Number(tarifaActual.bajada || 0).toLocaleString('es-AR', { minimumFractionDigits: 2 })}</span>
+                        </div>
+                        {Number(tarifaActual.adicionales) > 0 && (
+                          <div className="tariff-readonly-item highlight-adicionales">
+                            <span className="item-label">Adicionales (x1 por bloque)</span>
+                            <span className="item-value">${Number(tarifaActual.adicionales || 0).toLocaleString('es-AR', { minimumFractionDigits: 2 })}</span>
+                          </div>
+                        )}
                       </div>
                     </div>
-
-                    <div className="tariff-input-box sunday-tariff">
-                      <span className="tariff-title">
-                        Día Domingo <span className="sunday-badge-mini">DOM</span>
+                  ) : (
+                    <div className="tariffs-readonly-empty">
+                      <span style={{ fontSize: '18px' }}>ℹ️</span>
+                      <span>
+                        {proyecto
+                          ? 'El proyecto seleccionado no registra tarifas especiales en 1_2_tarifas_roster (se liquidará con tarifa base $0.00).'
+                          : 'Selecciona un proyecto asignado arriba para cargar automáticamente sus tarifas reglamentarias.'}
                       </span>
-                      <div className="input-currency-wrapper">
-                        <span className="currency-symbol">$</span>
-                        <input
-                          type="number"
-                          step="0.01"
-                          min="0"
-                          placeholder="0.00"
-                          value={precioDomingo}
-                          onChange={(e) => setPrecioDomingo(e.target.value)}
-                          className="roster-input tariff-input"
-                        />
-                      </div>
                     </div>
-                  </div>
+                  )}
                 </div>
               ) : (
                 <div className="franco-info-box">
@@ -1528,33 +1600,38 @@ export default function RosterView({ usuario, onVolver, tema }) {
                 </div>
               </div>
 
-              {/* Tarifas si es Campo */}
+              {/* Tarifas si es Campo (Modo Solo Lectura) */}
               {editTipo === 'Campo' && (
-                <div className="tariffs-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginTop: '6px' }}>
-                  <div className="tariff-input-box">
-                    <label style={{ fontSize: '11px', fontWeight: 600 }}>Tarifa Día Normal ($):</label>
-                    <input
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      value={editPrecioDia}
-                      onChange={(e) => setEditPrecioDia(e.target.value)}
-                      placeholder="0.00"
-                      className="roster-input"
-                    />
-                  </div>
-                  <div className="tariff-input-box">
-                    <label style={{ fontSize: '11px', fontWeight: 600 }}>Tarifa Día Domingo ($):</label>
-                    <input
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      value={editPrecioDomingo}
-                      onChange={(e) => setEditPrecioDomingo(e.target.value)}
-                      placeholder="0.00"
-                      className="roster-input"
-                    />
-                  </div>
+                <div style={{ marginTop: '10px' }}>
+                  <label className="roster-label" style={{ fontSize: '12px', marginBottom: '6px' }}>
+                    Tarifas Reglamentarias Asignadas (Solo Lectura):
+                  </label>
+                  {tarifaModalEdit ? (
+                    <div style={{ background: 'var(--bg-secondary, #f8fafc)', border: '1px solid var(--border-input, #cbd5e1)', borderRadius: '8px', padding: '10px 12px' }}>
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '8px', fontSize: '12px' }}>
+                        <div>
+                          <span style={{ fontSize: '11px', color: '#64748b', display: 'block' }}>Día Normal:</span>
+                          <strong>${Number(tarifaModalEdit.dia_normal || 0).toLocaleString('es-AR')}</strong>
+                        </div>
+                        <div>
+                          <span style={{ fontSize: '11px', color: '#92400e', display: 'block' }}>Domingo:</span>
+                          <strong style={{ color: '#b45309' }}>${Number(tarifaModalEdit.domingo || 0).toLocaleString('es-AR')}</strong>
+                        </div>
+                        <div>
+                          <span style={{ fontSize: '11px', color: '#065f46', display: 'block' }}>Subida:</span>
+                          <strong style={{ color: '#047857' }}>${Number(tarifaModalEdit.subida || 0).toLocaleString('es-AR')}</strong>
+                        </div>
+                        <div>
+                          <span style={{ fontSize: '11px', color: '#1e40af', display: 'block' }}>Bajada:</span>
+                          <strong style={{ color: '#1d4ed8' }}>${Number(tarifaModalEdit.bajada || 0).toLocaleString('es-AR')}</strong>
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div style={{ padding: '8px 12px', background: '#f1f5f9', borderRadius: '6px', fontSize: '12px', color: '#64748b' }}>
+                      Sin tarifa configurada en 1_2_tarifas_roster para este proyecto (Tarifa: $0.00).
+                    </div>
+                  )}
                 </div>
               )}
 

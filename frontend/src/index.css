@@ -5298,6 +5298,118 @@ html, body {
   border-color: #f59e0b;
 }
 
+/* [FN-03.08] Tarjeta Informativa de Tarifas de Solo Lectura */
+.tariffs-readonly-card {
+  background: var(--bg-surface, #ffffff);
+  border: 1px solid var(--border-subtle, #cbd5e1);
+  border-radius: var(--radius-md, 8px);
+  padding: 12px 14px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.tariffs-readonly-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.tariffs-readonly-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+  color: var(--text-primary);
+}
+
+.tariffs-readonly-id {
+  font-size: 10px;
+  font-family: monospace;
+  background: var(--bg-secondary, #f1f5f9);
+  padding: 2px 6px;
+  border-radius: 4px;
+  color: var(--text-secondary);
+}
+
+.tariffs-readonly-desc {
+  font-size: 11px;
+  color: var(--text-secondary, #64748b);
+  margin: 0;
+  line-height: 1.35;
+}
+
+.tariffs-readonly-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 8px;
+  margin-top: 2px;
+}
+
+.tariff-readonly-item {
+  background: var(--bg-surface-hover, #f8fafc);
+  border: 1px solid var(--border-subtle, #e2e8f0);
+  border-radius: 6px;
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.tariff-readonly-item .item-label {
+  font-size: 10.5px;
+  color: var(--text-secondary);
+  font-weight: 600;
+}
+
+.tariff-readonly-item .item-value {
+  font-size: 13.5px;
+  font-weight: 800;
+  color: var(--text-primary);
+}
+
+.tariff-readonly-item.highlight-domingo {
+  background: #fffbeb;
+  border-color: #fde68a;
+}
+.tariff-readonly-item.highlight-domingo .item-label { color: #92400e; }
+.tariff-readonly-item.highlight-domingo .item-value { color: #b45309; }
+
+.tariff-readonly-item.highlight-subida {
+  background: #f0fdf4;
+  border-color: #bbf7d0;
+}
+.tariff-readonly-item.highlight-subida .item-label { color: #166534; }
+.tariff-readonly-item.highlight-subida .item-value { color: #15803d; }
+
+.tariff-readonly-item.highlight-bajada {
+  background: #eff6ff;
+  border-color: #bfdbfe;
+}
+.tariff-readonly-item.highlight-bajada .item-label { color: #1e40af; }
+.tariff-readonly-item.highlight-bajada .item-value { color: #1d4ed8; }
+
+.tariff-readonly-item.highlight-adicionales {
+  background: #fdf2f8;
+  border-color: #fbcfe8;
+}
+.tariff-readonly-item.highlight-adicionales .item-label { color: #9d174d; }
+.tariff-readonly-item.highlight-adicionales .item-value { color: #be185d; }
+
+.tariffs-readonly-empty {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  background: var(--bg-surface-hover, #f8fafc);
+  border: 1px dashed var(--border-input, #cbd5e1);
+  border-radius: 6px;
+  font-size: 11.5px;
+  color: var(--text-secondary);
+  line-height: 1.4;
+}
+
 .franco-info-box {
   display: flex;
   align-items: flex-start;
