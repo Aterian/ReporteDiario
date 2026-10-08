@@ -16,46 +16,82 @@ export const COLABORADORES_GANTT_INGENIERIA = [
   'José María Zufiaurre'
 ];
 
-export const normalizarTexto = (txt) => {
-  if (!txt) return '';
-  return txt.trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+/**
+ * [FN-03.07] Normalización robusta de texto.
+ * Convierte a minúsculas, elimina tildes/acentos y unifica espacios en blanco.
+ *
+ * @param {any} valor - Texto o dato a normalizar.
+ * @returns {string} - Texto limpio y uniforme.
+ */
+export const normalizarTexto = (valor) => {
+  if (valor === null || valor === undefined) return '';
+  return String(valor)
+    .trim()
+    .toLowerCase()
+    .normalize('NFD') // Separa caracteres acentuados en letra base + tilde
+    .replace(/[\u0300-\u036f]/g, '') // Elimina los signos diacríticos
+    .replace(/\s+/g, ' '); // Unifica espacios repetidos
 };
 
-// [FN-03.08] Búsqueda de tarifa oficial en 1_2_tarifas_roster por id_proyecto y denominación
-export const buscarTarifaRoster = (proyectoTexto, tarifas) => {
-  if (!proyectoTexto || !Array.isArray(tarifas) || tarifas.length === 0) return null;
-  const pNorm = normalizarTexto(proyectoTexto);
+/**
+ * [FN-03.08] Búsqueda de tarifa oficial en 1_2_tarifas_roster.
+ * Busca coincidencias tanto por 'id_proyecto' como por 'denominacion' / 'proyecto',
+ * tolerando diferencias de mayúsculas, tildes y estructuras de formulario.
+ *
+ * @param {string} proyectoBuscado - UUID o Denominación del proyecto seleccionado.
+ * @param {Array} tarifas - Lista de tarifas cargadas desde 1_2_tarifas_roster.
+ * @returns {Object|null} - Objeto de tarifa encontrado o null si no existe.
+ */
+export const buscarTarifaRoster = (proyectoBuscado, tarifas) => {
+  // Validación de seguridad inicial
+  if (!proyectoBuscado || !Array.isArray(tarifas) || tarifas.length === 0) {
+    console.warn('[Tarifas Roster] Lista de tarifas vacía o proyecto no especificado:', {
+      proyectoBuscado,
+      cantidadTarifas: Array.isArray(tarifas) ? tarifas.length : 'No es un arreglo'
+    });
+    return null;
+  }
 
-  // 1. Coincidencia combinada estricta: tanto id_proyecto como denominación coinciden
-  const matchAmbos = tarifas.find(t => {
-    const idP = normalizarTexto(t.id_proyecto);
-    const nomP = normalizarTexto(t.proyecto);
-    if (!idP || !nomP) return false;
-    const idOk = idP === pNorm || pNorm.includes(idP);
-    const nomOk = nomP === pNorm || pNorm.includes(nomP) || nomP.includes(pNorm);
-    return idOk && nomOk;
+  const busquedaNorm = normalizarTexto(proyectoBuscado);
+
+  // Registro de depuración en consola para verificar los datos en tiempo real
+  console.log(`[Tarifas Roster] Buscando: "${busquedaNorm}" en ${tarifas.length} tarifas disponibles.`);
+
+  // 1. Coincidencia por ID de Proyecto (UUID)
+  const matchPorId = tarifas.find((t) => {
+    const idTarifa = normalizarTexto(t.id_proyecto);
+    return idTarifa !== '' && (idTarifa === busquedaNorm || busquedaNorm.includes(idTarifa) || idTarifa.includes(busquedaNorm));
   });
-  if (matchAmbos) return matchAmbos;
 
-  // 2. Coincidencia por id_proyecto exacto
-  const matchId = tarifas.find(t => {
-    const idP = normalizarTexto(t.id_proyecto);
-    return idP && (idP === pNorm || pNorm.startsWith(idP) || pNorm.includes(idP));
+  if (matchPorId) {
+    console.log('[Tarifas Roster] ¡Coincidencia encontrada por ID de proyecto!', matchPorId);
+    return matchPorId;
+  }
+
+  // 2. Coincidencia por Denominación Exacta (revisando 'denominacion' y 'proyecto')
+  const matchDenominacionExacta = tarifas.find((t) => {
+    const nombreTarifa = normalizarTexto(t.denominacion || t.proyecto);
+    return nombreTarifa !== '' && nombreTarifa === busquedaNorm;
   });
-  if (matchId) return matchId;
 
-  // 3. Coincidencia por denominación exacta
-  const matchDenomExacta = tarifas.find(t => {
-    const nomP = normalizarTexto(t.proyecto);
-    return nomP && nomP === pNorm;
+  if (matchDenominacionExacta) {
+    console.log('[Tarifas Roster] ¡Coincidencia encontrada por denominación exacta!', matchDenominacionExacta);
+    return matchDenominacionExacta;
+  }
+
+  // 3. Coincidencia por Inclusión Parcial (útil si el selector agrega códigos o prefijos)
+  const matchParcial = tarifas.find((t) => {
+    const nombreTarifa = normalizarTexto(t.denominacion || t.proyecto);
+    return nombreTarifa !== '' && (busquedaNorm.includes(nombreTarifa) || nombreTarifa.includes(busquedaNorm));
   });
-  if (matchDenomExacta) return matchDenomExacta;
 
-  // 4. Coincidencia por inclusión de denominación
-  return tarifas.find(t => {
-    const nomP = normalizarTexto(t.proyecto);
-    return nomP && (pNorm.includes(nomP) || nomP.includes(pNorm));
-  }) || null;
+  if (matchParcial) {
+    console.log('[Tarifas Roster] ¡Coincidencia encontrada por inclusión parcial!', matchParcial);
+    return matchParcial;
+  }
+
+  console.warn(`[Tarifas Roster] No se encontró tarifa para "${proyectoBuscado}". Tarifas actuales:`, tarifas);
+  return null;
 };
 
 // [MOD-05] RosterView
@@ -810,7 +846,7 @@ export default function RosterView({ usuario, onVolver, tema }) {
 
       {/* Contenido principal: Dividido o Centrado */}
       <div className={`roster-main-layout ${!mostrarCalendario ? 'layout-centered' : 'layout-split'}`}>
-        
+
         {/* =================================================================== */}
         {/* PANEL IZQUIERDO: FORMULARIO DE CARGA CONTINUA                      */}
         {/* =================================================================== */}
@@ -831,7 +867,7 @@ export default function RosterView({ usuario, onVolver, tema }) {
             )}
 
             <form onSubmit={handleGuardarRoster} className="roster-form-fields">
-              
+
               {/* 1. SELECCIÓN DE PROYECTO (PRIMERO Y OBLIGATORIO) */}
               <div className="form-group-roster highlight-project">
                 <label className="roster-label">
@@ -1118,7 +1154,7 @@ export default function RosterView({ usuario, onVolver, tema }) {
         {mostrarCalendario && (
           <div className="roster-gantt-panel">
             <div className="roster-gantt-card">
-              
+
               {/* Encabezado del Gantt: Navegación de meses, filtros y redimensionamiento */}
               <div className="gantt-header-controls">
                 <div className="gantt-month-navigator">
@@ -1366,7 +1402,7 @@ export default function RosterView({ usuario, onVolver, tema }) {
                                 </div>
                                 <div className="emp-text-col">
                                   <span className="emp-name-text" title={emp.nombre}>{emp.nombre}</span>
-                                  
+
                                   {/* Distinción del proyecto asignado (muy visible cuando está en 'Todos los proyectos') */}
                                   <div className="emp-projects-badge-row">
                                     {emp.proyectos && emp.proyectos.length > 0 ? (
@@ -1437,23 +1473,21 @@ export default function RosterView({ usuario, onVolver, tema }) {
 
                                     const etiquetaBarra = esSubida ? '⬆S' : (esBajada ? '⬇B' : (rInfo.tipo === 'Campo' ? 'C' : rInfo.tipo === 'Franco' ? 'F' : rInfo.tipo === 'Vacaciones' ? 'V' : 'L'));
 
-                                    const tituloTooltip = `${
-                                      esSubida
-                                        ? '⬆️ SUBIDA (Inicio de Campo / Viaje)'
-                                        : esBajada
+                                    const tituloTooltip = `${esSubida
+                                      ? '⬆️ SUBIDA (Inicio de Campo / Viaje)'
+                                      : esBajada
                                         ? '⬇️ BAJADA (Inicio de Descanso / Viaje)'
                                         : rInfo.tipo === 'Campo'
-                                        ? '🚜 Campo / Obra'
-                                        : rInfo.tipo === 'Franco'
-                                        ? '🏠 Franco'
-                                        : rInfo.tipo === 'Vacaciones'
-                                        ? '🏖️ Vacaciones'
-                                        : '🏥 Licencia'
-                                    }\nEmpleado: ${emp.nombre}\nProyecto: ${rInfo.proyecto}${
-                                      rInfo.tipo === 'Campo'
+                                          ? '🚜 Campo / Obra'
+                                          : rInfo.tipo === 'Franco'
+                                            ? '🏠 Franco'
+                                            : rInfo.tipo === 'Vacaciones'
+                                              ? '🏖️ Vacaciones'
+                                              : '🏥 Licencia'
+                                      }\nEmpleado: ${emp.nombre}\nProyecto: ${rInfo.proyecto}${rInfo.tipo === 'Campo'
                                         ? `\nTarifa día: $${rInfo.precio_dia || 0} | Dom: $${rInfo.precio_domingo || 0}`
                                         : ''
-                                    }\n\n(Click para modificar o eliminar este turno)`;
+                                      }\n\n(Click para modificar o eliminar este turno)`;
 
                                     return (
                                       <div

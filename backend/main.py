@@ -1979,6 +1979,56 @@ class ApiPuente:
             print(f"[Liquidacion] Error al exportar informe de liquidación: {e}")
             return {"exito": False, "error": str(e)}
 
+    # [FN-03.08] Obtener catálogo de tarifas de roster en caché local
+    def obtener_tarifas_roster(self):
+        """Retorna las tarifas de roster sincronizadas desde 1_2_tarifas_roster."""
+        tarifas = obtener_tarifas_roster_cache()
+        if not tarifas:
+            try:
+                t_rem = obtener_tarifas_roster_remotas()
+                if t_rem:
+                    guardar_tarifas_roster_cache(t_rem)
+                    return t_rem
+            except Exception as e:
+                print(f"[Roster] Error obteniendo tarifas de roster remotas: {e}")
+        return tarifas
+
+    # [FN-06.06] Edición manual de costo_dia con auditoría en modificaciones_realizadas
+    def actualizar_costo_dia_manual(self, datos: dict):
+        """Actualiza manualmente costo_dia en historial local, audita en modificaciones_realizadas y sincroniza en Sheets."""
+        sesion = obtener_sesion_activa()
+        if not puede_gestionar_tipo_costo(sesion) and not puede_modificar_historial_otros(sesion):
+            return {"exito": False, "error": "Acceso denegado: Se requieren permisos administrativos de RRHH para editar costos diarios."}
+
+        id_reg = datos.get("id") or datos.get("id_registro") or datos.get("id_asistencia")
+        if not id_reg:
+            return {"exito": False, "error": "Identificador de registro no proporcionado."}
+
+        try:
+            nuevo_costo = float(datos.get("costo_dia") if datos.get("costo_dia") is not None else (datos.get("nuevo_costo") or 0.0))
+        except (ValueError, TypeError):
+            return {"exito": False, "error": "El valor de costo_dia ingresado no es un número válido."}
+
+        quien_mod = sesion.get("nombre", "Administración") if sesion else "Administración"
+        motivo = str(datos.get("motivo") or "").strip()
+
+        res = actualizar_costo_dia_manual(
+            id_registro=id_reg,
+            nuevo_costo=nuevo_costo,
+            quien_modifica=quien_mod,
+            motivo=motivo
+        )
+
+        if res and res.get("exito"):
+            self._disparar_sync_segundo_plano()
+
+        return res
+
+    # [FN-06.07] Alias para actualizar_costo_dia_manual
+    def guardar_costo_dia(self, datos: dict):
+        """Alias de compatibilidad para actualizar_costo_dia_manual."""
+        return self.actualizar_costo_dia_manual(datos)
+
 
 
 def recurso_path(ruta_relativa: str) -> str:
@@ -2305,56 +2355,6 @@ def ejecutar_descarga_y_reinicio(url_descarga: str):
         os._exit(0)
     except Exception as e:
         return {"exito": False, "error": str(e)}
-
-    # [FN-03.08] Obtener catálogo de tarifas de roster en caché local
-    def obtener_tarifas_roster(self):
-        """Retorna las tarifas de roster sincronizadas desde 1_2_tarifas_roster."""
-        tarifas = obtener_tarifas_roster_cache()
-        if not tarifas:
-            try:
-                t_rem = obtener_tarifas_roster_remotas()
-                if t_rem:
-                    guardar_tarifas_roster_cache(t_rem)
-                    return t_rem
-            except Exception as e:
-                print(f"[Roster] Error obteniendo tarifas de roster remotas: {e}")
-        return tarifas
-
-    # [FN-06.06] Edición manual de costo_dia con auditoría en modificaciones_realizadas
-    def actualizar_costo_dia_manual(self, datos: dict):
-        """Actualiza manualmente costo_dia en historial local, audita en modificaciones_realizadas y sincroniza en Sheets."""
-        sesion = obtener_sesion_activa()
-        if not puede_gestionar_tipo_costo(sesion) and not puede_modificar_historial_otros(sesion):
-            return {"exito": False, "error": "Acceso denegado: Se requieren permisos administrativos de RRHH para editar costos diarios."}
-
-        id_reg = datos.get("id") or datos.get("id_registro") or datos.get("id_asistencia")
-        if not id_reg:
-            return {"exito": False, "error": "Identificador de registro no proporcionado."}
-
-        try:
-            nuevo_costo = float(datos.get("costo_dia") if datos.get("costo_dia") is not None else (datos.get("nuevo_costo") or 0.0))
-        except (ValueError, TypeError):
-            return {"exito": False, "error": "El valor de costo_dia ingresado no es un número válido."}
-
-        quien_mod = sesion.get("nombre", "Administración") if sesion else "Administración"
-        motivo = str(datos.get("motivo") or "").strip()
-
-        res = actualizar_costo_dia_manual(
-            id_registro=id_reg,
-            nuevo_costo=nuevo_costo,
-            quien_modifica=quien_mod,
-            motivo=motivo
-        )
-
-        if res and res.get("exito"):
-            self._disparar_sync_segundo_plano()
-
-        return res
-
-    # [FN-06.07] Alias para actualizar_costo_dia_manual
-    def guardar_costo_dia(self, datos: dict):
-        """Alias de compatibilidad para actualizar_costo_dia_manual."""
-        return self.actualizar_costo_dia_manual(datos)
 
 
 def demonio_recordatorios(ventana, tray_icon):

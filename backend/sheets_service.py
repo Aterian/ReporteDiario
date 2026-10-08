@@ -843,10 +843,23 @@ def obtener_tarifas_roster_remotas(spreadsheet_id: str = "") -> list:
             d_baj = parse_currency(f[idx_baj]) if (idx_baj >= 0 and len(f) > idx_baj) else 0.0
             d_adic = parse_currency(f[idx_adic]) if (idx_adic >= 0 and len(f) > idx_adic) else 0.0
 
+            #tarifas.append({
+             #   "id_tarifa": id_t or str(uuid.uuid4()),
+              #  "id_proyecto": id_p,
+               # "proyecto": proy,
+                #"dia_normal": d_norm,
+                #"domingo": d_dom,
+                #"subida": d_sub,
+                #"bajada": d_baj,
+                #"adicionales": d_adic
+            #})
+
+            # Dentro del bucle 'for f in filas[1:]' en backend/sheets_service.py:
             tarifas.append({
                 "id_tarifa": id_t or str(uuid.uuid4()),
-                "id_proyecto": id_p,
-                "proyecto": proy,
+                "id_proyecto": id_p,              # UUID del proyecto
+                "denominacion": proy,              # Nombre exacto según la cabecera de Sheets
+                "proyecto": proy,                  # Compatibilidad retroactiva con código previo
                 "dia_normal": d_norm,
                 "domingo": d_dom,
                 "subida": d_sub,

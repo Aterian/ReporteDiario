@@ -571,7 +571,7 @@ def guardar_tarifas_roster_cache(tarifas: list) -> int:
         for t in tarifas:
             id_tarifa = str(t.get("id_tarifa") or uuid.uuid4()).strip()
             id_proy = str(t.get("id_proyecto") or "").strip()
-            proy = str(t.get("proyecto") or "").strip()
+            proy = str(t.get("proyecto") or t.get("denominacion") or "").strip()
             if not proy:
                 continue
             d_norm = float(t.get("dia_normal") or 0.0)
@@ -593,7 +593,7 @@ def obtener_tarifas_roster_cache() -> list:
     with obtener_conexion() as conn:
         cursor = conn.cursor()
         cursor.execute("""
-            SELECT id_tarifa, id_proyecto, proyecto, dia_normal, domingo, subida, bajada, adicionales
+            SELECT id_tarifa, id_proyecto, proyecto, proyecto AS denominacion, dia_normal, domingo, subida, bajada, adicionales
             FROM tarifas_roster_cache
             ORDER BY proyecto ASC
         """)
