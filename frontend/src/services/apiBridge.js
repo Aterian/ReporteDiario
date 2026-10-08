@@ -107,7 +107,9 @@ const mockApi = {
     enviados: 0,
     pendientes: 0,
     usuarios: []
-  })
+  }),
+  obtener_tarifas_roster: async () => [],
+  actualizar_costo_dia_manual: async (datos) => ({ exito: true, mensaje: 'Costo actualizado (simulado).' })
 };
 
 let cachedApi = null;
@@ -487,6 +489,22 @@ export const api = {
       pendientes: 0,
       usuarios: []
     };
+  },
+
+  async obtenerTarifasRoster() {
+    const bridge = await getApi();
+    if (bridge.obtener_tarifas_roster) {
+      return await bridge.obtener_tarifas_roster();
+    }
+    return [];
+  },
+
+  async actualizarCostoDiaManual(datos) {
+    const bridge = await getApi();
+    if (bridge.actualizar_costo_dia_manual) {
+      return await bridge.actualizar_costo_dia_manual(datos);
+    }
+    return { exito: true, mensaje: 'Actualizado en modo simulado.' };
   }
 };
 

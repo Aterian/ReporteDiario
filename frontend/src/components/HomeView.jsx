@@ -257,35 +257,16 @@ export default function HomeView({
                 </button>
               )}
 
-              {/* Botón: Historial de Roster (Solo Justina Bertolozzi e Iván Valentin) */}
-              {puedeRoster && (
+              {/* Botón: Historial de Roster oculto por estar en desuso */}
+              {/* {puedeRoster && (
                 <button 
                   type="button" 
                   className="home-action-card card-roster-hist" 
                   onClick={onHistorialRoster}
                 >
-                  <div className="action-card-icon-box roster-hist-icon">
-                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-                      <polyline points="14 2 14 8 20 8" />
-                      <line x1="16" y1="13" x2="8" y2="13" />
-                      <line x1="16" y1="17" x2="8" y2="17" />
-                      <polyline points="10 9 9 9 8 9" />
-                    </svg>
-                  </div>
-                  <div className="action-card-content">
-                    <span className="action-card-title">Historial de Roster</span>
-                    <span className="action-card-desc">
-                      Consultar turnos y descargar reporte .xlsx mensual en 3 hojas
-                    </span>
-                  </div>
-                  <div className="action-card-arrow">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                      <polyline points="9 18 15 12 9 6" />
-                    </svg>
-                  </div>
+                  ...
                 </button>
-              )}
+              )} */}
 
               {/* Botón: Historial de otros empleados (RRHH, Núcleo e Iván Valentin) */}
               {puedeOtros && (

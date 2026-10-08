@@ -284,17 +284,7 @@ export default function RpgTavernBoard({
               </button>
             )}
 
-            {puedeRoster && onHistorialRoster && (
-              <button 
-                type="button" 
-                className="rpg-parchment-btn-sec"
-                style={{ marginTop: '6px' }}
-                onClick={onHistorialRoster}
-                title="Archivos de guardias y asignación de turnos"
-              >
-                🛡️ Decreto de Guardias y Roster
-              </button>
-            )}
+            {/* Botón de Historial de Roster en desuso oculto */}
           </div>
 
           {/* PERGAMINO 3: CALENDARIO MENSUAL DE REGISTROS (REEMPLAZA EXP) */}
@@ -377,11 +367,7 @@ export default function RpgTavernBoard({
                 👥 Aventureros
               </button>
             )}
-            {puedeRoster && onHistorialRoster && (
-              <button type="button" className="rpg-wood-btn" onClick={onHistorialRoster} title="Ver decreto y archivos de guardias y turnos">
-                🛡️ Roster Reino
-              </button>
-            )}
+            {/* Historial de Roster en desuso oculto */}
             <button type="button" className="rpg-wood-btn" onClick={onAvatarClick}>
               👤 Mi Héroe
             </button>

@@ -10775,5 +10775,105 @@ html, body {
   transform: translateY(-1px);
 }
 
+/* =========================================================================
+   [FN-03.08] DISTINTIVOS VISUALES GANTT ROSTER: SUBIDA Y BAJADA
+   ========================================================================= */
+.bar-subida {
+  background: linear-gradient(135deg, #15803d 0%, #16a34a 100%) !important;
+  color: #ffffff !important;
+  font-weight: 800 !important;
+  box-shadow: 0 0 6px rgba(22, 163, 74, 0.6) !important;
+  border: 1px solid #14532d !important;
+  animation: pulseSubida 2s infinite ease-in-out;
+}
 
+.bar-bajada {
+  background: linear-gradient(135deg, #d97706 0%, #f59e0b 100%) !important;
+  color: #1e293b !important;
+  font-weight: 800 !important;
+  box-shadow: 0 0 6px rgba(245, 158, 11, 0.6) !important;
+  border: 1px solid #b45309 !important;
+}
 
+@keyframes pulseSubida {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.04); }
+}
+
+.legend-box.subida {
+  background: linear-gradient(135deg, #15803d 0%, #16a34a 100%);
+  border: 1px solid #14532d;
+}
+
+.legend-box.bajada {
+  background: linear-gradient(135deg, #d97706 0%, #f59e0b 100%);
+  border: 1px solid #b45309;
+}
+
+/* =========================================================================
+   [FN-06.07] CALENDARIO AUDITORÍA: VISUALIZACIÓN Y MODAL DE COSTO_DIA
+   ========================================================================= */
+.cell-costo-badge-row {
+  margin: 2px 0 3px 0;
+  display: flex;
+  justify-content: center;
+}
+
+.cell-costo-dia-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 5px;
+  border-radius: 4px;
+  line-height: 1.2;
+  transition: all 0.15s ease;
+  user-select: none;
+}
+
+.cell-costo-dia-badge.costo-positivo {
+  background: #ecfdf5;
+  color: #065f46;
+  border: 1px solid #a7f3d0;
+}
+
+[data-theme='dark'] .cell-costo-dia-badge.costo-positivo {
+  background: rgba(16, 185, 129, 0.2);
+  color: #6ee7b7;
+  border-color: rgba(16, 185, 129, 0.4);
+}
+
+.cell-costo-dia-badge.costo-cero {
+  background: #f1f5f9;
+  color: #64748b;
+  border: 1px solid #e2e8f0;
+}
+
+[data-theme='dark'] .cell-costo-dia-badge.costo-cero {
+  background: rgba(148, 163, 184, 0.15);
+  color: #94a3b8;
+  border-color: rgba(148, 163, 184, 0.25);
+}
+
+.cell-costo-dia-badge:hover {
+  transform: scale(1.05);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.15);
+}
+
+.badge-costo-monto {
+  background: #ecfdf5 !important;
+  color: #065f46 !important;
+  border: 1px solid #a7f3d0 !important;
+  font-weight: 700 !important;
+}
+
+[data-theme='dark'] .badge-costo-monto {
+  background: rgba(16, 185, 129, 0.2) !important;
+  color: #6ee7b7 !important;
+  border-color: rgba(16, 185, 129, 0.4) !important;
+}
+
+.modal-costo-dia {
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.3), 0 8px 10px -6px rgba(0, 0, 0, 0.2);
+}

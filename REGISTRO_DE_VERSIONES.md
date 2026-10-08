@@ -2,7 +2,38 @@
 
 Historial cronológico de cambios, nuevas características y mejoras aplicadas al sistema **Check Diario Ingeap**.
 
-## [1.15.1] - 2026-10-07
+## [1.16.0] - 2026-10-08
+
+### 🐛 Corrección Crítica: Fines de Semana a Franco (`[FN-01.11]`)
+- **Imputación Estricta de Costo de Oficina en Fines de Semana**:
+  - Corrección de la acción "Fines de semana a franco" en `frontend/src/components/HistoryView.jsx` y `backend/main.py`: los sábados y domingos convertidos a franco se guardan estrictamente con `tipo_costo = 'Oficina'` y `costo_dia = costo_dia_ofi` (o tarifa de oficina correspondiente al colaborador).
+  - Persistencia asegurada en base de datos local SQLite (`historial`) y sincronización remota hacia Google Sheets (`1_asistencia_informada`).
+  - Migración correctiva defensiva en `backend/database.py` para reparar registros preexistentes de fines de semana franco guardados erróneamente como 'Campo'.
+
+### 📋 Módulo de Roster e Integración con `1_2_tarifas_roster` (`[FN-03.08]`)
+- **Depuración de Navegación**:
+  - Ocultamiento de accesos obsoletos a "Historial de Roster" en `HomeView.jsx` y `RpgTavernBoard.jsx` por encontrarse en desuso.
+- **Sincronización y Enlace de Tarifas Roster**:
+  - Lectura e introspección de la tabla `1_2_tarifas_roster` en Google Sheets (`sheets_service.py`) y persistencia en caché local `tarifas_roster_cache` con índices optimizados en SQLite (`database.py`).
+  - Vinculación automática de tarifas al guardar rangos de Roster mediante `id_proyecto`:
+    - **Modalidad Campo**: El primer día (`fecha_desde`) toma tarifa de `subida` sumando el concepto de `adicionales` (aplicado exactamente 1 vez por rango cargado). Los domingos toman la tarifa de `domingo` y los días hábiles toman la tarifa de `dia_normal`.
+    - **Modalidad Franco**: El primer día (`fecha_desde`) toma tarifa de `bajada`. Los días restantes toman la tarifa de descanso correspondiente.
+  - Persistencia de los valores calculados en las columnas canónicas `costo_dia` y `tipo_costo` sin alterar el esquema de columnas de `1_asistencia_informada`.
+- **Vista Gantt con Distintivos Destacados**:
+  - Identificadores visuales resaltados y badges específicos para días de **Subida** (`.bar-subida`, `⬆S`) y **Bajada** (`.bar-bajada`, `⬇B`) con leyenda explicativa interactiva.
+
+### 💰 Historial de Empleados, Edición de Costo y Calculadora de Liquidación (`[FN-06.06]`, `[FN-06.07]`)
+- **Visualización Diaria de Costo en Calendario (`[FN-06.07]`)**:
+  - Despliegue del valor acumulado de `costo_dia` en cada celda diaria interactiva del calendario de auditoría de otros empleados.
+  - Distintivos cromáticos (`.cell-costo-dia-badge`) indicando valores positivos y días sin costo computado.
+- **Modal Independiente y Exclusivo de Edición de `costo_dia` (`[FN-06.07]`)**:
+  - Modal separado de la edición integral de la jornada, permitiendo ajustar directamente el monto de `costo_dia`, elegir el registro específico si hay jornadas mixtas, aplicar tarifas sugeridas del empleado y registrar observaciones.
+  - Impacto directo en SQLite local, Google Sheets (`1_asistencia_informada`) y registro de auditoría (`modificaciones_realizadas`).
+- **Calculadora de Liquidación por `costo_dia` Asentado (`[FN-06.06]`)**:
+  - Cálculo automático de subtotales y total a liquidar fundamentado **únicamente en los valores asentados en la columna `costo_dia`** de los registros seleccionados.
+  - Preservación íntegra de la sobreescritura manual de días y tarifas para excepciones operativas de RRHH.
+
+---
 
 ### 📝 Auditoría de Modificaciones Revisadas con 'OK' en Google Sheets y Desactivación Remota (`[FN-02.01]`, `[FN-02.02]`)
 - **Extensión del Esquema Remoto en Google Sheets (`backend/sheets_service.py`)**:

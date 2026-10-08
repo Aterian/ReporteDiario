@@ -161,6 +161,10 @@ export default function OtherEmployeesHistoryView({
   const [diasFeriadoManual, setDiasFeriadoManual] = useState('');
   const [exportandoInforme, setExportandoInforme] = useState(false);
 
+  // [FN-06.07] Modal exclusivo e independiente para edición manual de costo_dia
+  const [modalCostoDia, setModalCostoDia] = useState(null);
+  const [guardandoCostoDia, setGuardandoCostoDia] = useState(false);
+
   // Tarifas de Liquidación (guardadas en localStorage)
   const [tarifas, setTarifas] = useState(() => {
     try {
@@ -556,6 +560,71 @@ export default function OtherEmployeesHistoryView({
     }));
   };
 
+  // [FN-06.07] Apertura de modal exclusivo para edición de costo_dia
+  const handleAbrirModalCostoDia = (celda, regEspecifico = null) => {
+    if (!celda || !celda.registros || celda.registros.length === 0) return;
+    const reg = regEspecifico || celda.registros[0];
+    setModalCostoDia({
+      fecha: celda.fechaIso,
+      empleado: reg.empleado || empleadoAuditar,
+      registros: celda.registros,
+      registroSeleccionado: reg,
+      costoDiaActual: Number(reg.costo_dia) || 0,
+      nuevoCostoDia: String(reg.costo_dia !== undefined && reg.costo_dia !== null ? reg.costo_dia : 0),
+      motivo: ''
+    });
+  };
+
+  const handleSeleccionarRegistroModalCostoDia = (reg) => {
+    if (!modalCostoDia || !reg) return;
+    setModalCostoDia(prev => ({
+      ...prev,
+      registroSeleccionado: reg,
+      costoDiaActual: Number(reg.costo_dia) || 0,
+      nuevoCostoDia: String(reg.costo_dia !== undefined && reg.costo_dia !== null ? reg.costo_dia : 0)
+    }));
+  };
+
+  const handleGuardarCostoDia = async (e) => {
+    e.preventDefault();
+    if (!modalCostoDia || !modalCostoDia.registroSeleccionado) return;
+    const target = modalCostoDia.registroSeleccionado;
+    const idTarget = target.id_asistencia || target.id;
+    if (!idTarget) {
+      alert('No se pudo identificar el registro para actualizar.');
+      return;
+    }
+
+    setGuardandoCostoDia(true);
+    try {
+      const valorNum = parseFloat(modalCostoDia.nuevoCostoDia) || 0;
+      const res = await api.actualizarCostoDiaManual({
+        id_asistencia: idTarget,
+        costo_dia: valorNum,
+        motivo: modalCostoDia.motivo?.trim() || 'Ajuste manual de costo_dia desde calendario'
+      });
+
+      if (res && res.exito) {
+        setMensajeSync({
+          tipo: 'exito',
+          texto: `Costo del día ($${valorNum.toLocaleString('es-AR')}) guardado para ${target.empleado} (${modalCostoDia.fecha}).`
+        });
+        setModalCostoDia(null);
+        await cargarDatos();
+        if (empleadoAuditar) {
+          await cargarAuditoriaEmpleado(empleadoAuditar, fechaCalendario);
+        }
+      } else {
+        alert(res?.error || 'No se pudo guardar el costo del día.');
+      }
+    } catch (err) {
+      console.error('Error al guardar costo_dia manual:', err);
+      alert('Error de comunicación al actualizar el costo del día.');
+    } finally {
+      setGuardandoCostoDia(false);
+    }
+  };
+
   // Manejo de asignación masiva de tipo_costo (RRHH)
   const handleToggleSelect = (id) => {
     setSeleccionados(prev => {
@@ -840,11 +909,57 @@ export default function OtherEmployeesHistoryView({
     ? Math.max(0, parseFloat(diasFeriadoManual))
     : conteosLiquidacion.diasFeriadoTrabajado;
 
-  const subtotalOficina = Math.round(cantDiasOficina * (tarifas.precioOficina || 0) * 100) / 100;
-  const subtotalObra = Math.round(cantDiasObra * (tarifas.precioObra || 0) * 100) / 100;
-  const subtotalFrancoObra = Math.round(cantDiasFrancoObra * (tarifas.precioFrancoObraTrabajado || 0) * 100) / 100;
-  const subtotalFrancoOfic = Math.round(cantDiasFrancoOfic * (tarifas.precioFrancoOficTrabajado || 0) * 100) / 100;
-  const subtotalFeriado = Math.round(cantDiasFeriadoTrabajado * (tarifas.precioFeriadoTrabajado || 0) * 100) / 100;
+  // [FN-06.06] Suma de importes basada estrictamente en la columna costo_dia de los registros
+  const sumasCostoDiaPorCategoria = useMemo(() => {
+    let sumOficina = 0;
+    let sumObra = 0;
+    let sumFrancoObra = 0;
+    let sumFrancoOfic = 0;
+    let sumFeriado = 0;
+    let totalDirecto = 0;
+
+    registrosParaLiquidar.forEach(r => {
+      const c = Number(r.costo_dia) || 0;
+      totalDirecto += c;
+      const cat = categorizarRegistroLiquidacion(r);
+      if (cat === 'oficina') sumOficina += c;
+      else if (cat === 'obra') sumObra += c;
+      else if (cat === 'franco_obra_trab') sumFrancoObra += c;
+      else if (cat === 'franco_ofic_trab') sumFrancoOfic += c;
+      else if (cat === 'feriado_trab') sumFeriado += c;
+      else sumOficina += c;
+    });
+
+    return {
+      oficina: Math.round(sumOficina * 100) / 100,
+      obra: Math.round(sumObra * 100) / 100,
+      francoObra: Math.round(sumFrancoObra * 100) / 100,
+      francoOfic: Math.round(sumFrancoOfic * 100) / 100,
+      feriado: Math.round(sumFeriado * 100) / 100,
+      totalDirecto: Math.round(totalDirecto * 100) / 100
+    };
+  }, [registrosParaLiquidar]);
+
+  // Subtotales: si hay sobreescritura manual en la categoría, calcula con días y tarifa; si no, toma la suma directa de costo_dia
+  const subtotalOficina = (diasOficinaManual !== '')
+    ? Math.round(cantDiasOficina * (tarifas.precioOficina || 0) * 100) / 100
+    : sumasCostoDiaPorCategoria.oficina;
+
+  const subtotalObra = (diasCampoManual !== '')
+    ? Math.round(cantDiasObra * (tarifas.precioObra || 0) * 100) / 100
+    : sumasCostoDiaPorCategoria.obra;
+
+  const subtotalFrancoObra = (diasFrancoObraManual !== '')
+    ? Math.round(cantDiasFrancoObra * (tarifas.precioFrancoObraTrabajado || 0) * 100) / 100
+    : sumasCostoDiaPorCategoria.francoObra;
+
+  const subtotalFrancoOfic = (diasFrancoOficManual !== '')
+    ? Math.round(cantDiasFrancoOfic * (tarifas.precioFrancoOficTrabajado || 0) * 100) / 100
+    : sumasCostoDiaPorCategoria.francoOfic;
+
+  const subtotalFeriado = (diasFeriadoManual !== '')
+    ? Math.round(cantDiasFeriadoTrabajado * (tarifas.precioFeriadoTrabajado || 0) * 100) / 100
+    : sumasCostoDiaPorCategoria.feriado;
 
   const totalLiquidar = Math.round((subtotalOficina + subtotalObra + subtotalFrancoObra + subtotalFrancoOfic + subtotalFeriado) * 100) / 100;
 
@@ -1405,6 +1520,18 @@ export default function OtherEmployeesHistoryView({
                               Costo: {item.tipo_costo}
                             </span>
                           )}
+                          {item.costo_dia !== undefined && item.costo_dia !== null && (
+                            <span
+                              className="status-badge badge-costo-monto"
+                              title={puedeEditarCosto ? `Costo día: $${Number(item.costo_dia).toLocaleString('es-AR')} (Click para editar)` : `Costo día: $${Number(item.costo_dia).toLocaleString('es-AR')}`}
+                              style={{ cursor: puedeEditarCosto ? 'pointer' : 'default', background: '#ecfdf5', color: '#065f46', borderColor: '#a7f3d0' }}
+                              onClick={() => {
+                                if (puedeEditarCosto) handleAbrirModalCostoDia({ fechaIso: item.fecha, registros: [item] }, item);
+                              }}
+                            >
+                              💰 ${Number(item.costo_dia).toLocaleString('es-AR')}{puedeEditarCosto ? ' ✏️' : ''}
+                            </span>
+                          )}
                           <span className={`status-badge ${estaSincronizado ? 'status-synced' : 'status-pending'}`}>
                             {estaSincronizado ? 'Sincronizado' : 'Pendiente'}
                           </span>
@@ -1488,6 +1615,18 @@ export default function OtherEmployeesHistoryView({
                             title="Marcar modificación como revisada por RRHH para quitar la alerta"
                           >
                             ✓ Revisado
+                          </button>
+                        )}
+
+                        {puedeEditarCosto && (
+                          <button
+                            type="button"
+                            className="btn-card-action"
+                            style={{ color: '#059669', borderColor: '#10b98150', background: '#10b98115', fontWeight: 600 }}
+                            onClick={() => handleAbrirModalCostoDia({ fechaIso: item.fecha, registros: [item] }, item)}
+                            title="Editar manualmente costo_dia de este registro"
+                          >
+                            💰 Costo ($)
                           </button>
                         )}
 
@@ -1669,6 +1808,7 @@ export default function OtherEmployeesHistoryView({
                 const tieneModificadosPendientes = celda.registros.some(r => r.modificacion_pendiente === 1 || (r.fue_modificado === 1 && r.modificacion_revisada !== 1));
                 const tieneModificadosRevisados = !tieneModificadosPendientes && celda.registros.some(r => r.modificacion_revisada === 1);
                 const esDestacada = diaDestacado === celda.fechaIso;
+                const costoDiaTotal = celda.registros.reduce((acc, r) => acc + (Number(r.costo_dia) || 0), 0);
 
                 return (
                   <div
@@ -1679,7 +1819,7 @@ export default function OtherEmployeesHistoryView({
                       setDiaSeleccionadoAuditoria(celda);
                     }}
                     style={{ cursor: tieneRegistros ? 'pointer' : 'default' }}
-                    title={tieneRegistros ? `${celda.registros.length} registro(s) el ${celda.fechaIso}${tieneModificadosPendientes ? ' • Modificación pendiente de revisión' : (tieneModificadosRevisados ? ' • Modificación revisada por RRHH' : '')} (Toca para ver detalles)` : celda.fechaIso}
+                    title={tieneRegistros ? `${celda.registros.length} registro(s) el ${celda.fechaIso} • Costo total: $${costoDiaTotal.toLocaleString('es-AR')}${tieneModificadosPendientes ? ' • Modificación pendiente de revisión' : (tieneModificadosRevisados ? ' • Modificación revisada por RRHH' : '')} (Toca para ver detalles)` : celda.fechaIso}
                   >
                     <div className="cell-top-bar">
                       <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
@@ -1720,6 +1860,27 @@ export default function OtherEmployeesHistoryView({
                         )}
                       </div>
                     </div>
+
+                    {/* [FN-06.07] Visualización del valor costo_dia en cada celda del calendario */}
+                    {tieneRegistros && (
+                      <div
+                        className="cell-costo-badge-row"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (puedeEditarCosto) {
+                            handleAbrirModalCostoDia(celda);
+                          } else {
+                            setDiaSeleccionadoAuditoria(celda);
+                          }
+                        }}
+                        title={puedeEditarCosto ? `Costo día: $${costoDiaTotal.toLocaleString('es-AR')} (Click para editar costo)` : `Costo día: $${costoDiaTotal.toLocaleString('es-AR')}`}
+                      >
+                        <span className={`cell-costo-dia-badge ${costoDiaTotal > 0 ? 'costo-positivo' : 'costo-cero'}`}>
+                          💰 ${costoDiaTotal.toLocaleString('es-AR')}
+                          {puedeEditarCosto && <span className="cell-costo-edit-icon" style={{ marginLeft: '2px', fontSize: '9px' }}>✏️</span>}
+                        </span>
+                      </div>
+                    )}
 
                     <div className="cell-events-container">
                       {celda.registros.slice(0, 3).map((r, idx) => {
@@ -2284,6 +2445,21 @@ export default function OtherEmployeesHistoryView({
                       )}
                     </div>
                     <div style={{ display: 'flex', gap: '4px', flexShrink: 0, alignItems: 'center' }}>
+                      {puedeEditarCosto && (
+                        <button
+                          type="button"
+                          className="btn-card-action"
+                          style={{ color: '#059669', borderColor: '#10b98150', background: '#10b98115', fontWeight: 600 }}
+                          onClick={() => {
+                            const celdaRef = diaSeleccionadoAuditoria;
+                            setDiaSeleccionadoAuditoria(null);
+                            handleAbrirModalCostoDia(celdaRef, item);
+                          }}
+                          title="Editar manualmente costo_dia de este registro"
+                        >
+                          💰 ${Number(item.costo_dia || 0).toLocaleString('es-AR')} ✏️
+                        </button>
+                      )}
                       {!esSoloLecturaNucleo && puedeModificarRegistro(usuario, item) ? (
                         <>
                           <button
@@ -2992,6 +3168,159 @@ export default function OtherEmployeesHistoryView({
                 </button>
               </div>
             </div>
+          </div>
+        </div>
+      {/* [FN-06.07] Modal Independiente y Exclusivo para Edición Manual de costo_dia */}
+      {modalCostoDia && (
+        <div className="modal-backdrop">
+          <div className="modal-box modal-costo-dia" style={{ maxWidth: '480px' }}>
+            <div className="modal-header">
+              <span className="modal-title" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span style={{ fontSize: '18px' }}>💰</span>
+                <span>Editar Costo del Día</span>
+              </span>
+              <button
+                type="button"
+                className="modal-close"
+                onClick={() => setModalCostoDia(null)}
+                disabled={guardandoCostoDia}
+              >
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleGuardarCostoDia}>
+              <div style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                <div style={{ background: 'var(--bg-surface-subtle, #f8fafc)', border: '1px solid var(--border-subtle, #e2e8f0)', borderRadius: '8px', padding: '12px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-primary)' }}>
+                      {modalCostoDia.empleado}
+                    </span>
+                    <span style={{ fontSize: '12px', fontWeight: 600, color: '#cc3333' }}>
+                      📅 {modalCostoDia.fecha}
+                    </span>
+                  </div>
+                  {modalCostoDia.registros.length > 1 && (
+                    <div style={{ marginTop: '6px' }}>
+                      <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: '4px' }}>
+                        Selecciona el registro específico a modificar:
+                      </label>
+                      <select
+                        className="form-select form-select-sm"
+                        style={{ width: '100%', fontSize: '12px' }}
+                        value={modalCostoDia.registroSeleccionado?.id || modalCostoDia.registroSeleccionado?.id_asistencia}
+                        onChange={(e) => {
+                          const idSel = e.target.value;
+                          const found = modalCostoDia.registros.find(r => (r.id || r.id_asistencia) === idSel);
+                          if (found) handleSeleccionarRegistroModalCostoDia(found);
+                        }}
+                      >
+                        {modalCostoDia.registros.map((r, i) => (
+                          <option key={r.id || r.id_asistencia || i} value={r.id || r.id_asistencia}>
+                            {r.servicio || 'Sin servicio'} ({r.tipo_ocf || r.lugar} - {r.horas} hs) • Actual: ${Number(r.costo_dia || 0).toLocaleString('es-AR')}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+                  {modalCostoDia.registroSeleccionado && (
+                    <div style={{ fontSize: '12px', color: 'var(--text-secondary)', display: 'flex', flexDirection: 'column', gap: '2px', marginTop: '4px' }}>
+                      <div>Proyecto / Servicio: <strong>{modalCostoDia.registroSeleccionado.servicio || 'Tiempo de área'}</strong></div>
+                      <div>Modalidad: <strong>{modalCostoDia.registroSeleccionado.tipo_ocf || modalCostoDia.registroSeleccionado.lugar}</strong> ({modalCostoDia.registroSeleccionado.horas || 0} hs)</div>
+                      <div>Tipo de Costo: <strong>{modalCostoDia.registroSeleccionado.tipo_costo || 'No definido'}</strong></div>
+                      <div>Costo actual: <strong style={{ color: '#059669' }}>${Number(modalCostoDia.costoDiaActual).toLocaleString('es-AR')}</strong></div>
+                    </div>
+                  )}
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                  <label style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-primary)' }}>
+                    Nuevo Valor de Costo del Día ($ ARS):
+                  </label>
+                  <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                    <span style={{ position: 'absolute', left: '10px', fontWeight: 700, color: 'var(--text-secondary)' }}>$</span>
+                    <input
+                      type="number"
+                      min="0"
+                      step="any"
+                      required
+                      className="form-input"
+                      style={{ paddingLeft: '26px', fontSize: '15px', fontWeight: 700, height: '40px', width: '100%' }}
+                      value={modalCostoDia.nuevoCostoDia}
+                      onChange={(e) => setModalCostoDia(prev => ({ ...prev, nuevoCostoDia: e.target.value }))}
+                      autoFocus
+                    />
+                  </div>
+
+                  {/* Sugerencias rápidas según nómina del colaborador */}
+                  <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginTop: '4px' }}>
+                    {empActual && Number(empActual.costo_dia_ofi) > 0 && (
+                      <button
+                        type="button"
+                        className="btn-action-ghost"
+                        style={{ fontSize: '11px', padding: '3px 8px' }}
+                        onClick={() => setModalCostoDia(prev => ({ ...prev, nuevoCostoDia: String(empActual.costo_dia_ofi) }))}
+                      >
+                        🏢 Oficina (${Number(empActual.costo_dia_ofi).toLocaleString('es-AR')})
+                      </button>
+                    )}
+                    {empActual && Number(empActual.costo_dia_obra) > 0 && (
+                      <button
+                        type="button"
+                        className="btn-action-ghost"
+                        style={{ fontSize: '11px', padding: '3px 8px' }}
+                        onClick={() => setModalCostoDia(prev => ({ ...prev, nuevoCostoDia: String(empActual.costo_dia_obra) }))}
+                      >
+                        🏕️ Obra (${Number(empActual.costo_dia_obra).toLocaleString('es-AR')})
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      className="btn-action-ghost"
+                      style={{ fontSize: '11px', padding: '3px 8px' }}
+                      onClick={() => setModalCostoDia(prev => ({ ...prev, nuevoCostoDia: '0' }))}
+                    >
+                      $0 (Sin Costo)
+                    </button>
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                  <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)' }}>
+                    Motivo de la modificación (Auditoría):
+                  </label>
+                  <input
+                    type="text"
+                    className="form-input form-input-sm"
+                    placeholder="Ej: Ajuste de tarifa especial / corrección de liquidación"
+                    value={modalCostoDia.motivo}
+                    onChange={(e) => setModalCostoDia(prev => ({ ...prev, motivo: e.target.value }))}
+                  />
+                  <span style={{ fontSize: '11px', color: 'var(--text-tertiary, #94a3b8)' }}>
+                    ℹ️ Esta modificación impactará en SQLite local, en Google Sheets (`1_asistencia_informada`) y quedará registrada en el historial de auditoría (`modificaciones_realizadas`).
+                  </span>
+                </div>
+              </div>
+
+              <div className="modal-footer" style={{ padding: '12px 16px', display: 'flex', justifyContent: 'flex-end', gap: '8px', borderTop: '1px solid var(--border-subtle)' }}>
+                <button
+                  type="button"
+                  className="modal-btn-cancel"
+                  onClick={() => setModalCostoDia(null)}
+                  disabled={guardandoCostoDia}
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="modal-btn-save"
+                  style={{ background: '#cc3333', borderColor: '#cc3333', color: '#ffffff', minWidth: '130px' }}
+                  disabled={guardandoCostoDia}
+                >
+                  {guardandoCostoDia ? 'Guardando...' : 'Guardar Costo'}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

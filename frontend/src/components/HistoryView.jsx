@@ -200,6 +200,8 @@ export default function HistoryView({ onVolver, tema, onNuevoReporte, usuario, o
         tipo_ocf: 'Franco',
         tipo_franco: 'Franco de Oficina',
         sub_franco: 'Franco de Oficina',
+        tipo_costo: 'Oficina',
+        costo_dia: Number(usuario?.costo_dia_ofi) || 0.0,
         area: areaDestino,
         servicio: areaDestino,
         horas: 0.0,

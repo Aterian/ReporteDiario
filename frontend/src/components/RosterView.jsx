@@ -36,6 +36,7 @@ export default function RosterView({ usuario, onVolver, tema }) {
   // Catálogos
   const [proyectosDisponibles, setProyectosDisponibles] = useState([]);
   const [empleadosDisponibles, setEmpleadosDisponibles] = useState([]);
+  const [tarifasRoster, setTarifasRoster] = useState([]);
   const [cargandoCatalogos, setCargandoCatalogos] = useState(true);
 
   // Fechas por defecto: hoy
@@ -56,6 +57,24 @@ export default function RosterView({ usuario, onVolver, tema }) {
   const [tipo, setTipo] = useState('Campo'); // 'Campo' | 'Franco' | 'Vacaciones' | 'Licencia'
   const [precioDia, setPrecioDia] = useState('');
   const [precioDomingo, setPrecioDomingo] = useState('');
+
+  // [FN-03.08] Vincular tarifa oficial del proyecto seleccionado desde 1_2_tarifas_roster
+  const tarifaActual = useMemo(() => {
+    if (!proyecto || !tarifasRoster.length) return null;
+    const pNorm = proyecto.trim().toLowerCase();
+    return tarifasRoster.find(t => {
+      const nomT = (t.proyecto || '').trim().toLowerCase();
+      const idP = (t.id_proyecto || '').trim().toLowerCase();
+      return nomT === pNorm || nomT.includes(pNorm) || pNorm.includes(nomT) || (idP && idP === pNorm);
+    }) || null;
+  }, [proyecto, tarifasRoster]);
+
+  useEffect(() => {
+    if (tarifaActual) {
+      if (tarifaActual.dia_normal != null) setPrecioDia(String(tarifaActual.dia_normal));
+      if (tarifaActual.domingo != null) setPrecioDomingo(String(tarifaActual.domingo));
+    }
+  }, [tarifaActual]);
 
   // Helpers para selección múltiple
   const toggleSeleccionEmpleado = (nom) => {
@@ -138,12 +157,14 @@ export default function RosterView({ usuario, onVolver, tema }) {
     setGuardandoEdit(true);
     try {
       const empObj = empleadosDisponibles.find(emp => emp.nombre === editEmpleado);
+      const tObj = tarifasRoster.find(t => (t.proyecto || '').trim().toLowerCase() === editProyecto.trim().toLowerCase());
       const res = await api.guardarRoster({
         id: editId,
         empleado: editEmpleado,
         dni: empObj ? empObj.dni : '',
         usuario_mail: empObj ? (empObj.mail || empObj.email || '') : '',
         proyecto: editProyecto,
+        id_proyecto: tObj ? tObj.id_proyecto : '',
         fecha_inicio: editFechaInicio,
         fecha_fin: editFechaFin,
         tipo: editTipo,
@@ -242,11 +263,15 @@ export default function RosterView({ usuario, onVolver, tema }) {
     async function cargarCatalogos() {
       setCargandoCatalogos(true);
       try {
-        const [proys, emps] = await Promise.all([
+        const [proys, emps, tarifas] = await Promise.all([
           api.obtenerServicios('I'), // Exclusivamente área de Ingeniería (I)
-          api.obtenerTodosUsuarios('I') // Exclusivamente empleados del área de Ingeniería (I)
+          api.obtenerTodosUsuarios('I'), // Exclusivamente empleados del área de Ingeniería (I)
+          api.obtenerTarifasRoster() // Tarifas de roster desde 1_2_tarifas_roster
         ]);
         if (activo) {
+          if (Array.isArray(tarifas)) {
+            setTarifasRoster(tarifas);
+          }
           if (Array.isArray(proys)) {
             setProyectosDisponibles(proys);
             if (proys.length > 0 && !proyecto) {
@@ -441,6 +466,7 @@ export default function RosterView({ usuario, onVolver, tema }) {
           dni: dniEmp,
           usuario_mail: mailEmp,
           proyecto: proyecto,
+          id_proyecto: tarifaActual ? tarifaActual.id_proyecto : '',
           fecha_inicio: fechaInicio,
           fecha_fin: fechaFin,
           tipo: tipo,
@@ -708,6 +734,39 @@ export default function RosterView({ usuario, onVolver, tema }) {
                   ))}
                 </select>
                 <span className="form-hint">Proyectos exclusivos de Ingeniería. Los francos deben asignarse a este mismo proyecto para cerrar el ciclo.</span>
+                {tarifaActual && (
+                  <div className="roster-tarifa-info-box" style={{ marginTop: '8px', padding: '10px 12px', background: 'var(--bg-secondary, #f8fafc)', border: '1px solid #cbd5e1', borderRadius: '8px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
+                      <span style={{ fontSize: '11px', fontWeight: 700, color: 'var(--color-primary, #cc3333)', letterSpacing: '0.5px' }}>
+                        📊 TARIFAS ROSTER VINCULADAS
+                      </span>
+                      {tarifaActual.id_proyecto && (
+                        <span style={{ fontSize: '10px', color: '#64748b' }}>
+                          ID: {tarifaActual.id_proyecto}
+                        </span>
+                      )}
+                    </div>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', fontSize: '12px' }}>
+                      <span style={{ background: '#ffffff', padding: '3px 8px', borderRadius: '4px', border: '1px solid #e2e8f0' }}>
+                        Día normal: <b>${tarifaActual.dia_normal}</b>
+                      </span>
+                      <span style={{ background: '#fef3c7', padding: '3px 8px', borderRadius: '4px', border: '1px solid #fde68a', color: '#92400e' }}>
+                        Domingo: <b>${tarifaActual.domingo}</b>
+                      </span>
+                      <span style={{ background: '#ecfdf5', padding: '3px 8px', borderRadius: '4px', border: '1px solid #a7f3d0', color: '#065f46' }}>
+                        ⬆️ Subida: <b>${tarifaActual.subida}</b>
+                      </span>
+                      <span style={{ background: '#eff6ff', padding: '3px 8px', borderRadius: '4px', border: '1px solid #bfdbfe', color: '#1e40af' }}>
+                        ⬇️ Bajada: <b>${tarifaActual.bajada}</b>
+                      </span>
+                      {Number(tarifaActual.adicionales) > 0 && (
+                        <span style={{ background: '#fdf2f8', padding: '3px 8px', borderRadius: '4px', border: '1px solid #fbcfe8', color: '#9d174d' }}>
+                          Adicionales: <b>${tarifaActual.adicionales}</b> (x1)
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* 2. SELECCIÓN DE EMPLEADOS (CARGA MÚLTIPLE - INGENIERÍA) */}
@@ -1025,6 +1084,14 @@ export default function RosterView({ usuario, onVolver, tema }) {
                     <span>Activo en Campo / Obra</span>
                   </div>
                   <div className="legend-item">
+                    <span className="legend-box subida"></span>
+                    <span>⬆️ Subida (Inicio Campo)</span>
+                  </div>
+                  <div className="legend-item">
+                    <span className="legend-box bajada"></span>
+                    <span>⬇️ Bajada (Inicio Franco)</span>
+                  </div>
+                  <div className="legend-item">
                     <span className="legend-box franco"></span>
                     <span>Franco / Descanso</span>
                   </div>
@@ -1223,39 +1290,52 @@ export default function RosterView({ usuario, onVolver, tema }) {
                                   style={{
                                     width: `${anchoColDia}px`,
                                     minWidth: `${anchoColDia}px`,
-                                    maxWidth: `${anchoColDia}px`
+                                    maxWidth: `${anchoColDia}px`,
                                   }}
                                 >
-                                  {rInfo && (
-                                    <div
-                                      className={`gantt-bar-cell ${
-                                        rInfo.tipo === 'Campo'
-                                          ? 'bar-campo'
-                                          : rInfo.tipo === 'Franco'
-                                          ? 'bar-franco'
-                                          : rInfo.tipo === 'Vacaciones'
-                                          ? 'bar-vacaciones'
-                                          : 'bar-licencia'
-                                      }`}
-                                      title={`${
-                                        rInfo.tipo === 'Campo'
-                                          ? '🚜 Campo / Obra'
-                                          : rInfo.tipo === 'Franco'
-                                          ? '🏠 Franco'
-                                          : rInfo.tipo === 'Vacaciones'
-                                          ? '🏖️ Vacaciones'
-                                          : '🏥 Licencia'
-                                      }\nEmpleado: ${emp.nombre}\nProyecto: ${rInfo.proyecto}${
-                                        rInfo.tipo === 'Campo'
-                                          ? `\nTarifa día: $${rInfo.precio_dia || 0} | Dom: $${rInfo.precio_domingo || 0}`
-                                          : ''
-                                      }\n\n(Click para modificar o eliminar este turno)`}
-                                      onClick={() => handleAbrirEditarGantt(rInfo)}
-                                      style={{ cursor: 'pointer' }}
-                                    >
-                                      {rInfo.tipo === 'Campo' ? 'C' : rInfo.tipo === 'Franco' ? 'F' : rInfo.tipo === 'Vacaciones' ? 'V' : 'L'}
-                                    </div>
-                                  )}
+                                  {rInfo && (() => {
+                                    const esSubida = (rInfo.tipo === 'Campo' && d.fechaStr === rInfo.fecha_inicio);
+                                    const esBajada = (rInfo.tipo === 'Franco' && d.fechaStr === rInfo.fecha_inicio);
+
+                                    let badgeTipoClass = 'bar-campo';
+                                    if (esSubida) badgeTipoClass = 'bar-subida';
+                                    else if (esBajada) badgeTipoClass = 'bar-bajada';
+                                    else if (rInfo.tipo === 'Campo') badgeTipoClass = 'bar-campo';
+                                    else if (rInfo.tipo === 'Franco') badgeTipoClass = 'bar-franco';
+                                    else if (rInfo.tipo === 'Vacaciones') badgeTipoClass = 'bar-vacaciones';
+                                    else if (rInfo.tipo === 'Licencia') badgeTipoClass = 'bar-licencia';
+
+                                    const etiquetaBarra = esSubida ? '⬆S' : (esBajada ? '⬇B' : (rInfo.tipo === 'Campo' ? 'C' : rInfo.tipo === 'Franco' ? 'F' : rInfo.tipo === 'Vacaciones' ? 'V' : 'L'));
+
+                                    const tituloTooltip = `${
+                                      esSubida
+                                        ? '⬆️ SUBIDA (Inicio de Campo / Viaje)'
+                                        : esBajada
+                                        ? '⬇️ BAJADA (Inicio de Descanso / Viaje)'
+                                        : rInfo.tipo === 'Campo'
+                                        ? '🚜 Campo / Obra'
+                                        : rInfo.tipo === 'Franco'
+                                        ? '🏠 Franco'
+                                        : rInfo.tipo === 'Vacaciones'
+                                        ? '🏖️ Vacaciones'
+                                        : '🏥 Licencia'
+                                    }\nEmpleado: ${emp.nombre}\nProyecto: ${rInfo.proyecto}${
+                                      rInfo.tipo === 'Campo'
+                                        ? `\nTarifa día: $${rInfo.precio_dia || 0} | Dom: $${rInfo.precio_domingo || 0}`
+                                        : ''
+                                    }\n\n(Click para modificar o eliminar este turno)`;
+
+                                    return (
+                                      <div
+                                        className={`gantt-bar-cell ${badgeTipoClass}`}
+                                        title={tituloTooltip}
+                                        onClick={() => handleAbrirEditarGantt(rInfo)}
+                                        style={{ cursor: 'pointer' }}
+                                      >
+                                        {etiquetaBarra}
+                                      </div>
+                                    );
+                                  })()}
                                 </td>
                               );
                             })}

@@ -310,6 +310,56 @@ def inicializar_bd():
             )
         """)
 
+        # [FN-03.08] Tabla de tarifas de roster en caché local (1_2_tarifas_roster)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS tarifas_roster_cache (
+                id_tarifa TEXT PRIMARY KEY,
+                id_proyecto TEXT DEFAULT '',
+                proyecto TEXT NOT NULL,
+                dia_normal REAL DEFAULT 0.0,
+                domingo REAL DEFAULT 0.0,
+                subida REAL DEFAULT 0.0,
+                bajada REAL DEFAULT 0.0,
+                adicionales REAL DEFAULT 0.0,
+                actualizado_en TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_tarifas_roster_proy ON tarifas_roster_cache(id_proyecto)")
+
+        # [FN-01.11] Reparación defensiva: Fines de semana con modalidad Franco deben ser 'Oficina'
+        try:
+            cursor.execute("""
+                UPDATE historial
+                SET tipo_costo = 'Oficina'
+                WHERE tipo_ocf = 'Franco'
+                  AND strftime('%w', fecha) IN ('0', '6')
+                  AND (tipo_costo = 'Campo' OR tipo_costo = '' OR tipo_costo IS NULL)
+            """)
+            cursor.execute("""
+                UPDATE historial
+                SET costo_dia = (
+                    SELECT u.costo_dia_ofi 
+                    FROM usuarios_cache u 
+                    WHERE LOWER(TRIM(u.nombre)) = LOWER(TRIM(historial.empleado))
+                )
+                WHERE tipo_ocf = 'Franco'
+                  AND strftime('%w', fecha) IN ('0', '6')
+                  AND tipo_costo = 'Oficina'
+                  AND EXISTS (
+                    SELECT 1 FROM usuarios_cache u 
+                    WHERE LOWER(TRIM(u.nombre)) = LOWER(TRIM(historial.empleado))
+                      AND u.costo_dia_ofi IS NOT NULL 
+                      AND u.costo_dia_ofi > 0
+                  )
+                  AND (costo_dia = 0.0 OR costo_dia IS NULL OR costo_dia != (
+                    SELECT u.costo_dia_ofi 
+                    FROM usuarios_cache u 
+                    WHERE LOWER(TRIM(u.nombre)) = LOWER(TRIM(historial.empleado))
+                  ))
+            """)
+        except Exception as e_fds_fix:
+            print(f"[DB] Aviso en corrección defensiva de fines de semana: {e_fds_fix}")
+
         # Tabla de metadatos del sistema (versión instalada, estado de sincronización)
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS meta_app (
@@ -508,6 +558,72 @@ def obtener_proyectos_cache() -> list:
         cursor = conn.cursor()
         cursor.execute("SELECT id_proyecto, denominacion, area FROM proyectos_cache ORDER BY denominacion ASC")
         return [dict(f) for f in cursor.fetchall()]
+
+# [FN-03.08] Gestión de tarifas de roster en caché local (1_2_tarifas_roster)
+def guardar_tarifas_roster_cache(tarifas: list) -> int:
+    """Actualiza la tabla de tarifas de roster sincronizada desde '1_2_tarifas_roster'."""
+    if not tarifas:
+        return 0
+    with obtener_conexion() as conn:
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM tarifas_roster_cache")
+        guardados = 0
+        for t in tarifas:
+            id_tarifa = str(t.get("id_tarifa") or uuid.uuid4()).strip()
+            id_proy = str(t.get("id_proyecto") or "").strip()
+            proy = str(t.get("proyecto") or "").strip()
+            if not proy:
+                continue
+            d_norm = float(t.get("dia_normal") or 0.0)
+            dom = float(t.get("domingo") or 0.0)
+            sub = float(t.get("subida") or 0.0)
+            baj = float(t.get("bajada") or 0.0)
+            adic = float(t.get("adicionales") or 0.0)
+            cursor.execute("""
+                INSERT INTO tarifas_roster_cache (
+                    id_tarifa, id_proyecto, proyecto, dia_normal, domingo, subida, bajada, adicionales, actualizado_en
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+            """, (id_tarifa, id_proy, proy, d_norm, dom, sub, baj, adic))
+            guardados += 1
+        conn.commit()
+        return guardados
+
+def obtener_tarifas_roster_cache() -> list:
+    """Retorna todas las tarifas de roster disponibles en la caché local."""
+    with obtener_conexion() as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT id_tarifa, id_proyecto, proyecto, dia_normal, domingo, subida, bajada, adicionales
+            FROM tarifas_roster_cache
+            ORDER BY proyecto ASC
+        """)
+        return [dict(r) for r in cursor.fetchall()]
+
+def obtener_tarifa_roster_por_proyecto(id_proyecto: str = "", nombre_proyecto: str = "") -> dict | None:
+    """Busca una tarifa de roster por id_proyecto o por denominación de proyecto."""
+    with obtener_conexion() as conn:
+        cursor = conn.cursor()
+        if id_proyecto:
+            cursor.execute("""
+                SELECT id_tarifa, id_proyecto, proyecto, dia_normal, domingo, subida, bajada, adicionales
+                FROM tarifas_roster_cache
+                WHERE id_proyecto = ?
+            """, (str(id_proyecto).strip(),))
+            r = cursor.fetchone()
+            if r:
+                return dict(r)
+        if nombre_proyecto:
+            nom_limpio = str(nombre_proyecto).strip().lower()
+            cursor.execute("""
+                SELECT id_tarifa, id_proyecto, proyecto, dia_normal, domingo, subida, bajada, adicionales
+                FROM tarifas_roster_cache
+            """)
+            for row in cursor.fetchall():
+                p_bd = str(row["proyecto"] or "").strip().lower()
+                if p_bd == nom_limpio or p_bd in nom_limpio or nom_limpio in p_bd:
+                    return dict(row)
+    return None
+
 
 DIAS_SEMANA = {
     0: "lunes",
@@ -1539,6 +1655,71 @@ def actualizar_tipo_costo_lote(ids_asistencia: list, tipo_costo: str) -> int:
             total_modificados += cursor.rowcount
         conn.commit()
         return total_modificados
+
+# [FN-06.06] Edición manual de costo_dia con auditoría en modificaciones_realizadas
+def actualizar_costo_dia_manual(
+    id_registro: int,
+    nuevo_costo: float,
+    quien_modifica: str = "",
+    motivo: str = ""
+) -> dict:
+    """Actualiza manualmente costo_dia en historial, audita en modificaciones_realizadas y marca sincronizado=0."""
+    with obtener_conexion() as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT id, id_asistencia, empleado, fecha, tipo_ocf, servicio, horas, tipo_costo, costo_dia
+            FROM historial
+            WHERE id = ? OR id_asistencia = ?
+        """, (id_registro if str(id_registro).isdigit() else -1, str(id_registro)))
+        row = cursor.fetchone()
+        if not row:
+            return {"exito": False, "error": "No se encontró el registro a modificar en la base local."}
+
+        costo_ant = float(row["costo_dia"] or 0.0)
+        nuevo_val = round(float(nuevo_costo or 0.0), 2)
+        uid_asistencia = str(row["id_asistencia"] or "").strip()
+        reg_id = row["id"]
+
+        if abs(costo_ant - nuevo_val) > 0.001 and uid_asistencia:
+            id_mod = str(uuid.uuid4())
+            fh_mod = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            desc_motivo = f" ({motivo.strip()})" if (motivo and str(motivo).strip()) else ""
+            cursor.execute("""
+                INSERT INTO modificaciones_realizadas (
+                    id_modificacion, id_asistencia, tipo_antes, tipo_despues,
+                    horas_antes, horas_despues, servicio_antes, servicio_despues,
+                    fecha_hora_modificaciones, quien_modifica, sincronizado, revisado, revisado_sincronizado
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, 1)
+            """, (
+                id_mod,
+                uid_asistencia,
+                f"{row['tipo_ocf']} [Costo: ${costo_ant:,.2f}]",
+                f"{row['tipo_ocf']} [Costo: ${nuevo_val:,.2f}]{desc_motivo}",
+                float(row["horas"] or 0.0),
+                float(row["horas"] or 0.0),
+                str(row["servicio"] or ""),
+                str(row["servicio"] or ""),
+                fh_mod,
+                quien_modifica or "Administración"
+            ))
+
+        cursor.execute("""
+            UPDATE historial
+            SET costo_dia = ?,
+                modificado = 1,
+                sincronizado = 0
+            WHERE id = ?
+        """, (nuevo_val, reg_id))
+        conn.commit()
+
+        return {
+            "exito": True,
+            "id": reg_id,
+            "id_asistencia": uid_asistencia,
+            "costo_anterior": costo_ant,
+            "costo_nuevo": nuevo_val,
+            "mensaje": f"Costo diario actualizado a ${nuevo_val:,.2f} exitosamente."
+        }
 
 # [FN-02.01] Consultar modificaciones recientes registradas
 def obtener_modificaciones_recientes(limite: int = 50) -> list:

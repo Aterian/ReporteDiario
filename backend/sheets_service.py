@@ -801,6 +801,67 @@ def parse_currency(val) -> float:
         return 0.0
 
 
+# [FN-03.08] Obtener tarifas de roster desde la hoja remota '1_2_tarifas_roster'
+def obtener_tarifas_roster_remotas(spreadsheet_id: str = "") -> list:
+    """
+    Lee las tarifas de roster de la pestaña '1_2_tarifas_roster'.
+    Columnas: id_tarifa, proyecto, dia_normal, domingo, subida, bajada, adicionales, id_proyecto.
+    """
+    try:
+        sh, _ = obtener_hoja_trabajo(spreadsheet_id=spreadsheet_id, sheet_name="1_2_tarifas_roster")
+        try:
+            ws = sh.worksheet("1_2_tarifas_roster")
+        except gspread.exceptions.WorksheetNotFound:
+            print("[Sheets] Pestaña '1_2_tarifas_roster' no encontrada en la hoja de cálculo.")
+            return []
+
+        filas = ws.get_all_values()
+        if not filas or len(filas) < 2:
+            return []
+
+        headers = [str(h).strip().lower() for h in filas[0]]
+        idx_id_tarifa = headers.index("id_tarifa") if "id_tarifa" in headers else -1
+        idx_proy = headers.index("proyecto") if "proyecto" in headers else (headers.index("denominacion") if "denominacion" in headers else 1)
+        idx_dia_norm = headers.index("dia_normal") if "dia_normal" in headers else -1
+        idx_dom = headers.index("domingo") if "domingo" in headers else -1
+        idx_sub = headers.index("subida") if "subida" in headers else -1
+        idx_baj = headers.index("bajada") if "bajada" in headers else -1
+        idx_adic = headers.index("adicionales") if "adicionales" in headers else -1
+        idx_id_proy = headers.index("id_proyecto") if "id_proyecto" in headers else -1
+
+        tarifas = []
+        for f in filas[1:]:
+            proy = f[idx_proy].strip() if (idx_proy >= 0 and len(f) > idx_proy) else ""
+            if not proy:
+                continue
+
+            id_t = f[idx_id_tarifa].strip() if (idx_id_tarifa >= 0 and len(f) > idx_id_tarifa) else ""
+            id_p = f[idx_id_proy].strip() if (idx_id_proy >= 0 and len(f) > idx_id_proy) else ""
+            d_norm = parse_currency(f[idx_dia_norm]) if (idx_dia_norm >= 0 and len(f) > idx_dia_norm) else 0.0
+            d_dom = parse_currency(f[idx_dom]) if (idx_dom >= 0 and len(f) > idx_dom) else 0.0
+            d_sub = parse_currency(f[idx_sub]) if (idx_sub >= 0 and len(f) > idx_sub) else 0.0
+            d_baj = parse_currency(f[idx_baj]) if (idx_baj >= 0 and len(f) > idx_baj) else 0.0
+            d_adic = parse_currency(f[idx_adic]) if (idx_adic >= 0 and len(f) > idx_adic) else 0.0
+
+            tarifas.append({
+                "id_tarifa": id_t or str(uuid.uuid4()),
+                "id_proyecto": id_p,
+                "proyecto": proy,
+                "dia_normal": d_norm,
+                "domingo": d_dom,
+                "subida": d_sub,
+                "bajada": d_baj,
+                "adicionales": d_adic
+            })
+
+        print(f"[Sheets] {len(tarifas)} tarifas de roster cargadas desde '1_2_tarifas_roster'.")
+        return tarifas
+    except Exception as e:
+        print(f"[Sheets] Error al obtener tarifas de roster remotas: {e}")
+        return []
+
+
+
 # [FN-01.08] Obtener sueldos y costos diarios desde la hoja CALCULO DE SUELDOS
 def obtener_sueldos_remotos(spreadsheet_id: str = "") -> dict:
     """

@@ -55,7 +55,11 @@ from database import (
     marcar_todas_modificaciones_revisadas,
     obtener_estado_diario_empleados,
     obtener_actividad_dia_anterior,
-    obtener_costos_empleado
+    obtener_costos_empleado,
+    guardar_tarifas_roster_cache,
+    obtener_tarifas_roster_cache,
+    obtener_tarifa_roster_por_proyecto,
+    actualizar_costo_dia_manual
 )
 from roster_export import generar_excel_roster_mes
 from liquidacion_export import generar_excel_informe_liquidacion
@@ -74,9 +78,11 @@ from sheets_service import (
     deduplicar_hoja_remota,
     limpiar_y_descargar_desde_sheets,
     descargar_modificaciones_desde_sheets,
-    actualizar_revisado_en_sheets
+    actualizar_revisado_en_sheets,
+    obtener_tarifas_roster_remotas
 )
 
+APP_VERSION = "1.16.0"
 
 # Lista predefinida de los empleados habilitados con sus correos oficiales, áreas y roles RBAC
 EMPLEADOS_AUTORIZADOS = [
@@ -177,6 +183,10 @@ def sincronizar_todo_desde_sheets(motivo: str = "inicio"):
         nl = obtener_no_laborales_remotos()
         if nl:
             guardar_no_laborales_cache(nl)
+
+        t_rem = obtener_tarifas_roster_remotas()
+        if t_rem:
+            guardar_tarifas_roster_cache(t_rem)
 
         res_asist = sincronizar_desde_sheets_hacia_local()
         purgar_rosters_huerfanos()
@@ -635,7 +645,12 @@ class ApiPuente:
             if nl_remotos:
                 guardar_no_laborales_cache(nl_remotos)
 
-            # 5. Sincronizar sincrónicamente '1_asistencia_informada', purgando registros locales inexistentes
+            # 5. Descargar y actualizar tarifas de roster (1_2_tarifas_roster)
+            t_remotos = obtener_tarifas_roster_remotas()
+            if t_remotos:
+                guardar_tarifas_roster_cache(t_remotos)
+
+            # 6. Sincronizar sincrónicamente '1_asistencia_informada', purgando registros locales inexistentes
             res_asist = sincronizar_desde_sheets_hacia_local()
             cant_del = res_asist.get("eliminados", 0) if isinstance(res_asist, dict) else 0
             cant_ins = res_asist.get("insertados", 0) if isinstance(res_asist, dict) else 0
@@ -747,9 +762,19 @@ class ApiPuente:
 
         es_carga_fds_franco = (
             lugar_norm in ["franco", "franco de oficina", "franco oficina"]
-            and bool(datos.get("fechas"))
-            and all(_es_fin_de_semana(f_str) for f_str in fechas_a_cargar)
+            and (
+                (bool(datos.get("fechas")) and all(_es_fin_de_semana(f_str) for f_str in fechas_a_cargar))
+                or (len(fechas_a_cargar) == 1 and _es_fin_de_semana(fechas_a_cargar[0]))
+            )
         )
+
+        if es_carga_fds_franco:
+            tipo_costo = "Oficina"
+            lugar = "Franco"
+            lugar_norm = "franco"
+            datos["tipo_costo"] = "Oficina"
+            datos["tipo_franco"] = "Franco de Oficina"
+            datos["sub_franco"] = "Franco de Oficina"
 
         if len(fechas_a_cargar) > 1 and not es_admin_subadmin and not es_carga_fds_franco:
             return {
@@ -1634,12 +1659,71 @@ class ApiPuente:
                 horas = 8.0 if tipo_norm.lower() == "campo" else 0.0
 
             emp_id = obtener_id_empleado(empleado)
-            proy_id = obtener_id_proyecto(proyecto) if proyecto else ""
+            proy_id = str(datos.get("id_proyecto", "")).strip() or (obtener_id_proyecto(proyecto) if proyecto else "")
             sesion = obtener_sesion_activa()
             cargado_por_rrhh = sesion["nombre"] if sesion else "RRHH"
 
-            # Reconciliar/guardar jornadas en historial
-            for dia_f in fechas_a_cargar:
+            # [FN-03.08] Vincular tarifas según tabla 1_2_tarifas_roster
+            tarifa_roster = obtener_tarifa_roster_por_proyecto(id_proyecto=proy_id, nombre_proyecto=proyecto)
+
+            fechas_ordenadas = sorted(fechas_a_cargar)
+            dia_inicio = fechas_ordenadas[0] if fechas_ordenadas else ""
+
+            # Reconciliar/guardar jornadas en historial con tipo_costo y costo_dia
+            for dia_f in fechas_ordenadas:
+                dt_dia = dt.strptime(dia_f, "%Y-%m-%d")
+                es_domingo = (dt_dia.weekday() == 6)
+
+                t_costo_dia = ""
+                c_costo_dia = 0.0
+
+                if tarifa_roster:
+                    if tipo_norm == "Campo":
+                        t_costo_dia = "Campo"
+                        if dia_f == dia_inicio:
+                            # Primer día (subida) + adicionales aplicado exactamente una (1) vez por rango
+                            c_costo_dia = round(float(tarifa_roster.get("subida") or 0.0) + float(tarifa_roster.get("adicionales") or 0.0), 2)
+                        elif es_domingo:
+                            c_costo_dia = round(float(tarifa_roster.get("domingo") or 0.0), 2)
+                        else:
+                            c_costo_dia = round(float(tarifa_roster.get("dia_normal") or 0.0), 2)
+                    elif tipo_norm == "Franco":
+                        if dia_f == dia_inicio:
+                            # Primer día (bajada)
+                            c_costo_dia = round(float(tarifa_roster.get("bajada") or 0.0), 2)
+                            t_costo_dia = "Campo"
+                        else:
+                            # Días restantes toman tarifa de franco correspondiente
+                            t_costo_dia, c_costo_dia = calcular_costo_dia_asistencia(
+                                tipo_ocf="Franco",
+                                servicio=proyecto,
+                                feriado="NO",
+                                empleado=empleado
+                            )
+                    else:
+                        t_costo_dia, c_costo_dia = calcular_costo_dia_asistencia(
+                            tipo_ocf=tipo_ocf,
+                            servicio=servicio,
+                            feriado="NO",
+                            empleado=empleado,
+                            tipo_costo="Campo" if tipo_norm.lower() == "campo" else ""
+                        )
+                else:
+                    # Fallback si el proyecto no tiene tarifa definida en 1_2_tarifas_roster
+                    p_dia_input = float(datos.get("precio_dia") or 0.0)
+                    p_dom_input = float(datos.get("precio_domingo") or 0.0)
+                    if tipo_norm == "Campo" and (p_dia_input > 0 or p_dom_input > 0):
+                        t_costo_dia = "Campo"
+                        c_costo_dia = p_dom_input if es_domingo and p_dom_input > 0 else p_dia_input
+                    else:
+                        t_costo_dia, c_costo_dia = calcular_costo_dia_asistencia(
+                            tipo_ocf=tipo_ocf,
+                            servicio=servicio,
+                            feriado="NO",
+                            empleado=empleado,
+                            tipo_costo="Campo" if tipo_norm.lower() == "campo" else ""
+                        )
+
                 with obtener_conexion() as conn:
                     cursor = conn.cursor()
                     cursor.execute(
@@ -1657,7 +1741,9 @@ class ApiPuente:
                         empleado=empleado,
                         id_empleado=emp_id,
                         id_proyecto=proy_id,
-                        cargado_por=cargado_por_rrhh
+                        cargado_por=cargado_por_rrhh,
+                        tipo_costo=t_costo_dia,
+                        costo_dia=c_costo_dia
                     )
                 else:
                     guardar_registro_asistencia(
@@ -1672,7 +1758,9 @@ class ApiPuente:
                         sincronizado=False,
                         cargado_por=cargado_por_rrhh,
                         id_empleado=emp_id,
-                        id_proyecto=proy_id
+                        id_proyecto=proy_id,
+                        tipo_costo=t_costo_dia,
+                        costo_dia=c_costo_dia
                     )
 
             if disparar_sync:
@@ -2217,6 +2305,51 @@ def ejecutar_descarga_y_reinicio(url_descarga: str):
         os._exit(0)
     except Exception as e:
         return {"exito": False, "error": str(e)}
+
+    # [FN-03.08] Obtener catálogo de tarifas de roster en caché local
+    def obtener_tarifas_roster(self):
+        """Retorna las tarifas de roster sincronizadas desde 1_2_tarifas_roster."""
+        tarifas = obtener_tarifas_roster_cache()
+        if not tarifas:
+            try:
+                t_rem = obtener_tarifas_roster_remotas()
+                if t_rem:
+                    guardar_tarifas_roster_cache(t_rem)
+                    return t_rem
+            except Exception as e:
+                print(f"[Roster] Error obteniendo tarifas de roster remotas: {e}")
+        return tarifas
+
+    # [FN-06.06] Edición manual de costo_dia con auditoría en modificaciones_realizadas
+    def actualizar_costo_dia_manual(self, datos: dict):
+        """Actualiza manualmente costo_dia en historial local, audita en modificaciones_realizadas y sincroniza en Sheets."""
+        sesion = obtener_sesion_activa()
+        if not puede_gestionar_tipo_costo(sesion) and not puede_modificar_historial_otros(sesion):
+            return {"exito": False, "error": "Acceso denegado: Se requieren permisos administrativos de RRHH para editar costos diarios."}
+
+        id_reg = datos.get("id") or datos.get("id_registro") or datos.get("id_asistencia")
+        if not id_reg:
+            return {"exito": False, "error": "Identificador de registro no proporcionado."}
+
+        try:
+            nuevo_costo = float(datos.get("costo_dia") if datos.get("costo_dia") is not None else (datos.get("nuevo_costo") or 0.0))
+        except (ValueError, TypeError):
+            return {"exito": False, "error": "El valor de costo_dia ingresado no es un número válido."}
+
+        quien_mod = sesion.get("nombre", "Administración") if sesion else "Administración"
+        motivo = str(datos.get("motivo") or "").strip()
+
+        res = actualizar_costo_dia_manual(
+            id_registro=id_reg,
+            nuevo_costo=nuevo_costo,
+            quien_modifica=quien_mod,
+            motivo=motivo
+        )
+
+        if res and res.get("exito"):
+            self._disparar_sync_segundo_plano()
+
+        return res
 
 
 def demonio_recordatorios(ventana, tray_icon):

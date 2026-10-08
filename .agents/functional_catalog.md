@@ -7,9 +7,37 @@
 - **Reglas de negocio e invariantes**:
   1. Disponible universalmente para todos los roles activos (`admin`, `sub_admin`, `core`, `user_1`, `user_2`) exclusivamente en historial personal.
   2. Los roles no administrativos computan invariablemente `tipo_ocf = 'Franco'`, `tipo_franco = 'Franco de Oficina'`, `horas = 0.0`.
-  3. El área de servicio se mapea dinámicamente (`MAPA_AREAS`) según el área del colaborador autenticado (`Mensura`, `SIG`, `Ingeniería`, `Núcleo`, `RRHH`, `Aplicaciones`, `Ventas y Marketing`).
-  4. Los fines de semana con registros preexistentes se preservan sin modificaciones.
-  5. En el backend, las cargas masivas con múltiples fechas solo se permiten a roles estándar si todas las fechas corresponden a sábados y domingos bajo modalidad Franco para su propio usuario.
+  3. Los fines de semana convertidos a franco se guardan estrictamente con `tipo_costo = 'Oficina'` y `costo_dia = costo_dia_ofi` correspondiente al empleado, tanto en SQLite local (`historial`) como en Google Sheets (`1_asistencia_informada`).
+  4. El área de servicio se mapea dinámicamente (`MAPA_AREAS`) según el área del colaborador autenticado (`Mensura`, `SIG`, `Ingeniería`, `Núcleo`, `RRHH`, `Aplicaciones`, `Ventas y Marketing`).
+  5. Los fines de semana con registros preexistentes se preservan sin modificaciones.
+  6. En el backend, las cargas masivas con múltiples fechas solo se permiten a roles estándar si todas las fechas corresponden a sábados y domingos bajo modalidad Franco para su propio usuario.
+
+## [FN-03.08] Integración de Tarifas Roster (1_2_tarifas_roster) y Distintivos Gantt
+- **Módulo**: [MOD-03] Módulo de Roster y Tarifas
+- **Flujo Operativo**: Vincula la tabla remota `1_2_tarifas_roster` mediante `id_proyecto` para computar automáticamente los costos diarios al cargar rangos de Roster (subida + adicionales una vez por rango, domingos, días hábiles, bajada y francos), reflejando distintivos visuales de Subida y Bajada en la vista Gantt.
+- **Tablas afectadas**: `1_2_tarifas_roster`, `tarifas_roster_cache`, `rosters`, `historial`, `1_asistencia_informada`.
+- **Reglas de negocio e invariantes**:
+  1. Turno Campo: el primer día (`fecha_desde`) toma tarifa de `subida` + `adicionales` (aplicado exactamente 1 vez por bloque cargado). Domingos toman tarifa de `domingo`. Días hábiles toman tarifa de `dia_normal`.
+  2. Turno Franco: el primer día (`fecha_desde`) toma tarifa de `bajada`. Los días restantes toman la tarifa de descanso habitual.
+  3. Los importes se persisten en las columnas canónicas `costo_dia` y `tipo_costo` sin mutar el esquema de 17 columnas de `1_asistencia_informada`.
+  4. La vista Gantt destaca Subida (`.bar-subida`, `⬆S`) y Bajada (`.bar-bajada`, `⬇B`).
+
+## [FN-06.06] Calculadora de Liquidación Basada en Costo Día Asentado
+- **Módulo**: [MOD-06] Gestión de Nómina y Liquidación
+- **Flujo Operativo**: Suma y liquida los importes de colaboradores seleccionados basándose únicamente en los valores reales asentados en la columna `costo_dia` de los registros seleccionados, preservando la capacidad de sobreescritura manual para excepciones operativas.
+- **Tablas afectadas**: `historial`.
+- **Reglas de negocio e invariantes**:
+  1. En modo automático (`!hayModoManual`), los subtotales de cada categoría provienen directamente de la sumatoria de `costo_dia` de los registros filtrados.
+  2. Permite excepciones manuales por categoría con ajuste de días y tarifas personalizadas sin alterar la base de datos hasta que el usuario decida.
+
+## [FN-06.07] Visualización y Edición Manual Exclusiva de Costo Día en Calendario
+- **Módulo**: [MOD-06] Gestión de Nómina y Liquidación
+- **Flujo Operativo**: Muestra el valor de `costo_dia` en cada celda del calendario mensual de otros empleados y provee un modal independiente y exclusivo para su edición manual por parte de RRHH/Administración.
+- **Tablas afectadas**: `historial`, `modificaciones_realizadas`, `1_asistencia_informada`, `1_1_modificaciones_realizadas`.
+- **Reglas de negocio e invariantes**:
+  1. Visualización interactiva en cada celda (`💰 $monto`) con distintivo cromático.
+  2. Modal desacoplado de la edición general de la jornada: actualiza `costo_dia` en SQLite local, en Google Sheets y asienta registro en la auditoría `modificaciones_realizadas`.
+  3. Selección de registro específico en caso de jornadas con múltiples proyectos en un mismo día.
 
 ## [FN-03.06] Obtener Conexión SQLite con Modo WAL y Timeout Concurrente
 - **Módulo**: [MOD-03] Sincronización y Persistencia Local
