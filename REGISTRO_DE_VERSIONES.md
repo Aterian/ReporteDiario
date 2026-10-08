@@ -33,6 +33,14 @@ Historial cronológico de cambios, nuevas características y mejoras aplicadas a
   - Cálculo automático de subtotales y total a liquidar fundamentado **únicamente en los valores asentados en la columna `costo_dia`** de los registros seleccionados.
   - Preservación íntegra de la sobreescritura manual de días y tarifas para excepciones operativas de RRHH.
 
+### 📦 Empaquetado y Distribución de Ejecutables v1.16.0 (`[FN-00.01]`)
+- **Recompilación Integral de la Aplicación y del Instalador Autónomo**:
+  - Generación del ejecutable principal `instalador/CheckDiarioIngeap.exe` (27.6 MB) que incluye los bundles compilados de producción de React + Vite en `backend/dist`.
+  - Generación del instalador monobloque autónomo `instalador/Instalador_CheckDiario_Ingeap.exe` (35.8 MB) con extracción a `LocalAppData\Ingeap\CheckDiario`, creación de accesos directos e inicio automático.
+- **Estandarización de Metadatos de Versión Windows PE**:
+  - Creación de `backend/file_version_info.txt` para estampar la versión `1.16.0.0` y metadatos de producto de Ingeap directamente en las propiedades de archivo de Windows de ambos ejecutables.
+  - Actualización de diálogos de confirmación (`INSTALLER_VERSION = '1.16.0'`) en `backend/installer_app.py`, script `compilar_instalador.bat`, `LEEME_INSTALACION.txt` y `Instalar_Acceso_Directo.ps1`.
+
 ---
 
 ### 📝 Auditoría de Modificaciones Revisadas con 'OK' en Google Sheets y Desactivación Remota (`[FN-02.01]`, `[FN-02.02]`)

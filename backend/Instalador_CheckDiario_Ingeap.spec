@@ -45,5 +45,6 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
+    version=os.path.join(base_dir, "file_version_info.txt"),
     icon=os.path.join(base_dir, "assets", "app.ico"),
 )

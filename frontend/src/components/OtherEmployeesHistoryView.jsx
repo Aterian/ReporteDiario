@@ -3170,6 +3170,8 @@ export default function OtherEmployeesHistoryView({
             </div>
           </div>
         </div>
+      )}
+
       {/* [FN-06.07] Modal Independiente y Exclusivo para Edición Manual de costo_dia */}
       {modalCostoDia && (
         <div className="modal-backdrop">

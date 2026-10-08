@@ -1,9 +1,9 @@
 @echo off
 setlocal
-title Compilador del Instalador - Check Diario Ingeap
+title Compilador del Instalador - Check Diario Ingeap v1.16.0
 
 echo ============================================================
-echo   Compilacion de Check Diario - Ingeap
+echo   Compilacion de Check Diario - Ingeap v1.16.0
 echo ============================================================
 echo.
 
@@ -14,7 +14,7 @@ set "INSTALADOR_DIR=%ROOT_DIR%instalador"
 
 echo [1/4] Compilando Frontend (Vite)...
 cd /d "%FRONTEND_DIR%"
-call npm run build
+call npm.cmd run build
 if %errorlevel% neq 0 (
     echo [ERROR] Fallo la compilacion del Frontend.
     pause

@@ -6,6 +6,9 @@ import subprocess
 import ctypes
 import winreg
 
+INSTALLER_VERSION = "1.16.0"
+
+# [FN-00.01] Instalador Autonomo de Escritorio Check Diario Ingeap
 def resource_path(relative_path):
     """Obtiene la ruta absoluta al recurso embebido en PyInstaller."""
     base_path = getattr(sys, "_MEIPASS", os.path.abspath("."))
@@ -86,12 +89,12 @@ $s2.Save()
         # 7. Cuadro de diálogo de confirmación
         ctypes.windll.user32.MessageBoxW(
             0,
-            "¡Check Diario Ingeap se ha instalado correctamente en tu equipo!\n\n"
+            f"¡Check Diario Ingeap v{INSTALLER_VERSION} se ha instalado correctamente en tu equipo!\n\n"
             "✓ Acceso directo creado en el Escritorio\n"
             "✓ Agregado al Menú Inicio de Windows\n"
             "✓ Configurado para iniciar con tu sesión\n\n"
             "La aplicación ya se encuentra abierta.",
-            "Instalación Completada - Ingeap",
+            f"Instalación Completada - Ingeap v{INSTALLER_VERSION}",
             0x40  # MB_ICONINFORMATION
         )
 

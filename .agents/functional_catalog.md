@@ -1,5 +1,14 @@
 # Catálogo Funcional del Sistema
 
+## [FN-00.01] Empaquetado y Generación de Ejecutables para Distribución
+- **Módulo**: [MOD-00] Compilación y Despliegue de Escritorio
+- **Flujo Operativo**: Pipeline automatizado que compila la SPA React con Vite hacia `backend/dist`, empaqueta el backend Python/pywebview con PyInstaller en `CheckDiarioIngeap.exe` con metadatos PE v1.16.0, y genera el instalador autónomo monobloque `Instalador_CheckDiario_Ingeap.exe` configurando accesos directos y registro de Windows.
+- **Tablas afectadas**: Ninguna (Herramientas de empaquetado y scripts de sistema).
+- **Reglas de negocio e invariantes**:
+  1. Frontend genera bundles optimizados en `backend/dist` vía `vite.config.js`.
+  2. PyInstaller estampa `backend/file_version_info.txt` con versión `1.16.0.0` y metadatos de Ingeap.
+  3. El instalador autónomo despliega en `%LOCALAPPDATA%\Ingeap\CheckDiario`, elimina restricciones SmartScreen (`Zone.Identifier`), genera accesos directos y registra autoarranque en `HKCU\Software\Microsoft\Windows\CurrentVersion\Run`.
+
 ## [FN-01.11] Asignación Asistida de Fines de Semana a Franco en Historial Propio
 - **Módulo**: [MOD-01] Registro de Asistencia Diaria
 - **Flujo Operativo**: Permite a cualquier usuario logueado en su historial personal cargar automáticamente todos los sábados y domingos pendientes del mes en curso como Franco (Franco de Oficina, 0 hs) imputados a su área respectiva, guardando localmente en SQLite y disparando la sincronización remota hacia Google Sheets.
