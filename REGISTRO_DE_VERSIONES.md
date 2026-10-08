@@ -2,6 +2,34 @@
 
 Historial cronológico de cambios, nuevas características y mejoras aplicadas al sistema **Check Diario Ingeap**.
 
+## [1.16.1] - 2026-10-08
+
+### 💰 Liquidación: Regla de Registro Único Diario por Categoría (`[FN-06.05]`)
+- **Imputación No Fraccionada y Registro Único por Día**:
+  - En la generación del informe y archivo Excel de liquidación (`handleDescargarInformeLiquidacion`), se computa **un único (1) registro por día y categoría** en caso de que existan múltiples registros del mismo tipo en una misma fecha (ej. dos jornadas de oficina).
+  - Eliminación definitiva del fraccionamiento proporcional de costos entre proyectos (`tarifa * hrs / totHrs`). El costo asignado es íntegro por día para la categoría, independiente de los proyectos registrados.
+  - En jornadas donde coexisten modalidades de oficina y campo en el mismo día, cada modalidad computa su día con su respectivo valor y **los importes diarios se suman**.
+
+### 📊 Gráfico Gantt de Roster: Exclusividad Canónica de 10 Colaboradores (`[FN-03.09]`)
+- **Restricción a Colaboradores Autorizados de Ingeniería**:
+  - La grilla del gráfico Gantt limita su universo de colaboradores exclusivamente a los 10 colaboradores autorizados:
+    1. Gabriel Juarez
+    2. Maximiliano Kromm
+    3. Fernando Aimar
+    4. Norberto José Luis Botto
+    5. Ivan Emanuel Altamirano
+    6. Alejo Ferrero
+    7. Facundo Ezequiel Calgaro
+    8. Rodolfo Julian Lescano
+    9. Agustina Ferrante
+    10. José María Zufiaurre
+- **Filtrado Reactivo por Proyecto en el Gantt**:
+  - Al seleccionar un proyecto específico en el selector del Gantt (`filtroProyectoGantt !== 'TODOS'`), la lista filtra dinámicamente para mostrar **únicamente a los colaboradores que tengan registros asignados a ese proyecto** en el período visualizado.
+
+### 📋 Carga de Roster: Búsqueda Exacta de Tarifas por ID y Denominación (`[FN-03.08]`)
+- **Vinculación Oficial de Tarifas con `1_2_tarifas_roster`**:
+  - Búsqueda exacta y prioritaria en la tabla `1_2_tarifas_roster` mediante `buscarTarifaRoster`, emparejando de forma concurrente el `id_proyecto` y la denominación del proyecto seleccionado tanto en el formulario de creación como en la edición de turnos.
+
 ## [1.16.0] - 2026-10-08
 
 ### 🐛 Corrección Crítica: Fines de Semana a Franco (`[FN-01.11]`)

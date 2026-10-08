@@ -1049,7 +1049,10 @@ export default function OtherEmployeesHistoryView({
         return 0;
       };
 
-      // 1. Agrupar registros por fecha para distribuir costos proporcionalmente entre proyectos del mismo día
+      // 1. Agrupar registros por fecha y categoría.
+      // Regla estricta: Solo 1 registro por día en caso de tener más de uno de la misma categoría.
+      // No fraccionar el costo del día entre los proyectos. El costo es íntegro por día independiente de los proyectos.
+      // Si coexisten oficina y campo en el mismo día, cada modalidad computa su día y sus valores se suman.
       const mapaPorFecha = new Map();
       registrosMes.forEach(r => {
         const f = r.fecha || '';
@@ -1061,7 +1064,7 @@ export default function OtherEmployeesHistoryView({
       const registrosDetalle = [];
 
       mapaPorFecha.forEach((regsDia, fechaStr) => {
-        // Agrupar registros del día por categoría
+        // Agrupar registros del día por categoría de liquidación
         const regsPorCat = new Map();
         regsDia.forEach(r => {
           const cat = categorizarRegistroLiquidacion(r);
@@ -1069,43 +1072,32 @@ export default function OtherEmployeesHistoryView({
           regsPorCat.get(cat).push(r);
         });
 
+        // Para cada categoría presente en el día, considerar EXACTAMENTE 1 registro con el costo íntegro del día
         regsPorCat.forEach((regsCat, cat) => {
           const tarifaCat = getTarifaEfectiva(cat);
+          const costoDiaCat = Math.round(tarifaCat * 100) / 100;
           const totHrsCat = regsCat.reduce((sum, r) => sum + (Number(r.horas) || 0), 0);
-          let acumuladoDiaCat = 0.0;
 
-          regsCat.forEach((r, idx) => {
-            const hrs = Number(r.horas) || 0;
-            let share = 0.0;
-            if (idx === regsCat.length - 1) {
-              share = Math.round((tarifaCat - acumuladoDiaCat) * 100) / 100;
-            } else {
-              if (totHrsCat > 0) {
-                share = Math.round(tarifaCat * (hrs / totHrsCat) * 100) / 100;
-              } else {
-                share = Math.round((tarifaCat / regsCat.length) * 100) / 100;
-              }
-              acumuladoDiaCat += share;
-            }
+          // Si hay más de un registro de la misma categoría, seleccionar el de mayor dedicación horaria como representativo
+          const regRepresentativo = [...regsCat].sort((a, b) => (Number(b.horas) || 0) - (Number(a.horas) || 0))[0];
 
-            const srv = (r.servicio || 'Sin servicio').trim();
-            if (!mapaProyectos.has(srv)) {
-              mapaProyectos.set(srv, { proyecto: srv, diasSet: new Set(), horas: 0, monto: 0 });
-            }
-            const itemP = mapaProyectos.get(srv);
-            itemP.diasSet.add(fechaStr);
-            itemP.horas += hrs;
-            itemP.monto += share;
+          const srv = (regRepresentativo.servicio || 'Sin servicio').trim();
+          if (!mapaProyectos.has(srv)) {
+            mapaProyectos.set(srv, { proyecto: srv, diasSet: new Set(), horas: 0, monto: 0 });
+          }
+          const itemP = mapaProyectos.get(srv);
+          itemP.diasSet.add(fechaStr);
+          itemP.horas += totHrsCat;
+          itemP.monto += costoDiaCat;
 
-            registrosDetalle.push({
-              fecha: r.fecha || '',
-              dia_semana: r.dia_semana || '',
-              tipo_ocf: obtenerEtiquetaModalidad(r),
-              servicio: srv,
-              horas: hrs,
-              tipo_costo: r.tipo_costo || (cat === 'obra' || cat === 'franco_obra_trab' ? 'Campo' : 'Oficina'),
-              costo_dia: share
-            });
+          registrosDetalle.push({
+            fecha: regRepresentativo.fecha || fechaStr,
+            dia_semana: regRepresentativo.dia_semana || '',
+            tipo_ocf: obtenerEtiquetaModalidad(regRepresentativo),
+            servicio: srv,
+            horas: totHrsCat,
+            tipo_costo: regRepresentativo.tipo_costo || (cat === 'obra' || cat === 'franco_obra_trab' ? 'Campo' : 'Oficina'),
+            costo_dia: costoDiaCat
           });
         });
       });

@@ -23,23 +23,33 @@
 
 ## [FN-03.08] Integración de Tarifas Roster (1_2_tarifas_roster) y Distintivos Gantt
 - **Módulo**: [MOD-03] Módulo de Roster y Tarifas
-- **Flujo Operativo**: Vincula la tabla remota `1_2_tarifas_roster` mediante `id_proyecto` para computar automáticamente los costos diarios al cargar rangos de Roster (subida + adicionales una vez por rango, domingos, días hábiles, bajada y francos), reflejando distintivos visuales de Subida y Bajada en la vista Gantt.
+- **Flujo Operativo**: Vincula la tabla remota `1_2_tarifas_roster` contrastando tanto `id_proyecto` como denominación para computar automáticamente los costos diarios al cargar rangos de Roster (subida + adicionales una vez por rango, domingos, días hábiles, bajada y francos), reflejando distintivos visuales de Subida y Bajada en la vista Gantt.
 - **Tablas afectadas**: `1_2_tarifas_roster`, `tarifas_roster_cache`, `rosters`, `historial`, `1_asistencia_informada`.
 - **Reglas de negocio e invariantes**:
-  1. Turno Campo: el primer día (`fecha_desde`) toma tarifa de `subida` + `adicionales` (aplicado exactamente 1 vez por bloque cargado). Domingos toman tarifa de `domingo`. Días hábiles toman tarifa de `dia_normal`.
-  2. Turno Franco: el primer día (`fecha_desde`) toma tarifa de `bajada`. Los días restantes toman la tarifa de descanso habitual.
-  3. Los importes se persisten en las columnas canónicas `costo_dia` y `tipo_costo` sin mutar el esquema de 17 columnas de `1_asistencia_informada`.
-  4. La vista Gantt destaca Subida (`.bar-subida`, `⬆S`) y Bajada (`.bar-bajada`, `⬇B`).
-  5. En el formulario y modal de Gantt, las tarifas se presentan en tarjetas de solo lectura vinculadas automáticamente a `1_2_tarifas_roster`.
+  1. Búsqueda de tarifa exacta emparejando de forma combinada `id_proyecto` y `proyecto` (denominación) con la entrada de `1_2_tarifas_roster`.
+  2. Turno Campo: el primer día (`fecha_desde`) toma tarifa de `subida` + `adicionales` (aplicado exactamente 1 vez por bloque cargado). Domingos toman tarifa de `domingo`. Días hábiles toman tarifa de `dia_normal`.
+  3. Turno Franco: el primer día (`fecha_desde`) toma tarifa de `bajada`. Los días restantes toman la tarifa de descanso habitual.
+  4. Los importes se persisten en las columnas canónicas `costo_dia` y `tipo_costo` sin mutar el esquema de 17 columnas de `1_asistencia_informada`.
+  5. La vista Gantt destaca Subida (`.bar-subida`, `⬆S`) y Bajada (`.bar-bajada`, `⬇B`).
+  6. En el formulario y modal de Gantt, las tarifas se presentan en tarjetas de solo lectura vinculadas automáticamente a `1_2_tarifas_roster`.
 
-## [FN-03.09] Filtrado Condicional de Colaboradores en Vista Gantt de Roster
+## [FN-03.09] Restricción Exclusiva y Filtrado de Colaboradores en Vista Gantt de Roster
 - **Módulo**: [MOD-03] Módulo de Roster y Tarifas
-- **Flujo Operativo**: Filtra la lista de colaboradores antes de renderizar la grilla mensual del Gantt, asegurando que solo aparezcan empleados del Área de Ingeniería o que tengan asignaciones activas en el período.
+- **Flujo Operativo**: Restringe la visualización del gráfico Gantt exclusivamente al conjunto canónico de los 10 colaboradores autorizados de Ingeniería, y filtra reactivamente por proyecto para mostrar únicamente a quienes tengan turnos asignados a dicho proyecto.
 - **Tablas afectadas**: `rosters`.
 - **Reglas de negocio e invariantes**:
-  1. Condición a: Colaboradores pertenecientes al Área de Ingeniería (`'I'`, `'Ingeniería'`, `'Ingenieria'`).
-  2. Condición b: Colaboradores que registren al menos una asignación activa cargada en la tabla de rosters para el mes/período visualizado.
-  3. Todo colaborador de otra área que carezca de asignaciones en el período es ocultado del Gantt.
+  1. Conjunto canónico de colaboradores: Gabriel Juarez, Maximiliano Kromm, Fernando Aimar, Norberto José Luis Botto, Ivan Emanuel Altamirano, Alejo Ferrero, Facundo Ezequiel Calgaro, Rodolfo Julian Lescano, Agustina Ferrante y José María Zufiaurre.
+  2. Cuando el selector de proyecto en el Gantt está en `'TODOS'`, se listan los 10 colaboradores canónicos.
+  3. Cuando se selecciona un proyecto específico (`filtroProyectoGantt !== 'TODOS'`), la lista muestra exclusivamente a aquellos colaboradores (del grupo de los 10) que registren turnos en dicho proyecto en el período visualizado.
+
+## [FN-06.05] Desglose y Liquidación con Registro Único Diario por Categoría
+- **Módulo**: [MOD-06] Gestión de Nómina y Liquidación
+- **Flujo Operativo**: Genera el informe de liquidación y archivo Excel oficial computando estrictamente un único registro por día para una misma categoría sin fraccionar el costo entre proyectos, y sumando importes diarios independientes si coexisten oficina y campo en la misma jornada.
+- **Tablas afectadas**: `historial`.
+- **Reglas de negocio e invariantes**:
+  1. En jornadas con múltiples registros del mismo tipo (ej. 2 de oficina), se computa un único (1) registro con la tarifa completa del día (`tarifaCat`), seleccionando el de mayor carga horaria como representativo.
+  2. Prohibido fraccionar o prorratear el costo diario entre proyectos registrados.
+  3. En jornadas mixtas donde coinciden oficina y campo en una misma fecha, cada categoría genera su línea de liquidación y los importes diarios se suman en el total.
 
 ## [FN-06.06] Calculadora de Liquidación Basada en Costo Día Asentado
 - **Módulo**: [MOD-06] Gestión de Nómina y Liquidación

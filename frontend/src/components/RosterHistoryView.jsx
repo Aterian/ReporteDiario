@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { api } from '../services/apiBridge';
 import { puedeAccederRoster } from '../utils/permissions';
+import { buscarTarifaRoster } from './RosterView';
 
 // [MOD-06] RosterHistoryView
 export default function RosterHistoryView({ usuario, onVolver, onNuevoRoster, tema }) {
@@ -34,6 +35,7 @@ export default function RosterHistoryView({ usuario, onVolver, onNuevoRoster, te
   const [filtrarTablaPorProyecto, setFiltrarTablaPorProyecto] = useState(false);
   const [filtroEmpleado, setFiltroEmpleado] = useState('TODOS');
   const [rosters, setRosters] = useState([]);
+  const [tarifasRoster, setTarifasRoster] = useState([]);
   const [cargando, setCargando] = useState(true);
   const [exportando, setExportando] = useState(false);
   const [mensaje, setMensaje] = useState(null); // { tipo: 'exito'|'error', texto: '' }
@@ -57,18 +59,28 @@ export default function RosterHistoryView({ usuario, onVolver, onNuevoRoster, te
   const [editPrecioDomingo, setEditPrecioDomingo] = useState('');
   const [guardandoEdit, setGuardandoEdit] = useState(false);
 
-  // Cargar proyectos y empleados exclusivos de Ingeniería (I)
+  // Cargar proyectos, tarifas y empleados exclusivos de Ingeniería (I)
   useEffect(() => {
     async function cargarCatalogos() {
       try {
-        const [proys, emps] = await Promise.all([
+        const [proys, emps, tarifas] = await Promise.all([
           api.obtenerServicios('I'),
-          api.obtenerTodosUsuarios('I')
+          api.obtenerTodosUsuarios('I'),
+          api.obtenerTarifasRoster()
         ]);
+        if (Array.isArray(tarifas)) {
+          setTarifasRoster(tarifas);
+        }
         if (Array.isArray(proys)) {
-          setProyectosDisponibles(proys);
-          if (proys.length > 0) {
-            setProyectoSeleccionado(proys[0]);
+          const setP = new Set();
+          proys.forEach(p => { if (p) setP.add(p.trim()); });
+          if (Array.isArray(tarifas)) {
+            tarifas.forEach(t => { if (t.proyecto) setP.add(t.proyecto.trim()); });
+          }
+          const proysTotales = Array.from(setP);
+          setProyectosDisponibles(proysTotales);
+          if (proysTotales.length > 0) {
+            setProyectoSeleccionado(proysTotales[0]);
           }
         }
         if (Array.isArray(emps)) {
@@ -154,12 +166,14 @@ export default function RosterHistoryView({ usuario, onVolver, onNuevoRoster, te
     setGuardandoEdit(true);
     try {
       const empObj = empleadosDisponibles.find(emp => emp.nombre === editEmpleado);
+      const tarifaRef = buscarTarifaRoster(editProyecto, tarifasRoster);
       const res = await api.guardarRoster({
         id: editId,
         empleado: editEmpleado,
         dni: empObj ? empObj.dni : '',
         usuario_mail: empObj ? (empObj.mail || empObj.email || '') : '',
         proyecto: editProyecto,
+        id_proyecto: tarifaRef ? tarifaRef.id_proyecto : '',
         fecha_inicio: editFechaInicio,
         fecha_fin: editFechaFin,
         tipo: editTipo,

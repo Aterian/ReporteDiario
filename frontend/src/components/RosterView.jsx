@@ -2,6 +2,62 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { api } from '../services/apiBridge';
 import { puedeAccederRoster } from '../utils/permissions';
 
+// [MOD-05] Lista canónica exclusiva de colaboradores autorizados de Ingeniería para el gráfico Gantt
+export const COLABORADORES_GANTT_INGENIERIA = [
+  'Gabriel Juarez',
+  'Maximiliano Kromm',
+  'Fernando Aimar',
+  'Norberto José Luis Botto',
+  'Ivan Emanuel Altamirano',
+  'Alejo Ferrero',
+  'Facundo Ezequiel Calgaro',
+  'Rodolfo Julian Lescano',
+  'Agustina Ferrante',
+  'José María Zufiaurre'
+];
+
+export const normalizarTexto = (txt) => {
+  if (!txt) return '';
+  return txt.trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+};
+
+// [FN-03.08] Búsqueda de tarifa oficial en 1_2_tarifas_roster por id_proyecto y denominación
+export const buscarTarifaRoster = (proyectoTexto, tarifas) => {
+  if (!proyectoTexto || !Array.isArray(tarifas) || tarifas.length === 0) return null;
+  const pNorm = normalizarTexto(proyectoTexto);
+
+  // 1. Coincidencia combinada estricta: tanto id_proyecto como denominación coinciden
+  const matchAmbos = tarifas.find(t => {
+    const idP = normalizarTexto(t.id_proyecto);
+    const nomP = normalizarTexto(t.proyecto);
+    if (!idP || !nomP) return false;
+    const idOk = idP === pNorm || pNorm.includes(idP);
+    const nomOk = nomP === pNorm || pNorm.includes(nomP) || nomP.includes(pNorm);
+    return idOk && nomOk;
+  });
+  if (matchAmbos) return matchAmbos;
+
+  // 2. Coincidencia por id_proyecto exacto
+  const matchId = tarifas.find(t => {
+    const idP = normalizarTexto(t.id_proyecto);
+    return idP && (idP === pNorm || pNorm.startsWith(idP) || pNorm.includes(idP));
+  });
+  if (matchId) return matchId;
+
+  // 3. Coincidencia por denominación exacta
+  const matchDenomExacta = tarifas.find(t => {
+    const nomP = normalizarTexto(t.proyecto);
+    return nomP && nomP === pNorm;
+  });
+  if (matchDenomExacta) return matchDenomExacta;
+
+  // 4. Coincidencia por inclusión de denominación
+  return tarifas.find(t => {
+    const nomP = normalizarTexto(t.proyecto);
+    return nomP && (pNorm.includes(nomP) || nomP.includes(pNorm));
+  }) || null;
+};
+
 // [MOD-05] RosterView
 export default function RosterView({ usuario, onVolver, tema }) {
   const isDark = tema === 'dark';
@@ -61,17 +117,7 @@ export default function RosterView({ usuario, onVolver, tema }) {
 
   // [FN-03.08] Vincular tarifa oficial del proyecto seleccionado desde 1_2_tarifas_roster
   const tarifaActual = useMemo(() => {
-    if (!proyecto || !tarifasRoster.length) return null;
-    const pNorm = proyecto.trim().toLowerCase();
-    return tarifasRoster.find(t => {
-      const nomT = (t.proyecto || '').trim().toLowerCase();
-      const idP = (t.id_proyecto || '').trim().toLowerCase();
-      return (idP && pNorm.includes(idP)) ||
-             (idP && idP === pNorm) ||
-             nomT === pNorm ||
-             nomT.includes(pNorm) ||
-             pNorm.includes(nomT);
-    }) || null;
+    return buscarTarifaRoster(proyecto, tarifasRoster);
   }, [proyecto, tarifasRoster]);
 
   useEffect(() => {
@@ -128,17 +174,7 @@ export default function RosterView({ usuario, onVolver, tema }) {
 
   // [FN-03.08] Tarifa oficial para el proyecto que se está editando en el modal de Gantt
   const tarifaModalEdit = useMemo(() => {
-    if (!editProyecto || !tarifasRoster.length) return null;
-    const pNorm = editProyecto.trim().toLowerCase();
-    return tarifasRoster.find(t => {
-      const nomT = (t.proyecto || '').trim().toLowerCase();
-      const idP = (t.id_proyecto || '').trim().toLowerCase();
-      return (idP && pNorm.includes(idP)) ||
-             (idP && idP === pNorm) ||
-             nomT === pNorm ||
-             nomT.includes(pNorm) ||
-             pNorm.includes(nomT);
-    }) || null;
+    return buscarTarifaRoster(editProyecto, tarifasRoster);
   }, [editProyecto, tarifasRoster]);
 
   const handleEliminarTurnoGantt = async () => {
@@ -295,18 +331,49 @@ export default function RosterView({ usuario, onVolver, tema }) {
             setTarifasRoster(tarifas);
           }
           if (Array.isArray(proys)) {
-            setProyectosDisponibles(proys);
-            if (proys.length > 0 && !proyecto) {
-              setProyecto(proys[0]);
-              setProyectoAExportar(proys[0]);
+            // Unificar proyectos disponibles asegurando que incluyan todas las denominaciones de 1_2_tarifas_roster
+            const setProys = new Set();
+            proys.forEach(p => { if (p) setProys.add(p.trim()); });
+            if (Array.isArray(tarifas)) {
+              tarifas.forEach(t => {
+                if (t.proyecto) setProys.add(t.proyecto.trim());
+              });
+            }
+            const proysUnificados = Array.from(setProys);
+            setProyectosDisponibles(proysUnificados);
+            if (proysUnificados.length > 0 && !proyecto) {
+              setProyecto(proysUnificados[0]);
+              setProyectoAExportar(proysUnificados[0]);
             }
           }
           if (Array.isArray(emps)) {
             setTodosLosEmpleados(emps);
-            // Filtrado estricto por área 'I' (Ingeniería)
-            const empsIngenieria = emps.filter(
-              (e) => ['I', 'INGENIERÍA', 'INGENIERIA'].includes((e.area || '').trim().toUpperCase())
-            );
+            // Asegurar que los 10 colaboradores canónicos de Ingeniería estén disponibles para selección
+            const setNombres = new Set();
+            const empsIngenieria = [];
+
+            COLABORADORES_GANTT_INGENIERIA.forEach(nom => {
+              const normKey = normalizarTexto(nom);
+              const eRef = emps.find(e => normalizarTexto(e.nombre) === normKey);
+              if (eRef && !setNombres.has(normKey)) {
+                setNombres.add(normKey);
+                empsIngenieria.push(eRef);
+              } else if (!setNombres.has(normKey)) {
+                setNombres.add(normKey);
+                empsIngenieria.push({ nombre: nom, dni: '', area: 'I', mail: '' });
+              }
+            });
+
+            // Sumar cualquier otro empleado con área 'I' si existiese en el catálogo
+            emps.forEach(e => {
+              const areaNorm = (e.area || '').trim().toUpperCase();
+              const normNom = normalizarTexto(e.nombre);
+              if (['I', 'INGENIERÍA', 'INGENIERIA'].includes(areaNorm) && !setNombres.has(normNom)) {
+                setNombres.add(normNom);
+                empsIngenieria.push(e);
+              }
+            });
+
             setEmpleadosDisponibles(empsIngenieria);
           }
         }
@@ -558,65 +625,56 @@ export default function RosterView({ usuario, onVolver, tema }) {
     return rostersPeriodo.filter(r => r.proyecto === filtroProyectoGantt);
   }, [rostersPeriodo, filtroProyectoGantt]);
 
-  // [FN-03.09] Agrupar y filtrar colaboradores en Gantt: Ingeniería ('I') o con asignaciones activas
+  // [FN-03.09] Colaboradores en Gantt: Exclusivamente los 10 colaboradores autorizados de Ingeniería
+  // Si se selecciona un proyecto específico, solo mostrar los colaboradores que tengan registros de ese proyecto
   const empleadosEnGantt = useMemo(() => {
     const mapa = {};
 
-    // 1. Condición a): Todos los colaboradores de Ingeniería ('I', 'Ingeniería', 'Ingenieria')
-    (empleadosDisponibles || []).forEach(emp => {
-      const nom = emp.nombre;
-      if (!nom) return;
-      const areaNorm = (emp.area || '').trim().toUpperCase();
-      const esIng = ['I', 'INGENIERÍA', 'INGENIERIA'].includes(areaNorm);
-      if (esIng) {
-        mapa[nom] = {
-          nombre: nom,
-          dni: emp.dni || '',
-          area: emp.area || 'I',
-          proyectosMap: {},
-          registros: []
-        };
+    // 1. Inicializar mapa exclusivamente con los 10 colaboradores canónicos de Ingeniería
+    COLABORADORES_GANTT_INGENIERIA.forEach(nom => {
+      const normKey = normalizarTexto(nom);
+      const empCat = (empleadosDisponibles || []).find(e => normalizarTexto(e.nombre) === normKey)
+        || (todosLosEmpleados || []).find(e => normalizarTexto(e.nombre) === normKey);
+
+      mapa[normKey] = {
+        nombre: nom,
+        dni: empCat ? empCat.dni : '',
+        area: empCat ? empCat.area : 'I',
+        proyectosMap: {},
+        registros: []
+      };
+    });
+
+    // 2. Asociar los registros del mes/período exclusivamente a estos colaboradores
+    const registrosAConsiderar = (filtroProyectoGantt && filtroProyectoGantt !== 'TODOS')
+      ? rostersPeriodo.filter(r => (r.proyecto || '').trim() === filtroProyectoGantt.trim())
+      : rostersPeriodo;
+
+    registrosAConsiderar.forEach(r => {
+      const empNom = r.empleado;
+      if (!empNom) return;
+      const keyNorm = normalizarTexto(empNom);
+      if (mapa[keyNorm]) {
+        mapa[keyNorm].registros.push(r);
+        if (r.proyecto) {
+          mapa[keyNorm].proyectosMap[r.proyecto] = true;
+        }
       }
     });
 
-    // 2. Condición b): Colaboradores con asignaciones activas cargadas en este mes/período
-    rostersFiltrados.forEach(r => {
-      const emp = r.empleado;
-      if (!emp) return;
+    const lista = Object.values(mapa).map(empObj => ({
+      ...empObj,
+      proyectos: Object.keys(empObj.proyectosMap)
+    }));
 
-      if (!mapa[emp]) {
-        const empRef = (todosLosEmpleados || []).find(e => e.nombre === emp);
-        mapa[emp] = {
-          nombre: emp,
-          dni: r.dni || (empRef ? empRef.dni : ''),
-          area: empRef ? empRef.area : (r.area || ''),
-          proyectosMap: {},
-          registros: []
-        };
-      }
+    // 3. Filtrado por proyecto: si se selecciona un proyecto específico,
+    // mostrar en la lista únicamente a los colaboradores que tengan registros de ese proyecto
+    if (filtroProyectoGantt && filtroProyectoGantt !== 'TODOS') {
+      return lista.filter(empObj => empObj.registros.length > 0);
+    }
 
-      mapa[emp].registros.push(r);
-      if (r.proyecto) {
-        mapa[emp].proyectosMap[r.proyecto] = true;
-      }
-    });
-
-    // 3. Filtrar estrictamente: SOLO mostrar quienes cumplan:
-    // a) Pertenezcan al Área de Ingeniería ('I', 'Ingeniería' o 'Ingenieria')
-    // b) Tengan al menos una asignación activa cargada en la tabla de rosters para el mes/período visualizado
-    return Object.values(mapa)
-      .filter(empObj => {
-        const areaNorm = (empObj.area || '').trim().toUpperCase();
-        const esIngenieria = ['I', 'INGENIERÍA', 'INGENIERIA'].includes(areaNorm);
-        const tieneAsignacionesActivas = empObj.registros && empObj.registros.length > 0;
-        return esIngenieria || tieneAsignacionesActivas;
-      })
-      .map(empObj => ({
-        ...empObj,
-        proyectos: Object.keys(empObj.proyectosMap)
-      }))
-      .sort((a, b) => a.nombre.localeCompare(b.nombre));
-  }, [rostersFiltrados, empleadosDisponibles, todosLosEmpleados]);
+    return lista;
+  }, [rostersPeriodo, filtroProyectoGantt, empleadosDisponibles, todosLosEmpleados]);
 
   // Nombres de los meses en español
   const nombresMeses = [
