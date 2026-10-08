@@ -1,9 +1,9 @@
 @echo off
 setlocal
-title Compilador del Instalador - Check Diario Ingeap v1.16.0
+title Compilador del Instalador - Check Diario Ingeap v1.16.1
 
 echo ============================================================
-echo   Compilacion de Check Diario - Ingeap v1.16.0
+echo   Compilacion de Check Diario - Ingeap v1.16.1
 echo ============================================================
 echo.
 
@@ -27,7 +27,7 @@ cd /d "%BACKEND_DIR%"
 call .\venv\Scripts\activate.bat
 call pyinstaller --clean --distpath "%INSTALADOR_DIR%" CheckDiarioIngeap.spec
 if %errorlevel% neq 0 (
-    echo [ERROR] Fallo el empaquetado de PyInstaller (CheckDiarioIngeap).
+    echo [ERROR] Fallo el empaquetado de PyInstaller: CheckDiarioIngeap
     pause
     exit /b %errorlevel%
 )
@@ -36,7 +36,7 @@ echo.
 echo [3/4] Empaquetando Instalador Autonomo de Archivo Unico...
 call pyinstaller --clean --distpath "%INSTALADOR_DIR%" Instalador_CheckDiario_Ingeap.spec
 if %errorlevel% neq 0 (
-    echo [ERROR] Fallo el empaquetado de PyInstaller (Instalador_CheckDiario_Ingeap).
+    echo [ERROR] Fallo el empaquetado de PyInstaller: Instalador_CheckDiario_Ingeap
     pause
     exit /b %errorlevel%
 )
