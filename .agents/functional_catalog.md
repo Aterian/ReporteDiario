@@ -21,6 +21,16 @@
   5. Los fines de semana con registros preexistentes se preservan sin modificaciones.
   6. En el backend, las cargas masivas con múltiples fechas solo se permiten a roles estándar si todas las fechas corresponden a sábados y domingos bajo modalidad Franco para su propio usuario.
 
+## [FN-01.12] Selección de Área Dirección (D) y Control de Visibilidad por Rol
+- **Módulo**: [MOD-01] Registro de Asistencia Diaria
+- **Flujo Operativo**: Permite a colaboradores autorizados (`admin`, `sub_admin`, `core`) imputar su jornada al área 'Dirección' (D), asentando el servicio con la denominación canónica 'Dedicado al area - Dirección' para su sincronización con Google Sheets.
+- **Tablas afectadas**: `historial`, hoja remota `1_asistencia_informada`.
+- **Reglas de negocio e invariantes**:
+  1. La opción de selección de Dirección (D) está reservada exclusivamente para roles `admin`, `sub_admin` y `core`.
+  2. Los roles estándar (`user_1` y `user_2`) no tienen acceso visual ni interactivo a la opción en ningún selector del formulario.
+  3. Al registrarse, el campo `servicio` se asienta estrictamente como `'Dedicado al area - Dirección'`.
+  4. La asignación del colaborador Alejandro Maglianesi opera bajo rol `core` para acceso a Dirección y supervisión general.
+
 ## [FN-03.08] Integración de Tarifas Roster (1_2_tarifas_roster) y Distintivos Gantt
 - **Módulo**: [MOD-03] Módulo de Roster y Tarifas
 - **Flujo Operativo**: Vincula la tabla remota `1_2_tarifas_roster` contrastando tanto `id_proyecto` como denominación para computar automáticamente los costos diarios al cargar rangos de Roster (subida + adicionales una vez por rango, domingos, días hábiles, bajada y francos), reflejando distintivos visuales de Subida y Bajada en la vista Gantt.

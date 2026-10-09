@@ -1,3 +1,4 @@
+// [FN-01.01] Formulario de Registro de Check Diario y Asignación de Jornada
 import { useState, useEffect } from 'react';
 import { api } from '../services/apiBridge';
 import {
@@ -6,7 +7,9 @@ import {
   puedeGestionarSubtiposFranco,
   puedeCargarParaOtro,
   esAdmin,
-  esSubAdmin
+  esSubAdmin,
+  esCore,
+  getRolUsuario
 } from '../utils/permissions';
 
 const LUGARES_BASE = [
@@ -28,7 +31,8 @@ const MAPA_AREAS = {
   'M': 'Mensura',
   'S': 'SIG',
   'RRHH': 'RRHH',
-  'VYM': 'Ventas y Marketing'
+  'VYM': 'Ventas y Marketing',
+  'D': 'Dirección'
 };
 
 const LISTADO_AREAS_CORPORATIVAS = [
@@ -56,7 +60,6 @@ export default function CheckForm({ onRegistroGuardado, onVolver, tema }) {
     const dia = String(hoy.getDate()).padStart(2, '0');
     return `${anio}-${mes}-${dia}`;
   };
-
 
   const [fecha, setFecha] = useState(getFechaHoy());
   const [fechaFin, setFechaFin] = useState(getFechaHoy());
@@ -100,12 +103,12 @@ export default function CheckForm({ onRegistroGuardado, onVolver, tema }) {
   const [cargandoServicios, setCargandoServicios] = useState(true);
   const [verTodosProyectos, setVerTodosProyectos] = useState(false);
 
-  // Sub-área para usuarios N, RRHH y A (default: Aplicaciones para A, o Ingeniería)
+  // Sub-área para usuarios N, RRHH, A, S y Dirección
   const [areaElegida, setAreaElegida] = useState('Aplicaciones');
 
   // División de jornada: 'equitativo' o 'personalizado'
   const [modoDivision, setModoDivision] = useState('equitativo');
-  const [horasPorProyecto, setHorasPorProyecto] = useState({}); // { [proyecto]: number }
+  const [horasPorProyecto, setHorasPorProyecto] = useState({});
   const [horasArea, setHorasArea] = useState(8);
 
   const [enviando, setEnviando] = useState(false);
@@ -114,15 +117,25 @@ export default function CheckForm({ onRegistroGuardado, onVolver, tema }) {
   const [segundosSyncRestantes, setSegundosSyncRestantes] = useState(0);
 
   // =========================================================================
-  // VARIABLES DERIVADAS (Declaradas aquí para evitar errores TDZ antes de los hooks)
+  // VARIABLES DERIVADAS
   // =========================================================================
   const esAdminUser = esAdmin(sesionUsuario);
   const esSubAdminUser = esSubAdmin(sesionUsuario);
   const esAdminOSubAdmin = esAdminUser || esSubAdminUser;
+  const esCoreUser = esCore(sesionUsuario);
   const puedeDelegarCarga = puedeCargarParaOtro(sesionUsuario);
   const permitirRango = puedeUsarRangoFechas(sesionUsuario);
   const puedeSubtiposFranco = puedeGestionarSubtiposFranco(sesionUsuario);
   const esFrancoDirecto = !puedeSubtiposFranco;
+
+  // Control de visibilidad por rol para el área 'Dirección' (D)
+  // Visible EXCLUSIVAMENTE para admin, sub_admin y core. Oculto para user_1 y user_2.
+  const rolUsuarioActual = (sesionUsuario?.rol_app || getRolUsuario(sesionUsuario) || '').toString().trim().toLowerCase();
+  const puedeVerDireccion = ['admin', 'sub_admin', 'core'].includes(rolUsuarioActual) || esAdminUser || esSubAdminUser || esCoreUser;
+
+  const areasDisponibles = puedeVerDireccion
+    ? [...LISTADO_AREAS_CORPORATIVAS, 'Dirección']
+    : LISTADO_AREAS_CORPORATIVAS;
 
   const empleadoActivoNombre = ((cargarParaOtro && usuarioSeleccionado)
     ? (usuarioSeleccionado.nombre || '')
@@ -132,12 +145,9 @@ export default function CheckForm({ onRegistroGuardado, onVolver, tema }) {
     : (sesionUsuario?.area || '')).trim().toUpperCase();
 
   // [RBAC] Reglas de Campo:
-  // - core, user_1, sub_admin y admin pueden registrar Campo
-  // - user_2 no puede registrar Campo por sí mismo
-  // - admin y sub_admin pueden registrar días de Campo para user_2 en carga delegada
   const habilitadoCampo = puedeCargarCampo(sesionUsuario, cargarParaOtro ? usuarioSeleccionado : null);
 
-  const esUsuarioAreaEspecial = ['N', 'RRHH', 'A', 'S'].includes(areaActiva);
+  const esUsuarioAreaEspecial = ['N', 'RRHH', 'A', 'S', 'D'].includes(areaActiva) || puedeVerDireccion;
   const areaNombreFinal = (esUsuarioAreaEspecial && areaElegida)
     ? areaElegida
     : (MAPA_AREAS[areaActiva] || areaActiva || 'General');
@@ -192,8 +202,17 @@ export default function CheckForm({ onRegistroGuardado, onVolver, tema }) {
       setAreaElegida('Ingeniería');
     } else if (areaActiva === 'M') {
       setAreaElegida('Mensura');
+    } else if (areaActiva === 'D' || areaActiva === 'DIRECCION' || areaActiva === 'DIRECCIÓN') {
+      setAreaElegida('Dirección');
     }
   }, [areaActiva]);
+
+  // Restricción de seguridad: Si el rol no puede ver Dirección, evitar que permanezca seleccionada
+  useEffect(() => {
+    if (!puedeVerDireccion && (areaElegida === 'Dirección' || areaElegida === 'D')) {
+      setAreaElegida('Aplicaciones');
+    }
+  }, [puedeVerDireccion, areaElegida]);
 
   // Si admin/sub_admin activa la opción de cargar para otro, refrescar lista fresca de empleados
   useEffect(() => {
@@ -239,11 +258,21 @@ export default function CheckForm({ onRegistroGuardado, onVolver, tema }) {
     // Si seleccionó un área corporativa específica
     if (seleccionado.startsWith('__AREA__:')) {
       const nombreAr = seleccionado.replace('__AREA__:', '').trim();
-      itemNombre = `Dedicado al área - ${nombreAr}`;
+      if (nombreAr === 'Dirección' || nombreAr === 'D') {
+        itemNombre = 'Dedicado al area - Dirección';
+      } else {
+        itemNombre = `Dedicado al área - ${nombreAr}`;
+      }
     } else if (seleccionado === '__OPCION_AREA__') {
-      itemNombre = esUsuarioAreaEspecial
-        ? `Dedicado al área - ${areaElegida}`
-        : 'Dedicado al área';
+      if (esUsuarioAreaEspecial) {
+        itemNombre = (areaElegida === 'Dirección' || areaElegida === 'D')
+          ? 'Dedicado al area - Dirección'
+          : `Dedicado al área - ${areaElegida}`;
+      } else {
+        itemNombre = (areaActiva === 'D' || areaActiva === 'DIRECCION' || areaActiva === 'DIRECCIÓN')
+          ? 'Dedicado al area - Dirección'
+          : 'Dedicado al área';
+      }
     }
 
     if (!proyectosSeleccionados.includes(itemNombre)) {
@@ -265,7 +294,9 @@ export default function CheckForm({ onRegistroGuardado, onVolver, tema }) {
   };
 
   const handleAgregarAreaDirecta = (nombreAr) => {
-    const itemNombre = `Dedicado al área - ${nombreAr}`;
+    const itemNombre = (nombreAr === 'Dirección' || nombreAr === 'D')
+      ? 'Dedicado al area - Dirección'
+      : `Dedicado al área - ${nombreAr}`;
     if (!proyectosSeleccionados.includes(itemNombre)) {
       const nuevaLista = [...proyectosSeleccionados, itemNombre];
       setProyectosSeleccionados(nuevaLista);
@@ -380,7 +411,6 @@ export default function CheckForm({ onRegistroGuardado, onVolver, tema }) {
       }
     }
 
-
     setEnviando(true);
 
     try {
@@ -423,14 +453,20 @@ export default function CheckForm({ onRegistroGuardado, onVolver, tema }) {
         } else if (tipoFranco === 'Franco Ofic Trabajado') {
           payload.lugar = 'Franco Ofic Trabajado';
           payload.tipo_ocf = 'Franco Ofic Trabajado';
-          const srv = proyectoFrancoOfic || areaNombreFinal;
+          let srv = proyectoFrancoOfic || areaNombreFinal;
+          if (srv === 'D' || srv === 'Dirección' || srv === 'Dedicado al área - Dirección') {
+            srv = 'Dedicado al area - Dirección';
+          }
           payload.servicio = srv;
           payload.proyecto = proyectoFrancoOfic || '';
           payload.area = areaNombreFinal;
           payload.horas = Number(horasFrancoTrabajado || 8);
         } else {
           // Franco de oficina / normal (0 hs, servicio = area)
-          const areaFranco = esFrancoDirecto ? (MAPA_AREAS[areaActiva] || areaNombreFinal || 'General') : areaNombreFinal;
+          let areaFranco = esFrancoDirecto ? (MAPA_AREAS[areaActiva] || areaNombreFinal || 'General') : areaNombreFinal;
+          if (areaFranco === 'Dirección' || areaFranco === 'D') {
+            areaFranco = 'Dedicado al area - Dirección';
+          }
           payload.lugar = 'Franco';
           payload.tipo_ocf = 'Franco';
           payload.servicio = areaFranco;
@@ -457,9 +493,22 @@ export default function CheckForm({ onRegistroGuardado, onVolver, tema }) {
       } else if (proyectosSeleccionados.length === 0) {
         // Sin proyectos específicos: Tiempo dedicado al área o Campo general
         const h = esCampañaOCampo ? horasCampoCalculadas : (modoDivision === 'equitativo' ? 8 : horasArea);
-        const nombreServicio = esCampañaOCampo
-          ? (esUsuarioAreaEspecial ? `Campo - ${areaElegida}` : 'Campo')
-          : (esUsuarioAreaEspecial ? `Dedicado al área - ${areaElegida}` : 'Dedicado al área');
+        let nombreServicio;
+        if (esCampañaOCampo) {
+          nombreServicio = esUsuarioAreaEspecial
+            ? ((areaElegida === 'Dirección' || areaElegida === 'D') ? 'Campo - Dirección' : `Campo - ${areaElegida}`)
+            : 'Campo';
+        } else {
+          if (esUsuarioAreaEspecial) {
+            nombreServicio = (areaElegida === 'Dirección' || areaElegida === 'D')
+              ? 'Dedicado al area - Dirección'
+              : `Dedicado al área - ${areaElegida}`;
+          } else {
+            nombreServicio = (areaActiva === 'D' || areaActiva === 'DIRECCION' || areaActiva === 'DIRECCIÓN')
+              ? 'Dedicado al area - Dirección'
+              : 'Dedicado al área';
+          }
+        }
 
         payload.proyectos = [{ servicio: nombreServicio, horas: h }];
         payload.servicio = nombreServicio;
@@ -675,7 +724,7 @@ export default function CheckForm({ onRegistroGuardado, onVolver, tema }) {
             </div>
           )}
 
-          {/* SECCIÓN 1: CUÁNDO Y DÓNDE / REINO Y CAMPAMENTO */}
+          {/* SECCIÓN 1: CUÁNDO Y DÓNDE */}
           <div className="form-section-card">
             <div className="form-section-header">
               <span className="form-section-tag">{isRpg ? 'Fase I' : 'Paso 1'}</span>
@@ -744,7 +793,7 @@ export default function CheckForm({ onRegistroGuardado, onVolver, tema }) {
               )}
             </div>
 
-            {/* Modalidad / Ubicación: Selector segmentado estilizado */}
+            {/* Modalidad / Ubicación */}
             <div className="form-group-clean">
               <label className="form-label-clean">
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -791,7 +840,7 @@ export default function CheckForm({ onRegistroGuardado, onVolver, tema }) {
               </div>
             </div>
 
-            {/* Si la modalidad es Campo: Selector dinámico de Hora Inicio y Hora Fin con cálculo automático */}
+            {/* Horarios de Campo */}
             {esCampañaOCampo && (
               <div className="campo-horarios-card">
                 <div className="campo-horarios-header">
@@ -850,7 +899,7 @@ export default function CheckForm({ onRegistroGuardado, onVolver, tema }) {
             )}
           </div>
 
-          {/* SI ES FRANCO, FERIADO TRABAJADO, VACACIONES O LICENCIA */}
+          {/* FRANCO, FERIADO TRABAJADO, VACACIONES O LICENCIA */}
           {esFranco ? (
             <div className="franco-serene-card">
               <div className="franco-serene-icon">☕</div>
@@ -863,7 +912,6 @@ export default function CheckForm({ onRegistroGuardado, onVolver, tema }) {
                   }
                 </p>
 
-                {/* Sub-selector de Franco (Solo accesible para admin y sub_admin; no disponible para user_1, user_2 ni empleados con franco directo) */}
                 {puedeSubtiposFranco && !esFrancoDirecto && (
                   <div className="franco-subtypes-grid">
                   {[
@@ -1065,7 +1113,7 @@ export default function CheckForm({ onRegistroGuardado, onVolver, tema }) {
               </div>
             </div>
           ) : (
-            /* SECCIÓN 2: ACTIVIDAD Y PROYECTOS / HAZAÑAS */
+            /* SECCIÓN 2: ACTIVIDAD Y PROYECTOS */
             <div className="form-section-card">
               <div className="form-section-header">
                 <span className="form-section-tag">{isRpg ? 'Fase II' : 'Paso 2'}</span>
@@ -1074,7 +1122,7 @@ export default function CheckForm({ onRegistroGuardado, onVolver, tema }) {
                 </span>
               </div>
 
-              {/* Selector desplegable de proyectos y áreas corporativas múltiples */}
+              {/* Selector desplegable de proyectos y áreas corporativas */}
               <div className="form-group-clean">
                 <div className="form-group-label-row">
                   <span className="form-label-clean">
@@ -1116,12 +1164,12 @@ export default function CheckForm({ onRegistroGuardado, onVolver, tema }) {
                       : '+ Seleccionar de la lista...'}
                   </option>
 
-                  {/* Si es A, N o RRHH: Permite elegir libremente entre todas las áreas corporativas */}
+                  {/* Dedicación a Áreas Internas: Exclusivo para usuarios habilitados */}
                   {esUsuarioAreaEspecial ? (
                     <optgroup label="🏢 Dedicación a Áreas Internas">
-                      {LISTADO_AREAS_CORPORATIVAS.map(ar => (
+                      {areasDisponibles.map(ar => (
                         <option key={ar} value={`__AREA__:${ar}`}>
-                          🏢 Dedicado al área - {ar}
+                          🏢 Dedicado al área - {ar}{ar === 'Dirección' ? ' (D)' : ''}
                         </option>
                       ))}
                     </optgroup>
@@ -1185,8 +1233,10 @@ export default function CheckForm({ onRegistroGuardado, onVolver, tema }) {
                         value={areaElegida}
                         onChange={(e) => setAreaElegida(e.target.value)}
                       >
-                        {LISTADO_AREAS_CORPORATIVAS.map(ar => (
-                          <option key={ar} value={ar}>{ar}</option>
+                        {areasDisponibles.map(ar => (
+                          <option key={ar} value={ar}>
+                            {ar}{ar === 'Dirección' ? ' (D)' : ''}
+                          </option>
                         ))}
                       </select>
 
@@ -1212,7 +1262,6 @@ export default function CheckForm({ onRegistroGuardado, onVolver, tema }) {
               ) : (
                 /* CASO B: Proyectos o Múltiples Áreas seleccionadas */
                 <div className="projects-active-wrapper">
-                  {/* Selector de modo para 1 o más proyectos/áreas */}
                   {proyectosSeleccionados.length >= 1 && (
                     <div className="division-toggle-bar">
                       <button
@@ -1245,13 +1294,15 @@ export default function CheckForm({ onRegistroGuardado, onVolver, tema }) {
                         ? getHorasEquitativas()
                         : (horasPorProyecto[p] ?? getHorasEquitativas());
 
-                      const esAreaItem = p.startsWith('Dedicado al área');
+                      const esAreaItem = p.startsWith('Dedicado al área') || p.startsWith('Dedicado al area');
 
                       return (
                         <div key={p} className={`project-row-item ${esAreaItem ? 'area-item-highlight' : ''}`}>
                           <div className="project-row-info">
                             <span className="project-row-name" title={p}>
-                              {esAreaItem ? `🏢 ${p.replace('Dedicado al área - ', 'Área: ')}` : p}
+                              {esAreaItem 
+                                ? `🏢 ${p.replace('Dedicado al área - ', 'Área: ').replace('Dedicado al area - ', 'Área: ')}` 
+                                : p}
                             </span>
                             {modoDivision === 'equitativo' && (
                               <span className="project-row-badge-hours">{horasItem} hs</span>

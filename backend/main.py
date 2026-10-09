@@ -82,7 +82,7 @@ from sheets_service import (
     obtener_tarifas_roster_remotas
 )
 
-APP_VERSION = "1.16.1"
+APP_VERSION = "1.17.0"
 
 # Lista predefinida de los empleados habilitados con sus correos oficiales, áreas y roles RBAC
 EMPLEADOS_AUTORIZADOS = [
@@ -98,7 +98,7 @@ EMPLEADOS_AUTORIZADOS = [
     {"nombre": "Lionel Juarez", "dni": "43008805", "mail": "ljuarez@ingeap.com", "area": "A", "rol_app": "user_1"},
     {"nombre": "Santiago Destefanis", "dni": "36580770", "mail": "sdestefanis@ingeap.com", "area": "N", "rol_app": "core"},
     {"nombre": "Justina Bertolozzi", "dni": "45411162", "mail": "rrhh@ingeap.com", "area": "RRHH", "rol_app": "sub_admin"},
-    {"nombre": "Alejandro Maglianesi", "dni": "32370731", "mail": "amaglianesi@ingeap.com", "area": "VYM", "rol_app": "user_1"},
+    {"nombre": "Alejandro Maglianesi", "dni": "32370731", "mail": "amaglianesi@ingeap.com", "area": "VYM", "rol_app": "core"},
     {"nombre": "Daiana Sanchez", "dni": "37546183", "mail": "marketing@ingeap.com", "area": "VYM", "rol_app": "user_1"},
     {"nombre": "Gabriel Canavesio", "dni": "45059000", "mail": "gabrielcanavesio17@gmail.com", "area": "S", "rol_app": "user_2"},
     {"nombre": "Renzo Polo", "dni": "35295498", "mail": "renzoepolo@ingeap.com", "area": "S", "rol_app": "user_2"}

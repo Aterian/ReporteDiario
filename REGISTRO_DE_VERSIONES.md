@@ -2,6 +2,21 @@
 
 Historial cronológico de cambios, nuevas características y mejoras aplicadas al sistema **Check Diario Ingeap**.
 
+## [1.17.0] - 2026-10-09
+
+### 🏢 Área Dirección (D): Nueva Área y Control de Acceso RBAC (`[FN-01.12]`)
+- **Incorporación del Área Dirección (`'D'` / `'Dirección'`)**:
+  - Incorporación del identificador `'D'` y denominación `'Dirección'` en el mapeo de áreas corporativas (`MAPA_AREAS`).
+- **Control Estricto de Visibilidad por Rol**:
+  - La opción de área `'Dirección'` es visible exclusivamente para colaboradores con roles de gestión y supervisión (`admin`, `sub_admin`, `core`).
+  - Ocultamiento estricto e inaccesibilidad para roles técnicos y operativos estándar (`user_1`, `user_2`) en todos los selectores del formulario de reporte diario.
+- **Normalización Canónica de Servicio Imputado**:
+  - Al seleccionar Dirección y registrar el reporte, el servicio se asienta exactamente bajo la cadena: `'Dedicado al area - Dirección'` para la sincronización con Google Sheets y almacenamiento local en SQLite.
+- **Actualización de Rol de Usuario**:
+  - Asignación de rol `core` para el colaborador Alejandro Maglianesi en el padrón de empleados autorizados.
+- **Compilación de Binarios PE e Instalador**:
+  - Empaquetado de la aplicación de escritorio (`CheckDiarioIngeap.exe`) e instalador monobloque (`Instalador_CheckDiario_Ingeap.exe`) actualizados a versión v1.17.0.
+
 ## [1.16.1] - 2026-10-08
 
 ### 💰 Liquidación: Regla de Registro Único Diario por Categoría (`[FN-06.05]`)
