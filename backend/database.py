@@ -360,6 +360,12 @@ def inicializar_bd():
         except Exception as e_fds_fix:
             print(f"[DB] Aviso en corrección defensiva de fines de semana: {e_fds_fix}")
 
+        # [FN-06.04] Saneamiento defensivo de costos salariales en historial (desacoplamiento de tarifas de Roster)
+        try:
+            reparar_costos_salariales_historial()
+        except Exception as e_rep_sal:
+            print(f"[DB] Aviso en saneamiento de costos salariales: {e_rep_sal}")
+
         # Tabla de metadatos del sistema (versión instalada, estado de sincronización)
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS meta_app (
@@ -2075,6 +2081,12 @@ def reconstruir_rosters_desde_historial() -> int:
                 if proy_k and proy_k not in mapa_tarifas_proy:
                     mapa_tarifas_proy[proy_k] = (float(r["precio_dia"] or 0), float(r["precio_domingo"] or 0))
 
+            cursor.execute("SELECT proyecto, dia_normal, domingo FROM tarifas_roster_cache WHERE dia_normal > 0")
+            for r in cursor.fetchall():
+                proy_k = (r["proyecto"] or "").strip().lower()
+                if proy_k and proy_k not in mapa_tarifas_proy:
+                    mapa_tarifas_proy[proy_k] = (float(r["dia_normal"] or 0), float(r["domingo"] or 0))
+
             # 3. Obtener registros existentes en rosters para no duplicar
             cursor.execute("SELECT empleado, proyecto, tipo, fecha_inicio, fecha_fin FROM rosters")
             existentes = {
@@ -2236,3 +2248,73 @@ def eliminar_registro_roster(id_roster: str) -> bool:
         cursor.execute("DELETE FROM rosters WHERE id = ?", (id_roster.strip(),))
         conn.commit()
         return cursor.rowcount > 0
+
+
+# [FN-06.04] Saneamiento y desacoplamiento de tarifas de Roster hacia costo salarial
+def reparar_costos_salariales_historial() -> int:
+    """
+    Sanea en la tabla local 'historial' cualquier jornada de Roster, Campo o Franco
+    que contenga viáticos o costos de proyecto erróneos en 'costo_dia'.
+    Asegura que:
+    - 'Campo' y 'Roster' tengan tipo_costo = 'Campo' y costo_dia = costo_dia_obra del empleado.
+    - 'Franco' tenga tipo_costo = 'Oficina' y costo_dia = costo_dia_ofi del empleado.
+    - 'Licencia' y 'Vacaciones' tengan costo_dia = 0.0.
+    Marca los registros modificados con sincronizado = 0 para propagar el sueldo correcto a Google Sheets.
+    Retorna la cantidad de registros normalizados.
+    """
+    try:
+        with obtener_conexion() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT h.id, h.empleado, h.tipo_ocf, h.feriado, h.tipo_costo, h.costo_dia,
+                       u.costo_dia_ofi, u.costo_dia_obra
+                FROM historial h
+                LEFT JOIN usuarios_cache u ON LOWER(TRIM(u.nombre)) = LOWER(TRIM(h.empleado))
+                WHERE h.tipo_ocf IN ('Roster', 'Campo', 'Franco', 'Licencia', 'Vacaciones')
+            """)
+            filas = cursor.fetchall()
+            reparados = 0
+
+            for f in filas:
+                t_ocf = (f["tipo_ocf"] or "").strip()
+                t_norm = t_ocf.lower()
+                es_fer = str(f["feriado"] or "").strip().upper() == "SI" or t_norm == "feriado trabajado"
+                c_ofi = float(f["costo_dia_ofi"] or 0.0)
+                c_obra = float(f["costo_dia_obra"] or 0.0)
+                costo_actual = float(f["costo_dia"] or 0.0)
+                tipo_costo_actual = (f["tipo_costo"] or "").strip()
+
+                if t_norm in ["roster", "campo"]:
+                    nuevo_tipo_costo = "Campo"
+                    base = c_obra
+                    nuevo_costo = round(base * 2.0 if es_fer else base, 2)
+                elif t_norm == "franco":
+                    nuevo_tipo_costo = "Oficina"
+                    base = c_ofi
+                    nuevo_costo = round(base * 2.0 if es_fer else base, 2)
+                elif t_norm in ["licencia", "vacaciones"]:
+                    nuevo_tipo_costo = "Oficina"
+                    base = 0.0
+                    nuevo_costo = 0.0
+                else:
+                    continue
+
+                cambio_costo = abs(costo_actual - nuevo_costo) > 0.01
+                cambio_tipo = tipo_costo_actual != nuevo_tipo_costo
+                if (cambio_costo or cambio_tipo) and (base > 0 or nuevo_costo == 0.0):
+                    cursor.execute("""
+                        UPDATE historial
+                        SET tipo_costo = ?,
+                            costo_dia = ?,
+                            sincronizado = 0
+                        WHERE id = ?
+                    """, (nuevo_tipo_costo, nuevo_costo, f["id"]))
+                    reparados += 1
+
+            if reparados > 0:
+                conn.commit()
+                print(f"[BD] Se normalizaron {reparados} registros en 'historial' desacoplando tarifas de Roster hacia costo salarial.")
+            return reparados
+    except Exception as e:
+        print(f"[BD] Error en reparar_costos_salariales_historial: {e}")
+        return 0

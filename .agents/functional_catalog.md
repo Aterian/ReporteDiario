@@ -33,15 +33,14 @@
 
 ## [FN-03.08] Integración de Tarifas Roster (1_2_tarifas_roster) y Distintivos Gantt
 - **Módulo**: [MOD-03] Módulo de Roster y Tarifas
-- **Flujo Operativo**: Vincula la tabla remota `1_2_tarifas_roster` contrastando tanto `id_proyecto` como denominación para computar automáticamente los costos diarios al cargar rangos de Roster (subida + adicionales una vez por rango, domingos, días hábiles, bajada y francos), reflejando distintivos visuales de Subida y Bajada en la vista Gantt.
+- **Flujo Operativo**: Vincula la tabla remota `1_2_tarifas_roster` contrastando tanto `id_proyecto` como denominación para asociar los viáticos de proyecto en la tabla local SQLite `rosters` y vista Gantt, asegurando que `costo_dia` en `1_asistencia_informada` guarde exclusivamente el salario del colaborador.
 - **Tablas afectadas**: `1_2_tarifas_roster`, `tarifas_roster_cache`, `rosters`, `historial`, `1_asistencia_informada`.
 - **Reglas de negocio e invariantes**:
   1. Búsqueda de tarifa exacta emparejando de forma combinada `id_proyecto` y `proyecto` (denominación) con la entrada de `1_2_tarifas_roster`.
-  2. Turno Campo: el primer día (`fecha_desde`) toma tarifa de `subida` + `adicionales` (aplicado exactamente 1 vez por bloque cargado). Domingos toman tarifa de `domingo`. Días hábiles toman tarifa de `dia_normal`.
-  3. Turno Franco: el primer día (`fecha_desde`) toma tarifa de `bajada`. Los días restantes toman la tarifa de descanso habitual.
-  4. Los importes se persisten en las columnas canónicas `costo_dia` y `tipo_costo` sin mutar el esquema de 17 columnas de `1_asistencia_informada`.
-  5. La vista Gantt destaca Subida (`.bar-subida`, `⬆S`) y Bajada (`.bar-bajada`, `⬇B`).
-  6. En el formulario y modal de Gantt, las tarifas se presentan en tarjetas de solo lectura vinculadas automáticamente a `1_2_tarifas_roster`.
+  2. Desacoplamiento estricto: Las tarifas de proyecto (`dia_normal`, `domingo`, `subida`, `bajada`, `adicionales`) son viáticos operativos que se almacenan EXCLUSIVAMENTE en SQLite local (`rosters` y `tarifas_roster_cache`) para la UI y exportación Excel (.xlsx).
+  3. La columna `costo_dia` en `historial` y `1_asistencia_informada` refleja EXCLUSIVAMENTE el salario base del empleado (`costo_dia_obra` en Campo, `costo_dia_ofi` en Franco/Oficina). Bajo ninguna circunstancia se escribe una tarifa de `1_2_tarifas_roster` en Google Sheets.
+  4. La vista Gantt destaca Subida (`.bar-subida`, `⬆S`) y Bajada (`.bar-bajada`, `⬇B`).
+  5. En el formulario y modal de Gantt, las tarifas se presentan en tarjetas de solo lectura vinculadas automáticamente a `1_2_tarifas_roster`.
 
 ## [FN-03.09] Restricción Exclusiva y Filtrado de Colaboradores en Vista Gantt de Roster
 - **Módulo**: [MOD-03] Módulo de Roster y Tarifas

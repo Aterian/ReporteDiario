@@ -2,6 +2,21 @@
 
 Historial cronológico de cambios, nuevas características y mejoras aplicadas al sistema **Check Diario Ingeap**.
 
+## [1.17.1] - 2026-10-09
+
+### 🐛 Desacoplamiento de Tarifas de Roster y Protección de 'costo_dia' (`[FN-03.08]`, `[FN-06.04]`)
+- **Separación Estricta de Costo Salarial y Viáticos de Proyecto**:
+  - Corrección de la persistencia al asignar Roster en `backend/main.py`: la columna `costo_dia` de la tabla remota `1_asistencia_informada` (Google Sheets) y de la tabla local `historial` (SQLite) refleja **exclusivamente el sueldo diario del empleado** según sus tarifas base:
+    - `costo_dia_obra` para jornadas en 'Campo' (Roster).
+    - `costo_dia_ofi` para jornadas en 'Oficina' o 'Franco'.
+    - 0.0 para 'Licencia' o 'Vacaciones'.
+    - Multiplicadores salariales oficiales (Feriado x2.0, Franco trabajado x1.5).
+  - Prohibición estricta de asentar viáticos o tarifas de proyecto (`1_2_tarifas_roster`: subida, bajada, domingo, día normal, adicionales) en la columna `costo_dia` de asistencias.
+- **Confinamiento de Viáticos Operativos a SQLite y Exportación**:
+  - Las tarifas operativas de `1_2_tarifas_roster` se persisten exclusivamente en la tabla local SQLite `rosters` (`precio_dia`, `precio_domingo`) y en `tarifas_roster_cache` para consumo de la UI (`RosterView`) y la exportación de liquidación en Excel (`.xlsx` vía `openpyxl`).
+- **Autosaneamiento de Historial Preexistente**:
+  - Incorporación de la rutina `reparar_costos_salariales_historial()` en `backend/database.py` y `ApiPuente` para normalizar registros preexistentes de Roster que hayan sido contaminados con viáticos de proyecto, marcándolos para sincronización limpia con Google Sheets.
+
 ## [1.17.0] - 2026-10-09
 
 ### 🏢 Área Dirección (D): Nueva Área y Control de Acceso RBAC (`[FN-01.12]`)

@@ -59,7 +59,8 @@ from database import (
     guardar_tarifas_roster_cache,
     obtener_tarifas_roster_cache,
     obtener_tarifa_roster_por_proyecto,
-    actualizar_costo_dia_manual
+    actualizar_costo_dia_manual,
+    reparar_costos_salariales_historial
 )
 from roster_export import generar_excel_roster_mes
 from liquidacion_export import generar_excel_informe_liquidacion
@@ -82,7 +83,7 @@ from sheets_service import (
     obtener_tarifas_roster_remotas
 )
 
-APP_VERSION = "1.17.0"
+APP_VERSION = "1.17.1"
 
 # Lista predefinida de los empleados habilitados con sus correos oficiales, áreas y roles RBAC
 EMPLEADOS_AUTORIZADOS = [
@@ -381,12 +382,12 @@ def calcular_costo_dia_asistencia(
             base = c_obra
         factor = 1.5
     elif lug_norm in ["franco", "franco de oficina", "franco oficina"]:
-        if es_servicio_area_interna(serv_str):
-            costo_tipo = "Oficina"
-            base = c_ofi
-        else:
+        if costo_forzado == "Campo":
             costo_tipo = "Campo"
             base = c_obra
+        else:
+            costo_tipo = "Oficina"
+            base = c_ofi
         factor = 1.0
     elif lug_norm in ["franco obra", "franco de obra"]:
         costo_tipo = "Campo"
@@ -661,6 +662,12 @@ class ApiPuente:
                 reconstruir_rosters_desde_historial()
             except Exception as e_rec_h:
                 print(f"[Refrescar] Aviso al reconstruir rosters: {e_rec_h}")
+
+            # 5.2 Saneamiento automático de costos salariales en historial (desacoplamiento de tarifas de Roster)
+            try:
+                reparar_costos_salariales_historial()
+            except Exception as e_rep_s:
+                print(f"[Refrescar] Aviso al sanear costos salariales: {e_rep_s}")
 
             # 6. Purgar también cualquier registro de la tabla rosters cuyos días ya no existan en historial
             cant_rosters_del = purgar_rosters_huerfanos()
@@ -1575,6 +1582,19 @@ class ApiPuente:
                     if row:
                         old_roster = dict(row)
 
+            # [FN-03.08] Vincular tarifas de viáticos de proyecto según tabla 1_2_tarifas_roster
+            # Se persisten EXCLUSIVAMENTE en la tabla local 'rosters' para la UI y la exportación de Excel.
+            # NO se guardan en historial ni se transmiten a Google Sheets.
+            proy_nom = str(datos.get("proyecto") or "").strip()
+            proy_id = str(datos.get("id_proyecto") or "").strip() or (obtener_id_proyecto(proy_nom) if proy_nom else "")
+            tipo_input = str(datos.get("tipo", "Campo")).strip()
+            tarifa_roster = obtener_tarifa_roster_por_proyecto(id_proyecto=proy_id, nombre_proyecto=proy_nom)
+            if tarifa_roster and tipo_input.capitalize() == "Campo":
+                if not datos.get("precio_dia") or float(datos.get("precio_dia") or 0) == 0:
+                    datos["precio_dia"] = float(tarifa_roster.get("dia_normal") or 0.0)
+                if not datos.get("precio_domingo") or float(datos.get("precio_domingo") or 0) == 0:
+                    datos["precio_domingo"] = float(tarifa_roster.get("domingo") or 0.0)
+
             res = guardar_registro_roster(datos)
             if not res or not res.get("exito"):
                 return res
@@ -1665,66 +1685,50 @@ class ApiPuente:
             sesion = obtener_sesion_activa()
             cargado_por_rrhh = sesion["nombre"] if sesion else "RRHH"
 
-            # [FN-03.08] Vincular tarifas según tabla 1_2_tarifas_roster
-            tarifa_roster = obtener_tarifa_roster_por_proyecto(id_proyecto=proy_id, nombre_proyecto=proyecto)
-
             fechas_ordenadas = sorted(fechas_a_cargar)
-            dia_inicio = fechas_ordenadas[0] if fechas_ordenadas else ""
+            fer_val = str(datos.get("feriado", "NO")).strip()
 
-            # Reconciliar/guardar jornadas en historial con tipo_costo y costo_dia
+            # Reconciliar/guardar jornadas en historial con tipo_costo y costo_dia salarial
             for dia_f in fechas_ordenadas:
-                dt_dia = dt.strptime(dia_f, "%Y-%m-%d")
-                es_domingo = (dt_dia.weekday() == 6)
-
-                t_costo_dia = ""
-                c_costo_dia = 0.0
-
-                if tarifa_roster:
-                    if tipo_norm == "Campo":
-                        t_costo_dia = "Campo"
-                        if dia_f == dia_inicio:
-                            # Primer día (subida) + adicionales aplicado exactamente una (1) vez por rango
-                            c_costo_dia = round(float(tarifa_roster.get("subida") or 0.0) + float(tarifa_roster.get("adicionales") or 0.0), 2)
-                        elif es_domingo:
-                            c_costo_dia = round(float(tarifa_roster.get("domingo") or 0.0), 2)
-                        else:
-                            c_costo_dia = round(float(tarifa_roster.get("dia_normal") or 0.0), 2)
-                    elif tipo_norm == "Franco":
-                        if dia_f == dia_inicio:
-                            # Primer día (bajada)
-                            c_costo_dia = round(float(tarifa_roster.get("bajada") or 0.0), 2)
-                            t_costo_dia = "Campo"
-                        else:
-                            # Días restantes toman tarifa de franco correspondiente
-                            t_costo_dia, c_costo_dia = calcular_costo_dia_asistencia(
-                                tipo_ocf="Franco",
-                                servicio=proyecto,
-                                feriado="NO",
-                                empleado=empleado
-                            )
-                    else:
-                        t_costo_dia, c_costo_dia = calcular_costo_dia_asistencia(
-                            tipo_ocf=tipo_ocf,
-                            servicio=servicio,
-                            feriado="NO",
-                            empleado=empleado,
-                            tipo_costo="Campo" if tipo_norm.lower() == "campo" else ""
-                        )
+                # [FN-06.04] Desacoplamiento estricto: El costo_dia para 1_asistencia_informada
+                # (Google Sheets) corresponde EXCLUSIVAMENTE al sueldo diario del empleado:
+                # - 'costo_dia_obra' si la jornada es en 'Campo' (Roster).
+                # - 'costo_dia_ofi' si la jornada es en 'Oficina' o 'Franco'.
+                # - 0.0 si es Licencia o Vacaciones.
+                # Multiplicadores salariales habituales (Feriado x2.0, Franco trabajado x1.5).
+                # Bajo ninguna circunstancia se escribe una tarifa de 1_2_tarifas_roster en historial ni Sheets.
+                
+                if tipo_norm == "Campo":
+                    t_costo_dia, c_costo_dia = calcular_costo_dia_asistencia(
+                        tipo_ocf=tipo_ocf,
+                        servicio=servicio,
+                        feriado=fer_val,
+                        empleado=empleado,
+                        tipo_costo="Campo"
+                    )
+                elif tipo_norm == "Franco":
+                    t_costo_dia, c_costo_dia = calcular_costo_dia_asistencia(
+                        tipo_ocf="Franco",
+                        servicio=servicio,
+                        feriado=fer_val,
+                        empleado=empleado,
+                        tipo_costo="Oficina"
+                    )
+                elif tipo_norm in ["Licencia", "Vacaciones"]:
+                    t_costo_dia, c_costo_dia = calcular_costo_dia_asistencia(
+                        tipo_ocf=tipo_ocf,
+                        servicio=servicio,
+                        feriado="NO",
+                        empleado=empleado,
+                        tipo_costo="Oficina"
+                    )
                 else:
-                    # Fallback si el proyecto no tiene tarifa definida en 1_2_tarifas_roster
-                    p_dia_input = float(datos.get("precio_dia") or 0.0)
-                    p_dom_input = float(datos.get("precio_domingo") or 0.0)
-                    if tipo_norm == "Campo" and (p_dia_input > 0 or p_dom_input > 0):
-                        t_costo_dia = "Campo"
-                        c_costo_dia = p_dom_input if es_domingo and p_dom_input > 0 else p_dia_input
-                    else:
-                        t_costo_dia, c_costo_dia = calcular_costo_dia_asistencia(
-                            tipo_ocf=tipo_ocf,
-                            servicio=servicio,
-                            feriado="NO",
-                            empleado=empleado,
-                            tipo_costo="Campo" if tipo_norm.lower() == "campo" else ""
-                        )
+                    t_costo_dia, c_costo_dia = calcular_costo_dia_asistencia(
+                        tipo_ocf=tipo_ocf,
+                        servicio=servicio,
+                        feriado=fer_val,
+                        empleado=empleado
+                    )
 
                 with obtener_conexion() as conn:
                     cursor = conn.cursor()
@@ -2028,6 +2032,19 @@ class ApiPuente:
     def guardar_costo_dia(self, datos: dict):
         """Alias de compatibilidad para actualizar_costo_dia_manual."""
         return self.actualizar_costo_dia_manual(datos)
+
+    def reparar_costos_salariales_historial(self):
+        """Sanea los registros de historial para asegurar que costo_dia contenga sueldos del empleado y no viáticos de roster."""
+        sesion = obtener_sesion_activa()
+        if not sesion or not puede_acceder_roster(sesion):
+            return {"exito": False, "error": "Acceso no autorizado."}
+        try:
+            cant = reparar_costos_salariales_historial()
+            if cant > 0:
+                self._disparar_sync_segundo_plano()
+            return {"exito": True, "reparados": cant}
+        except Exception as e:
+            return {"exito": False, "error": str(e)}
 
 
 
