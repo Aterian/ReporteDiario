@@ -63,6 +63,12 @@ const mockApi = {
   verificar_actualizacion: async () => ({ actualizacion_disponible: false }),
   aplicar_actualizacion: async () => ({ exito: true }),
   guardar_roster: async (datos) => ({ exito: true, id: datos.id || 'mock-' + Date.now() }),
+  aplicar_tarifa_local_roster: async (datos) => ({
+    exito: true,
+    mensaje: 'Tarifa local asignada con éxito (modo simulado).',
+    precio_dia: Number(datos.precio_dia) || 0,
+    precio_domingo: Number(datos.precio_domingo) || 0
+  }),
   obtener_rosters: async (desde, hasta) => ([]),
   eliminar_roster: async (id) => ({ exito: true }),
   purgar_rosters_locales: async () => ({ exito: true }),
@@ -364,6 +370,19 @@ export const api = {
       return await bridge.exportar_roster_excel(anio, mes, proyecto);
     }
     return { exito: false, error: 'Función no disponible' };
+  },
+
+  async aplicarTarifaLocalRoster(datos) {
+    const bridge = await getApi();
+    if (bridge.aplicar_tarifa_local_roster) {
+      return await bridge.aplicar_tarifa_local_roster(datos);
+    }
+    return {
+      exito: true,
+      mensaje: 'Tarifa guardada localmente.',
+      precio_dia: Number(datos.precio_dia) || 0,
+      precio_domingo: Number(datos.precio_domingo) || 0
+    };
   },
 
   async exportarInformeLiquidacion(datosInforme) {

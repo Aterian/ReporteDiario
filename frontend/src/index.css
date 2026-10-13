@@ -7,6 +7,25 @@
 :root {
   color-scheme: light;
   --font-family: 'Montserrat', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-sans: 'Montserrat', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+
+  /* ==========================================================================
+     TOKENS SEMÁNTICOS CORPORATIVOS OFICIALES INGEAP [Rule FRONT-BRAND-01 & UI-TAILWIND-V4-01]
+     ========================================================================== */
+  --brand-red: #cc3333;
+  --brand-red-hover: #b32a2a;
+  --brand-red-active: #992424;
+  --brand-red-light: #e04444;
+  --brand-red-glow: rgba(204, 51, 51, 0.16);
+  --brand-red-subtle: rgba(204, 51, 51, 0.08);
+
+  --brand-gray: #999999;
+  --brand-gray-light: #e5e7eb;
+  --brand-gray-border: #cbd5e1;
+  --brand-gray-dark: #4b5563;
+
+  /* Accesibilidad Táctil Operativa WCAG 2.2 [Rule UI-ACCESSIBILITY-TARGET-01] */
+  --touch-min-size: 44px;
 
   /* Fondos (Blanco puro y Slate muy suave) */
   --bg-app: #f8fafc;
@@ -15,20 +34,20 @@
   --bg-surface-hover: #f1f5f9;
   --bg-card: #ffffff;
 
-  /* Rojo Corporativo Refinado */
-  --primary: #c81e2b;
-  --primary-light: #d92534;
-  --primary-dark: #9f121a;
-  --primary-glow: rgba(200, 30, 43, 0.12);
-  --primary-subtle: rgba(200, 30, 43, 0.06);
+  /* Rojo Corporativo Canónico */
+  --primary: var(--brand-red);
+  --primary-light: var(--brand-red-light);
+  --primary-dark: var(--brand-red-hover);
+  --primary-glow: var(--brand-red-glow);
+  --primary-subtle: var(--brand-red-subtle);
   
   /* Estados */
   --accent-emerald: #059669;
   --accent-emerald-bg: rgba(5, 150, 105, 0.08);
   --accent-amber: #d97706;
   --accent-amber-bg: rgba(217, 119, 6, 0.08);
-  --accent-rose: #c81e2b;
-  --accent-rose-bg: rgba(200, 30, 43, 0.08);
+  --accent-rose: var(--brand-red);
+  --accent-rose-bg: var(--brand-red-subtle);
 
   /* Texto (Pizarra suave en lugar de negro puro para evitar fatiga visual) */
   --text-primary: #1e293b;    /* Slate 800 */
@@ -39,14 +58,14 @@
   /* Bordes y Líneas */
   --border-subtle: #edf2f7;
   --border-input: #e2e8f0;
-  --border-active: #c81e2b;
-  --border-focus: #c81e2b;
+  --border-active: var(--brand-red);
+  --border-focus: var(--brand-red);
 
   /* Sombras Difusas Suaves */
   --shadow-sm: 0 1px 3px rgba(15, 23, 42, 0.04), 0 1px 2px rgba(15, 23, 42, 0.02);
   --shadow-md: 0 4px 16px -2px rgba(15, 23, 42, 0.06), 0 2px 6px -1px rgba(15, 23, 42, 0.03);
   --shadow-lg: 0 12px 28px -4px rgba(15, 23, 42, 0.08), 0 4px 10px -2px rgba(15, 23, 42, 0.03);
-  --shadow-red: 0 4px 14px rgba(200, 30, 43, 0.22);
+  --shadow-red: 0 4px 14px rgba(204, 51, 51, 0.24);
 
   --radius-sm: 8px;
   --radius-md: 12px;
@@ -58,6 +77,21 @@
 [data-theme='dark'] {
   color-scheme: dark;
 
+  /* Tokens semánticos corporativos adaptados a alto contraste oscuro */
+  --brand-red: #ef4444;
+  --brand-red-hover: #f87171;
+  --brand-red-active: #dc2626;
+  --brand-red-light: #f87171;
+  --brand-red-glow: rgba(239, 68, 68, 0.28);
+  --brand-red-subtle: rgba(239, 68, 68, 0.14);
+
+  --brand-gray: #94a3b8;
+  --brand-gray-light: #334155;
+  --brand-gray-border: #334155;
+  --brand-gray-dark: #cbd5e1;
+
+  --touch-min-size: 44px;
+
   /* Fondos oscuros modernos (Pizarra Slate 900 / 800) */
   --bg-app: #0a0e17;
   --bg-surface: #141c2e;
@@ -66,11 +100,11 @@
   --bg-card: #141c2e;
 
   /* Rojo Corporativo Luminoso para modo oscuro */
-  --primary: #ef4444;
-  --primary-light: #f87171;
-  --primary-dark: #dc2626;
-  --primary-glow: rgba(239, 68, 68, 0.25);
-  --primary-subtle: rgba(239, 68, 68, 0.14);
+  --primary: var(--brand-red);
+  --primary-light: var(--brand-red-light);
+  --primary-dark: var(--brand-red-active);
+  --primary-glow: var(--brand-red-glow);
+  --primary-subtle: var(--brand-red-subtle);
 
   /* Estados */
   --accent-emerald: #10b981;
@@ -89,8 +123,8 @@
   /* Bordes y Líneas */
   --border-subtle: #24324a;
   --border-input: #334155;
-  --border-active: #ef4444;
-  --border-focus: #ef4444;
+  --border-active: var(--brand-red);
+  --border-focus: var(--brand-red);
 
   /* Sombras oscuras */
   --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.4);
@@ -101,6 +135,10 @@
 
 [data-theme='rpg'] {
   color-scheme: dark;
+
+  --touch-min-size: 44px;
+  --brand-red: #e11d48;
+  --brand-gray: #a78bfa;
 
   /* Fondos místicos de fantasía épica (Obsidiana / Amatista profundo) */
   --bg-app: #0d0b18;
@@ -414,6 +452,7 @@ html, body {
   border: none;
   border-radius: var(--radius-full);
   padding: 7px 12px;
+  min-height: var(--touch-min-size, 44px);
   color: var(--text-secondary);
   font-family: var(--font-family);
   font-weight: 600;
@@ -489,6 +528,7 @@ html, body {
   border: 1px solid var(--border-input);
   border-radius: var(--radius-md);
   padding: 9px 12px;
+  min-height: var(--touch-min-size, 44px);
   color: var(--text-primary);
   font-family: var(--font-family);
   font-size: 13px;
@@ -552,6 +592,7 @@ html, body {
   border: 1px solid var(--border-input);
   border-radius: var(--radius-md);
   padding: 8px 4px;
+  min-height: var(--touch-min-size, 44px);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -597,6 +638,7 @@ html, body {
   border: none;
   border-radius: var(--radius-md);
   padding: 12px;
+  min-height: var(--touch-min-size, 44px);
   color: #ffffff;
   font-family: var(--font-family);
   font-size: 13.5px;
@@ -1026,6 +1068,7 @@ html, body {
   border: 1px solid var(--border-input);
   border-radius: var(--radius-md);
   padding: 8px 10px;
+  min-height: var(--touch-min-size, 44px);
   font-size: 11.5px;
   font-family: var(--font-family);
   font-weight: 600;
@@ -1191,6 +1234,7 @@ html, body {
   border: 1px solid var(--border-input);
   border-radius: var(--radius-md);
   padding: 8px 6px;
+  min-height: var(--touch-min-size, 44px);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -1458,7 +1502,8 @@ html, body {
   background: var(--bg-surface);
   border: 1px solid var(--border-input);
   border-radius: var(--radius-full);
-  padding: 5px 11px;
+  padding: 5px 12px;
+  min-height: var(--touch-min-size, 44px);
   font-family: var(--font-family);
   font-size: 11px;
   font-weight: 700;
@@ -1815,7 +1860,7 @@ html, body {
 
 @media (min-width: 768px) {
   .home-container {
-    max-width: 1040px !important;
+    max-width: 1040px;
     padding: 16px 20px 20px;
     gap: 16px;
   }
@@ -5135,6 +5180,7 @@ html, body {
 .roster-input {
   width: 100%;
   padding: 9px 12px;
+  min-height: var(--touch-min-size, 44px);
   border-radius: var(--radius-sm);
   border: 1px solid var(--border-input);
   background: var(--bg-surface);
@@ -5178,6 +5224,7 @@ html, body {
   justify-content: center;
   gap: 7px;
   padding: 10px 12px;
+  min-height: var(--touch-min-size, 44px);
   border: 1.5px solid var(--border-input);
   background: var(--bg-surface);
   border-radius: var(--radius-sm);
@@ -6294,10 +6341,14 @@ html, body {
   border: 1px solid var(--border-input);
   border-radius: var(--radius-sm);
   padding: 8px 16px;
+  min-height: var(--touch-min-size, 44px);
   font-size: 12px;
   font-weight: 600;
   color: var(--text-secondary);
   cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   transition: var(--transition);
 }
 
@@ -6309,12 +6360,14 @@ html, body {
 .btn-modal-confirm {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 7px;
   background: #059669;
   color: #ffffff;
   border: none;
   border-radius: var(--radius-sm);
   padding: 8px 18px;
+  min-height: var(--touch-min-size, 44px);
   font-size: 12.5px;
   font-weight: 700;
   cursor: pointer;
@@ -6329,6 +6382,32 @@ html, body {
 }
 
 .btn-modal-confirm:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.btn-modal-delete {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  background: transparent;
+  border: 1px solid #ef4444;
+  color: #ef4444;
+  padding: 8px 16px;
+  min-height: var(--touch-min-size, 44px);
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: var(--transition);
+}
+
+.btn-modal-delete:hover:not(:disabled) {
+  background: rgba(239, 68, 68, 0.08);
+}
+
+.btn-modal-delete:disabled {
   opacity: 0.6;
   cursor: not-allowed;
 }
@@ -10989,3 +11068,117 @@ html, body {
 .modal-costo-dia {
   box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.3), 0 8px 10px -6px rgba(0, 0, 0, 0.2);
 }
+
+/* ==========================================================================
+   UTILIDADES CORPORATIVAS INGEAP & ACCESIBILIDAD WCAG 2.2 [Rule FRONT-BRAND-01 & UI-ACCESSIBILITY-TARGET-01]
+   ========================================================================== */
+
+/* Área táctil mínima accesible para controles interactivos en campo */
+.touch-target {
+  min-height: var(--touch-min-size, 44px);
+  min-width: var(--touch-min-size, 44px);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Campos y botones con alto contraste para operatividad bajo luz solar directa */
+.high-contrast-field {
+  border-color: var(--brand-gray-border, #cbd5e1);
+  color: var(--text-primary);
+  background-color: var(--bg-surface);
+}
+
+.high-contrast-field:focus {
+  border-color: var(--brand-red, #cc3333);
+  box-shadow: 0 0 0 3px var(--brand-red-glow, rgba(204, 51, 51, 0.16));
+}
+
+/* Botón corporativo estándar Ingeap */
+.btn-brand-primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: var(--brand-red, #cc3333);
+  color: #ffffff;
+  border: none;
+  border-radius: var(--radius-sm);
+  padding: 10px 18px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  min-height: var(--touch-min-size, 44px);
+  transition: var(--transition);
+  box-shadow: 0 2px 8px rgba(204, 51, 51, 0.25);
+}
+
+.btn-brand-primary:hover:not(:disabled) {
+  background: var(--brand-red-hover, #b32a2a);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(204, 51, 51, 0.35);
+}
+
+.btn-brand-primary:active:not(:disabled) {
+  background: var(--brand-red-active, #992424);
+  transform: translateY(0);
+}
+
+.btn-brand-primary:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  filter: grayscale(0.4);
+}
+
+/* Botón secundario con borde gris corporativo */
+.btn-brand-secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: transparent;
+  color: var(--text-primary);
+  border: 1.5px solid var(--brand-gray, #999999);
+  border-radius: var(--radius-sm);
+  padding: 10px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  min-height: var(--touch-min-size, 44px);
+  transition: var(--transition);
+}
+
+.btn-brand-secondary:hover:not(:disabled) {
+  background: var(--bg-surface-hover);
+  border-color: var(--brand-gray-dark, #4b5563);
+}
+
+.btn-brand-secondary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Insignias cromáticas semánticas */
+.brand-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border-radius: var(--radius-full);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.brand-badge-red {
+  background: var(--brand-red-subtle, rgba(204, 51, 51, 0.08));
+  color: var(--brand-red, #cc3333);
+  border: 1px solid rgba(204, 51, 51, 0.2);
+}
+
+.brand-badge-gray {
+  background: var(--bg-surface-hover);
+  color: var(--text-secondary);
+  border: 1px solid var(--border-input);
+}
+

@@ -59,5 +59,8 @@ Thumbs.db
 ehthumbs.db
 Desktop.ini
 $RECYCLE.BIN/
-.DS_Store
+# --- ARCHIVOS TEMPORALES Y SCRATCH ---
+*.txt
+!instalador/LEEME_INSTALACION.txt
+.pytest_cache/
 

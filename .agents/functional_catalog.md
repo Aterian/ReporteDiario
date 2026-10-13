@@ -9,6 +9,23 @@
   2. PyInstaller estampa `backend/file_version_info.txt` con versión `1.16.0.0` y metadatos de Ingeap.
   3. El instalador autónomo despliega en `%LOCALAPPDATA%\Ingeap\CheckDiario`, elimina restricciones SmartScreen (`Zone.Identifier`), genera accesos directos y registra autoarranque en `HKCU\Software\Microsoft\Windows\CurrentVersion\Run`.
 
+## [FN-02.03] Descomposición Modular de OtherEmployeesHistoryView
+- **Módulo**: [MOD-02] Auditoría y Gestión de Asistencia de Colaboradores
+- **Flujo Operativo**: Arquitectura modularizada que descompone la vista de 3,400 líneas en un orquestador ligero y 9 subcomponentes especializados (`HistoryTopBar`, `HistoryRecordsList`, `HistoryAuditCalendar`, `HistoryLiquidationCard` y 5 modales dedicados), desacoplando la renderización sin alterar el estado global, APIs ni las llamadas nativas de confirmación.
+- **Tablas afectadas**: `historial`, `1_asistencia_informada`, `modificaciones_realizadas`.
+- **Reglas de negocio e invariantes**:
+  1. La función canónica `categorizarRegistroLiquidacion` permanece exportada para preservar compatibilidad retroactiva.
+  2. Los diálogos nativos (`alert()`, `confirm()`) y los endpoints de `ApiPuente` mantienen intactos sus contratos.
+  3. Desglose estricto en subcomponentes ubicados en `frontend/src/components/history/`.
+
+## [FN-03.10] Modularización de RosterView y Asignación de Tarifas en Gantt
+- **Módulo**: [MOD-03] Módulo de Roster y Tarifas
+- **Flujo Operativo**: Descompone la vista de Roster en orquestador y subcomponentes (`RosterShiftForm`, `RosterGanttChart`, `RosterEmployeeChecklist`), e incorpora la asignación en memoria de tarifas oficiales del proyecto en el modal de edición de turnos sin persistencia prematura en base de datos.
+- **Tablas afectadas**: `rosters`, `1_2_tarifas_roster`, `tarifas_roster_cache`.
+- **Reglas de negocio e invariantes**:
+  1. Asignación reactiva de tarifas oficiales en memoria sin crear registros DB hasta confirmación del usuario.
+  2. Subcomponentes desacoplados en `frontend/src/components/roster/`.
+
 ## [FN-01.11] Asignación Asistida de Fines de Semana a Franco en Historial Propio
 - **Módulo**: [MOD-01] Registro de Asistencia Diaria
 - **Flujo Operativo**: Permite a cualquier usuario logueado en su historial personal cargar automáticamente todos los sábados y domingos pendientes del mes en curso como Franco (Franco de Oficina, 0 hs) imputados a su área respectiva, guardando localmente en SQLite y disparando la sincronización remota hacia Google Sheets.
@@ -409,3 +426,31 @@
   1. Acceso de revisión exclusivo para Justina Bertolozzi e Iván Valentin (`puedeVerModificaciones`).
   2. La subida de 'OK' se ejecuta en lote asíncrono hacia Google Sheets con fallback celda por celda.
   3. `descargar_modificaciones_desde_sheets` actualiza filas existentes con valor remoto 'OK', sincronizando el apagado del banner de notificación entre administradores.
+
+## [FN-03.10] Modularización de RosterView y Asignación de Tarifas en Modal de Edición Gantt
+- **Módulo**: [MOD-03] Módulo de Roster y Tarifas
+- **Flujo Operativo**: Descompone `RosterView` en subcomponentes (`RosterShiftForm`, `RosterGanttChart`, `RosterEmployeeChecklist`, `rosterConstants`) e incorpora un botón en el modal de edición de turnos de Gantt para asignar las tarifas oficiales vigentes del proyecto en memoria sin crear registros adicionales en la base de datos.
+- **Tablas afectadas**: `rosters`, `tarifas_roster_cache`.
+- **Reglas de negocio e invariantes**:
+  1. El botón `⚡ Asignar tarifas oficiales al turno` recupera la tarifa oficial de `1_2_tarifas_roster` para el proyecto del turno y puebla `editPrecioDia` y `editPrecioDomingo` en memoria.
+  2. No genera nuevas filas ni muta la base de datos hasta que el operador pulse explícitamente "Guardar Modificación".
+  3. Preserva compatibilidad con exportaciones y selección exclusiva de colaboradores de Ingeniería.
+
+## [FN-03.11] Persistencia Local de Tarifas Roster y Francos de Obra en Modalidad Campo
+- **Módulo**: [MOD-03] Módulo de Roster y Tarifas
+- **Flujo Operativo**: Al cargar un turno de franco en Roster, asigna automáticamente `tipo_costo = 'Campo'` y el sueldo de campo del empleado (`costo_dia_obra`) en `historial` y `1_asistencia_informada`. Al asignar la tarifa de roster en la ventana de modificación de un turno en Gantt, la persiste inmediatamente en la tabla local `rosters` sin alterar `historial` ni invocar a Google Sheets, permitiendo la correcta visualización reactiva y exportación del archivo `.xlsx`.
+- **Tablas afectadas**: `rosters`, `historial`.
+- **Reglas de negocio e invariantes**:
+  1. Todo turno de Roster con tipo 'Franco' se considera franco de obra (`tipo_costo = 'Campo'`) y liquida con `costo_dia_obra` del colaborador.
+  2. La asignación de tarifas de proyecto en la ventana de modificación de turnos actualiza exclusivamente las columnas `precio_dia` y `precio_domingo` de la tabla SQLite `rosters`.
+  3. No se tocan salarios en `historial` ni se desencadenan sincronizaciones remotas a Google Sheets durante dicha asignación local.
+
+## [FN-07.01] Sistema de Diseño Ingeap y Accesibilidad Operativa WCAG 2.2
+- **Módulo**: [MOD-07] Sistema de Diseño y UI
+- **Flujo Operativo**: Estandariza la paleta cromática corporativa oficial (`#cc3333`, `#999999`) y fija áreas táctiles mínimas de 44x44 px (`--touch-min-size: 44px`) en todos los controles interactivos para operatividad táctil en campo y con guantes de protección.
+- **Tablas afectadas**: Ninguna (capa puramente visual y de accesibilidad CSS).
+- **Reglas de negocio e invariantes**:
+  1. Los controles interactivos (botones, selectores, campos de texto, pills de turnos y modales) respetan un área táctil mínima de 44px conforme a WCAG 2.2.
+  2. Los tokens corporativos oficiales (`--brand-red: #cc3333`, `--brand-gray: #999999`) gobiernan la variable `--primary` garantizando sincronización determinista en temas Light, Dark y RPG.
+  3. Se depuran reglas desbalanceadas con `!important` en el layout corporativo asegurando especificidad limpia en la cascada CSS.
+

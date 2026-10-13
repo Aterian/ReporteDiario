@@ -2,6 +2,67 @@
 
 Historial cronológico de cambios, nuevas características y mejoras aplicadas al sistema **Check Diario Ingeap**.
 
+## [1.18.0] - 2026-10-13
+
+### 🎨 Sistema de Diseño Ingeap y Accesibilidad WCAG 2.2 (`[FN-07.01]`)
+- **Centralización de Tokens Semánticos Corporativos**:
+  - Declaración de variables oficiales en `:root` y `[data-theme='dark']` en `frontend/src/index.css`:
+    - Color Primario: `--brand-red: #cc3333;`, `--brand-red-hover: #b32a2a;`, `--brand-red-active: #992424;`
+    - Color Secundario: `--brand-gray: #999999;`, `--brand-gray-light: #e5e7eb;`, `--brand-gray-border: #cbd5e1;`
+    - Escalas cromáticas y auras semánticas unificadas con `--primary: var(--brand-red)`.
+- **Accesibilidad Operativa en Campo (WCAG 2.2 Target Size)**:
+  - Fijación de área táctil mínima de 44px (`--touch-min-size: 44px`) para garantizar operatividad con guantes y pantallas táctiles en campo.
+  - Aplicación de `min-height: var(--touch-min-size)` a todos los controles interactivos primarios: botones de envío (`.btn-submit`), navegación (`.tab-btn`, `.btn-back`), opciones de formulario (`.form-input`, `.form-select`, `.jornada-btn`, `.location-btn`, `.division-mode-btn`), selectores de Roster (`.roster-input`, `.roster-select`, `.btn-type-pill`) y acciones modales (`.btn-modal-confirm`, `.btn-modal-cancel`, `.btn-modal-delete`).
+- **Saneamiento de Especificidad CSS y Utilidades de Alto Contraste**:
+  - Eliminación de reglas desbalanceadas con `!important` en el layout corporativo (ej. `.home-container max-width`).
+  - Creación de utilidades reutilizables: `.touch-target`, `.high-contrast-field`, `.btn-brand-primary`, `.btn-brand-secondary` y badges cromáticos (`.brand-badge-red`, `.brand-badge-gray`) optimizados para visualización bajo luz solar directa.
+
+## [1.17.4] - 2026-10-13
+
+### 🚜 Roster: Cómputo de Francos en Modalidad Campo y Persistencia Local de Tarifas (`[FN-03.11]`)
+- **Turnos de Franco de Roster como Modalidad Campo**:
+  - Al cargar un turno de modalidad 'Franco' en Roster, el valor guardado en `tipo_costo` (`tipo_dia`) se fija determinísticamente en `'Campo'` y `costo_dia` adopta el valor de jornada de campo del empleado (`costo_dia_obra`), no el valor de oficina.
+  - Actualización de `_guardar_roster_interno` en `backend/main.py` para invocar `calcular_costo_dia_asistencia(..., tipo_costo="Campo")` cuando `tipo_norm == "Franco"`.
+  - Normalización defensiva en `backend/database.py`: las rutinas de inicio excluyen los francos de Roster de la reasignación de fin de semana y la rutina `reparar_costos_salariales_historial` actualiza a `'Campo'` con `costo_dia_obra` cualquier jornada de franco asociada a turnos de Roster.
+- **Persistencia Local Exclusiva de Tarifas de Roster en Ventana de Modificación**:
+  - En la ventana modal de edición/modificación de turnos en el diagrama Gantt (`RosterGanttChart`), el botón de asignación de tarifas oficiales guarda inmediatamente `precio_dia` y `precio_domingo` en la base de datos local SQLite (`rosters` table) mediante el endpoint `aplicar_tarifa_local_roster`.
+  - Se garantiza que esta operación no muta la tabla de asistencias (`historial`) ni envía peticiones de sincronización a Google Sheets, permitiendo la reactividad inmediata del Gantt y la correcta exportación del archivo `.xlsx` oficial por proyecto.
+
+## [1.17.3] - 2026-10-13
+
+### 🧩 Modularización de Frontend: Descomposición de OtherEmployeesHistoryView (`[FN-02.03]`)
+- **Descomposición Modular de OtherEmployeesHistoryView**:
+  - `OtherEmployeesHistoryView.jsx` pasa de 3,426 líneas a ~680 líneas, estructurándose como un orquestador limpio y desacoplado.
+  - Creación de `frontend/src/components/history/historyConstants.js`: Centraliza listas de modalidades (`LUGARES_OPCIONES`), áreas corporativas (`LISTADO_AREAS_CORPORATIVAS`), tipos de licencia, utilidades de badge (`getBadgeClassLugar`), iniciales de usuario y la función canónica de categorización de liquidación (`categorizarRegistroLiquidacion`).
+  - Creación de `frontend/src/components/history/HistoryTopBar.jsx`: Barra superior con navegación, estado de sincronización automática en segundo plano y acciones de actualización/limpieza.
+  - Creación de `frontend/src/components/history/HistoryRecordsList.jsx`: Panel izquierdo con filtros de búsqueda, selección por empleado/mes visible, asignación masiva de costos y tarjetas de registros interactivos.
+  - Creación de `frontend/src/components/history/HistoryAuditCalendar.jsx`: Panel interactivo de auditoría mensual con selector de colaborador, grilla de días, insignias de estado/modificación, barra flotante de asignación de costos y referencias cromáticas.
+  - Creación de `frontend/src/components/history/HistoryLiquidationCard.jsx`: Calculadora de liquidación para RRHH con detección automática de días, soporte para modificaciones manuales en incrementos de 0.5 días, cálculo de subtotales/totales y exportación oficial a Excel.
+  - Creación de subcomponentes modales dedicados en `frontend/src/components/history/`:
+    - `HistoryDayRecordsModal.jsx`: Modal de desglose de múltiples registros por día.
+    - `HistoryEditRecordModal.jsx`: Modal de modificación con lógica condicional de modalidad y servicio.
+    - `HistoryDeleteRecordModal.jsx`: Modal de confirmación destructiva.
+    - `HistoryDiffModal.jsx`: Panel flotante comparativo dividido (*split-view*) antes/después con historial de modificaciones y acción de "Marcar como Revisado".
+    - `HistoryCostDayModal.jsx`: Modal exclusivo e independiente para la edición manual del `costo_dia`.
+- **Preservación Estricta de Compatibilidad y Arquitectura**:
+  - Se mantiene la re-exportación de `categorizarRegistroLiquidacion` desde `OtherEmployeesHistoryView.jsx`.
+  - Integridad de todos los flujos nativos con SQLite WAL, `ApiPuente` y sincronización en segundo plano con Google Sheets sin alteraciones a la capa backend.
+
+## [1.17.2] - 2026-10-13
+
+### 🧩 Modularización de Frontend: RosterView y Asignación de Tarifas en Gantt (`[FN-03.10]`)
+- **Descomposición Modular de RosterView**:
+  - `RosterView.jsx` pasa de 1,885 líneas a ~470 líneas, actuando como un orquestador limpio de estado y comunicación.
+  - Creación de `frontend/src/components/roster/rosterConstants.js`: Centraliza lista canónica de colaboradores de Ingeniería, normalizador de texto y función de búsqueda de tarifas.
+  - Creación de `frontend/src/components/roster/RosterEmployeeChecklist.jsx`: Componente visual para selección múltiple de colaboradores con botones de acción rápida.
+  - Creación de `frontend/src/components/roster/RosterShiftForm.jsx`: Componente para la carga continua de turnos, proyectos y visualización de tarifas reglamentarias.
+  - Creación de `frontend/src/components/roster/RosterGanttChart.jsx`: Componente especializado para el diagrama Gantt, navegación de meses, zoom de columnas y modales.
+- **Asignación Rápida de Tarifas en Modal de Edición Gantt**:
+  - Incorporación del botón `⚡ Asignar tarifas oficiales al turno` en la ventana de detalle/modificación de turnos del Gantt.
+  - Carga reactiva de las tarifas vigentes del proyecto (`1_2_tarifas_roster`) en los campos de edición en memoria, **sin crear nuevos registros en la base de datos**. Los valores se persisten únicamente cuando el operador pulsa "Guardar Modificación".
+- **Corrección de Footers de Modales**:
+  - Corrección del modal de exportación a Excel, desacoplándolo de acciones de eliminación o modificación accidental.
+
 ## [1.17.1] - 2026-10-09
 
 ### 🐛 Desacoplamiento de Tarifas de Roster y Protección de 'costo_dia' (`[FN-03.08]`, `[FN-06.04]`)

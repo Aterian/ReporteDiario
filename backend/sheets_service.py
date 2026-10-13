@@ -3,6 +3,9 @@ import sys
 import json
 import re
 import threading
+import uuid       # <- REQUERIDO para generar identificadores únicos
+import time       # <- REQUERIDO para pausas de seguridad en Google Sheets API
+
 _sync_lock = threading.Lock()
 import gspread
 from gspread.utils import ValueInputOption, rowcol_to_a1
@@ -564,9 +567,9 @@ def descargar_modificaciones_desde_sheets(spreadsheet_id: str = "") -> dict:
 def sincronizar_pendientes() -> dict:
     """
     Lee los registros con sincronizado=0 de la base local y los sube/actualiza
-    en la hoja '1_asistencia_informada' con las 17 columnas completas.
-    Garantiza que cargas con rango de fechas o múltiples proyectos por día
-    se inserten íntegramente sin omisiones ni sobreescrituras accidentales.
+    en la hoja '1_asistencia_informada'.
+    Garantiza que si una fecha ya tiene una fila en Google Sheets (cargada desde otra PC),
+    se actualice en su lugar (in-place) en vez de generar una fila duplicada.
     """
     if not _sync_lock.acquire(blocking=True, timeout=60):
         return {
@@ -585,7 +588,6 @@ def sincronizar_pendientes() -> dict:
 
         pendientes = obtener_pendientes_sincronizacion()
         if not pendientes:
-            # Procesar posibles modificaciones pendientes de auditoría aun si no hay asistencias pendientes
             try:
                 sincronizar_modificaciones_pendientes()
             except Exception:
@@ -606,7 +608,7 @@ def sincronizar_pendientes() -> dict:
 
         _, ws = obtener_hoja_trabajo()
 
-        # Obtener todas las filas remotas existentes para mapear por ID único
+        # Obtener todas las filas remotas existentes para mapear por ID y por (empleado, fecha)
         todas_filas = ws.get_all_values()
         headers = [h.strip().lower() for h in todas_filas[0]] if todas_filas else []
         idx_id = headers.index("id_asistencia") if "id_asistencia" in headers else 0
@@ -615,8 +617,9 @@ def sincronizar_pendientes() -> dict:
         idx_serv = headers.index("servicio") if "servicio" in headers else 4
 
         mapa_ids_remotos = {}
-        # Mapeo secundario solo para registros históricos sin UUID remoto: (emp, fecha, servicio)
+        mapa_emp_fecha_remoto = {}      # <- NUEVO: Mapeo para evitar duplicaciones entre PCs
         mapa_historico_sin_id = {}
+
         for r_idx, f in enumerate(todas_filas[1:], start=2):
             uid_val = f[idx_id].strip() if len(f) > idx_id else ""
             emp_val = f[idx_emp].strip().lower() if len(f) > idx_emp else ""
@@ -625,7 +628,12 @@ def sincronizar_pendientes() -> dict:
 
             if uid_val and uid_val.lower() != "id_asistencia":
                 mapa_ids_remotos[uid_val] = r_idx
-            elif emp_val and fec_val:
+
+            # Mapeamos la fila por la combinación natural de empleado y fecha
+            if emp_val and fec_val:
+                mapa_emp_fecha_remoto[(emp_val, fec_val)] = r_idx
+
+            if (not uid_val or uid_val.lower() == "id_asistencia") and emp_val and fec_val:
                 mapa_historico_sin_id[(emp_val, fec_val, serv_val)] = r_idx
 
         filas_a_insertar = []
@@ -641,21 +649,26 @@ def sincronizar_pendientes() -> dict:
             fila = construir_fila_asistencia(p, headers)
             es_modificacion = int(p.get("modificado") or 0) == 1
 
-            # Determinamos si ya existe en Google Sheets:
-            # 1. Por id_asistencia (clave primaria inequívoca)
-            # 2. O si es una modificación de un registro antiguo de AppSheet sin UUID que coincide exactamente en (emp, fecha, servicio)
+            # 1. Comprobar si existe por id_asistencia directo
             row_existente = mapa_ids_remotos.get(uid)
+
+            # 2. Si no coincide por UUID, verificar si ya existe una fila para ese colaborador y fecha en Google Sheets
+            if not row_existente and emp and f_str:
+                row_existente = mapa_emp_fecha_remoto.get((emp.lower(), f_str))
+
+            # 3. Respaldo para registros históricos sin ID
             if not row_existente and es_modificacion:
                 clave_historica = (emp.lower(), f_str, serv.lower())
                 row_existente = mapa_historico_sin_id.get(clave_historica)
 
             if row_existente:
+                # Si ya existía una fila para ese día, la actualizamos en su lugar (in-place)
                 filas_a_actualizar.append((row_existente, fila, uid))
             else:
-                # Es un registro verdaderamente nuevo (ej. día de rango de fechas o nuevo proyecto)
+                # Solo se inserta si la fecha verdaderamente no existía en Google Sheets
                 filas_a_insertar.append((fila, uid))
 
-        # 1. Ejecutar actualizaciones in-place para registros preexistentes
+        # 1. Ejecutar actualizaciones in-place para registros existentes
         for row_idx, fila_vals, uid_reg in filas_a_actualizar:
             try:
                 col_end = chr(ord('A') + len(fila_vals) - 1)
@@ -669,17 +682,16 @@ def sincronizar_pendientes() -> dict:
             except Exception as e_up:
                 print(f"[Sheets] Error al actualizar fila {row_idx} ({uid_reg}): {e_up}")
 
-        # 2. Inserción en lote de todas las filas nuevas para garantizar que ningún día de rango se omita
+        # 2. Inserción de filas que realmente son nuevas
         if filas_a_insertar:
             bloque_filas = [item[0] for item in filas_a_insertar]
             uids_bloque = [item[1] for item in filas_a_insertar]
             try:
                 ws.append_rows(bloque_filas, value_input_option=ValueInputOption.user_entered)
                 ids_exitosos.extend(uids_bloque)
-                print(f"[Sheets] Se insertaron exitosamente {len(bloque_filas)} fila(s) nuevas en Google Sheets.")
+                print(f"[Sheets] Se insertaron {len(bloque_filas)} fila(s) nuevas en Google Sheets.")
             except Exception as e_ins:
                 print(f"[Sheets] Error al insertar filas en lote: {e_ins}")
-                # Fallback defensivo: intentar fila por fila si falló el lote completo
                 for f_vals, uid_item in filas_a_insertar:
                     try:
                         ws.append_rows([f_vals], value_input_option=ValueInputOption.user_entered)
@@ -687,11 +699,10 @@ def sincronizar_pendientes() -> dict:
                     except Exception as e_indiv:
                         print(f"[Sheets] Error en inserción individual ({uid_item}): {e_indiv}")
 
-        # 3. Marcar en la base local como sincronizados ÚNICAMENTE los que efectivamente se subieron
+        # 3. Marcar en SQLite local como sincronizados los registros confirmados
         if ids_exitosos:
             marcar_como_sincronizados(ids_exitosos)
 
-        # 4. Sincronizar registros de auditoría de modificaciones
         try:
             sincronizar_modificaciones_pendientes()
         except Exception as e_mod:
@@ -1165,22 +1176,17 @@ def sincronizar_desde_sheets_hacia_local(spreadsheet_id: str = "") -> dict:
 
 def deduplicar_hoja_remota(filas_registros: list[dict] | None = None, spreadsheet_id: str = "") -> list[dict] | dict:
     """
-    Filtra una lista de registros de asistencia eliminando duplicados exactos,
-    pero preservando turnos múltiples del mismo empleado en el mismo día y proyecto
-    (por ejemplo: 4 horas a la mañana y 4 horas a la tarde).
-
-    Si filas_registros es None, audita la pestaña '1_asistencia_informada' en Google Sheets
-    y elimina directamente las filas duplicadas remotas.
+    Filtra y elimina registros duplicados.
+    Si filas_registros es None, audita directamente la pestaña '1_asistencia_informada'
+    en Google Sheets, detecta colisiones de (empleado, fecha), conserva la fila principal
+    (priorizando Campo/Roster) y elimina las duplicadas en orden descendente.
     """
     if filas_registros is not None:
         registros_unicos = []
         claves_vistas = set()
 
         for registro in filas_registros:
-            # 1. Si el registro tiene un identificador único de asistencia (id_asistencia),
-            # lo usamos como criterio primario de unicidad.
             id_asistencia = str(registro.get("id_asistencia", "")).strip()
-            
             if id_asistencia:
                 clave_primaria = ("ID", id_asistencia)
                 if clave_primaria in claves_vistas:
@@ -1189,8 +1195,6 @@ def deduplicar_hoja_remota(filas_registros: list[dict] | None = None, spreadshee
                 registros_unicos.append(registro)
                 continue
 
-            # 2. Si no cuenta con id_asistencia, generamos una tupla extendida.
-            # Incluir hora_inicio y hora_fin evita que se descarten turnos divididos.
             empleado = str(registro.get("empleado", "")).strip().lower()
             fecha = str(registro.get("fecha", "")).strip()
             servicio = str(registro.get("servicio", "")).strip().lower()
@@ -1199,21 +1203,10 @@ def deduplicar_hoja_remota(filas_registros: list[dict] | None = None, spreadshee
             hora_fin = str(registro.get("hora_fin", "")).strip()
             horas_totales = str(registro.get("horas_totales", "") or registro.get("horas", "")).strip()
 
-            # Si la fila está vacía, la omitimos
             if not empleado and not fecha:
                 continue
 
-            clave_extendida = (
-                empleado,
-                fecha,
-                servicio,
-                lugar,
-                hora_inicio,
-                hora_fin,
-                horas_totales
-            )
-
-            # Si ya existe exactamente el mismo turno en ese mismo horario, es un duplicado real
+            clave_extendida = (empleado, fecha, servicio, lugar, hora_inicio, hora_fin, horas_totales)
             if clave_extendida in claves_vistas:
                 continue
 
@@ -1222,7 +1215,7 @@ def deduplicar_hoja_remota(filas_registros: list[dict] | None = None, spreadshee
 
         return registros_unicos
 
-    # Deduplicación remota directa sobre Google Sheets
+    # Deduplicación remota directa sobre la hoja de Google Sheets
     if not _sync_lock.acquire(blocking=True, timeout=60):
         return {"exito": False, "error": "Sincronización en curso. Reintente en unos momentos."}
     try:
@@ -1232,44 +1225,55 @@ def deduplicar_hoja_remota(filas_registros: list[dict] | None = None, spreadshee
             return {"exito": True, "eliminados": 0, "mensaje": "No hay registros para deduplicar."}
 
         headers = [h.strip().lower() for h in filas[0]]
-        idx_id = headers.index("id_asistencia") if "id_asistencia" in headers else 0
         idx_emp = headers.index("empleado") if "empleado" in headers else 1
         idx_fecha = headers.index("fecha") if "fecha" in headers else 2
         idx_tipo = headers.index("tipo_ocf") if "tipo_ocf" in headers else 3
         idx_serv = headers.index("servicio") if "servicio" in headers else 4
-        idx_horas = headers.index("horas") if "horas" in headers else 5
-        idx_hini = headers.index("hora_inicio") if "hora_inicio" in headers else -1
-        idx_hfin = headers.index("hora_fin") if "hora_fin" in headers else -1
+        idx_costo = headers.index("costo_dia") if "costo_dia" in headers else -1
 
-        claves_vistas = set()
-        filas_a_borrar = []
-
+        # Agrupamos todas las filas por (empleado, fecha)
+        grupos_por_dia = {}
         for r_idx, f in enumerate(filas[1:], start=2):
-            uid = f[idx_id].strip() if len(f) > idx_id else ""
-            if uid:
-                clave = ("ID", uid)
-            else:
-                emp = f[idx_emp].strip().lower() if len(f) > idx_emp else ""
-                fec = f[idx_fecha].strip() if len(f) > idx_fecha else ""
-                tipo = f[idx_tipo].strip().lower() if len(f) > idx_tipo else ""
-                serv = f[idx_serv].strip().lower() if len(f) > idx_serv else ""
-                hrs = f[idx_horas].strip() if len(f) > idx_horas else ""
-                h_ini = f[idx_hini].strip() if (idx_hini >= 0 and len(f) > idx_hini) else ""
-                h_fin = f[idx_hfin].strip() if (idx_hfin >= 0 and len(f) > idx_hfin) else ""
-                if not emp and not fec:
-                    continue
-                clave = (emp, fec, serv, tipo, h_ini, h_fin, hrs)
+            emp = f[idx_emp].strip().lower() if len(f) > idx_emp else ""
+            fec = f[idx_fecha].strip() if len(f) > idx_fecha else ""
+            tipo = f[idx_tipo].strip().lower() if len(f) > idx_tipo else ""
+            serv = f[idx_serv].strip().lower() if len(f) > idx_serv else ""
+            costo_val = parse_currency(f[idx_costo]) if (idx_costo >= 0 and len(f) > idx_costo) else 0.0
 
-            if clave in claves_vistas:
-                filas_a_borrar.append(r_idx)
-            else:
-                claves_vistas.add(clave)
+            if not emp or not fec:
+                continue
 
+            clave = (emp, fec)
+            if clave not in grupos_por_dia:
+                grupos_por_dia[clave] = []
+
+            grupos_por_dia[clave].append({
+                "num_fila": r_idx,
+                "es_campo": ("campo" in tipo or "roster" in tipo),
+                "costo_dia": costo_val
+            })
+
+        filas_a_borrar = []
+        for clave, ocurrencias in grupos_por_dia.items():
+            if len(ocurrencias) > 1:
+                # Priorizar la fila de Campo/Roster y, en caso de empate, la que tenga mayor costo salarial
+                ocurrencias_ordenadas = sorted(
+                    ocurrencias,
+                    key=lambda x: (1 if x["es_campo"] else 0, x["costo_dia"]),
+                    reverse=True
+                )
+                # Conservamos la primera ocurrencia (índice 0) y marcamos las demás para eliminar
+                for duplicado in ocurrencias_ordenadas[1:]:
+                    filas_a_borrar.append(duplicado["num_fila"])
+
+        # Eliminamos en orden descendente (de mayor a menor) para que los índices no se desplacen
+        filas_a_borrar.sort(reverse=True)
         eliminados = 0
-        for r_num in reversed(filas_a_borrar):
+        for r_num in filas_a_borrar:
             try:
                 ws.delete_rows(r_num)
                 eliminados += 1
+                time.sleep(0.4)  # Pausa breve de seguridad contra cuotas de Google Sheets API
             except Exception as e_del:
                 print(f"[Sheets] Error al borrar fila duplicada {r_num}: {e_del}")
 
@@ -1317,3 +1321,76 @@ def limpiar_y_descargar_desde_sheets(spreadsheet_id: str = "") -> dict:
     finally:
         _sync_lock.release()
 
+def calcular_costo_dia_asistencia(
+    tipo_ocf: str,
+    servicio: str,
+    feriado: str,
+    empleado: str,
+    tipo_costo: str = ""
+) -> tuple[str, float]:
+    """
+    Calcula estrictamente el costo salarial diario de un empleado para 'historial' y Google Sheets.
+    Determina si corresponde 'Campo' u 'Oficina' y aplica el sueldo base del colaborador.
+    """
+    tipo_norm = str(tipo_ocf or "").strip().lower()
+    
+    # 1. Determinar si el concepto es Campo u Oficina
+    if tipo_costo:
+        t_costo = tipo_costo
+    elif "campo" in tipo_norm or "roster" in tipo_norm:
+        t_costo = "Campo"
+    else:
+        t_costo = "Oficina"
+
+    # 2. Consultar tarifas salariales base del empleado en la base local SQLite
+    costo_ofi = 0.0
+    costo_obra = 0.0
+    try:
+        with obtener_conexion() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "SELECT costo_dia_ofi, costo_dia_obra FROM usuarios_cache WHERE LOWER(TRIM(nombre)) = LOWER(TRIM(?)) LIMIT 1",
+                (empleado,)
+            )
+            u = cursor.fetchone()
+            if u:
+                costo_ofi = float(u["costo_dia_ofi"] or 0.0)
+                costo_obra = float(u["costo_dia_obra"] or 0.0)
+    except Exception as e:
+        print(f"[Sheets] Aviso al leer tarifas salariales de {empleado}: {e}")
+
+    costo_base = costo_obra if t_costo == "Campo" else costo_ofi
+
+    # 3. Aplicar multiplicadores de convenio
+    if str(feriado or "").strip().upper() == "SI":
+        costo_final = round(costo_base * 2.0, 2)
+    elif "trabajado" in str(servicio or "").lower():
+        costo_final = round(costo_base * 1.5, 2)
+    else:
+        costo_final = round(costo_base, 2)
+
+    return (t_costo, costo_final)
+
+
+def obtener_tarifa_roster_por_proyecto(id_proyecto: str = "", nombre_proyecto: str = "") -> dict | None:
+    """
+    Busca la tarifa oficial de un proyecto en '1_2_tarifas_roster' por UUID o denominación.
+    Retorna el diccionario de tarifas o None si no registra configuración.
+    """
+    catalogo = obtener_tarifas_roster_remotas()
+    if not catalogo:
+        return None
+
+    id_buscado = str(id_proyecto or "").strip().lower()
+    nom_buscado = str(nombre_proyecto or "").strip().lower()
+
+    for item in catalogo:
+        item_id = str(item.get("id_proyecto", "")).strip().lower()
+        item_nom = str(item.get("denominacion") or item.get("proyecto") or "").strip().lower()
+
+        if id_buscado and item_id and item_id == id_buscado:
+            return item
+        if nom_buscado and item_nom and (nom_buscado == item_nom or nom_buscado in item_nom or item_nom in nom_buscado):
+            return item
+
+    return None

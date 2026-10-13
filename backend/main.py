@@ -83,7 +83,7 @@ from sheets_service import (
     obtener_tarifas_roster_remotas
 )
 
-APP_VERSION = "1.17.1"
+APP_VERSION = "1.18.0"
 
 # Lista predefinida de los empleados habilitados con sus correos oficiales, áreas y roles RBAC
 EMPLEADOS_AUTORIZADOS = [
@@ -1566,10 +1566,17 @@ class ApiPuente:
         return {"exito": True}
 
     def _guardar_roster_interno(self, datos: dict, disparar_sync: bool = True):
-        """Lógica central para guardar un roster e insertar sus asistencias en historial."""
+        """
+        Lógica central para guardar o modificar un turno de roster en SQLite
+        y reconciliar las jornadas en la tabla 'historial'.
+        Garantiza que 'costo_dia' sea puramente salarial y previene duplicados.
+        """
         sesion = obtener_sesion_activa()
         if not puede_acceder_roster(sesion):
-            return {"exito": False, "error": "Acceso denegado: El módulo de Roster solo puede ser gestionado por Justina Bertolozzi e Iván Valentin."}
+            return {
+                "exito": False,
+                "error": "Acceso denegado: El módulo de Roster solo puede ser gestionado por personal autorizado."
+            }
 
         def _operacion():
             id_roster = str(datos.get("id") or "").strip()
@@ -1582,14 +1589,28 @@ class ApiPuente:
                     if row:
                         old_roster = dict(row)
 
-            # [FN-03.08] Vincular tarifas de viáticos de proyecto según tabla 1_2_tarifas_roster
-            # Se persisten EXCLUSIVAMENTE en la tabla local 'rosters' para la UI y la exportación de Excel.
-            # NO se guardan en historial ni se transmiten a Google Sheets.
+            # 1. Normalizar tipo de jornada recibido desde el formulario o modal
+            tipo_raw = str(datos.get("tipo") or datos.get("tipo_jornada") or "Campo").strip().lower()
+            if "campo" in tipo_raw or "obra" in tipo_raw:
+                tipo_norm = "Campo"
+            elif "franco" in tipo_raw or "descanso" in tipo_raw:
+                tipo_norm = "Franco"
+            elif "licencia" in tipo_raw:
+                tipo_norm = "Licencia"
+            elif "vacaciones" in tipo_raw:
+                tipo_norm = "Vacaciones"
+            else:
+                tipo_norm = tipo_raw.capitalize()
+
+            # Asegurar que 'tipo' en el diccionario tenga el valor normalizado
+            datos["tipo"] = tipo_norm
+
+            # 2. Asignar viáticos de proyecto EXCLUSIVAMENTE a la tabla local 'rosters'
             proy_nom = str(datos.get("proyecto") or "").strip()
             proy_id = str(datos.get("id_proyecto") or "").strip() or (obtener_id_proyecto(proy_nom) if proy_nom else "")
-            tipo_input = str(datos.get("tipo", "Campo")).strip()
+            
             tarifa_roster = obtener_tarifa_roster_por_proyecto(id_proyecto=proy_id, nombre_proyecto=proy_nom)
-            if tarifa_roster and tipo_input.capitalize() == "Campo":
+            if tarifa_roster and tipo_norm == "Campo":
                 if not datos.get("precio_dia") or float(datos.get("precio_dia") or 0) == 0:
                     datos["precio_dia"] = float(tarifa_roster.get("dia_normal") or 0.0)
                 if not datos.get("precio_domingo") or float(datos.get("precio_domingo") or 0) == 0:
@@ -1603,7 +1624,6 @@ class ApiPuente:
             proyecto = str(datos.get("proyecto", "")).strip()
             fecha_inicio = str(datos.get("fecha_inicio", "")).strip()
             fecha_fin = str(datos.get("fecha_fin", "")).strip()
-            tipo = str(datos.get("tipo", "Campo")).strip()
 
             usuario_mail = str(datos.get("usuario_mail", "")).strip()
             if not usuario_mail and empleado:
@@ -1629,7 +1649,7 @@ class ApiPuente:
             elif fecha_inicio:
                 fechas_a_cargar = [fecha_inicio]
 
-            # Limpiar días antiguos si cambió el rango o empleado
+            # 3. Limpiar días antiguos si cambió el rango de fechas o el empleado
             if old_roster:
                 old_emp = old_roster.get("empleado", "")
                 old_ini = old_roster.get("fecha_inicio", "")
@@ -1647,18 +1667,23 @@ class ApiPuente:
                             c += timedelta(days=1)
                     except Exception:
                         fechas_antiguas = [old_ini]
-                
+
                 with obtener_conexion() as conn:
                     cur = conn.cursor()
                     for f_ant in fechas_antiguas:
                         if f_ant not in fechas_a_cargar or old_emp != empleado:
                             cur.execute(
-                                "DELETE FROM historial WHERE empleado = ? AND fecha = ? AND tipo_ocf IN ('Roster', 'Franco', 'Licencia', 'Vacaciones')",
+                                """
+                                DELETE FROM historial 
+                                WHERE LOWER(TRIM(empleado)) = LOWER(TRIM(?)) 
+                                  AND fecha = ? 
+                                  AND tipo_ocf IN ('Roster', 'Campo', 'Franco', 'Licencia', 'Vacaciones')
+                                """,
                                 (old_emp, f_ant)
                             )
                     conn.commit()
 
-            tipo_norm = tipo.strip().capitalize()
+            # 4. Asignación de tipo_ocf y carga horaria
             if tipo_norm == "Campo":
                 tipo_ocf = "Roster"
                 servicio = proyecto
@@ -1678,7 +1703,7 @@ class ApiPuente:
             else:
                 tipo_ocf = tipo_norm
                 servicio = proyecto
-                horas = 8.0 if tipo_norm.lower() == "campo" else 0.0
+                horas = 8.0
 
             emp_id = obtener_id_empleado(empleado)
             proy_id = str(datos.get("id_proyecto", "")).strip() or (obtener_id_proyecto(proyecto) if proyecto else "")
@@ -1688,16 +1713,8 @@ class ApiPuente:
             fechas_ordenadas = sorted(fechas_a_cargar)
             fer_val = str(datos.get("feriado", "NO")).strip()
 
-            # Reconciliar/guardar jornadas en historial con tipo_costo y costo_dia salarial
+            # 5. Guardar o actualizar jornadas en 'historial' con salario exacto
             for dia_f in fechas_ordenadas:
-                # [FN-06.04] Desacoplamiento estricto: El costo_dia para 1_asistencia_informada
-                # (Google Sheets) corresponde EXCLUSIVAMENTE al sueldo diario del empleado:
-                # - 'costo_dia_obra' si la jornada es en 'Campo' (Roster).
-                # - 'costo_dia_ofi' si la jornada es en 'Oficina' o 'Franco'.
-                # - 0.0 si es Licencia o Vacaciones.
-                # Multiplicadores salariales habituales (Feriado x2.0, Franco trabajado x1.5).
-                # Bajo ninguna circunstancia se escribe una tarifa de 1_2_tarifas_roster en historial ni Sheets.
-                
                 if tipo_norm == "Campo":
                     t_costo_dia, c_costo_dia = calcular_costo_dia_asistencia(
                         tipo_ocf=tipo_ocf,
@@ -1712,7 +1729,7 @@ class ApiPuente:
                         servicio=servicio,
                         feriado=fer_val,
                         empleado=empleado,
-                        tipo_costo="Oficina"
+                        tipo_costo="Campo"
                     )
                 elif tipo_norm in ["Licencia", "Vacaciones"]:
                     t_costo_dia, c_costo_dia = calcular_costo_dia_asistencia(
@@ -1732,14 +1749,22 @@ class ApiPuente:
 
                 with obtener_conexion() as conn:
                     cursor = conn.cursor()
+                    # Búsqueda insensible a mayúsculas y espacios
                     cursor.execute(
-                        "SELECT id FROM historial WHERE empleado = ? AND fecha = ?",
+                        """
+                        SELECT id, id_asistencia FROM historial 
+                        WHERE LOWER(TRIM(empleado)) = LOWER(TRIM(?)) AND fecha = ?
+                        ORDER BY id ASC
+                        """,
                         (empleado, dia_f)
                     )
-                    existente = cursor.fetchone()
-                if existente:
+                    filas_existentes = cursor.fetchall()
+
+                if filas_existentes:
+                    # Si ya existe, actualizamos reutilizando su id_asistencia original
+                    primera_fila = filas_existentes[0]
                     actualizar_registro_asistencia(
-                        id_registro=existente["id"],
+                        id_registro=primera_fila["id"],
                         fecha=dia_f,
                         tipo_ocf=tipo_ocf,
                         servicio=servicio,
@@ -1751,7 +1776,16 @@ class ApiPuente:
                         tipo_costo=t_costo_dia,
                         costo_dia=c_costo_dia
                     )
+                    # Si hubiese filas duplicadas anteriores locales, purgamos las extras
+                    if len(filas_existentes) > 1:
+                        with obtener_conexion() as conn:
+                            cur_del = conn.cursor()
+                            for f_extra in filas_existentes[1:]:
+                                cur_del.execute("DELETE FROM historial WHERE id = ?", (f_extra["id"],))
+                            conn.commit()
                 else:
+                    # Inserción nueva con nuevo UUID
+                    import uuid
                     guardar_registro_asistencia(
                         id_asistencia=str(uuid.uuid4()),
                         empleado=empleado,
@@ -1778,6 +1812,60 @@ class ApiPuente:
             return ejecutar_con_reintentos_db(_operacion)
         except Exception as e:
             print(f"[Rosters] Error al guardar roster: {e}")
+            return {"exito": False, "error": str(e)}
+
+    def aplicar_tarifa_local_roster(self, datos: dict) -> dict:
+        """
+        [NUEVA FUNCIÓN] Asigna las tarifas de 1_2_tarifas_roster en la tabla local 'rosters'
+        para un turno ya existente. Permite visualizar totales y exportar a Excel
+        desde cualquier PC sin tocar 'historial' ni Google Sheets.
+        """
+        sesion = obtener_sesion_activa()
+        if not puede_acceder_roster(sesion):
+            return {"exito": False, "error": "Acceso denegado."}
+
+        try:
+            id_roster = str(datos.get("id_roster") or datos.get("id") or "").strip()
+            empleado = str(datos.get("empleado") or "").strip()
+            proy_nom = str(datos.get("proyecto") or "").strip()
+            proy_id = str(datos.get("id_proyecto") or "").strip()
+
+            tarifa = obtener_tarifa_roster_por_proyecto(id_proyecto=proy_id, nombre_proyecto=proy_nom)
+            if not tarifa:
+                p_dia = float(datos.get("precio_dia") or 0.0)
+                p_dom = float(datos.get("precio_domingo") or 0.0)
+                if p_dia == 0 and p_dom == 0:
+                    return {"exito": False, "error": "No se encontraron tarifas para este proyecto en 1_2_tarifas_roster."}
+            else:
+                p_dia = float(datos.get("precio_dia") if datos.get("precio_dia") is not None else (tarifa.get("dia_normal") or 0.0))
+                p_dom = float(datos.get("precio_domingo") if datos.get("precio_domingo") is not None else (tarifa.get("domingo") or 0.0))
+
+            with obtener_conexion() as conn:
+                cursor = conn.cursor()
+                if id_roster:
+                    cursor.execute(
+                        "UPDATE rosters SET precio_dia = ?, precio_domingo = ? WHERE id = ?",
+                        (p_dia, p_dom, id_roster)
+                    )
+                else:
+                    cursor.execute(
+                        """
+                        UPDATE rosters SET precio_dia = ?, precio_domingo = ?
+                        WHERE LOWER(TRIM(empleado)) = LOWER(TRIM(?))
+                          AND (id_proyecto = ? OR LOWER(TRIM(proyecto)) = LOWER(TRIM(?)))
+                        """,
+                        (p_dia, p_dom, empleado, proy_id, proy_nom)
+                    )
+                conn.commit()
+
+            return {
+                "exito": True,
+                "mensaje": "Tarifa local asignada con éxito.",
+                "precio_dia": p_dia,
+                "precio_domingo": p_dom
+            }
+        except Exception as e:
+            print(f"[Roster Local] Error al aplicar tarifa: {e}")
             return {"exito": False, "error": str(e)}
 
     def guardar_roster(self, datos: dict):
