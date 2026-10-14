@@ -2690,6 +2690,27 @@ html, body {
   background: var(--bg-surface);
 }
 
+.error-fallback-details-wrapper {
+  width: 100%;
+  margin: 6px 0;
+}
+
+.error-fallback-toggle-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  font-size: 11px;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: var(--radius-sm);
+  transition: var(--transition);
+}
+
+.error-fallback-toggle-btn:hover {
+  color: var(--primary);
+  background: var(--bg-surface-hover);
+}
+
 /* ==========================================================================
    FORMULARIO DE REGISTRO REDISEÑADO (CHECK FORM & MULTI-ÁREA)
    ========================================================================== */

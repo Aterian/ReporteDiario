@@ -1,3 +1,5 @@
+import { toast } from 'sonner';
+
 // Purgar inmediatamente cualquier dato simulado residual de versiones anteriores
 try {
   localStorage.removeItem('ingeap_rosters_mock');
@@ -158,7 +160,7 @@ async function getApi() {
   });
 }
 
-export const api = {
+const apiBase = {
   async obtenerEstadoSesion() {
     const bridge = await getApi();
     return await bridge.obtener_estado_sesion();
@@ -538,5 +540,59 @@ export const api = {
     return await this.actualizarCostoDiaManual(datos);
   }
 };
+
+/**
+ * [FN-00.03] Interceptor centralizado para métodos de la API.
+ * Captura excepciones y valida automáticamente el contrato canónico.
+ * Si !respuesta.exito, dispara un toast.error() elegante sin bloquear el hilo.
+ */
+function envolverLlamadaApi(nombreMetodo, fn) {
+  return async function (...args) {
+    try {
+      const res = await fn(...args);
+
+      if (res && typeof res === 'object') {
+        // Métodos de verificación o polling en segundo plano no deben molestar con toasts de error
+        const metodosSilenciosos = ['verificarRegistroHoy', 'verificarActualizacion', 'obtenerEstadoSesion', 'obtenerServicios'];
+
+        if (res.exito === false && res.error && !metodosSilenciosos.includes(nombreMetodo)) {
+          toast.error(res.error, {
+            description: res.codigo_error ? `Código: ${res.codigo_error}` : undefined,
+            duration: 4500
+          });
+        }
+      }
+
+      return res;
+    } catch (error) {
+      console.error(`[apiBridge] Error al invocar ${nombreMetodo}:`, error);
+      const mensaje = error?.message || 'Error de comunicación con el sistema.';
+      toast.error(mensaje, {
+        description: 'Verifique la conexión interna con el servidor.',
+        duration: 5000
+      });
+      return {
+        exito: false,
+        datos: null,
+        error: mensaje,
+        codigo_error: 'ERROR_CONEXION_PUENTE'
+      };
+    }
+  };
+}
+
+// Proxificamos apiBase para interceptar transparentemente todas las llamadas
+export const api = new Proxy(apiBase, {
+  get(target, prop, receiver) {
+    const orig = Reflect.get(target, prop, receiver);
+    if (typeof orig === 'function') {
+      return envolverLlamadaApi(prop, orig.bind(target));
+    }
+    return orig;
+  }
+});
+
+export { toast };
+
 
 

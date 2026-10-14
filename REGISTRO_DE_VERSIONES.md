@@ -2,6 +2,23 @@
 
 Historial cronológico de cambios, nuevas características y mejoras aplicadas al sistema **Check Diario Ingeap**.
 
+## [1.19.0] - 2026-10-14
+
+### 🛡️ Arquitectura Robusta de Manejo Centralizado de Errores y Logging (`[FN-00.03]`)
+- **Logging Estructurado y Diagnóstico con Loguru**:
+  - Incorporación de `backend/error_handler.py` con configuración centralizada de `loguru`: salida enriquecida en consola y archivo rotativo en `logs/app_errors.log` (rotación 10 MB, retención 10 días, compresión zip, diagnóstico y backtrace habilitados).
+- **Persistencia Transaccional y Traducción Granular de Excepciones**:
+  - Implementación del context manager `transaccion_db(conn)` que asegura `commit` automático o `rollback` inmediato, eliminando conexiones *idle in transaction*.
+  - Captura granular y traducción semántica de violaciones de PostgreSQL (`psycopg2` / `psycopg`) y SQLite (`UniqueViolation` a `RegistroDuplicadoError`, `ForeignKeyViolation` a `ValidacionError`, `OperationalError` a `DatabaseTransactionError`).
+- **Decorador Unificado y Contrato Canónico de API**:
+  - Decorador `@manejar_errores_api` con soporte para funciones síncronas y asíncronas.
+  - Captura y formateo amigable de errores de validación de Pydantic (`ValidationError`), excepciones de dominio y captura de excepciones no controladas con `logger.exception()`.
+  - Estandarización del contrato de salida: `{"exito": bool, "datos": any, "error": str | None, "codigo_error": str | None}`.
+- **Frontend Resiliente y Notificaciones Elegantes con Sonner**:
+  - Creación del componente `frontend/src/components/ErrorFallback.jsx` integrado con `react-error-boundary` y cumplimiento estricto de accesibilidad WCAG 2.2 (`touch-target` >= 44px).
+  - Actualización de `frontend/src/services/apiBridge.js` mediante un `Proxy` interceptor que detecta automáticamente `if (!respuesta.exito)` y dispara `toast.error(respuesta.error)` de `sonner`, eliminando diálogos `alert()` nativos bloqueantes.
+  - Montaje de `<Toaster />` corporativo en la raíz de `frontend/src/App.jsx`.
+
 ## [1.18.1] - 2026-10-14
 
 ### 💰 Corrección de Cálculo Salarial en Días Feriados No Trabajados (`[FN-06.04]`)

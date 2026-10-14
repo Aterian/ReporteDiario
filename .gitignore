@@ -63,4 +63,6 @@ $RECYCLE.BIN/
 *.txt
 !instalador/LEEME_INSTALACION.txt
 .pytest_cache/
+logs/
+*.log
 

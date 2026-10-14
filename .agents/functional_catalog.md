@@ -1,5 +1,15 @@
 # Catálogo Funcional del Sistema
 
+## [FN-00.03] Arquitectura Robusta de Manejo Centralizado de Errores y Logging
+- **Módulo**: [MOD-00] Arquitectura Base y Confiabilidad
+- **Flujo Operativo**: Centraliza la captura de excepciones mediante decorador `@manejar_errores_api`, valida esquemas con Pydantic, canaliza transacciones SQL con rollback garantizado vía `transaccion_db`, registra trazas con Loguru en `logs/app_errors.log` y previene caídas visuales en React mediante `ErrorFallback` y notificaciones `sonner`.
+- **Tablas afectadas**: Transversal a todas las tablas (`historial`, `rosters`, `sesion`, `perfiles_empleados`, etc.).
+- **Reglas de negocio e invariantes**:
+  1. Toda transacción de escritura debe asegurar rollback inmediato ante fallos para evitar bloqueos *idle in transaction*.
+  2. Los errores de clave única o unicidad se traducen a `RegistroDuplicadoError` con mensajes comprensibles de negocio, sin exponer queries SQL ni stacktraces crudos al usuario final.
+  3. Las respuestas de API hacia el frontend satisfacen determinísticamente el contrato `{"exito": bool, "datos": any, "error": str | None, "codigo_error": str | None}`.
+  4. Los errores visuales de React son contenidos por `react-error-boundary`, permitiendo la recuperación o recarga de la vista sin pérdida de sesión.
+
 ## [FN-06.04] Reglas de Liquidación de Feriados No Trabajados y Saneamiento Salarial
 - **Módulo**: [MOD-06] Liquidación y Costos Salariales
 - **Flujo Operativo**: Calcula `costo_dia` neutralizando el recargo `x2.0` cuando `feriado = "SI"` en jornadas no trabajadas (Franco, Licencia, Vacaciones), manteniendo su costo salarial base ordinario, y provee saneamiento reactivo en SQLite (`historial`) marcando `sincronizado = 0` para actualizar la hoja `1_asistencia_informada`.

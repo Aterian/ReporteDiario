@@ -8,7 +8,9 @@ import HistoryView from './components/HistoryView';
 import OtherEmployeesHistoryView from './components/OtherEmployeesHistoryView';
 import RosterView from './components/RosterView';
 import RosterHistoryView from './components/RosterHistoryView';
-import ErrorBoundary from './components/ErrorBoundary';
+import { ErrorBoundary } from 'react-error-boundary';
+import ErrorFallback from './components/ErrorFallback';
+import { Toaster } from 'sonner';
 import { puedeAccederRoster, puedeVerHistorialOtros, puedeVerModificaciones, esAreaAplicaciones } from './utils/permissions';
 
 // [MOD-00] App Principal
@@ -625,8 +627,11 @@ export default function App() {
         </div>
       )}
 
-      {/* Navegación por vistas protegida con ErrorBoundary */}
-      <ErrorBoundary onReset={() => setVistaActiva('home')}>
+      {/* Sistema centralizado de notificaciones Toast */}
+      <Toaster position="top-right" richColors closeButton expand={false} duration={4000} theme={tema} />
+
+      {/* Navegación por vistas protegida con react-error-boundary */}
+      <ErrorBoundary FallbackComponent={ErrorFallback} onReset={() => setVistaActiva('home')}>
         {vistaActiva === 'home' && (
           <HomeView
             usuario={usuario}
