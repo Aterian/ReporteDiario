@@ -12,8 +12,10 @@ from database import (
     obtener_conexion,
     guardar_usuarios_cache,
     guardar_registro_roster,
+    reparar_costos_salariales_historial,
 )
 from main import calcular_costo_dia_asistencia
+import sheets_service
 
 
 
@@ -121,6 +123,103 @@ class TestRosterBusinessLogic(unittest.TestCase):
 
         self.assertEqual(row["precio_dia"], 42000.0)
         self.assertEqual(row["precio_domingo"], 65000.0)
+
+    def test_franco_feriado_no_aplica_recargo_doble_campo(self):
+        """Regla de Negocio: En feriado, un Franco de Campo/Roster NO debe duplicar su costo_dia."""
+        tipo_c, costo_dia = calcular_costo_dia_asistencia(
+            tipo_ocf="Franco",
+            servicio="Gasoducto Norte",
+            feriado="SI",
+            empleado="Iván Valentin",
+            tipo_costo="Campo"
+        )
+        self.assertEqual(tipo_c, "Campo")
+        self.assertEqual(costo_dia, 75000.0)
+
+    def test_franco_feriado_no_aplica_recargo_doble_oficina(self):
+        """Regla de Negocio: En feriado, un Franco de Oficina NO debe duplicar su costo_dia."""
+        tipo_c, costo_dia = calcular_costo_dia_asistencia(
+            tipo_ocf="Franco",
+            servicio="Oficina Central",
+            feriado="SI",
+            empleado="Iván Valentin",
+            tipo_costo="Oficina"
+        )
+        self.assertEqual(tipo_c, "Oficina")
+        self.assertEqual(costo_dia, 45000.0)
+
+    def test_licencia_y_vacaciones_feriado_retorna_cero(self):
+        """Regla de Negocio: Días de Licencia y Vacaciones siempre computan 0.0 de costo_dia."""
+        tipo_c_lic, costo_lic = calcular_costo_dia_asistencia(
+            tipo_ocf="Licencia",
+            servicio="Licencia Médica",
+            feriado="SI",
+            empleado="Iván Valentin"
+        )
+        self.assertEqual(costo_lic, 0.0)
+
+        tipo_c_vac, costo_vac = calcular_costo_dia_asistencia(
+            tipo_ocf="Vacaciones",
+            servicio="Vacaciones",
+            feriado="SI",
+            empleado="Iván Valentin"
+        )
+        self.assertEqual(costo_vac, 0.0)
+
+    def test_campo_trabajado_en_feriado_si_aplica_recargo_doble(self):
+        """Regla de Negocio: Día de Campo efectivamente trabajado en feriado debe multiplicarse por 2.0."""
+        tipo_c, costo_dia = calcular_costo_dia_asistencia(
+            tipo_ocf="Campo",
+            servicio="Gasoducto Norte",
+            feriado="SI",
+            empleado="Iván Valentin",
+            tipo_costo="Campo"
+        )
+        self.assertEqual(tipo_c, "Campo")
+        self.assertEqual(costo_dia, 150000.0)
+
+    def test_sheets_service_calcular_costo_dia_asistencia_feriado_franco(self):
+        """Verifica que la función en sheets_service también neutralice el recargo de feriado en francos."""
+        tipo_c, costo_dia = sheets_service.calcular_costo_dia_asistencia(
+            tipo_ocf="Franco",
+            servicio="Gasoducto Norte",
+            feriado="SI",
+            empleado="Iván Valentin",
+            tipo_costo="Campo"
+        )
+        self.assertEqual(tipo_c, "Campo")
+        self.assertEqual(costo_dia, 75000.0)
+
+    def test_reparar_costos_salariales_historial_corrige_feriado_en_franco(self):
+        """Verifica que reparar_costos_salariales_historial sanee francos inflados con feriado."""
+        with obtener_conexion() as conn:
+            cursor = conn.cursor()
+            # Insertar registro histórico con feriado='SI' y costo_dia duplicado indebidamente
+            cursor.execute("""
+                INSERT INTO historial (
+                    id_asistencia, empleado, fecha, tipo_ocf, servicio,
+                    horas, tipo_costo, costo_dia, feriado, sincronizado
+                ) VALUES (
+                    'asist-001', 'Iván Valentin', '2026-10-12',
+                    'Franco', 'Gasoducto Norte', 0.0, 'Campo', 150000.0, 'SI', 1
+                )
+            """)
+            conn.commit()
+
+        # Ejecutar rutina de reparación
+        reparados = reparar_costos_salariales_historial()
+        self.assertGreaterEqual(reparados, 1)
+
+        # Comprobar que costo_dia se recalculó al valor normal (75000.0) y sincronizado=0
+        with obtener_conexion() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT costo_dia, tipo_costo, sincronizado FROM historial WHERE id_asistencia = 'asist-001'")
+            row = cursor.fetchone()
+
+        self.assertIsNotNone(row)
+        self.assertEqual(row["costo_dia"], 75000.0)
+        self.assertEqual(row["tipo_costo"], "Campo")
+        self.assertEqual(row["sincronizado"], 0)
 
 
 if __name__ == "__main__":

@@ -1334,6 +1334,11 @@ def calcular_costo_dia_asistencia(
     """
     tipo_norm = str(tipo_ocf or "").strip().lower()
     
+    # Días no computables de costo
+    if tipo_norm in ("vacaciones", "licencia"):
+        t_costo = tipo_costo or "Oficina"
+        return (t_costo, 0.0)
+
     # 1. Determinar si el concepto es Campo u Oficina
     if tipo_costo:
         t_costo = tipo_costo
@@ -1362,9 +1367,15 @@ def calcular_costo_dia_asistencia(
     costo_base = costo_obra if t_costo == "Campo" else costo_ofi
 
     # 3. Aplicar multiplicadores de convenio
-    if str(feriado or "").strip().upper() == "SI":
+    # Días no trabajados (Franco, Licencia, Vacaciones) no reciben recargo por feriado (x2.0)
+    es_no_trabajado = (
+        tipo_norm in ("franco", "licencia", "vacaciones")
+        or (tipo_norm.startswith("franco") and "trabajado" not in tipo_norm)
+    )
+
+    if str(feriado or "").strip().upper() == "SI" and not es_no_trabajado:
         costo_final = round(costo_base * 2.0, 2)
-    elif "trabajado" in str(servicio or "").lower():
+    elif "trabajado" in str(servicio or "").lower() or "trabajado" in tipo_norm:
         costo_final = round(costo_base * 1.5, 2)
     else:
         costo_final = round(costo_base, 2)

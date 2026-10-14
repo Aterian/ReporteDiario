@@ -1,5 +1,15 @@
 # Catálogo Funcional del Sistema
 
+## [FN-06.04] Reglas de Liquidación de Feriados No Trabajados y Saneamiento Salarial
+- **Módulo**: [MOD-06] Liquidación y Costos Salariales
+- **Flujo Operativo**: Calcula `costo_dia` neutralizando el recargo `x2.0` cuando `feriado = "SI"` en jornadas no trabajadas (Franco, Licencia, Vacaciones), manteniendo su costo salarial base ordinario, y provee saneamiento reactivo en SQLite (`historial`) marcando `sincronizado = 0` para actualizar la hoja `1_asistencia_informada`.
+- **Tablas afectadas**: `historial`, `1_asistencia_informada`, `usuarios_cache`, `rosters`.
+- **Reglas de negocio e invariantes**:
+  1. Si `tipo_ocf` es 'Franco', 'Licencia' o 'Vacaciones', el empleado no laboró; por tanto, aunque `feriado` sea 'SI', `costo_dia` no se duplica.
+  2. El recargo por feriado (`x2.0`) aplica exclusivamente a jornadas efectivamente laboradas ('Campo', 'Roster', 'Oficina', 'Franco Trabajado').
+  3. Francos en Roster de Campo computan su base como `costo_dia_obra` sin recargo por feriado; Francos de Oficina computan `costo_dia_ofi`. Licencias y Vacaciones computan `0.0`.
+  4. La rutina `reparar_costos_salariales_historial` opera íntegramente en memoria sin bloqueos SQLite y estampa `sincronizado = 0` ante cualquier corrección salarial.
+
 ## [FN-00.01] Empaquetado y Generación de Ejecutables para Distribución
 - **Módulo**: [MOD-00] Compilación y Despliegue de Escritorio
 - **Flujo Operativo**: Pipeline automatizado que compila la SPA React con Vite hacia `backend/dist`, empaqueta el backend Python/pywebview con PyInstaller en `CheckDiarioIngeap.exe` con metadatos PE v1.16.0, y genera el instalador autónomo monobloque `Instalador_CheckDiario_Ingeap.exe` configurando accesos directos y registro de Windows.

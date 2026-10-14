@@ -371,12 +371,6 @@ def inicializar_bd():
         except Exception as e_fds_fix:
             print(f"[DB] Aviso en corrección defensiva de fines de semana: {e_fds_fix}")
 
-        # [FN-06.04] Saneamiento defensivo de costos salariales en historial (desacoplamiento de tarifas de Roster)
-        try:
-            reparar_costos_salariales_historial()
-        except Exception as e_rep_sal:
-            print(f"[DB] Aviso en saneamiento de costos salariales: {e_rep_sal}")
-
         # Tabla de metadatos del sistema (versión instalada, estado de sincronización)
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS meta_app (
@@ -401,6 +395,12 @@ def inicializar_bd():
             pass
 
         conn.commit()
+
+    # [FN-06.04] Saneamiento defensivo de costos salariales en historial (desacoplamiento de tarifas de Roster)
+    try:
+        reparar_costos_salariales_historial()
+    except Exception as e_rep_sal:
+        print(f"[DB] Aviso en saneamiento de costos salariales: {e_rep_sal}")
 
 def obtener_avatar_por_dni(dni: str) -> str:
     """Recupera el avatar guardado de un empleado por su DNI."""
@@ -2289,7 +2289,8 @@ def reparar_costos_salariales_historial() -> int:
             cursor.execute("""
                 SELECT id, empleado, fecha, tipo_ocf, servicio, feriado, tipo_costo, costo_dia
                 FROM historial
-                WHERE LOWER(tipo_ocf) IN ('campo', 'franco', 'roster')
+                WHERE LOWER(tipo_ocf) IN ('campo', 'franco', 'roster', 'licencia', 'vacaciones')
+                   OR LOWER(tipo_ocf) LIKE 'franco%'
             """)
             registros = cursor.fetchall()
 
@@ -2309,6 +2310,15 @@ def reparar_costos_salariales_historial() -> int:
                 feriado = str(reg["feriado"] or "").strip().upper()
                 tipo_costo_actual = str(reg["tipo_costo"] or "").strip()
                 f_reg = str(reg["fecha"] or "").strip()
+
+                # Días sin cómputo de costo salarial (Licencia, Vacaciones)
+                if tipo_ocf in ("licencia", "vacaciones"):
+                    t_costo = tipo_costo_actual or "Oficina"
+                    c_nuevo = 0.0
+                    costo_guardado = float(reg["costo_dia"] or 0.0)
+                    if abs(costo_guardado - c_nuevo) > 0.01:
+                        registros_a_actualizar.append((t_costo, c_nuevo, reg["id"]))
+                    continue
 
                 # Si el registro pertenece a un turno de Roster (Campo o Franco), tipo_costo es 'Campo'
                 es_roster_activo = any(
@@ -2332,10 +2342,16 @@ def reparar_costos_salariales_historial() -> int:
                     else tarifas_emp["costo_dia_ofi"]
                 )
 
+                # Días no trabajados (Franco, Licencia, Vacaciones): no multiplican por feriado (x2.0)
+                es_no_trabajado = (
+                    tipo_ocf in ("franco", "licencia", "vacaciones")
+                    or (tipo_ocf.startswith("franco") and "trabajado" not in tipo_ocf and "trabajado" not in servicio)
+                )
+
                 # Aplicar recargos salariales de convenio
-                if feriado == "SI":
+                if feriado == "SI" and not es_no_trabajado:
                     c_nuevo = round(costo_base * 2.0, 2)
-                elif "trabajado" in servicio:
+                elif "trabajado" in servicio or "trabajado" in tipo_ocf:
                     c_nuevo = round(costo_base * 1.5, 2)
                 else:
                     c_nuevo = round(costo_base, 2)

@@ -2,6 +2,17 @@
 
 Historial cronológico de cambios, nuevas características y mejoras aplicadas al sistema **Check Diario Ingeap**.
 
+## [1.18.1] - 2026-10-14
+
+### 💰 Corrección de Cálculo Salarial en Días Feriados No Trabajados (`[FN-06.04]`)
+- **Neutralización de Recargo en Feriados No Trabajados**:
+  - Corrección de `calcular_costo_dia_asistencia` en `backend/main.py` y `backend/sheets_service.py`: cuando `tipo_ocf` corresponde a días no laborados (`Franco`, `Licencia`, `Vacaciones`), la presencia de `feriado = "SI"` NO multiplica el valor por `2.0`, preservando su tarifa salarial base (`costo_dia_obra` para Francos de Campo/Roster, `costo_dia_ofi` para Francos de Oficina, y `0.0` para Licencias/Vacaciones).
+  - El multiplicador por feriado trabajado (`x2.0`) se aplica exclusivamente a jornadas efectivamente laboradas (`Campo`, `Roster`, `Oficina`, `Franco Trabajado`, etc.).
+  - Actualización defensiva en `_guardar_roster_interno` (`backend/main.py`) para invocar el cálculo con `feriado = "NO"` en turnos de Franco y Licencia/Vacaciones.
+- **Saneamiento Automático en Base de Datos y Replicación a Google Sheets**:
+  - Actualización de `reparar_costos_salariales_historial` en `backend/database.py` para contrastar en memoria las jornadas con `feriado = "SI"` bajo modalidades no trabajadas. Si el valor en `costo_dia` registra el recargo duplicado anterior, se normaliza al costo base y se estampa `sincronizado = 0` para su replicación automática a la hoja remota `1_asistencia_informada`.
+  - Reubicación de la llamada de saneamiento al finalizar la transacción de `inicializar_bd` para garantizar visibilidad atómica de tablas sin advertencias de bloqueo en bases de datos nuevas.
+
 ## [1.18.0] - 2026-10-13
 
 ### 🎨 Sistema de Diseño Ingeap y Accesibilidad WCAG 2.2 (`[FN-07.01]`)

@@ -83,7 +83,7 @@ from sheets_service import (
     obtener_tarifas_roster_remotas
 )
 
-APP_VERSION = "1.18.0"
+APP_VERSION = "1.18.1"
 
 # Lista predefinida de los empleados habilitados con sus correos oficiales, áreas y roles RBAC
 EMPLEADOS_AUTORIZADOS = [
@@ -422,8 +422,13 @@ def calcular_costo_dia_asistencia(
         costo_tipo = costo_forzado
         base = c_ofi if costo_tipo == "Oficina" else c_obra
 
-    # Regla 7: Feriado Trabajado (+100% sobre el valor base original que corresponda)
-    if es_fer:
+    # Regla 7: Feriado Trabajado (+100% sobre el valor base original que corresponda).
+    # Días no trabajados (Franco, Licencia, Vacaciones) no reciben recargo por feriado.
+    es_no_trabajado = (
+        lug_norm in ("franco", "licencia", "vacaciones")
+        or (lug_norm.startswith("franco") and "trabajado" not in lug_norm)
+    )
+    if es_fer and not es_no_trabajado:
         costo_calc = round(base * 2.0, 2)
     else:
         costo_calc = round(base * factor, 2)
@@ -1727,7 +1732,7 @@ class ApiPuente:
                     t_costo_dia, c_costo_dia = calcular_costo_dia_asistencia(
                         tipo_ocf="Franco",
                         servicio=servicio,
-                        feriado=fer_val,
+                        feriado="NO",
                         empleado=empleado,
                         tipo_costo="Campo"
                     )
