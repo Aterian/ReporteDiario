@@ -32,6 +32,8 @@ hidden_imports = [
     "openpyxl.styles",
     "openpyxl.utils",
     "openpyxl.worksheet",
+    "loguru",
+    "pydantic",
 ]
 
 a = Analysis(

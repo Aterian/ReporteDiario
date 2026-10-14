@@ -83,7 +83,7 @@ from sheets_service import (
     obtener_tarifas_roster_remotas
 )
 
-APP_VERSION = "1.18.1"
+APP_VERSION = "1.19.0"
 
 # Lista predefinida de los empleados habilitados con sus correos oficiales, áreas y roles RBAC
 EMPLEADOS_AUTORIZADOS = [
