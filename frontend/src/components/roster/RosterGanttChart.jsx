@@ -368,6 +368,7 @@ export default function RosterGanttChart({
                                 return (
                                   <div
                                     className={`gantt-bar-cell ${badgeTipoClass}`}
+                                    data-testid="gantt-bar-cell"
                                     title={tituloTooltip}
                                     onClick={() => onAbrirEditar(rInfo)}
                                     style={{ cursor: 'pointer' }}
@@ -563,6 +564,8 @@ export default function RosterGanttChart({
                     {/* [NUEVO BOTÓN]: Asignar tarifas de roster del proyecto al turno actual */}
                     <button
                       type="button"
+                      aria-label="Visualizar Tarifa"
+                      data-testid="btn-asignar-tarifa-local"
                       onClick={onAsignarTarifasOficiales}
                       disabled={guardandoEdit || eliminandoEdit || !tarifaModalEdit}
                       className="btn-link-action"

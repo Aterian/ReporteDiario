@@ -1,5 +1,15 @@
 # Catálogo Funcional del Sistema
 
+## [FN-00.04] Suite de Testing Full-Stack (Pytest + Vitest) y Candado Pre-Commit
+- **Módulo**: [MOD-00] Arquitectura Base y Confiabilidad
+- **Flujo Operativo**: Ejecuta de forma automatizada y aislada la verificación de lógica salarial, concurrencia multi-PC, resiliencia de red y renderizado RBAC/tarifas de UI mediante Pytest (backend) y Vitest + JSDOM (frontend), interceptando los commits de Git mediante un hook pre-commit para bloquear la inserción de regresiones.
+- **Tablas afectadas**: `historial`, `1_asistencia_informada`, `usuarios_cache`, `rosters`.
+- **Reglas de negocio e invariantes**:
+  1. La sincronización multi-PC con Google Sheets debe resolver filas por combinación natural `(empleado, fecha)` ejecutando `ws.update` in-place y prohibiendo duplicaciones vía `ws.append_rows`.
+  2. Los días no trabajados (`Franco`, `Licencia`, `Vacaciones`) no deben multiplicar su `costo_dia` por `2.0` ante `feriado = "SI"`, reservando el sueldo base sin viáticos de proyectos.
+  3. Ante corte de red o excepciones hacia Google APIs, los registros locales en SQLite deben conservar indefectiblemente su estado `sincronizado = 0`.
+  4. Ningún commit es permitido si al menos una prueba unitaria o de integración de backend o frontend finaliza con código de error.
+
 ## [FN-00.03] Arquitectura Robusta de Manejo Centralizado de Errores y Logging
 - **Módulo**: [MOD-00] Arquitectura Base y Confiabilidad
 - **Flujo Operativo**: Centraliza la captura de excepciones mediante decorador `@manejar_errores_api`, valida esquemas con Pydantic, canaliza transacciones SQL con rollback garantizado vía `transaccion_db`, registra trazas con Loguru en `logs/app_errors.log` y previene caídas visuales en React mediante `ErrorFallback` y notificaciones `sonner`.

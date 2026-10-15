@@ -6,7 +6,7 @@ import subprocess
 import ctypes
 import winreg
 
-INSTALLER_VERSION = "1.19.0"
+INSTALLER_VERSION = "1.20.0"
 
 # [FN-00.01] Instalador Autonomo de Escritorio Check Diario Ingeap
 def resource_path(relative_path):

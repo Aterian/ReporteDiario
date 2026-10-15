@@ -2,8 +2,8 @@
 # [FN-00.01] Metadatos de Version Windows PE para PyInstaller
 VSVersionInfo(
   ffi=FixedFileInfo(
-    filevers=(1, 19, 0, 0),
-    prodvers=(1, 19, 0, 0),
+    filevers=(1, 20, 0, 0),
+    prodvers=(1, 20, 0, 0),
     mask=0x3f,
     flags=0x0,
     OS=0x40004,
@@ -19,12 +19,12 @@ VSVersionInfo(
           [
             StringStruct('CompanyName', 'Ingeap'),
             StringStruct('FileDescription', 'Check Diario de Asistencia y Proyectos - Ingeap'),
-            StringStruct('FileVersion', '1.19.0.0'),
+            StringStruct('FileVersion', '1.20.0.0'),
             StringStruct('InternalName', 'CheckDiarioIngeap'),
             StringStruct('LegalCopyright', 'Copyright (C) 2026 Ingeap. Todos los derechos reservados.'),
             StringStruct('OriginalFilename', 'CheckDiarioIngeap.exe'),
             StringStruct('ProductName', 'Check Diario Ingeap'),
-            StringStruct('ProductVersion', '1.19.0.0'),
+            StringStruct('ProductVersion', '1.20.0.0'),
           ]
         )
       ]

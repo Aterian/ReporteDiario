@@ -2,6 +2,23 @@
 
 Historial cronológico de cambios, nuevas características y mejoras aplicadas al sistema **Check Diario Ingeap**.
 
+## [1.20.0] - 2026-10-15
+
+### 🧪 Suite de Testing Full-Stack (Pytest + Vitest) y Candado Pre-Commit (`[FN-00.03]`)
+- **Suite de Integridad Backend (`pytest` + `unittest.mock`)**:
+  - Creación de `backend/tests/test_integridad_roster_sheets.py` para validar la lógica crítica sin conexión a sockets remotos ni alteración de la base de datos de producción.
+  - **Prevención de duplicados multi-PC:** Simulación de concurrencia donde PC 1 sincroniza un turno (`UUID_A`) y PC 2 lo modifica localmente (`UUID_B`). Validación de que `sincronizar_pendientes()` resuelve la fila por clave natural `(empleado, fecha)` ejecutando `ws.update` in-place sin invocar `append_rows`, marcando el registro local como `sincronizado = 1`.
+  - **Reglas salariales e invariantes de feriados:** Verificación de que `costo_dia` guarde estrictamente sueldos base de `usuarios_cache` y no viáticos de `1_2_tarifas_roster`. Comprobación de que días no trabajados (`Franco`, `Licencia`, `Vacaciones`) no dupliquen su costo ante `feriado = "SI"` (manteniendo costo base o 0.0), contrastado con jornadas de trabajo activo que sí computan recargo `x2.0`.
+  - **Resiliencia ante cortes de red:** Simulación de fallos de conexión hacia Google APIs (`ConnectionError`) verificando que los registros locales mantengan estrictamente `sincronizado = 0` y no se marquen como subidos erróneamente.
+- **Suite de Pruebas Frontend (`Vitest` + `JSDOM` + `@testing-library/react`)**:
+  - Configuración del runner `vitest` en `frontend/vite.config.js` con entorno `jsdom` y setup global en `frontend/src/setupTests.js` (mocks de `matchMedia`, `ResizeObserver`, alertas).
+  - Creación de `frontend/src/__tests__/RosterView.test.jsx`:
+    - **Renderizado seguro por RBAC:** Validación de carga de catálogos y controles sin errores de referencias nulas para `admin` y `sub_admin`, asegurando bloqueo y cartel de acceso denegado para roles no autorizados (`user_1`, `user_2`).
+    - **Cálculo y visualización de tarifas locales:** Simulación de un turno con tarifa en `$0,00` (cargado en otra terminal), apertura interactiva del modal de edición de turno en el Gantt y clic en `Visualizar Tarifa` / `Asignar tarifas oficiales al turno`, comprobando la invocación a `api.aplicarTarifaLocalRoster`, actualización reactiva del monto en pantalla y verificación de no duplicación del turno en el Gantt.
+- **Candado Automático de Git (`pre-commit`) e Instalador Windows**:
+  - Implementación de `.git/hooks/pre-commit` que ejecuta de forma secuencial y obligatoria `pytest` sobre `backend/tests/` y `npm run test -- --run` sobre `frontend/`, abortando cualquier intento de commit si una sola prueba falla.
+  - Creación de `instalar_candado_git.ps1` para aprovisionar el hook de manera idempotente en entornos de desarrollo Windows con terminaciones LF.
+
 ## [1.19.0] - 2026-10-14
 
 ### 🛡️ Arquitectura Robusta de Manejo Centralizado de Errores y Logging (`[FN-00.03]`)
