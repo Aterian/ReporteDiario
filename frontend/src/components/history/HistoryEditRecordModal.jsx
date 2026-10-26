@@ -1,6 +1,6 @@
 // [FN-02.03] Modal de modificación y edición de registros de asistencia
 import React from 'react';
-import { LUGARES_OPCIONES, LISTADO_AREAS_CORPORATIVAS, TIPOS_LICENCIA } from './historyConstants';
+import { LUGARES_OPCIONES, LISTADO_AREAS_CORPORATIVAS } from './historyConstants';
 
 export default function HistoryEditRecordModal({
   registroEditando,
@@ -98,6 +98,9 @@ export default function HistoryEditRecordModal({
                   ...registroEditando,
                   tipo_ocf: nuevoLugar,
                   lugar: nuevoLugar,
+                  modalidad: ['Vacaciones', 'Licencia'].includes(nuevoLugar)
+                    ? (registroEditando.modalidad === 'obra' ? 'obra' : 'oficina')
+                    : (['Campo', 'Campaña / Campo', 'Roster', 'Franco Obra', 'Franco de Obra', 'Franco Obra Trabajado', 'Feriado Trabajado'].includes(nuevoLugar) ? 'obra' : 'oficina'),
                   servicio: nuevoServicio,
                   horas: nuevasHoras
                 });
@@ -110,24 +113,19 @@ export default function HistoryEditRecordModal({
             </select>
           </div>
 
-          {/* Si es Licencia: enum de tipos de licencia */}
-          {(registroEditando.tipo_ocf === 'Licencia' || registroEditando.lugar === 'Licencia') ? (
-            <div className="form-group-clean">
-              <label className="form-label-clean">Tipo de Licencia:</label>
-              <select
-                className="form-select form-select-clean"
-                value={registroEditando.servicio || 'Licencia - Médica'}
-                onChange={(e) => setRegistroEditando({ ...registroEditando, servicio: e.target.value })}
-                required
-              >
-                {TIPOS_LICENCIA.map(tl => (
-                  <option key={tl} value={tl}>{tl}</option>
-                ))}
-                {registroEditando.servicio && !TIPOS_LICENCIA.includes(registroEditando.servicio) && (
-                  <option value={registroEditando.servicio}>{registroEditando.servicio}</option>
-                )}
+          {['Vacaciones', 'Licencia'].includes(registroEditando.tipo_ocf || registroEditando.lugar) && (
+            <fieldset className="pg-absence-controls">
+              <legend>Modalidad de liquidación</legend>
+              <label htmlFor="modalidad-edicion">Modalidad</label>
+              <select id="modalidad-edicion" className="form-select form-select-clean" value={registroEditando.modalidad || 'oficina'} onChange={e => setRegistroEditando({ ...registroEditando, modalidad: e.target.value })}>
+                <option value="oficina">Oficina</option><option value="obra">Obra</option>
               </select>
-            </div>
+              <label className="pg-checkbox-label"><input type="checkbox" checked={registroEditando.costo_manual || false} onChange={e => setRegistroEditando({ ...registroEditando, costo_manual: e.target.checked })} />Costo diario manual</label>
+              {registroEditando.costo_manual && <><label htmlFor="costo-edicion">Costo diario (ARS)</label><input id="costo-edicion" className="form-input form-input-clean" type="number" min="0" step="0.01" required value={registroEditando.costo_dia ?? ''} onChange={e => setRegistroEditando({ ...registroEditando, costo_dia: e.target.value })} /></>}
+            </fieldset>
+          )}
+          {(registroEditando.tipo_ocf === 'Licencia' || registroEditando.lugar === 'Licencia') ? (
+            <p>Se registrará el estado Licencia con la modalidad de liquidación seleccionada.</p>
           ) : (['Franco Obra', 'Franco de Obra', 'Franco Obra Trabajado', 'Feriado Trabajado', 'Campo', 'Campaña / Campo', 'Roster'].includes(registroEditando.tipo_ocf || registroEditando.lugar)) ? (
             <div className="form-group-clean">
               <label className="form-label-clean">Proyecto Asignado:</label>

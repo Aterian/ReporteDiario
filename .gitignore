@@ -66,3 +66,12 @@ $RECYCLE.BIN/
 logs/
 *.log
 
+
+.env
+.env.*
+!.env.example
+!backend/.env.example
+.pytest_tmp/
+
+.artifacts/
+output/

@@ -1,5 +1,71 @@
 # Catálogo Funcional del Sistema
 
+## [FN-07.01] Pool PostgreSQL y retiro de persistencia local
+- **Módulo**: [MOD-07] Persistencia PostgreSQL
+- **Flujo Operativo**: Carga DATABASE_URL desde entorno/.env, introspecta columnas y presta conexiones ThreadedConnectionPool con RealDictCursor. Retira SQLite y sincronización Sheets del flujo operativo.
+- **Tablas afectadas**: information_schema.columns; app_rrhh.*; app_proyectos.b_1_proyectos_servicios.
+- **Reglas de negocio e invariantes**: Commit o rollback y devolución garantizada; lecturas sin transacciones abiertas; secretos fuera de código y ejecutables; ninguna creación de tablas en arranque.
+
+## [FN-07.02] Sesión y permisos desde PostgreSQL
+- **Módulo**: [MOD-07]
+- **Flujo Operativo**: Valida nombre/DNI de usuario activo y revalida rol_app en cada operación del puente. Mantiene las firmas públicas de pywebview.
+- **Tablas afectadas**: app_rrhh.a_1_usuarios; app_rrhh.a_1_sueldos_base.
+- **Reglas de negocio e invariantes**: Sin roles elevados por nombre/área; sesión en memoria; operador tomado de sesión; funciones no representadas por el esquema devuelven no disponibilidad.
+
+## [FN-07.03] Asistencia parametrizada y modalidad de ausencias
+- **Módulo**: [MOD-07]
+- **Flujo Operativo**: Traduce modalidades React a enums, valida DTOs y guarda lotes atómicos. RRHH selecciona Oficina/Obra o costo manual para Vacaciones/Licencia.
+- **Tablas afectadas**: app_rrhh.b_1_asistencias; app_rrhh.a_1_calculo_sueldo por triggers.
+- **Reglas de negocio e invariantes**: Automático omite costo_dia; costo manual finito no negativo admite cero; registros de roster se editan desde su turno; auditoría de operador proviene de sesión.
+
+## [FN-07.04] Roster transaccional y Gantt canónico
+- **Módulo**: [MOD-07]
+- **Flujo Operativo**: Guarda exclusivamente b_1_roster y deja generación diaria/viáticos a triggers. Consulta joins históricos y muestra total_viaticos y marcas finales en Gantt.
+- **Tablas afectadas**: app_rrhh.b_1_roster; app_rrhh.b_1_tarifas_roster; app_rrhh.b_1_asistencias por triggers; app_proyectos.b_1_proyectos_servicios.
+- **Reglas de negocio e invariantes**: Campo↔activo; lote atómico sin superposición; consulta por r.id_tarifa; Bajada último Campo y Subida último Franco; no prorratear turnos entre meses.
+
+## [FN-07.05] Bloqueo de eliminación operativa
+- **Módulo**: [MOD-07]
+- **Flujo Operativo**: Devuelve BORRADO_LOGICO_PENDIENTE al solicitar eliminación de rosters o asistencias.
+- **Tablas afectadas**: app_rrhh.b_1_roster; app_rrhh.b_1_asistencias.
+- **Reglas de negocio e invariantes**: No ejecutar DELETE FROM en la aplicación; mantener bloqueo hasta disponer de borrado lógico, conforme a decisión del usuario.
+
+## [FN-07.06] Liquidación mensual desde columnas y triggers
+- **Módulo**: [MOD-07]
+- **Flujo Operativo**: Consulta liquidación y adicionales en una instantánea; tarjeta TypeScript con TanStack Query muestra estimado, real, adicionales y sueldo total.
+- **Tablas afectadas**: app_rrhh.a_1_calculo_sueldo; app_rrhh.a_1_adicionales_sueldo.
+- **Reglas de negocio e invariantes**: Sin fórmulas salariales en Python/React; selección parcial del calendario no altera el ciclo mensual; ausencia de liquidación no se convierte en importe cero ficticio.
+
+## [FN-07.07] Actividad diaria desde asistencias PostgreSQL
+- **Módulo**: [MOD-07]
+- **Flujo Operativo**: Consulta estado diario y actividad anterior con modalidad y horas agregadas en PostgreSQL para los widgets existentes.
+- **Tablas afectadas**: app_rrhh.a_1_usuarios; app_rrhh.b_1_asistencias.
+- **Reglas de negocio e invariantes**: Mantener campos enviado/registrado y conteos de usuarios activos; ninguna cola de sincronización ni cálculo salarial.
+
+## [FN-07.08] Compatibilidad explícita de funciones retiradas
+- **Módulo**: [MOD-07]
+- **Flujo Operativo**: Mantiene las firmas del puente; refresco lee PostgreSQL y las funciones de limpieza, avatares y auditoría no representadas por el esquema informan no disponibilidad.
+- **Tablas afectadas**: Ninguna adicional.
+- **Reglas de negocio e invariantes**: No reactivar Google Sheets ni SQLite; no confirmar como persistidos datos sin columnas de destino.
+
+## [FN-07.09] Exportaciones de importes del servidor
+- **Módulo**: [MOD-07]
+- **Flujo Operativo**: Exporta turnos completos y liquidación mensual, con adicionales y asistencias, a Excel consultando PostgreSQL.
+- **Tablas afectadas**: app_rrhh.b_1_roster; app_rrhh.b_1_asistencias; app_rrhh.a_1_calculo_sueldo; app_rrhh.a_1_adicionales_sueldo.
+- **Reglas de negocio e invariantes**: Ignorar totales de cliente; no multiplicar tarifas; no reconstruir quincenas; cadenas de usuario no se convierten en fórmulas Excel.
+
+## [FN-07.10] PostgreSQL aislado para integración
+- **Módulo**: [MOD-07]
+- **Flujo Operativo**: Crea base de pruebas independiente con estructura introspectada sin datos operativos; guarda conexión fuera de Git y ejecuta fixtures reversibles.
+- **Tablas afectadas**: Estructura app_rrhh y app_proyectos en base codex_check_diario_test_*.
+- **Reglas de negocio e invariantes**: Acceso PUBLIC revocado; prefijo obligatorio; datos sintéticos con rollback; no eliminar bases automáticamente; procedimiento en .agents/skills/postgres-test-environment/SKILL.md.
+
+## [FN-07.11] Prioridad de Oficina sin reentrada salarial
+- **Módulo**: [MOD-07]
+- **Flujo Operativo**: Corrige fn_trigger_sincronizar_liquidacion para no restaurar el costo de Obra durante una actualización anidada de costo iniciada por el trigger de prioridad.
+- **Tablas afectadas**: app_rrhh.b_1_asistencias; app_rrhh.a_1_calculo_sueldo por triggers.
+- **Reglas de negocio e invariantes**: Una fecha mixta conserva un único costo con prioridad Oficina; reparación normal y recálculo de ciclos se mantienen; correctivo probado en entorno aislado y aplicado con autorización explícita.
+
 ## [FN-00.03] Arquitectura Robusta de Manejo Centralizado de Errores y Logging
 - **Módulo**: [MOD-00] Arquitectura Base y Confiabilidad
 - **Flujo Operativo**: Centraliza la captura de excepciones mediante decorador `@manejar_errores_api`, valida esquemas con Pydantic, canaliza transacciones SQL con rollback garantizado vía `transaccion_db`, registra trazas con Loguru en `logs/app_errors.log` y previene caídas visuales en React mediante `ErrorFallback` y notificaciones `sonner`.

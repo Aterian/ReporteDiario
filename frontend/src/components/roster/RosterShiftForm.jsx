@@ -195,7 +195,7 @@ export default function RosterShiftForm({
                     )}
                   </div>
                   <p className="tariffs-readonly-desc">
-                    Valores asignados automáticamente desde la hoja oficial <code>1_2_tarifas_roster</code> para este proyecto.
+                    Valores asignados automáticamente desde la hoja oficial <code>b_1_tarifas_roster</code> para este proyecto.
                   </p>
                   <div className="tariffs-readonly-grid">
                     <div className="tariff-readonly-item">
@@ -207,11 +207,11 @@ export default function RosterShiftForm({
                       <span className="item-value">${Number(tarifaActual.domingo || 0).toLocaleString('es-AR', { minimumFractionDigits: 2 })}</span>
                     </div>
                     <div className="tariff-readonly-item highlight-subida">
-                      <span className="item-label">⬆️ Subida (Inicio Campo)</span>
+                      <span className="item-label">⬆️ Subida (Último Franco)</span>
                       <span className="item-value">${Number(tarifaActual.subida || 0).toLocaleString('es-AR', { minimumFractionDigits: 2 })}</span>
                     </div>
                     <div className="tariff-readonly-item highlight-bajada">
-                      <span className="item-label">⬇️ Bajada (Inicio Franco)</span>
+                      <span className="item-label">⬇️ Bajada (Último Campo)</span>
                       <span className="item-value">${Number(tarifaActual.bajada || 0).toLocaleString('es-AR', { minimumFractionDigits: 2 })}</span>
                     </div>
                     {Number(tarifaActual.adicionales) > 0 && (
@@ -227,7 +227,7 @@ export default function RosterShiftForm({
                   <span style={{ fontSize: '18px' }}>ℹ️</span>
                   <span>
                     {proyecto
-                      ? 'El proyecto seleccionado no registra tarifas especiales en 1_2_tarifas_roster (se liquidará con tarifa base $0.00).'
+                      ? 'El proyecto seleccionado no registra tarifas especiales en b_1_tarifas_roster (se liquidará con tarifa base $0.00).'
                       : 'Selecciona un proyecto asignado arriba para cargar automáticamente sus tarifas reglamentarias.'}
                   </span>
                 </div>

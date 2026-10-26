@@ -9,8 +9,6 @@ base_dir = SPECPATH
 added_files = [
     (os.path.join(base_dir, "dist"), "dist"),
     (os.path.join(base_dir, "assets"), "assets"),
-    (os.path.join(base_dir, "config.json"), "."),
-    (os.path.join(base_dir, "app-xrbnwyhr6nmuvnylmuutjr43be-4baae45ec6b2.json"), "."),
 ]
 
 hidden_imports = [
@@ -24,16 +22,16 @@ hidden_imports = [
     "PIL",
     "PIL.Image",
     "PIL.ImageDraw",
-    "gspread",
-    "google.auth",
-    "google.oauth2.service_account",
-    "sqlite3",
     "openpyxl",
     "openpyxl.styles",
     "openpyxl.utils",
     "openpyxl.worksheet",
     "loguru",
     "pydantic",
+    "psycopg2",
+    "psycopg2.extras",
+    "psycopg2.pool",
+    "dotenv",
 ]
 
 a = Analysis(

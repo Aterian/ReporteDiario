@@ -134,11 +134,11 @@ export default function RosterGanttChart({
               </div>
               <div className="legend-item">
                 <span className="legend-box subida"></span>
-                <span>⬆️ Subida (Inicio Campo)</span>
+                <span>⬆️ Subida (Último día de Franco)</span>
               </div>
               <div className="legend-item">
                 <span className="legend-box bajada"></span>
-                <span>⬇️ Bajada (Inicio Franco)</span>
+                <span>⬇️ Bajada (Último día de Campo)</span>
               </div>
               <div className="legend-item">
                 <span className="legend-box franco"></span>
@@ -206,7 +206,7 @@ export default function RosterGanttChart({
                       }}
                     >
                       <div className="th-content-resizable">
-                        <span>Total a Liquidar</span>
+                        <span title="Suma de viáticos de los turnos completos que intersectan el mes">Total a Liquidar</span>
                         <div
                           className="col-resizer"
                           onMouseDown={(e) => onResizeStart(e, 'total')}
@@ -245,7 +245,7 @@ export default function RosterGanttChart({
                   {empleadosEnGantt.map(emp => {
                     let diasNormActivos = 0;
                     let domingosActivos = 0;
-                    let dineroTotal = 0;
+                    const dineroTotal = emp.registros.reduce((total, r) => total + Number(r.total_viaticos ?? 0), 0);
 
                     const estadoDia = {};
                     diasEnMes.forEach(d => {
@@ -255,10 +255,8 @@ export default function RosterGanttChart({
                           if (r.tipo === 'Campo') {
                             if (d.esDomingo) {
                               domingosActivos += 1;
-                              dineroTotal += Number(r.precio_domingo) || 0;
                             } else {
                               diasNormActivos += 1;
-                              dineroTotal += Number(r.precio_dia) || 0;
                             }
                           }
                           break;
@@ -336,8 +334,8 @@ export default function RosterGanttChart({
                               }}
                             >
                               {rInfo && (() => {
-                                const esSubida = (rInfo.tipo === 'Campo' && d.fechaStr === rInfo.fecha_inicio);
-                                const esBajada = (rInfo.tipo === 'Franco' && d.fechaStr === rInfo.fecha_inicio);
+                                const esSubida = (rInfo.tipo === 'Franco' && d.fechaStr === rInfo.fecha_fin);
+                                const esBajada = (rInfo.tipo === 'Campo' && d.fechaStr === rInfo.fecha_fin);
 
                                 let badgeTipoClass = 'bar-campo';
                                 if (esSubida) badgeTipoClass = 'bar-subida';
@@ -350,9 +348,9 @@ export default function RosterGanttChart({
                                 const etiquetaBarra = esSubida ? '⬆S' : (esBajada ? '⬇B' : (rInfo.tipo === 'Campo' ? 'C' : rInfo.tipo === 'Franco' ? 'F' : rInfo.tipo === 'Vacaciones' ? 'V' : 'L'));
 
                                 const tituloTooltip = `${esSubida
-                                  ? '⬆️ SUBIDA (Inicio de Campo / Viaje)'
+                                  ? '⬆️ SUBIDA (Último día de Franco / Viaje)'
                                   : esBajada
-                                    ? '⬇️ BAJADA (Inicio de Descanso / Viaje)'
+                                    ? '⬇️ BAJADA (Último día de Campo / Viaje)'
                                     : rInfo.tipo === 'Campo'
                                       ? '🚜 Campo / Obra'
                                       : rInfo.tipo === 'Franco'
@@ -578,9 +576,9 @@ export default function RosterGanttChart({
                         alignItems: 'center',
                         gap: '4px'
                       }}
-                      title="Guarda las tarifas vigentes del proyecto en la base de datos local para este turno, permitiendo la correcta visualización y exportación del .xlsx sin afectar Google Sheets."
+                      title="Consulta la tarifa vigente como referencia. El turno conserva la tarifa histórica que le corresponde."
                     >
-                      ⚡ Asignar tarifas oficiales al turno
+                      ⚡ Consultar tarifa vigente
                     </button>
                   </div>
 
@@ -606,12 +604,12 @@ export default function RosterGanttChart({
                       </div>
 
                       <div style={{ fontSize: '11px', color: '#475569', background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '4px', padding: '6px 8px' }}>
-                        Tarifas aplicadas a este turno: <strong>Normal: ${Number(editPrecioDia || 0).toLocaleString('es-AR')}</strong> | <strong>Dom: ${Number(editPrecioDomingo || 0).toLocaleString('es-AR')}</strong>
+                        Referencia de tarifa: <strong>Normal: ${Number(editPrecioDia || 0).toLocaleString('es-AR')}</strong> | <strong>Dom: ${Number(editPrecioDomingo || 0).toLocaleString('es-AR')}</strong>
                       </div>
                     </div>
                   ) : (
                     <div style={{ padding: '8px 10px', background: '#f1f5f9', borderRadius: '6px', fontSize: '12px', color: '#64748b' }}>
-                      Sin tarifas especiales en <code>1_2_tarifas_roster</code> para este proyecto.
+                      Sin tarifas especiales en <code>b_1_tarifas_roster</code> para este proyecto.
                     </div>
                   )}
                 </div>
@@ -621,8 +619,8 @@ export default function RosterGanttChart({
                 <button
                   type="button"
                   className="btn-modal-delete"
-                  disabled={guardandoEdit || eliminandoEdit}
-                  onClick={onEliminarTurno}
+                  disabled
+                  onClick={onEliminarTurno} title="Eliminación bloqueada hasta disponer de borrado lógico"
                   style={{
                     background: 'transparent',
                     border: '1px solid #ef4444',

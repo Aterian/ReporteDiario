@@ -126,21 +126,7 @@ export default function HistoryCostDayModal({
               </div>
             </div>
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-              <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)' }}>
-                Motivo de la modificación (Auditoría):
-              </label>
-              <input
-                type="text"
-                className="form-input form-input-sm"
-                placeholder="Ej: Ajuste de tarifa especial / corrección de liquidación"
-                value={modalCostoDia.motivo}
-                onChange={(e) => setModalCostoDia(prev => ({ ...prev, motivo: e.target.value }))}
-              />
-              <span style={{ fontSize: '11px', color: 'var(--text-tertiary, #94a3b8)' }}>
-                ℹ️ Esta modificación impactará en SQLite local, en Google Sheets (`1_asistencia_informada`) y quedará registrada en el historial de auditoría (`modificaciones_realizadas`).
-              </span>
-            </div>
+            <p>El costo manual se guardará en PostgreSQL y actualizará la liquidación mensual.</p>
           </div>
 
           <div className="modal-footer" style={{ padding: '12px 16px', display: 'flex', justifyContent: 'flex-end', gap: '8px', borderTop: '1px solid var(--border-subtle)' }}>

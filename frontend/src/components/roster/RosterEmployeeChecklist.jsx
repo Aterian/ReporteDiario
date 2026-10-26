@@ -29,7 +29,7 @@ export default function RosterEmployeeChecklist({
             className="btn-link-action"
             onClick={onDeseleccionarTodos}
           >
-            Limpiar
+            Quitar selección
           </button>
         </div>
       </div>

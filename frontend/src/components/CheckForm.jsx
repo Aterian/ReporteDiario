@@ -72,8 +72,9 @@ export default function CheckForm({ onRegistroGuardado, onVolver, tema }) {
   const [proyectoFeriado, setProyectoFeriado] = useState('');
   const [horasFrancoTrabajado, setHorasFrancoTrabajado] = useState(8);
   const [horasFeriado, setHorasFeriado] = useState(8);
-  const [tipoLicencia, setTipoLicencia] = useState('Médica');
-  const [detalleLicencia, setDetalleLicencia] = useState('');
+  const [modalidadAusencia, setModalidadAusencia] = useState('oficina');
+  const [costoManualAusencia, setCostoManualAusencia] = useState(false);
+  const [costoAusencia, setCostoAusencia] = useState('');
 
   const calcularHorasDecimales = (inicio, fin) => {
     if (!inicio || !fin) return 0;
@@ -113,7 +114,6 @@ export default function CheckForm({ onRegistroGuardado, onVolver, tema }) {
   const [enviando, setEnviando] = useState(false);
   const [mensajeExito, setMensajeExito] = useState('');
   const [mensajeError, setMensajeError] = useState('');
-  const [segundosSyncRestantes, setSegundosSyncRestantes] = useState(0);
 
   // =========================================================================
   // VARIABLES DERIVADAS (Declaradas aquí para evitar errores TDZ antes de los hooks)
@@ -455,10 +455,8 @@ export default function CheckForm({ onRegistroGuardado, onVolver, tema }) {
         payload.servicio = 'Vacaciones';
         payload.horas = 0.0;
       } else if (esLicencia) {
-        const descLic = tipoLicencia === 'Otra' ? (detalleLicencia.trim() || 'Especial') : tipoLicencia;
         payload.lugar = 'Licencia';
-        payload.tipo_licencia = descLic;
-        payload.servicio = `Licencia - ${descLic}`;
+        payload.servicio = 'Licencia';
         payload.horas = 0.0;
       } else if (proyectosSeleccionados.length === 0) {
         // Sin proyectos específicos: Tiempo dedicado al área o Campo general
@@ -508,6 +506,17 @@ export default function CheckForm({ onRegistroGuardado, onVolver, tema }) {
         }
       }
 
+      if (esVacaciones || esLicencia) {
+        payload.modalidad = modalidadAusencia;
+        payload.costo_manual = costoManualAusencia;
+        if (costoManualAusencia) {
+          if (costoAusencia.trim() === '' || !Number.isFinite(Number(costoAusencia)) || Number(costoAusencia) < 0) {
+            setMensajeError('Indique un costo diario válido, mayor o igual a cero.');
+            return;
+          }
+          payload.costo_dia = costoAusencia;
+        }
+      }
       const res = await api.guardarCheckDiario(payload);
 
       if (res.exito) {
@@ -518,20 +527,6 @@ export default function CheckForm({ onRegistroGuardado, onVolver, tema }) {
         if (onRegistroGuardado) {
           onRegistroGuardado();
         }
-        setSegundosSyncRestantes(4);
-        const timer = setInterval(() => {
-          setSegundosSyncRestantes((prev) => {
-            if (prev <= 1) {
-              clearInterval(timer);
-              setTimeout(() => {
-                setMensajeExito('');
-                if (onVolver) onVolver();
-              }, 500);
-              return 0;
-            }
-            return prev - 1;
-          });
-        }, 1000);
       } else {
         setMensajeError(res.error || 'No se pudo registrar el reporte.');
       }
@@ -586,8 +581,7 @@ export default function CheckForm({ onRegistroGuardado, onVolver, tema }) {
               <div style={{ display: 'flex', flexDirection: 'column', gap: '3px', flex: 1 }}>
                 <strong style={{ fontSize: '13px', color: '#065f46' }}>{mensajeExito}</strong>
                 <span style={{ fontSize: '12px', color: '#047857', display: 'flex', alignItems: 'center', gap: '4px', flexWrap: 'wrap' }}>
-                  ⏳ Sincronizando con Google Sheets (~{segundosSyncRestantes > 0 ? segundosSyncRestantes : 1}s)...
-                  <span style={{ fontWeight: 600, color: '#065f46' }}>No es necesario presionar 'Subir'</span>.
+                  Guardado confirmado en PostgreSQL.
                 </span>
               </div>
               <button
@@ -1030,45 +1024,7 @@ export default function CheckForm({ onRegistroGuardado, onVolver, tema }) {
               </div>
             </div>
           ) : esLicencia ? (
-            <div className="licencia-card">
-              <div className="licencia-header">
-                <span className="licencia-icon">📋</span>
-                <div>
-                  <h4 style={{ margin: 0, fontSize: '14px', fontWeight: 600 }}>Registro de Licencia</h4>
-                  <p style={{ margin: '2px 0 0 0', fontSize: '12px', color: 'var(--text-secondary)' }}>Indica el tipo o motivo de la licencia otorgada:</p>
-                </div>
-              </div>
-              <div className="licencia-body" style={{ marginTop: '12px' }}>
-                <div className="form-group-clean">
-                  <label className="form-label-clean">Tipo de Licencia:</label>
-                  <select
-                    className="form-select form-select-clean"
-                    value={tipoLicencia}
-                    onChange={(e) => setTipoLicencia(e.target.value)}
-                  >
-                    <option value="Médica">Médica / Salud</option>
-                    <option value="Especial">Especial</option>
-                    <option value="Estudio / Examen">Estudio / Examen</option>
-                    <option value="Maternidad / Paternidad">Maternidad / Paternidad</option>
-                    <option value="Duelo">Duelo familiar</option>
-                    <option value="Gremial">Gremial</option>
-                    <option value="Otra">Otra (especificar detalle)...</option>
-                  </select>
-                </div>
-                {tipoLicencia === 'Otra' && (
-                  <div className="form-group-clean" style={{ marginTop: '8px' }}>
-                    <label className="form-label-clean">Detalle / Motivo:</label>
-                    <input
-                      type="text"
-                      className="form-input form-input-clean"
-                      placeholder="Ej: Licencia sin goce de sueldo, etc."
-                      value={detalleLicencia}
-                      onChange={(e) => setDetalleLicencia(e.target.value)}
-                    />
-                  </div>
-                )}
-              </div>
-            </div>
+            <div className="licencia-card"><h4>Registro de Licencia</h4><p>Se registrarán las fechas seleccionadas con estado Licencia y cero horas.</p></div>
           ) : (
             /* SECCIÓN 2: ACTIVIDAD Y PROYECTOS / HAZAÑAS */
             <div className="form-section-card">
@@ -1322,6 +1278,17 @@ export default function CheckForm({ onRegistroGuardado, onVolver, tema }) {
           )}
 
           {/* BOTÓN DE CONFIRMACIÓN */}
+          {(esVacaciones || esLicencia) && (
+            <fieldset className="pg-absence-controls">
+              <legend>Modalidad de liquidación</legend>
+              <label htmlFor="modalidad-ausencia">Modalidad</label>
+              <select id="modalidad-ausencia" className="form-select form-select-clean" value={modalidadAusencia} onChange={e => setModalidadAusencia(e.target.value)}>
+                <option value="oficina">Oficina</option><option value="obra">Obra</option>
+              </select>
+              <label className="pg-checkbox-label"><input type="checkbox" checked={costoManualAusencia} onChange={e => setCostoManualAusencia(e.target.checked)} />Costo diario manual</label>
+              {costoManualAusencia && <><label htmlFor="costo-ausencia">Costo diario (ARS)</label><input id="costo-ausencia" className="form-input form-input-clean" type="number" min="0" step="0.01" required value={costoAusencia} onChange={e => setCostoAusencia(e.target.value)} /></>}
+            </fieldset>
+          )}
           <button type="submit" className="btn-submit btn-submit-spacious" disabled={enviando}>
             {enviando ? (
               <>

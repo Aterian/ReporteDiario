@@ -18,18 +18,6 @@ export default function RosterView({ usuario, onVolver, tema }) {
   const isDark = tema === 'dark';
   const isRpg = tema === 'rpg';
 
-  if (!puedeAccederRoster(usuario)) {
-    return (
-      <div className="view-content" style={{ padding: '32px', textAlign: 'center' }}>
-        <p style={{ fontSize: '15px', color: 'var(--text-secondary)', marginBottom: '16px' }}>
-          Acceso denegado: El módulo de Roster solo puede ser visualizado por personal autorizado (Justina Bertolozzi e Iván Valentin).
-        </p>
-        <button type="button" className="btn-back" onClick={onVolver}>
-          Volver al Inicio
-        </button>
-      </div>
-    );
-  }
 
   // Al entrar a Roster, la ventana se maximiza a pantalla completa
   useEffect(() => {
@@ -40,7 +28,7 @@ export default function RosterView({ usuario, onVolver, tema }) {
   // Estados de control de vista
   const [refrescando, setRefrescando] = useState(false);
   const [mostrarCalendario, setMostrarCalendario] = useState(true);
-  const [limpiando, setLimpiando] = useState(false);
+  const limpiando = false;
 
   // Catálogos
   const [proyectosDisponibles, setProyectosDisponibles] = useState([]);
@@ -200,7 +188,7 @@ export default function RosterView({ usuario, onVolver, tema }) {
   // [FN-03.08] Asignar tarifas oficiales de roster al turno en edición en base local (sin sincronizar con Sheets ni tocar historial)
   const handleAsignarTarifasOficiales = async () => {
     if (!tarifaModalEdit) {
-      alert(`No se encontraron tarifas configuradas para el proyecto "${editProyecto}" en 1_2_tarifas_roster.`);
+      alert(`No se encontraron tarifas configuradas para el proyecto "${editProyecto}" en b_1_tarifas_roster.`);
       return;
     }
     const diaNorm = Number(tarifaModalEdit.dia_normal || 0);
@@ -224,17 +212,10 @@ export default function RosterView({ usuario, onVolver, tema }) {
         setEditPrecioDia(String(pdiaFinal));
         setEditPrecioDomingo(String(pdomFinal));
 
-        // Actualizar reactivamente en memoria rostersPeriodo para visualización en Gantt y exportación a Excel
-        setRostersPeriodo(prev => prev.map(r => {
-          if (r.id === editId) {
-            return { ...r, precio_dia: pdiaFinal, precio_domingo: pdomFinal };
-          }
-          return r;
-        }));
 
         setMensajeFeedback({
           tipo: 'exito',
-          texto: `Tarifa oficial asignada y guardada en base local para ${editEmpleado} (${editProyecto}): Normal: $${pdiaFinal.toLocaleString('es-AR')} | Dom: $${pdomFinal.toLocaleString('es-AR')}. Lista para visualización y exportación Excel.`
+          texto: `Tarifa de referencia seleccionada para ${editEmpleado} (${editProyecto}): Normal: $${pdiaFinal.toLocaleString('es-AR')} | Dom: $${pdomFinal.toLocaleString('es-AR')}. PostgreSQL determina la tarifa aplicada al guardar el turno.`
         });
       } else {
         alert(res?.error || 'No se pudo guardar la tarifa en la base local.');
@@ -291,9 +272,6 @@ export default function RosterView({ usuario, onVolver, tema }) {
               if (eRef && !setNombres.has(normKey)) {
                 setNombres.add(normKey);
                 empsIngenieria.push(eRef);
-              } else if (!setNombres.has(normKey)) {
-                setNombres.add(normKey);
-                empsIngenieria.push({ nombre: nom, dni: '', area: 'I', mail: '' });
               }
             });
 
@@ -358,41 +336,15 @@ export default function RosterView({ usuario, onVolver, tema }) {
     setRefrescando(true);
     try {
       localStorage.removeItem('ingeap_rosters_mock');
-      await api.refrescarCatalogos();
+      const [proyectos, empleados, tarifas] = await Promise.all([api.obtenerServicios('I'), api.obtenerTodosUsuarios('I'), api.obtenerTarifasRoster()]);
+      if (Array.isArray(proyectos)) setProyectosDisponibles(proyectos);
+      if (Array.isArray(empleados)) { setTodosLosEmpleados(empleados); setEmpleadosDisponibles(empleados); }
+      if (Array.isArray(tarifas)) setTarifasRoster(tarifas);
     } catch (err) {
       console.error('Error al refrescar catálogos de Roster:', err);
     } finally {
       await cargarRostersMes(anioGantt, mesGantt);
       setRefrescando(false);
-    }
-  };
-
-  const handleLimpiarLocalYDescargar = async () => {
-    if (!window.confirm('¿Deseas limpiar todos los registros locales y volver a descargar la información oficial desde Google Sheets? Esta acción descarta cambios locales no sincronizados y evita duplicados.')) {
-      return;
-    }
-    setLimpiando(true);
-    setMensajeFeedback(null);
-    try {
-      localStorage.removeItem('ingeap_rosters_mock');
-      const res = await api.limpiarYDescargarSheets();
-      if (res && res.exito) {
-        setMensajeFeedback({
-          tipo: 'exito',
-          texto: res.mensaje || 'Registros locales limpiados y actualizados exitosamente desde Google Sheets.'
-        });
-        await cargarRostersMes(anioGantt, mesGantt);
-      } else {
-        setMensajeFeedback({
-          tipo: 'error',
-          texto: res?.error || 'No se pudo completar la limpieza y descarga.'
-        });
-      }
-    } catch (err) {
-      console.error(err);
-      setMensajeFeedback({ tipo: 'error', texto: 'Error de comunicación al limpiar y descargar.' });
-    } finally {
-      setLimpiando(false);
     }
   };
 
@@ -501,7 +453,7 @@ export default function RosterView({ usuario, onVolver, tema }) {
         const cant = empleadosSeleccionados.length;
         setMensajeFeedback({
           tipo: 'exito',
-          texto: `¡Roster registrado y sincronizado en Google Sheets para ${cant} empleado${cant > 1 ? 's' : ''} (${empleadosSeleccionados.join(', ')})! Podés continuar cargando los siguientes turnos.`
+          texto: `¡Roster registrado y sincronizado en PostgreSQL para ${cant} empleado${cant > 1 ? 's' : ''} (${empleadosSeleccionados.join(', ')})! Podés continuar cargando los siguientes turnos.`
         });
         await cargarRostersMes(anioGantt, mesGantt);
 
@@ -518,7 +470,7 @@ export default function RosterView({ usuario, onVolver, tema }) {
           setTipo('Franco');
         }
       } else {
-        setMensajeFeedback({ tipo: 'error', texto: fallo?.error || 'Ocurrió un error al guardar el roster para algunos empleados.' });
+        setMensajeFeedback({ tipo: 'error', texto: resMultiple?.error || 'Ocurrió un error al guardar el roster para algunos empleados.' });
       }
     } catch (err) {
       console.error('Error guardando roster:', err);
@@ -666,6 +618,19 @@ export default function RosterView({ usuario, onVolver, tema }) {
     return lista;
   }, [rostersPeriodo, filtroProyectoGantt, empleadosDisponibles, todosLosEmpleados]);
 
+  if (!puedeAccederRoster(usuario)) {
+    return (
+      <div className="view-content" style={{ padding: '32px', textAlign: 'center' }}>
+        <p style={{ fontSize: '15px', color: 'var(--text-secondary)', marginBottom: '16px' }}>
+          Acceso denegado: El módulo de Roster solo puede ser visualizado por personal autorizado (Justina Bertolozzi e Iván Valentin).
+        </p>
+        <button type="button" className="btn-back" onClick={onVolver}>
+          Volver al Inicio
+        </button>
+      </div>
+    );
+  }
+
   const contenidoPrincipal = (
     <>
       {/* Barra superior de navegación y acciones */}
@@ -694,7 +659,7 @@ export default function RosterView({ usuario, onVolver, tema }) {
             className={isRpg ? 'rpg-wood-btn' : `btn-roster-refresh ${refrescando ? 'btn-refresh-spinning' : ''}`}
             onClick={handleRefrescar}
             disabled={refrescando || cargandoRosters || limpiando}
-            title="Refrescar y sincronizar con Google Sheets"
+            title="Recargar datos desde PostgreSQL"
           >
             <svg
               width="14"
@@ -714,28 +679,7 @@ export default function RosterView({ usuario, onVolver, tema }) {
             {refrescando ? 'Sincronizando...' : (isRpg ? 'Consultar Oráculo' : 'Refrescar')}
           </button>
 
-          <button
-            type="button"
-            className={isRpg ? 'rpg-wood-btn' : 'btn-roster-refresh'}
-            onClick={handleLimpiarLocalYDescargar}
-            disabled={refrescando || cargandoRosters || limpiando}
-            title="Eliminar registros locales y descargar registros oficiales desde Google Sheets para evitar duplicados"
-          >
-            <svg
-              width="14"
-              height="14"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2.2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              className={limpiando ? 'spinner' : ''}
-            >
-              <path d="M3 6h18m-2 0v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6m3 0V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
-            </svg>
-            {limpiando ? 'Purgando...' : (isRpg ? 'Purgar Anales' : 'Limpiar')}
-          </button>
+
 
           <button
             type="button"
@@ -897,6 +841,8 @@ export default function RosterView({ usuario, onVolver, tema }) {
   }
 
   // Renderizado corporativo habitual
+
+
   return (
     <div className={`roster-view-container ${isDark ? 'dark-theme' : ''}`}>
       {contenidoPrincipal}

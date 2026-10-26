@@ -255,14 +255,14 @@ export default function HistoryView({ onVolver, tema, onNuevoReporte, usuario, o
     try {
       const res = await api.sincronizarSheets();
       if (res && res.exito) {
-        setMensajeSync({ tipo: 'exito', texto: res.mensaje || 'Sincronizado correctamente con Google Sheets.' });
+        setMensajeSync({ tipo: 'exito', texto: res.mensaje || 'Sincronizado correctamente con PostgreSQL.' });
         await cargarHistorial();
       } else {
-        setMensajeSync({ tipo: 'error', texto: res?.error || 'No se pudo sincronizar con Google Sheets.' });
+        setMensajeSync({ tipo: 'error', texto: res?.error || 'No se pudo sincronizar con PostgreSQL.' });
       }
     } catch (err) {
       console.error(err);
-      setMensajeSync({ tipo: 'error', texto: 'Error de red o comunicación con Google Sheets.' });
+      setMensajeSync({ tipo: 'error', texto: 'Error de red o comunicación con PostgreSQL.' });
     } finally {
       setSincronizando(false);
     }
@@ -316,7 +316,7 @@ export default function HistoryView({ onVolver, tema, onNuevoReporte, usuario, o
       if (res && res.exito) {
         setMensajeSync({
           tipo: 'exito',
-          texto: 'Reporte modificado exitosamente. Sincronizando con Google Sheets en segundo plano (~3-5 seg)... No es necesario presionar Subir.'
+          texto: 'Reporte modificado exitosamente. Guardado en PostgreSQL.'
         });
         setRegistroEditando(null);
         await cargarHistorial();
@@ -534,7 +534,7 @@ export default function HistoryView({ onVolver, tema, onNuevoReporte, usuario, o
                 className={isRpg ? 'rpg-wood-btn' : 'btn-sync'}
                 onClick={ejecutarSincronizacion}
                 disabled={sincronizando}
-                title="Sincronizar reportes pendientes inmediatamente con Google Sheets (No requerido: se sincroniza solo)"
+                title="Sincronizar reportes pendientes inmediatamente con PostgreSQL (No requerido: se sincroniza solo)"
               >
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M3 12a9 9 0 0 1 15-6.7L21 8" />

@@ -1,0 +1,50 @@
+/* [FN-07.06] Liquidación mensual y modalidad de ausencias */
+.pg-liquidation { padding: 20px; background: var(--bg-card, #fff); border: 1px solid #999999; border-radius: 12px; }
+.pg-liquidation-heading { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; }
+.pg-liquidation-heading h3 { margin: 0; }
+.pg-liquidation-totals { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.pg-liquidation-totals > div { padding: 14px; border: 1px solid #999999; border-radius: 8px; }
+.pg-liquidation-totals dt { font-size: 13px; }
+.pg-liquidation-totals dd { margin: 8px 0 0; font-size: 20px; font-weight: 700; overflow-wrap: anywhere; }
+.pg-salary-total { background: #cc3333; color: white; }
+.pg-table-scroll { overflow-x: auto; margin: 12px 0; }
+.pg-table-scroll table { width: 100%; border-collapse: collapse; }
+.pg-table-scroll th, .pg-table-scroll td { text-align: left; padding: 12px; border-bottom: 1px solid #999999; }
+.pg-liquidation button, .pg-absence-controls select, .pg-absence-controls input:not([type=checkbox]) { min-height: 44px; }
+.pg-absence-controls { display: grid; gap: 10px; min-width: 0; margin: 16px 0; padding: 16px; border: 1px solid #999999; border-radius: 8px; }
+.pg-checkbox-label { display: flex; align-items: center; gap: 10px; min-height: 44px; }
+.pg-checkbox-label input { width: 22px; height: 22px; accent-color: #cc3333; }
+@media (max-width: 480px) { .pg-liquidation-totals { grid-template-columns: 1fr; } .pg-liquidation { padding: 12px; } }
+
+@media (max-width: 900px) {
+  .roster-view-container .roster-main-layout.layout-split { grid-template-columns: minmax(0, 1fr); overflow: auto; padding: 12px; }
+  .roster-view-container .roster-form-panel { height: auto; overflow: visible; min-width: 0; }
+  .roster-view-container .roster-gantt-panel { min-width: 0; min-height: 480px; }
+  .roster-view-container .roster-top-nav { flex-wrap: wrap; gap: 12px; padding: 12px; }
+  .roster-view-container .roster-top-nav-left, .roster-header-title { flex-wrap: wrap; min-width: 0; }
+  .roster-view-container .roster-form-card { padding: 12px; min-width: 0; overflow-wrap: anywhere; }
+  .roster-view-container button, .roster-view-container select, .roster-view-container input { min-height: 44px; }
+  .roster-view-container .roster-multi-emp-container { grid-template-columns: minmax(0, 1fr); }
+  .roster-view-container .roster-label { flex-wrap: wrap; }
+  .roster-view-container .roster-dates-row { grid-template-columns: minmax(0, 1fr); }
+}
+
+@media (max-width: 900px) {
+  .roster-view-container .roster-gantt-panel { height: auto; overflow: visible; }
+  .roster-view-container .roster-gantt-card { height: auto; min-width: 0; }
+  .roster-view-container .gantt-header-controls { flex-direction: column; align-items: stretch; gap: 12px; padding: 12px; }
+  .roster-view-container .gantt-month-navigator { justify-content: center; gap: 8px; }
+  .roster-view-container .gantt-current-month { min-width: 0; }
+  .roster-view-container .gantt-right-controls-group { flex-direction: column; align-items: stretch; gap: 10px; }
+  .roster-view-container .gantt-project-filter { flex-wrap: wrap; }
+  .roster-view-container .gantt-filter-select { flex: 1; min-width: 0; max-width: 100%; }
+  .roster-view-container .gantt-col-size-bar { justify-content: space-between; gap: 4px; }
+  .roster-view-container .gantt-col-size-bar button { min-width: 32px; }
+  .roster-view-container .gantt-legend-bar { flex-direction: column; align-items: stretch; gap: 8px; padding: 12px; }
+  .roster-view-container .legend-items-left { flex-wrap: wrap; }
+  .roster-view-container .legend-resizer-hint { display: none; }
+  .roster-view-container .gantt-table-container { flex: none; height: 380px; min-height: 320px; max-width: 100%; }
+  .roster-view-container .gantt-th-emp, .roster-view-container .gantt-th-totales, .roster-view-container .gantt-td-emp, .roster-view-container .gantt-td-totales { position: static; }
+}
+
+@media (max-width: 900px) { .roster-view-container .gantt-col-size-bar button, .roster-view-container .gantt-month-navigator button { min-width: 44px; min-height: 44px; } }

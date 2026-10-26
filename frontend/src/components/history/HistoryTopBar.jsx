@@ -13,8 +13,7 @@ export default function HistoryTopBar({
   mensajeSync,
   setMensajeSync,
   ejecutarSincronizacion,
-  onRefrescar,
-  handleLimpiarLocalYDescargar
+  onRefrescar
 }) {
   return (
     <>
@@ -79,7 +78,7 @@ export default function HistoryTopBar({
             className={isRpg ? 'rpg-wood-btn' : 'btn-refresh'}
             onClick={onRefrescar}
             disabled={cargando || sincronizando || limpiando}
-            title="Actualizar registros desde Google Sheets y base local"
+            title="Actualizar registros desde PostgreSQL"
           >
             <svg
               width="12"
@@ -99,28 +98,7 @@ export default function HistoryTopBar({
             {isRpg ? 'Consultar Oráculo' : 'Refrescar'}
           </button>
 
-          <button
-            type="button"
-            className={isRpg ? 'rpg-wood-btn' : 'btn-refresh'}
-            onClick={handleLimpiarLocalYDescargar}
-            disabled={cargando || sincronizando || limpiando}
-            title="Eliminar registros locales y descargar directamente desde Google Sheets para evitar duplicados"
-          >
-            <svg
-              width="12"
-              height="12"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2.2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              className={limpiando ? 'spinner' : ''}
-            >
-              <path d="M3 6h18m-2 0v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6m3 0V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
-            </svg>
-            {limpiando ? 'Purgando...' : (isRpg ? 'Purgar Anales' : 'Limpiar')}
-          </button>
+
         </div>
       </div>
 

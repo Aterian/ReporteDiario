@@ -60,29 +60,10 @@ export const esAreaAplicaciones = (usuario) => {
 /**
  * Normaliza y extrae el rol asignado al usuario (admin, sub_admin, core, user_1, user_2)
  */
+// [FN-07.02] Usar exclusivamente el rol vigente de PostgreSQL
 export const getRolUsuario = (usuario) => {
-  if (!usuario) return 'user_2';
-
-  // 1. Garantía determinista por identidad de administradores y gestión clave
-  if (esIvanValentin(usuario)) return 'admin';
-  if (esJustinaBertolozzi(usuario)) return 'sub_admin';
-
-  // 2. Extracción y normalización de rol_app explícito
-  const raw = (usuario.rol_app || '').toString().trim().toLowerCase().replace(/\s+/g, '_');
-  if (raw === 'admin' || raw === 'administrador' || raw === 'admin_general') return 'admin';
-  if (raw === 'sub_admin' || raw === 'subadmin' || raw === 'rrhh' || raw === 'gestion') return 'sub_admin';
-  if (raw === 'core' || raw === 'nucleo' || raw === 'direccion') return 'core';
-  if (raw === 'user_1' || raw === 'user1' || raw === 'campo') return 'user_1';
-  if (raw === 'user_2' || raw === 'user2' || raw === 'oficina') return 'user_2';
-
-  // 3. Fallbacks retrocompatibles por área histórica
-  if (esAreaRRHH(usuario)) return 'sub_admin';
-  if (esAreaNucleo(usuario)) return 'core';
-  const area = (usuario.area || '').toUpperCase().trim();
-  if (area === 'S' || area === 'SIG' || normalizar(usuario.nombre).includes('llovio')) {
-    return 'user_2';
-  }
-  return 'user_1';
+  const rol = String(usuario?.rol_app || '').trim().toLowerCase();
+  return ['admin', 'sub_admin', 'core', 'user_1', 'user_2'].includes(rol) ? rol : 'user_1';
 };
 
 export const esAdmin = (usuario) => getRolUsuario(usuario) === 'admin';

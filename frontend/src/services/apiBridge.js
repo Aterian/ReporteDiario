@@ -117,6 +117,7 @@ const mockApi = {
     usuarios: []
   }),
   obtener_tarifas_roster: async () => [],
+  obtener_liquidacion: async () => ({ exito: true, liquidacion: null }),
   actualizar_costo_dia_manual: async (datos) => ({ exito: true, mensaje: 'Costo actualizado (simulado).' })
 };
 
@@ -153,7 +154,7 @@ async function getApi() {
         } else {
           console.info('[apiBridge] Corriendo en modo navegador web con datos simulados.');
           // NO bloquear permanentemente cachedApi con mockApi para permitir reintento
-          resolve(mockApi);
+          resolve(import.meta.env.DEV ? mockApi : new Proxy({}, { get: (_target, key) => key === 'then' ? undefined : async () => ({ exito: false, error: 'El puente de escritorio no está disponible.', codigo_error: 'PUENTE_NO_DISPONIBLE' }) }));
         }
       }
     }, 3500);
@@ -161,6 +162,11 @@ async function getApi() {
 }
 
 const apiBase = {
+  async obtenerLiquidacion(empleado, cicloCobro) {
+    const bridge = await getApi();
+    if (!bridge.obtener_liquidacion) return { exito: false, error: 'El puente no admite consultas de liquidación.' };
+    return await bridge.obtener_liquidacion(empleado, cicloCobro);
+  },
   async obtenerEstadoSesion() {
     const bridge = await getApi();
     return await bridge.obtener_estado_sesion();
@@ -528,7 +534,7 @@ const apiBase = {
     if (bridge.guardar_costo_dia) {
       return await bridge.guardar_costo_dia(datos);
     }
-    return { exito: true, mensaje: 'Actualizado en modo simulado.' };
+    return { exito: false, error: 'El puente no admite la actualización de costos.' };
   },
 
   // [FN-06.07] Guardar costo del día directamente

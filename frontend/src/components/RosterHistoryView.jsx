@@ -297,7 +297,7 @@ export default function RosterHistoryView({ usuario, onVolver, onNuevoRoster, te
             className={isRpg ? `rpg-wood-btn ${refrescando ? 'btn-refresh-spinning' : ''}` : `btn-roster-refresh ${refrescando ? 'btn-refresh-spinning' : ''}`}
             onClick={handleRefrescar}
             disabled={refrescando || cargando}
-            title="Refrescar y sincronizar con Google Sheets"
+            title="Recargar datos desde PostgreSQL"
           >
             <svg
               width="14"
@@ -552,7 +552,7 @@ export default function RosterHistoryView({ usuario, onVolver, onNuevoRoster, te
                 <span className="roster-title-badge" style={{ margin: 0, background: '#2563eb' }}>EDITAR</span>
                 <h3>Modificar Registro de Roster</h3>
               </div>
-              <p>Actualiza la asignación, fechas o tarifas del empleado. Los cambios se sincronizarán con Google Sheets.</p>
+              <p>Actualiza la asignación, fechas o tarifas del empleado. Los cambios se guardarán en PostgreSQL.</p>
             </div>
 
             <form onSubmit={handleGuardarEdicion} className="roster-modal-body">

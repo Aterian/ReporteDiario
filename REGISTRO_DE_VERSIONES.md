@@ -2,6 +2,17 @@
 
 Historial cronológico de cambios, nuevas características y mejoras aplicadas al sistema **Check Diario Ingeap**.
 
+## [2.0.0] - 2026-10-26
+
+- [MOD-07] Migración de persistencia SQLite/Google Sheets a PostgreSQL mediante psycopg2, pool transaccional y consultas parametrizadas; conserva todas las firmas públicas de ApiPuente.
+- Introspección del esquema real y adaptación a nombre/apellido/correo y codificacion_serv. Roles exclusivamente desde rol_app, sin elevación por identidad.
+- Roster individual/múltiple atómico: solo escribe b_1_roster; triggers generan asistencias y viáticos. Joins históricos por id_tarifa, Gantt con total_viaticos, Bajada último Campo y Subida último Franco.
+- Vacaciones/Licencia admiten Oficina/Obra y costo manual incluido cero. Liquidación mensual y adicionales se leen del servidor; tarjeta TypeScript estricta y TanStack Query, exportaciones sin recálculos.
+- Se retiran sincronización, cachés operativas y limpieza Sheets. El usuario decidió bloquear eliminaciones hasta disponer de borrado lógico. Capacidades sin columnas de destino se informan como no disponibles.
+- Se creó una base PostgreSQL de pruebas separada, sin datos operativos y con transacciones revertidas. El defecto de reentrada salarial del trigger se reprodujo allí, se corrigió y se aplicó al operativo con autorización explícita; se conserva reversión SQL.
+- Versión mayor por cambio de almacenamiento, reinicio de sesión al abrir y nuevo formato de exportación canónica. No se importaron registros históricos de SQLite/Sheets.
+- Verificación: 45 pruebas de contrato e integración PostgreSQL, comprobación TypeScript, build a backend/dist sin errores y revisión de interfaz con datos sintéticos en escritorio/móvil. Detalles en POSTGRESQL_MIGRACION.md.
+
 ## [1.19.0] - 2026-10-14
 
 ### 🛡️ Arquitectura Robusta de Manejo Centralizado de Errores y Logging (`[FN-00.03]`)
