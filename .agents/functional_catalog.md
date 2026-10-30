@@ -1,5 +1,59 @@
 # Catálogo Funcional del Sistema
 
+## [FN-07.19] Verificación Integral de Calidad, Blindaje de React Hooks y Testing Vitest
+- **Módulo**: [MOD-07] Pruebas Automatizadas y Calidad Frontend
+- **Flujo Operativo**: Ejecuta suites automatizadas unitarias en frontend con Vitest para validar reglas RBAC y liquidación canónica; expande TypeScript a todo el árbol de fuentes; y refuerza ESLint con error estricto en reglas de hooks, eliminando retornos condicionales antes de hooks en vistas principales.
+- **Tablas afectadas**: Ninguna (Capa de testing, build y frontend).
+- **Reglas de negocio e invariantes**: 100% de tests de backend (pytest) y frontend (vitest) deben pasar antes de cualquier commit; orden de invocación de React Hooks invariable; los permisos RBAC impiden autoelevación a usuarios core.
+
+## [FN-07.18] Liquidación Canónica con Cero Válido y Exportación Quincenal de Roster
+- **Módulo**: [MOD-07] Persistencia y Exportaciones
+- **Flujo Operativo**: Liquida haberes respetando el valor `$0.00` derivado de la regla de prioridad de Oficina sobre Obra en PostgreSQL; concilia aritméticamente el informe Excel asegurando que subtotales y adicionales sumen exactamente el total a liquidar; exporta turnos de Roster en 3 hojas (`Ciclo Completo`, `1ra Quincena` y `2da Quincena`) computando días normales, domingos, subida, bajada y adicionales por tramo; e incorpora dinámicamente al Gantt a todos los colaboradores de Ingeniería activos o con turnos en el período.
+- **Tablas afectadas**: app_rrhh.b_1_asistencias; app_rrhh.a_1_calculo_sueldo; app_rrhh.a_1_adicionales_sueldo; app_rrhh.b_1_roster; app_rrhh.b_1_tarifas_roster.
+- **Reglas de negocio e invariantes**: El valor `$0.00` de un jornal por jornada única no debe sobreescribirse con tarifa teórica; cuadre exacto de filas en hoja de resumen; Subida computada el último día de franco y Bajada el último día de campo; todo empleado con turnos en el mes es visible en el Gantt.
+
+## [FN-07.17] Autenticación Estricta, RBAC Seguro y Minimización de Datos
+- **Módulo**: [MOD-07] Persistencia PostgreSQL y RBAC
+- **Flujo Operativo**: Autentica usuarios validando coincidencia numérica estricta del DNI y nombre exacto; restringe edición de usuarios y sueldos exclusivamente a `admin` y `sub_admin` impidiendo autopromoción o alteración de roles por `sub_admin`; desarma costos manuales inyectados en colecciones por roles operativos; minimiza el catálogo público suprimiendo DNI, email y salarios a roles no autorizados; y valida la autenticidad y cabecera ejecutable PE de las actualizaciones de escritorio.
+- **Tablas afectadas**: app_rrhh.a_1_usuarios; app_rrhh.a_1_sueldos_base; app_rrhh.b_1_asistencias.
+- **Reglas de negocio e invariantes**: DNI obligatorio de al menos 6 dígitos numéricos; rol `core` restringido a solo lectura; `sub_admin` no puede modificar cuentas `admin` ni asignar rol `admin`; usuarios no administradores no pueden persistir `costo_manual = TRUE`; descargas de actualización confinadas a HTTPS oficial y ejecutables con cabecera `MZ`.
+
+## [FN-07.16] Suite de Pruebas de Carga Masiva y Concurrencia en PostgreSQL
+- **Módulo**: [MOD-07] Persistencia PostgreSQL
+- **Flujo Operativo**: Infraestructura y runner automatizado de pruebas de carga concurrente multi-hilo (20 usuarios simultáneos) sobre entorno aislado, evaluando ráfagas multi-registro, colisiones en misma fecha con prioridad de oficina, contención pesimista intra-usuario y carga masiva de turnos de Roster por RRHH con autogeneración de asistencias.
+- **Tablas afectadas**: app_rrhh.a_1_usuarios; app_rrhh.a_1_sueldos_base; app_rrhh.b_1_asistencias; app_rrhh.b_1_roster; app_rrhh.b_1_tarifas_roster; app_rrhh.a_1_calculo_sueldo; app_proyectos.b_1_proyectos_servicios.
+- **Reglas de negocio e invariantes**: Conexión exclusiva a base con prefijo `codex_check_diario_test_`; semáforo de pool `PG_POOL_MAX = 20`; 0 violaciones del invariante de costo único por fecha; 0 deadlocks entre `pg_advisory_xact_lock` y bloqueos pesimistas `SELECT ... FOR UPDATE`; cuadre al centavo de liquidaciones mensuales generadas por triggers.
+
+## [FN-07.15] Consolidación de Asistencias Diarias en Turnos de Roster
+- **Módulo**: [MOD-07] Historial y Auditoría
+- **Flujo Operativo**: Modal interactivo accesible desde Historial de Otros Empleados (`📅 Crear Roster`) para el empleado seleccionado. Agrupa jornadas contiguas sin vincular (`id_roster IS NULL`) en bloques de Campo y Franco, permitiendo editar proyecto, fechas, tipos y excluir bloques antes de insertar transaccionalmente en `app_rrhh.b_1_roster` y vincular las asistencias existentes sin duplicar registros.
+- **Tablas afectadas**: app_rrhh.b_1_roster; app_rrhh.b_1_asistencias; app_rrhh.b_1_tarifas_roster; app_proyectos.b_1_proyectos_servicios.
+- **Reglas de negocio e invariantes**: Restricción a roles `admin` y `sub_admin`; inserción atómica por bloque vinculando `id_tarifa` activa; preservación de `id_asistencia` preexistentes asignando `id_roster`; recálculo de viáticos delegado a triggers de PostgreSQL.
+
+## [FN-07.13] Módulo de Empleados con Acceso RBAC y Auditoría Salarial
+- **Módulo**: [MOD-08] Gestión de Empleados
+- **Flujo Operativo**: Panel accesible desde el menú principal para roles `admin`, `sub_admin` y `core`, listando el personal completo con filtros por texto, área y estado, visualizando lugar habitual, sueldos base oficina/obra, costo día generado por PostgreSQL, última asistencia registrada y cumpleaños, con modal de edición y recálculo instantáneo.
+- **Tablas afectadas**: app_rrhh.a_1_usuarios; app_rrhh.a_1_sueldos_base; app_rrhh.b_1_asistencias; app_proyectos.b_1_proyectos_servicios.
+- **Reglas de negocio e invariantes**: Restricción estricta por rol RBAC; compatibilidad completa en modos Claro, Oscuro y RPG; cálculo de costo día delegado a columnas generadas en PostgreSQL (`sueldo / 30`).
+
+## [FN-07.14] Resolución de Autoría, Fines de Semana a Franco de Oficina y Refinamiento Visual
+- **Módulo**: [MOD-07] Historial y Auditoría
+- **Flujo Operativo**: Resuelve el nombre real del operador en `cargado_por` mediante join relacional contra `a_1_usuarios`, carga fines de semana asistidos como Franco de Oficina con valor de oficina, y presenta tarjetas de auditoría con avatar circular, separación de campos y botones de acción unificados (29px).
+- **Tablas afectadas**: app_rrhh.b_1_asistencias; app_rrhh.a_1_usuarios; app_rrhh.a_1_calculo_sueldo.
+- **Reglas de negocio e invariantes**: Prohibida la exposición de UUIDs crudos en UI; las áreas internas canónicas (`A`, `I`, `M`, `RRHH`, `N`, `VyM`, `S`) se catalogan como área/oficina; fines de semana a franco no multiplican costo y toman valor de oficina.
+
+## [FN-07.11] Carga y actualización de tarifas de roster
+- **Módulo**: [MOD-07]
+- **Flujo Operativo**: Formulario modal accesible desde RosterView con desplegable de proyectos; captura obligatoria de dia_normal y dia_domingo, y opcionales subida, bajada y adicional_turno. Persiste la tarifa en PostgreSQL y refresca el catálogo.
+- **Tablas afectadas**: app_rrhh.b_1_tarifas_roster.
+- **Reglas de negocio e invariantes**: El trigger nativo fn_desactivar_tarifas_anteriores desactiva automáticamente cualquier tarifa previa del mismo proyecto; los valores negativos son rechazados por validación Pydantic.
+
+## [FN-07.12] Administración de usuarios y sueldos base
+- **Módulo**: [MOD-06] Gestión de Usuarios
+- **Flujo Operativo**: Panel exclusivo para roles admin y sub_admin que lista usuarios (activos e inactivos), permite filtrar por texto, área y estado, y desplegar un modal de edición integral para actualizar datos personales, rol de app, estado y sueldos base de oficina y obra.
+- **Tablas afectadas**: app_rrhh.a_1_usuarios; app_rrhh.a_1_sueldos_base.
+- **Reglas de negocio e invariantes**: Restricción estricta por rol RBAC; campos salariales no se exponen a roles operativos; al persistir sueldo_oficina y sueldo_obra, PostgreSQL computa costo_dia_ofi y costo_dia_obra en tiempo real.
+
 ## [FN-07.01] Pool PostgreSQL y retiro de persistencia local
 - **Módulo**: [MOD-07] Persistencia PostgreSQL
 - **Flujo Operativo**: Carga DATABASE_URL desde entorno/.env, introspecta columnas y presta conexiones ThreadedConnectionPool con RealDictCursor. Retira SQLite y sincronización Sheets del flujo operativo.
@@ -539,4 +593,54 @@
   1. Los controles interactivos (botones, selectores, campos de texto, pills de turnos y modales) respetan un área táctil mínima de 44px conforme a WCAG 2.2.
   2. Los tokens corporativos oficiales (`--brand-red: #cc3333`, `--brand-gray: #999999`) gobiernan la variable `--primary` garantizando sincronización determinista en temas Light, Dark y RPG.
   3. Se depuran reglas desbalanceadas con `!important` en el layout corporativo asegurando especificidad limpia en la cascada CSS.
+
+## [FN-07.15] Consolidación de Asistencias en Turnos de Roster con Preservación Forense
+- **Módulo**: [MOD-07] Persistencia Relacional PostgreSQL y Auditoría RRHH
+- **Flujo Operativo**: Permite a usuarios `admin` y `sub_admin` desde `OtherEmployeesHistoryView` agrupar asistencias diarias huérfanas mediante Gaps-and-Islands y consolidarlas atómicamente en `app_rrhh.b_1_roster`, preservando horarios, horas, tipo de día y costos manuales.
+- **Tablas afectadas**: `app_rrhh.b_1_roster`, `app_rrhh.b_1_asistencias`, `app_rrhh.a_1_calculo_sueldo`.
+- **Reglas de negocio e invariantes**:
+  1. Validación de compatibilidad: rechaza con `ValidacionError` si el empleado registra en el rango asistencias con `lugar = 'oficina'` o ausencias justificadas (`vacaciones`, `licencia`).
+  2. Preservación forense: respalda horarios (`hora_inicio`, `hora_fin`), acumula `horas_dedicadas`, mantiene `tipo_dia` especial y costos manuales fijados previamente.
+  3. Tras la regeneración por el trigger `trg_generar_asistencias_roster`, actualiza atómicamente las asistencias con los atributos originales preservados.
+
+## [FN-07.16] Auditoría y Trazabilidad Forense de Modificaciones en PostgreSQL
+- **Módulo**: [MOD-07] Persistencia Relacional PostgreSQL y Auditoría RRHH
+- **Flujo Operativo**: Gestiona el ciclo de vida de revisiones de modificaciones y eliminaciones registradas en `app_rrhh.b_1_modificaciones_realizadas` disparadas por `trg_auditar_modificaciones_asistencia`, con soporte para resumen ejecutivo, listado reciente, alertas y marcado de revisión.
+- **Tablas afectadas**: `app_rrhh.b_1_modificaciones_realizadas`, `app_rrhh.b_1_asistencias`.
+- **Reglas de negocio e invariantes**:
+  1. Toda edición manual de costo diario (`actualizar_costo_dia_manual`) asocia el UUID del operador a `cargado_por` y anexa el motivo a `detalle_cambio`.
+  2. Consultas de asistencias correlacionan modificaciones por fila para activar comparativas antes/después y banderas `modificacion_pendiente` / `modificacion_revisada`.
+  3. Las operaciones de marcado como revisado (`revisado = TRUE`) registran `revisado_por` y `fecha_hora_revision`, actualizando la UI únicamente ante respuesta confirmada (`res.exito === true`).
+
+## [FN-07.19] Concurrencia Transaccional en Roster y Liquidación
+- **Módulo**: [MOD-07] Persistencia Relacional PostgreSQL y Auditoría RRHH
+- **Flujo Operativo**: Desacopla la lectura de liquidación de los bloqueos de escritura y reemplaza cerrojos globales por advisory locks por empleado en orden determinista, optimizando el rendimiento de lotes concurrentes.
+- **Tablas afectadas**: `app_rrhh.b_1_roster`, `app_rrhh.a_1_calculo_sueldo`, `app_rrhh.a_1_usuarios`.
+- **Reglas de negocio e invariantes**:
+  1. `obtener_liquidacion` ejecuta lecturas limpias sin `FOR UPDATE` contra `a_1_calculo_sueldo`. El recálculo y bloqueo de fila se reserva solo cuando la fila no existe o ante `forzar_recalculo = TRUE`.
+  2. `guardar_rosters_atomicos` y `crear_rosters_desde_asistencias` adquieren cerrojos advisory `checkdiario.roster.<uuid>` ordenados deterministamente por UUID, eliminando contención cruzada entre colaboradores distintos.
+  3. `consultar_asistencias` soporta paginación parametrizada `LIMIT` y `OFFSET`, y el frontend implementa renderizado progresivo de a 50 tarjetas para listas masivas.
+
+## [FN-07.12] Blindaje Anti-Recursión en Liquidación e Idempotencia de Migración
+- **Módulo**: [MOD-07] Persistencia Relacional PostgreSQL y Auditoría RRHH
+- **Flujo Operativo**: Previene desbordes de pila en triggers de PostgreSQL ante tarifas en cero, preserva costos manuales al editar turnos de Roster en SQL y garantiza migración idempotente desde Excel mediante UUIDv5.
+- **Tablas afectadas**: `app_rrhh.b_1_asistencias`, `app_rrhh.b_1_roster`, `app_rrhh.a_1_calculo_sueldo`.
+- **Reglas de negocio e invariantes**:
+  1. `fn_trigger_sincronizar_liquidacion` restringe la promoción de jornada a `pg_trigger_depth() = 1`, eliminando recursión infinita cuando `costo_dia` es `$0.00`.
+  2. `fn_sincronizar_asistencias_desde_roster` almacena temporalmente en memoria (`JSONB`) los registros con `costo_manual = TRUE` en `[NEW.fecha_inicio, NEW.fecha_fin]` y los restaura tras la inserción en bloque.
+  3. `migrar_excel_a_postgres.py` ejecuta por defecto en modo simulación (`MODO_SIMULACION_DRY_RUN = True`) y asigna UUIDv5 deterministas basados en tupla natural para evitar duplicaciones al repetir la importación.
+
+## [FN-07.17] Suite de Verificación Automatizada y Resiliencia de Esquema PostgreSQL
+- **Módulo**: [MOD-07] Persistencia Relacional PostgreSQL y Auditoría RRHH
+- **Flujo Operativo**: Garantiza paridad entre el esquema real en Railway (`nombre` + `apellido` + `b_1_modificaciones_realizadas`) y el entorno de pruebas aislado, manteniendo conexiones resilientes mediante TCP Keepalives y validando permisos y liquidación mediante Vitest y Pytest.
+- **Tablas afectadas**: `app_rrhh.a_1_usuarios`, `app_rrhh.b_1_asistencias`, `app_rrhh.b_1_modificaciones_realizadas`.
+- **Reglas de negocio e invariantes**:
+  1. `perfil_esquema()` resuelve expresiones dinámicas independientes por alias SQL (`u`, `uc`, `um`) envueltas en `NULLIF(concat_ws(...), '')`.
+  2. `obtener_cursor_pg()` descarta automáticamente conexiones caídas (`close=True`) en `ThreadedConnectionPool` y registra el código SQLSTATE antes de elevar `DatabaseTransactionError`.
+  3. El candado pre-commit exige 100% de aprobación en `pytest` (contrato + integración con auditoría activa), `vitest`, `eslint` (`rules-of-hooks: error`) y `tsc --noEmit`.
+
+
+
+
+
 

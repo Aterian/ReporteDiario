@@ -2,6 +2,209 @@
 
 Historial cronológico de cambios, nuevas características y mejoras aplicadas al sistema **Check Diario Ingeap**.
 
+## [2.8.1] - 2026-10-30
+
+### 🔌 Resiliencia del Pool PostgreSQL, Paridad de Esquema en Auditoría y Sincronización de Triggers (`[FN-07.01]` / `[FN-07.16]`)
+- **Compatibilidad de Esquema en Consultas de Auditoría (`[FN-07.01]` / `[FN-07.16]`)**:
+  - En `backend/postgres_repository.py`, `perfil_esquema()` expone ahora `nombre_cargador` (`NULLIF(concat_ws(' ', uc.nombre, uc.apellido), '')`) y `nombre_modificador` (`NULLIF(concat_ws(' ', um.nombre, um.apellido), '')`), corrigiendo el `UndefinedColumn: column um.nombre_completo does not exist` en `consultar_asistencias()` y el `UndefinedTable: missing FROM-clause entry for table "uc"` en `obtener_modificaciones_recientes()` y `obtener_notificaciones_modificaciones()` cuando `app_rrhh.a_1_usuarios` utiliza `nombre` y `apellido` con `b_1_modificaciones_realizadas` activa.
+  - Se incorporó `_enriquecer_modificacion_auditoria()` para normalizar etiquetas de modalidad antes/después, nombres de proyectos y banderas de revisión (`revisado = 1 | 0`) requeridas por `OtherEmployeesHistoryView.jsx`.
+- **Resiliencia del Pool de Conexiones hacia Railway (`[FN-07.01]`)**:
+  - En `backend/postgres_db.py`, se configuraron parámetros TCP Keepalive (`keepalives=1`, `keepalives_idle=30`, `keepalives_interval=10`, `keepalives_count=5`) en `ThreadedConnectionPool`, descarte automático (`putconn(..., close=True)`) de conexiones cerradas por el proxy de Railway y trazabilidad detallada en `loguru` ante errores de PostgreSQL (`pgcode`).
+- **Paridad de Esquema y Triggers en Producción y Entorno de Pruebas (`[FN-07.10]` / `[FN-07.12]`)**:
+  - Aplicada la migración `003_blindar_triggers_liquidacion_y_roster.sql` en Railway (`DATABASE_URL`) y en la base aislada (`TEST_DATABASE_URL`).
+  - Incorporada la estructura completa de `app_rrhh.b_1_modificaciones_realizadas` y `trg_auditar_modificaciones_asistencia` en `backend/tests/fixtures/postgres_schema.sql`.
+
+## [2.8.0] - 2026-10-30
+
+### 🧪 Suite Vitest Automatizada, Blindaje de React Hooks y Tipado Global (`[FN-07.17]` / `[FN-04.11]`)
+- **Cumplimiento Estricto de Reglas de React Hooks (`[FN-04.11]`)**:
+  - Configurado `'react-hooks/rules-of-hooks': 'error'` en `frontend/eslint.config.js`.
+  - En `OtherEmployeesHistoryView.jsx`, `UsersManagementView.jsx` y `RosterHistoryView.jsx`, se eliminaron los retornos anticipados antes de hooks (`useState`, `useEffect`, `useMemo`), reubicando las pantallas de restricción de acceso al final del flujo del componente para garantizar un orden de ejecución inmutable en cada renderizado.
+- **Tipado y Cobertura Global en TypeScript (`[FN-07.03]`)**:
+  - En `frontend/tsconfig.json`, se expandió el bloque `include` a `"src/**/*"`, permitiendo que `tsc --noEmit` analice la totalidad de archivos y rutas de importación de la aplicación.
+- **Suite de Pruebas Unitarias Frontend con Vitest (`[FN-07.17]`)**:
+  - Integrado `vitest` en `frontend/package.json` con scripts `"test": "vitest run"` y `"test:watch": "vitest"`.
+  - Implementada suite en `frontend/src/tests/permissions.test.js`: verificación exhaustiva de la matriz RBAC, prohibición de autoelevación salarial para usuarios `core`, control de acceso a Roster, carga delegada y rango de fechas.
+  - Implementada suite en `frontend/src/tests/liquidation.test.js`: verificación de `categorizarRegistroLiquidacion`, agregación de costos por `(fecha, categoria)` y respeto de subtotales canónicos de `$0.00` sin sustitución arbitraria.
+- **Validación del 100% de Candados Pre-Commit**:
+  - 38/38 tests de contrato backend en `pytest` superados.
+  - 12/12 tests de integración PostgreSQL en `pytest` superados.
+  - 23/23 tests unitarios frontend en `vitest` superados.
+  - 0 errores en `eslint .` y 0 errores en `tsc --noEmit`.
+  - Empaquetado de producción de Vite (`npm run build`) validado en `backend/dist/`.
+
+## [2.7.0] - 2026-10-30
+
+### 🛡️ Idempotencia en Migrador Excel y Blindaje Anti-Recursión en Triggers SQL (`[FN-07.12]` / `[FN-07.15]`)
+- **Idempotencia Estricta y Simulación por Defecto en `migrar_excel_a_postgres.py` (`[FN-07.15]`)**:
+  - `MODO_SIMULACION_DRY_RUN` activado por defecto (`"--commit" not in sys.argv`), exigiendo autorización explícita mediante el flag de línea de comando `--commit` para impactar la base de datos operativa.
+  - Implementada la función `generar_uuid_asistencia_estable`: las filas de Excel que carecen de UUID nativo reciben un UUIDv5 determinista (`uuid.uuid5(uuid.NAMESPACE_OID, semilla)`) calculado a partir de la tupla `(id_usuario, fecha_iso, activo_franco, lugar, id_proyecto, hora_inicio, hora_fin, horas_dedicadas, ocurrencia_en_dia)`. Rellenar o reejecutar la migración jamás duplicará filas ni alterará identificadores previos.
+- **Blindaje contra Recursión Infinita en Liquidación (`[FN-07.12]`)**:
+  - En `002_corregir_prioridad_oficina.sql`, `003_blindar_triggers_liquidacion_y_roster.sql` y `postgres_schema.sql`, se endureció la guarda del trigger `fn_trigger_sincronizar_liquidacion` a `IF pg_trigger_depth() = 1 AND (TG_OP = 'DELETE' OR TG_OP = 'UPDATE') THEN`.
+  - Se elimina definitivamente el riesgo de bucles recursivos o desbordes de pila (`stack depth limit exceeded`) cuando los colaboradores poseen tarifa `$0.00` o cuando coexisten registros de oficina y obra en la misma jornada.
+- **Preservación In-Memory JSONB de Costos Manuales al Editar Turnos de Roster (`[FN-07.12]`)**:
+  - En `fn_sincronizar_asistencias_desde_roster`, al ejecutarse un `UPDATE` sobre `app_rrhh.b_1_roster`, se respaldan en una variable de memoria `JSONB` todas las asistencias con `costo_manual = TRUE` cuyas fechas permanezcan dentro del rango `[NEW.fecha_inicio, NEW.fecha_fin]`.
+  - Tras la regeneración del bloque diario por el trigger, se restauran atómicamente el costo manual (`costo_manual`, `costo_dia`), la clasificación especial de jornada (`tipo_dia`), los horarios y las horas dedicadas.
+
+## [2.6.0] - 2026-10-29
+
+### ⚡ Concurrencia Transaccional, Paginación de Historial y Eliminación de Race Conditions (`[FN-07.06]` / `[FN-07.04]` / `[FN-02.03]` / `[FN-07.02]`)
+- **Lectura de Liquidación sin Bloqueo de Escritura (`[FN-07.06]`)**:
+  - En `postgres_repository.py` (`obtener_liquidacion`), se desacopló la consulta de liquidación mensual eliminando el `SELECT ... FOR UPDATE` y la ejecución forzada de `fn_recalcular_liquidacion_mes` en lecturas habituales.
+  - La consulta lee directamente de `app_rrhh.a_1_calculo_sueldo` (mantenida actualizada por triggers), permitiendo consultas concurrentes instantáneas sin competir con capturas ni ediciones. Se reserva el recálculo transaccional exclusivo para cuando la fila no existe o se indica `forzar_recalculo = True`.
+- **Cerrojos de Roster Aislados por Empleado (`[FN-07.04]` / `[FN-07.15]`)**:
+  - Reemplazado el bloqueo global `"checkdiario.roster"` en `guardar_rosters_atomicos` y `crear_rosters_desde_asistencias` por cerrojos transaccionales a nivel de colaborador `checkdiario.roster.<uuid>`, adquiridos en orden determinista de UUID junto al bloqueo de fila `a_1_usuarios FOR UPDATE`.
+  - Operadores administrando colaboradores distintos ya no sufren esperas ni bloqueos cruzados entre sí.
+- **Paginación en Base de Datos y Renderizado Progresivo en Frontend (`[FN-07.03]` / `[FN-02.03]`)**:
+  - En `postgres_repository.py` (`consultar_asistencias`), incorporado soporte de `limite` y `offset` con cláusulas parametrizadas `LIMIT %s OFFSET %s`.
+  - En `HistoryRecordsList.jsx`, implementado renderizado progresivo (bloques iniciales de 50 tarjetas) con botón extensible `"Mostrar más registros"`, previniendo sobrecarga en el DOM ante miles de registros acumulados.
+- **Eliminación de Carreras de Peticiones (Race Conditions) y Sincronización de Caché (`[FN-02.03]` / `[FN-07.02]`)**:
+  - En `OtherEmployeesHistoryView.jsx`, incorporado contador secuencial `requestSeqRef` para `cargarAuditoriaEmpleado`, descartando automáticamente respuestas obsoletas al alternar rápidamente entre colaboradores o meses.
+  - Actualizado el listener `catalogos-actualizados` mediante referencias mutables para eliminar problemas de *stale closures*.
+  - En `postgres_repository.py`, el invalidador de caché purga simultáneamente ambas variantes `('usuarios', False)` y `('usuarios', True)` en todas las mutaciones operativas.
+
+## [2.5.0] - 2026-10-29
+
+### 🔄 Preservación en Roster, Auditoría Forense PostgreSQL y Blindaje de Vigencia Salarial (`[FN-07.15]` / `[FN-07.16]` / `[FN-04.12]`)
+- **Preservación de Datos Originales en Consolidación de Roster (`[FN-07.15]`)**:
+  - En `postgres_repository.py` (`crear_rosters_desde_asistencias`), implementada la consulta previa de asistencias huérfanas en el rango del turno.
+  - Se validan incompatibilidades operativas rechazando con `ValidacionError` explícito si existen registros con jornada de Oficina (`lugar == 'oficina'`) o ausencias remuneradas (`vacaciones`, `licencia`).
+  - Se respaldan y agregan por fecha los atributos cargados: horarios (`hora_inicio`, `hora_fin`), `horas_dedicadas` (acumuladas en caso de múltiples imputaciones), clasificaciones especiales (`tipo_dia`), y banderas de `costo_manual` con su respectivo `costo_dia`.
+  - Tras la inserción del bloque en `b_1_roster` (que dispara `trg_generar_asistencias_roster`), se actualizan atómicamente las asistencias generadas restaurando los atributos preservados sin pérdida de información forense.
+- **Integración de Auditoría Real en PostgreSQL y Trazabilidad de Motivo (`[FN-07.16]` / `[FN-07.03]`)**:
+  - Detección activa en `perfil_esquema()` de la tabla `app_rrhh.b_1_modificaciones_realizadas`.
+  - En `postgres_repository.py`, implementadas las consultas canónicas de auditoría: `obtener_resumen_modificaciones()`, `obtener_modificaciones_recientes(limite)`, `obtener_notificaciones_modificaciones()`, `marcar_modificacion_revisada()`, `marcar_modificacion_por_asistencia_revisada()` y `marcar_todas_modificaciones_revisadas()`.
+  - En `postgres_bridge.py`, conectados los métodos puente hacia la base de datos eliminando listas vacías y respuestas mock.
+  - En `actualizar_costo_dia_manual()`, se asigna el UUID del operador a `cargado_por` en `b_1_asistencias` (lo que propaga automáticamente el autor hacia `b_1_modificaciones_realizadas` vía trigger) y se anexa el motivo explícito `[Motivo: ...]` al campo `detalle_cambio`.
+  - En `consultar_asistencias()`, se correlacionan las modificaciones de cada asistencia, exponiendo `modificacion_pendiente`, `modificacion_revisada` y el array `modificaciones` para activar el panel comparativo de RRHH.
+  - En `App.jsx` y `OtherEmployeesHistoryView.jsx`, se condiciona la actualización optimista y los mensajes de éxito a la confirmación exitosa del backend (`res?.exito !== false`).
+- **Protección de Vigencia Salarial ante Cambios de Perfil (`[FN-04.12]`)**:
+  - En `actualizar_usuario_y_sueldo()`, se consulta previamente el registro en `app_rrhh.a_1_sueldos_base`.
+  - Si los montos (`sueldo_oficina`, `sueldo_obra`) y el `lugar_habitual` no han variado, se omite el `INSERT ... ON CONFLICT DO UPDATE` y se omite la invocación a `fn_recalcular_liquidacion_mes`, conservando intacta la fecha `vigente_desde` original y evitando falsas entradas en `a_1_historial_sueldos`.
+  - Cuando existe un cambio salarial efectivo, se admite una fecha `vigente_desde` personalizada o se fija `CURRENT_DATE`, ejecutando el recálculo mensual de forma controlada.
+
+## [2.4.0] - 2026-10-29
+
+### 📊 Exactitud Contable en Liquidación, Respeto de Costo $0 y Exportación Roster en 3 Hojas (`[FN-07.09]` / `[FN-07.04]`)
+- **Respeto Canónico de Subtotales $0.00 en Liquidación (`[FN-07.09]`)**:
+  - En `OtherEmployeesHistoryView.jsx`, corregida la condición que sustituía sumas de costo `$0.00` por `días × tarifa`, permitiendo que los días de Obra coetáneos con Oficina (remunerados legítimamente en `$0.00` según la regla de jornada única de PostgreSQL) se reflejen fidedignamente sin inflar los haberes.
+  - Sincronizados los subtotales con los valores reales computados por la base de datos y respetando únicamente los overrides manuales cuando el auditor los define explícitamente.
+- **Conciliación Aritmética en Excel de Liquidación (`[FN-07.09]`)**:
+  - En `liquidacion_export.py`, garantizado que la suma de subtotales por concepto y los adicionales aprobados (`a_1_adicionales_sueldo`) sea idéntica al `TOTAL A LIQUIDAR`.
+  - Insertada fila explícita para `"Adicionales aprobados del mes"` cuando existen registros en `a_1_adicionales_sueldo`, cerrando la discrepancia entre el desglose y el sueldo total oficial.
+- **Exportación de Roster en 3 Hojas Reglamentarias (`[FN-07.09]`)**:
+  - En `postgres_exports.py` y `roster_export.py`, implementada la generación de las 3 hojas canónicas estipuladas en `AGENTS.md`:
+    1. `"Ciclo Completo"`: turnos consolidados con viáticos integrales.
+    2. `"1ra Quincena (1 al 15)"`: desglose acotado a los primeros 15 días con cómputo de días normales, domingos, bajada/subida y adicionales proporcionales.
+    3. `"2da Quincena (16 al Fin)"`: cómputo del tramo restante hasta el último día del mes.
+- **Gantt de Roster Dinámico por Catálogo y Período (`[FN-07.04]`)**:
+  - En `RosterView.jsx`, ampliada la construcción de `empleadosEnGantt` para integrar tanto la lista canónica de Ingeniería como a cualquier nuevo colaborador del área `'I'` activo en catálogo o con turnos registrados en el mes, evitando la exclusión visual de colaboradores seleccionables en el formulario.
+
+### 🛡️ Blindaje de Autenticación, RBAC, Catálogo Mínimo y Actualizador Seguro (`[FN-07.02]` / `[FN-04.12]` / `[FN-03.06]`)
+- **Autenticación Estricta Nombre + DNI (`[FN-07.02]`)**:
+  - Implementada función `autenticar_usuario(nombre, dni)` en `postgres_repository.py` separada de `resolver_usuario()`.
+  - Exige DNI numérico (mínimo 6 dígitos) y coincidencia estricta y simultánea contra `u.dni` y `u.nombre`, bloqueando el bypass de login con el nombre en el campo DNI.
+- **Separación de Privilegios y Bloqueo de Escalada de Roles (`[FN-04.12]`)**:
+  - En `postgres_bridge.py`: `actualizar_usuario_y_sueldo` restringido exclusivamente a `admin` y `sub_admin`. El rol `core` queda bloqueado en el backend con `PermisoDenegadoError`.
+  - En `postgres_repository.py`: Validación atómica con `FOR UPDATE`. Se prohíbe que `sub_admin` modifique cuentas `admin`, se autopromueva a `admin` o cambie el `rol_app` de usuarios.
+  - En `UsersManagementView.jsx`: Modo solo lectura para `core`, selector de roles restringido a `admin` y bloqueo visual de cuentas `admin` ante usuarios `sub_admin`.
+- **Protección contra Inyección de Costo Manual Anidado (`[FN-07.03]`)**:
+  - `preparar_asistencias` y `guardar_check_diario` desarman y bloquean cualquier `costo_manual` o `costo_dia` inyectado dentro de la lista de proyectos por usuarios no administradores.
+- **Minimización de Catálogo Público (`[FN-07.02]`)**:
+  - `obtener_todos_usuarios` proyecta exclusivamente campos públicos (`id_usuario`, `nombre`, `area`, `lugar_habitual`, `activo`) para roles operativos (`user_1`, `user_2`), eliminando DNI, correos, roles y última actividad del payload.
+- **Blindaje y Reparación del Actualizador de Escritorio (`[FN-03.06]`)**:
+  - Eliminado el `NameError` de `cargar_configuracion()`, leyendo el repositorio GitHub desde `os.environ.get("GITHUB_REPO")` y distinguiendo errores de red de "sin actualizaciones".
+  - `ejecutar_descarga_y_reinicio` valida que la URL sea HTTPS oficial de GitHub, verifica la cabecera PE ejecutable de Windows (`MZ`) y rechaza binarios corruptos o URLs arbitrarias.
+
+## [2.3.0] - 2026-10-29
+
+### 📐 Optimización Estructural de Interfaz, Adaptabilidad de Zoom y Contraste RPG (`[FN-04.08]` / `[FN-02.03]`)
+- **Adaptabilidad de Viewport ante Escala de Zoom (80% - 130%)**:
+  - Inyección reactiva de la variable `--ui-zoom` (`zoom / 100`) y cálculo compensatorio `--vh-full: calc(100vh / var(--ui-zoom, 1))` en `:root`.
+  - Reemplazo de alturas fijas rígidas `calc(100vh - 65px)` en `.roster-view-container`, `.history-split-viewport` y `.other-history-container` por `calc(var(--vh-full, 100vh) - ...)`, eliminando franjas blancas inferiores en zoom `< 100%` y desbordes en zoom `> 100%`.
+  - Ancho adaptable `max-width: min(760px, 94vw)` en formularios y distribución vertical uniforme en `.calendar-grid` y `.audit-calendar-grid` (`grid-auto-rows: minmax(64px, 1fr)`).
+- **Estandarización y Espaciado de Botoneras**:
+  - Incorporada la clase corporativa `.btn-action-primary` (`#cc3333`, `height: 36px`, `border-radius: 8px`), corrigiendo el botón `+ Nuevo Check` en `HistoryView` y unificando el botón `Cargar Tarifas` en `RosterView`.
+  - Reestructurado `RosterEmployeeChecklist` con chips `Todos` / `Ninguno`, evitando rupturas de línea y truncamiento de nombres en la grilla.
+  - Reemplazado UUID crudo en `RosterShiftForm` por el badge corporativo `✓ Tarifa Activa`.
+  - Mejorados los tamaños táctiles de stepper horario (28x28px en `CheckForm`), zoom de días (26x26px en Gantt) y botones de auditoría (32px).
+- **Legibilidad y Contraste Integral en Modo RPG**:
+  - Desacoplado el `<select>` de `"Aventurero a auditar"` en `HistoryAuditCalendar` con `min-width: 220px`, impidiendo que el chip RPG colapse el menú a 24px.
+  - Ámbito semántico de tinta oscura sobre pergamino (`--text-primary: #2b1d0c`, `--text-secondary: #5c381e`), restaurando la visibilidad de títulos, meses del calendario, fechas de asistencia, proyectos, horas y leyendas.
+  - Título `.users-view-title` ajustado a dorado claro `#fef3c7` sobre la madera oscura del tablón, y fechas/proyectos de la tabla de empleados fijados con alto contraste sobre el pergamino.
+  - Fondo `#fbf2dc` y texto `#2b1d0c` asegurados en todas las etiquetas `select`, `option` y `optgroup` en Modo RPG.
+
+### 🎨 Rediseño Corporativo del Modal Interactivo de Consolidación de Roster (`[FN-07.15]`)
+- **Aislamiento DOM y Portales (`[MOD-02]` / `[MOD-07]`)**:
+  - Encapsulamiento del modal en `ReactDOM.createPortal(..., document.body)` para evitar colisiones de contexto de apilamiento (*stacking context*), *transforms* o recortes de contenedores padre en `OtherEmployeesHistoryView`.
+  - Backdrop desenfocado (`backdrop-blur-md bg-slate-900/65`) con cierre por tecla `Escape` y clic exterior seguro.
+- **Jerarquía Visual y Tipografía Corporativa Ingeap (`[Rule FRONT-BRAND-01]`)**:
+  - Incorporada cabecera con contenedor de icono SVG corporativo, tipografía semi-bold de 16px, pill badge del colaborador auditado y botón de cierre accesible (`44x44px`).
+  - Tarjeta de controles superiores (`.modal-roster-config-card`) para alcance y proyecto por defecto con focus ring corporativo (`#cc3333`).
+  - Métricas de auditoría estructuradas con tags semánticos (asistencias huérfanas en ámbar, vinculadas en esmeralda y resumen de bloques en rojo Ingeap).
+- **Resolución de Truncamiento en Tabla de Turnos (`[FN-07.15]`)**:
+  - Eliminado el corte de texto en selectores de "Tipo Turno" (`Franc`/`Camp` -> pastillas completas `🏕️ Campo` y `🏠 Franco` con min-width 135px).
+  - Inputs de fecha (`.modal-roster-date-input`) con tipografía nítida y alineación consistente.
+  - Footer con resumen explicativo del lote contable y botón de confirmación con estado de carga interactivo (`.modal-roster-confirm-btn`).
+
+### ⚡ Blindaje de Concurrencia y Suite de Pruebas de Carga Masiva (`[FN-07.16]`)
+- **Blindaje del Pool de Conexiones (`[MOD-07]`)**:
+  - Ampliado `PG_POOL_MAX` de 8 a 20 conexiones en `backend/postgres_db.py` para soportar ráfagas concurrentes sin rechazo por semáforo.
+  - Timeout de adquisición de conexión configurable mediante `PG_POOL_ACQUIRE_TIMEOUT` (15 segundos por defecto).
+- **Serialización Pesimista y Prevención de Deadlocks (`[MOD-07]`)**:
+  - Adquisición de `SELECT id_usuario FROM app_rrhh.a_1_usuarios WHERE id_usuario = %s FOR UPDATE` en `obtener_liquidacion` previo al recálculo de `fn_recalcular_liquidacion_mes`, eliminando carreras e inversiones de bloqueo con inserciones concurrentes.
+- **Suite Automatizada de Carga Masiva (20 Usuarios Simultáneos) (`[FN-07.16]`)**:
+  - Implementado `backend/tests/test_postgres_concurrency_load.py` con sembrado reversible de 20 usuarios sintéticos, 5 proyectos y tarifas de Roster en base aislada.
+  - Evaluación de 4 escenarios de concurrencia:
+    1. Ráfaga multi-registro simultánea (120 registros procesados en paralelo, 0 deadlocks, liquidación cuadra al centavo).
+    2. Colisiones en misma fecha validando prevalencia de Oficina sobre Obra (100% de cumplimiento del costo único diario).
+    3. Contención intra-usuario (doble submit, auditoría salarial y consulta simultánea bajo serialización `FOR UPDATE`).
+    4. Responsable de RRHH cargando múltiples turnos de Roster en lote (8 turnos y 84 asistencias autogeneradas concurrentes con 16 colaboradores activos).
+- **Runner CLI de Telemetría (`backend/stress_test_runner.py`)**:
+  - Medición automatizada de latencias (mínimo, promedio, p50, p95, p99, máximo), throughput y auditoría SQL de invariantes contables con 0 violaciones detectadas.
+
+## [2.2.0] - 2026-10-28
+
+### 🚀 Módulo Integral de Empleados, Accesibilidad, Liquidación y Refinamiento Visual
+- **Erradicación de Google Sheets (`[MOD-01]` / `[MOD-07]`)**: Eliminación total del botón de refresco y sondeos periódicos hacia Google Sheets, operando 100% nativo sobre PostgreSQL en Railway.
+- **Módulo de Empleados con RBAC extendido (`[MOD-08]`)**:
+  - Incorporada la tarjeta de acceso a **Módulo de Empleados** en el panel principal (`HomeView` y `RpgTavernBoard`) para los roles `admin`, `sub_admin` y `core`.
+  - Visualización completa con scroll vertical fluido, filtros por área canónica (`I`, `A`, `M`, `RRHH`, `N`, `VyM`, `S`) y estado, mostrando sueldo base, valor día generado por PostgreSQL, último registro de jornada y cumpleaños.
+  - Soporte y adaptación visual completa en Modo Claro, Modo Oscuro y Modo RPG Pergamino Taberna.
+- **Zoom Dinámico Accesible (`[MOD-01]`)**:
+  - Implementado ajuste de escala global mediante `Ctrl + Scroll` del ratón (80% a 130%) con bloqueo de comportamiento nativo del navegador, sincronizado con el indicador de porcentaje del header y atajos `Ctrl + +`, `Ctrl + -`, `Ctrl + 0`.
+- **Calculadora de Liquidación y Auditoría Salarial (`[MOD-07]`)**:
+  - Restauración canónica de las 5 celdas individuales en `OtherEmployeesHistoryView` (*Día de oficina*, *Día de obra*, *Franco de obra trab.*, *Franco de ofic. trab.*, *Feriado trabajado*), con breakpoint responsive adaptado a `<= 1100px`.
+  - Asignación y edición manual de costo diario (`admin` / `sub_admin`) en el calendario mensual y tarjetas laterales mediante `HistoryCostDayModal`.
+- **Fines de Semana a Franco de Oficina (`[MOD-02]` / `[MOD-07]`)**:
+  - Carga asistida de sábados y domingos estrictamente como **Franco de Oficina** con **valor de oficina** (`dia_oficina`), independientemente del rol del usuario.
+  - Resolución canónica en `francoUtils.js` de códigos cortos de áreas internas (`A`, `I`, `M`, `RRHH`, `N`, `VyM`, `S`), previniendo catalogación errónea como *Franco de Obra*.
+- **Resolución de Autor en `cargado_por` (`[MOD-02]` / `[MOD-07]`)**:
+  - Cruce relacional en PostgreSQL (`LEFT JOIN a_1_usuarios uc ON uc.id_usuario = a.cargado_por`), proyectando el nombre real del operador en lugar de UUIDs alfanuméricos.
+  - Función defensiva `resolverNombreCargador` en cliente y etiquetado preciso de autoría (`✓ Cargado por mí` en historial propio sin falsos indicadores de RRHH).
+- **Refinamiento Visual y Maquetación de Tarjetas (`[MOD-07]`)**:
+  - Estructuración flexbox de `.other-record-card`: avatar circular con iniciales, separación limpia entre nombre y autor, pills de costo/estado sin solapamiento y botones de acción unificados (altura uniforme de 29px en fila horizontal).
+- **Exportación de Informe de Liquidación y Creación de Roster desde Historial (`[FN-07.09]` / `[FN-07.15]`)**:
+  - Resolución flexible de ciclo mensual (`ciclo_cobro`, `mes` o `nombre_mes`) y respaldo de liquidación en `exportar_informe_liquidacion`, incorporando hoja ejecutiva `Resumen Liquidación` en Excel.
+  - Nuevo modal interactivo `HistoryCreateRosterModal` en Historial de Otros Empleados (`📅 Crear Roster`) que detecta bloques contiguos de asistencias sin vincular (`id_roster IS NULL`) y los consolida atómicamente en `app_rrhh.b_1_roster` sin duplicar asistencias.
+
+## [2.1.0] - 2026-10-26
+
+### 💰 Restauración de Calculadora Canónica de Liquidación (`[FN-02.03]`)
+- **Interfaz interactiva canónica**: Restaurada la presentación en 5 columnas/conceptos (*Día de oficina*, *Día de obra*, *Franco de obra trab.*, *Franco de ofic. trab.*, *Feriado trabajado*), con badges de conteo automático detectado, inputs directos para edición de días manuales (step 0.5 con botón `↺ Auto`), tarifas unitarias editables, subtotales reactivos y banner consolidado de total a liquidar.
+- **Sincronización con perfil salarial**: Precarga automática de tarifas unitarias a partir de `costo_dia_ofi` y `costo_dia_obra` del usuario seleccionado en PostgreSQL.
+- **Exportación oficial en Excel**: Generación de planilla detallada de liquidación con detalle por proyecto y jornada.
+
+### ⚙️ Carga y Gestión de Tarifas de Roster (`[FN-07.11]`)
+- **Modal de tarifas de roster**: Implementado `RosterTarifaModal` accesible desde la barra de herramientas de `RosterView`. Presenta selector desplegable para seleccionar el proyecto y campos para las tarifas respectivas.
+- **Campos obligatorios y opcionales**: Únicos campos obligatorios: `dia_normal` y `dia_domingo` ($\ge 0$). Campos opcionales: `subida`, `bajada` y `adicional_turno` (con valor por defecto 0).
+- **Persistencia en PostgreSQL**: Integración con `app_rrhh.b_1_tarifas_roster`, activando automáticamente la nueva tarifa y desactivando tarifas precedentes mediante el trigger nativo de base de datos.
+
+### 👥 Módulo de Administración de Usuarios y Sueldos Base (`[FN-07.12]`)
+- **Módulo con control RBAC**: Vista `UsersManagementView` y acceso en header/menú principal restringido exclusivamente a roles `admin` y `sub_admin` (`puedeGestionarUsuarios`).
+- **Lista integral y filtrado**: Visualización completa de todos los usuarios (activos e inactivos), con buscador por texto, filtro por área y estado, badges de rol RBAC y sueldos base mensual de oficina y obra.
+- **Modal de edición y recálculo salarial**: Permite modificar datos personales (nombre, apellido, DNI, email), área, rol de aplicación, estado activo/baja y sueldos base (`sueldo_oficina`, `sueldo_obra`, `lugar_habitual`). Al persistir en `app_rrhh.a_1_sueldos_base`, PostgreSQL recalcula de inmediato los costos diarios `costo_dia_ofi` y `costo_dia_obra`.
+
 ## [2.0.0] - 2026-10-26
 
 - [MOD-07] Migración de persistencia SQLite/Google Sheets a PostgreSQL mediante psycopg2, pool transaccional y consultas parametrizadas; conserva todas las firmas públicas de ApiPuente.

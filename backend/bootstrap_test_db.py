@@ -84,6 +84,9 @@ def main():
             correccion = ROOT/"backend"/"sql"/"002_corregir_prioridad_oficina.sql"
             if correccion.exists():
                 cur.execute(correccion.read_text(encoding="utf-8"))
+            blindaje = ROOT/"backend"/"sql"/"003_blindar_triggers_liquidacion_y_roster.sql"
+            if blindaje.exists():
+                cur.execute(blindaje.read_text(encoding="utf-8"))
     fixture = ROOT/"backend"/"tests"/"fixtures"/"postgres_schema.sql"
     fixture.parent.mkdir(parents=True,exist_ok=True)
     fixture.write_text("-- [FN-07.10] Estructura introspectada para pruebas aisladas; no contiene datos\n"+estructura.replace("\r\n","\n"),encoding="utf-8",newline="\n")

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { getTituloRpg } from '../utils/rpgTitles';
 import { api } from '../services/apiBridge';
-import { puedeVerHistorialOtros, puedeAccederRoster } from '../utils/permissions';
+import { puedeVerHistorialOtros, puedeAccederRoster, puedeGestionarUsuarios } from '../utils/permissions';
 
 // Iconos vectoriales medievales para garantizar renderizado perfecto sin depender de compatibilidad de emojis
 const QuillIcon = ({ size = 16, color = "#6b4317" }) => (
@@ -55,7 +55,8 @@ export default function RpgTavernBoard({
   onAvatarClick,
   onHistorialOtrosEmpleados,
   onNuevoRoster,
-  onHistorialRoster
+  onHistorialRoster,
+  onGestionUsuarios
 }) {
   const puedeOtros = puedeVerHistorialOtros(usuario);
   const puedeRoster = puedeAccederRoster(usuario);
@@ -281,6 +282,18 @@ export default function RpgTavernBoard({
                 title="Auditoría y misiones de todos los colaboradores del gremio"
               >
                 👥 Crónicas de Compañeros (Otros Empleados)
+              </button>
+            )}
+
+            {puedeGestionarUsuarios(usuario) && onGestionUsuarios && (
+              <button 
+                type="button" 
+                className="rpg-parchment-btn-sec"
+                style={{ marginTop: '6px', borderColor: '#854d0e', color: '#854d0e', fontWeight: 700 }}
+                onClick={onGestionUsuarios}
+                title="Registro mayor de aventureros y asignación de soldadas"
+              >
+                📜 Libro de Aventureros y Soldadas (Empleados)
               </button>
             )}
 

@@ -1,7 +1,6 @@
 // [FN-02.03] Orquestador de Historial de Otros Empleados, Auditoría y Liquidación
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { api } from '../services/apiBridge';
-import { queryClient } from '../services/queryClient';
 import {
   puedeVerHistorialOtros,
   puedeModificarRegistro,
@@ -27,6 +26,7 @@ import HistoryEditRecordModal from './history/HistoryEditRecordModal';
 import HistoryDeleteRecordModal from './history/HistoryDeleteRecordModal';
 import HistoryDiffModal from './history/HistoryDiffModal';
 import HistoryCostDayModal from './history/HistoryCostDayModal';
+import HistoryCreateRosterModal from './history/HistoryCreateRosterModal';
 
 // Re-exportar para preservar compatibilidad con posibles importadores externos
 export { categorizarRegistroLiquidacion };
@@ -44,13 +44,15 @@ export default function OtherEmployeesHistoryView({
 
   // Maximizar ventana para experiencia panorámica
   useEffect(() => {
-    api.maximizarVentana();
-  }, []);
+    if (puedeVerHistorialOtros(usuario)) {
+      api.maximizarVentana();
+    }
+  }, [usuario]);
 
   const [registros, setRegistros] = useState([]);
   const [cargando, setCargando] = useState(true);
   const [sincronizando, setSincronizando] = useState(false);
-  const limpiando = false;
+  const [limpiando, setLimpiando] = useState(false);
   const [mensajeSync, setMensajeSync] = useState(null);
 
   // Catálogos auxiliares
@@ -90,6 +92,19 @@ export default function OtherEmployeesHistoryView({
   const [marcandoRevisadoId, setMarcandoRevisadoId] = useState(null);
   const [comparativaModificacion, setComparativaModificacion] = useState(null);
 
+  // [FN-02.03] Control secuencial para prevención de carreras de peticiones (race conditions)
+  const requestSeqRef = useRef(0);
+  const empleadoAuditarRef = useRef(empleadoAuditar);
+  const fechaCalendarioRef = useRef(fechaCalendario);
+
+  useEffect(() => {
+    empleadoAuditarRef.current = empleadoAuditar;
+  }, [empleadoAuditar]);
+
+  useEffect(() => {
+    fechaCalendarioRef.current = fechaCalendario;
+  }, [fechaCalendario]);
+
   // [FN-04.11] Controles de permisos según rol RBAC
   const esSoloLectura = esCore(usuario) || esAreaNucleo(usuario) || !puedeModificarHistorialOtros(usuario);
   const esSoloLecturaNucleo = esSoloLectura;
@@ -97,11 +112,80 @@ export default function OtherEmployeesHistoryView({
   const puedeEditarCosto = !esSoloLectura && puedeGestionarTipoCosto(usuario);
   const puedeVerLiquidacion = puedeVerCalculadoraLiquidacion(usuario);
 
+  // Cantidad manual de días para las 5 categorías de liquidación (RRHH)
+  const [diasOficinaManual, setDiasOficinaManual] = useState('');
+  const [diasCampoManual, setDiasCampoManual] = useState('');
+  const [diasFrancoObraManual, setDiasFrancoObraManual] = useState('');
+  const [diasFrancoOficManual, setDiasFrancoOficManual] = useState('');
+  const [diasFeriadoManual, setDiasFeriadoManual] = useState('');
+  const [exportandoInforme, setExportandoInforme] = useState(false);
+
   // [FN-06.07] Modal exclusivo e independiente para edición manual de costo_dia
   const [modalCostoDia, setModalCostoDia] = useState(null);
   const [guardandoCostoDia, setGuardandoCostoDia] = useState(false);
+  const [modalCrearRosterAbierto, setModalCrearRosterAbierto] = useState(false);
+  const [creandoRoster, setCreandoRoster] = useState(false);
 
-  const empActual = empleados.find(e => e.nombre === empleadoAuditar) ?? null;
+  // Tarifas de Liquidación (guardadas en localStorage)
+  const [tarifas, setTarifas] = useState(() => {
+    try {
+      const guardadas = localStorage.getItem('ingeap_tarifas_rrhh');
+      if (guardadas) {
+        const parsed = JSON.parse(guardadas);
+        return {
+          precioOficina: parsed.precioOficina || 0,
+          precioObra: parsed.precioObra || 0,
+          precioFrancoObraTrabajado: parsed.precioFrancoObraTrabajado ?? (parsed.precioFrancoTrabajado || 0),
+          precioFrancoOficTrabajado: parsed.precioFrancoOficTrabajado ?? (parsed.precioFrancoTrabajado || 0),
+          precioFeriadoTrabajado: parsed.precioFeriadoTrabajado || 0
+        };
+      }
+    } catch (e) {
+      console.error(e);
+    }
+    return {
+      precioOficina: 0,
+      precioObra: 0,
+      precioFrancoObraTrabajado: 0,
+      precioFrancoOficTrabajado: 0,
+      precioFeriadoTrabajado: 0
+    };
+  });
+
+  const handleTarifaChange = (campo, valor) => {
+    const num = parseFloat(valor) || 0;
+    const nuevas = { ...tarifas, [campo]: num };
+    setTarifas(nuevas);
+    try {
+      localStorage.setItem('ingeap_tarifas_rrhh', JSON.stringify(nuevas));
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  // Colaborador actualmente seleccionado para auditar
+  const empActual = useMemo(() => {
+    if (!empleadoAuditar || !Array.isArray(empleados)) return null;
+    const n = empleadoAuditar.trim().toLowerCase();
+    return empleados.find(e => (e.nombre || '').trim().toLowerCase() === n);
+  }, [empleadoAuditar, empleados]);
+
+  // [FN-01.02] Pre-cargar tarifas con los costos reales de nómina del empleado si existen
+  useEffect(() => {
+    if (empActual) {
+      const cOfi = Number(empActual.costo_dia_ofi) || 0;
+      const cObra = Number(empActual.costo_dia_obra) || 0;
+      if (cOfi > 0 || cObra > 0) {
+        setTarifas(prev => ({
+          precioOficina: cOfi > 0 ? cOfi : prev.precioOficina,
+          precioObra: cObra > 0 ? cObra : prev.precioObra,
+          precioFrancoObraTrabajado: cObra > 0 ? Math.round(cObra * 1.5 * 100) / 100 : (cOfi > 0 ? Math.round(cOfi * 1.5 * 100) / 100 : (prev.precioFrancoObraTrabajado || 0)),
+          precioFrancoOficTrabajado: cOfi > 0 ? Math.round(cOfi * 1.5 * 100) / 100 : (cObra > 0 ? Math.round(cObra * 1.5 * 100) / 100 : (prev.precioFrancoOficTrabajado || 0)),
+          precioFeriadoTrabajado: cObra > 0 ? Math.round(cObra * 2.0 * 100) / 100 : (cOfi > 0 ? Math.round(cOfi * 2.0 * 100) / 100 : prev.precioFeriadoTrabajado)
+        }));
+      }
+    }
+  }, [empActual]);
 
   const cargarDatos = async () => {
     setCargando(true);
@@ -131,37 +215,42 @@ export default function OtherEmployeesHistoryView({
 
   const cargarAuditoriaEmpleado = async (emp, fechaCal) => {
     if (!emp) return;
+    const reqSeq = ++requestSeqRef.current;
     setCargandoAuditoria(true);
     try {
       const anio = fechaCal.getFullYear();
       const mesStr = String(fechaCal.getMonth() + 1).padStart(2, '0');
       const mesAnio = `${anio}-${mesStr}`;
       const data = await api.obtenerTodosRegistrosEmpleado(emp, mesAnio);
-      if (Array.isArray(data)) {
+      if (reqSeq === requestSeqRef.current && Array.isArray(data)) {
         setRegistrosEmpleadoAuditar(data);
-        queryClient.invalidateQueries({ queryKey: ['liquidacion', emp, mesAnio] });
       }
     } catch (err) {
-      console.error('Error al cargar registros del empleado para auditoría:', err);
+      if (reqSeq === requestSeqRef.current) {
+        console.error('Error al cargar registros del empleado para auditoría:', err);
+      }
     } finally {
-      setCargandoAuditoria(false);
+      if (reqSeq === requestSeqRef.current) {
+        setCargandoAuditoria(false);
+      }
     }
   };
 
   useEffect(() => {
+    if (!puedeVerHistorialOtros(usuario)) return;
     cargarDatos();
 
     const handleCatalogos = () => {
       cargarDatos();
-      if (empleadoAuditar) {
-        cargarAuditoriaEmpleado(empleadoAuditar, fechaCalendario);
+      if (empleadoAuditarRef.current) {
+        cargarAuditoriaEmpleado(empleadoAuditarRef.current, fechaCalendarioRef.current);
       }
     };
     window.addEventListener('catalogos-actualizados', handleCatalogos);
     return () => {
       window.removeEventListener('catalogos-actualizados', handleCatalogos);
     };
-  }, []);
+  }, [usuario]);
 
   // [FN-02.04] Abrir panel flotante dividido comparativo de modificación
   const abrirComparativa = (item, modEspecifica = null) => {
@@ -216,6 +305,11 @@ export default function OtherEmployeesHistoryView({
 
   useEffect(() => {
     if (empleadoAuditar) {
+      setDiasOficinaManual('');
+      setDiasCampoManual('');
+      setDiasFrancoObraManual('');
+      setDiasFrancoOficManual('');
+      setDiasFeriadoManual('');
       setDiasSeleccionadosCalendario(new Set());
       cargarAuditoriaEmpleado(empleadoAuditar, fechaCalendario);
     }
@@ -227,19 +321,50 @@ export default function OtherEmployeesHistoryView({
     try {
       const res = await api.sincronizarSheets();
       if (res && res.exito) {
-        setMensajeSync({ tipo: 'exito', texto: res.mensaje || 'Sincronizado correctamente con PostgreSQL.' });
+        setMensajeSync({ tipo: 'exito', texto: res.mensaje || 'Sincronizado correctamente con el servidor.' });
         await cargarDatos();
         if (empleadoAuditar) {
           await cargarAuditoriaEmpleado(empleadoAuditar, fechaCalendario);
         }
       } else {
-        setMensajeSync({ tipo: 'error', texto: res?.error || 'No se pudo sincronizar con PostgreSQL.' });
+        setMensajeSync({ tipo: 'error', texto: res?.error || 'No se pudo sincronizar con el servidor.' });
       }
     } catch (err) {
       console.error(err);
-      setMensajeSync({ tipo: 'error', texto: 'Error de red o comunicación con PostgreSQL.' });
+      setMensajeSync({ tipo: 'error', texto: 'Error de red o comunicación con el servidor.' });
     } finally {
       setSincronizando(false);
+    }
+  };
+
+  const handleLimpiarLocalYDescargar = async () => {
+    if (!window.confirm('¿Deseas limpiar todos los registros locales y volver a descargar la información oficial desde la base de datos? Esta acción descarta datos locales y previene registros duplicados.')) {
+      return;
+    }
+    setLimpiando(true);
+    setMensajeSync(null);
+    try {
+      const res = await api.limpiarYDescargarSheets();
+      if (res && res.exito) {
+        setMensajeSync({
+          tipo: 'exito',
+          texto: res.mensaje || 'Registros locales limpiados y sincronizados desde el servidor.'
+        });
+        await cargarDatos();
+        if (empleadoAuditar) {
+          await cargarAuditoriaEmpleado(empleadoAuditar, fechaCalendario);
+        }
+      } else {
+        setMensajeSync({
+          tipo: 'error',
+          texto: res?.error || 'No se pudo completar la limpieza y descarga desde el servidor.'
+        });
+      }
+    } catch (err) {
+      console.error(err);
+      setMensajeSync({ tipo: 'error', texto: 'Error de comunicación al limpiar y descargar.' });
+    } finally {
+      setLimpiando(false);
     }
   };
 
@@ -263,9 +388,6 @@ export default function OtherEmployeesHistoryView({
         id: registroEditando.id,
         fecha: registroEditando.fecha,
         lugar: registroEditando.tipo_ocf || registroEditando.lugar || 'Oficina',
-        modalidad: registroEditando.modalidad === 'roster' ? 'obra' : registroEditando.modalidad,
-        costo_manual: registroEditando.costo_manual || false,
-        costo_dia: registroEditando.costo_dia,
         servicio: registroEditando.servicio,
         horas: Number(registroEditando.horas) || 0,
         hora_inicio: registroEditando.hora_inicio || '',
@@ -281,7 +403,7 @@ export default function OtherEmployeesHistoryView({
       if (res && res.exito) {
         setMensajeSync({
           tipo: 'exito',
-          texto: 'Registro modificado exitosamente. Guardado en PostgreSQL.'
+          texto: 'Registro modificado exitosamente y sincronizado con el servidor.'
         });
         setRegistroEditando(null);
         await cargarDatos();
@@ -335,7 +457,11 @@ export default function OtherEmployeesHistoryView({
     if (!idAsistencia) return;
     setMarcandoRevisadoId(idAsistencia);
     try {
-      await api.marcarModificacionPorAsistenciaRevisada(idAsistencia);
+      const res = await api.marcarModificacionPorAsistenciaRevisada(idAsistencia);
+      if (res && res.exito === false) {
+        setMensajeSync({ tipo: 'error', texto: res.error || 'No se pudo marcar la modificación como revisada.' });
+        return;
+      }
       setRegistros(prev => prev.map(r => {
         if (r.id_asistencia === idAsistencia || r.id === item.id) {
           return { ...r, modificacion_pendiente: 0, modificacion_revisada: 1 };
@@ -701,6 +827,288 @@ export default function OtherEmployeesHistoryView({
     setFechaCalendario(new Date(hoy.getFullYear(), hoy.getMonth(), 1));
   };
 
+  // [FN-06.04] Registros seleccionados para liquidación
+  const registrosParaLiquidar = useMemo(() => {
+    const anio = fechaCalendario.getFullYear();
+    const mesStr = String(fechaCalendario.getMonth() + 1).padStart(2, '0');
+    const prefijoMes = `${anio}-${mesStr}`;
+
+    if (diasSeleccionadosCalendario && diasSeleccionadosCalendario.size > 0) {
+      return registrosEmpleadoAuditar.filter(r => r.fecha && diasSeleccionadosCalendario.has(r.fecha));
+    }
+    if (seleccionados && seleccionados.size > 0) {
+      return registrosEmpleadoAuditar.filter(r => seleccionados.has(r.id || r.id_asistencia));
+    }
+    return registrosEmpleadoAuditar.filter(r => r.fecha && r.fecha.startsWith(prefijoMes));
+  }, [registrosEmpleadoAuditar, fechaCalendario, diasSeleccionadosCalendario, seleccionados]);
+
+  // [FN-06.04] Conteo de días para la calculadora de liquidación
+  const conteosLiquidacion = useMemo(() => {
+    const fechasOficina = new Set();
+    const fechasObra = new Set();
+    const fechasFrancoObraTrabajado = new Set();
+    const fechasFrancoOficTrabajado = new Set();
+    const fechasFeriadoTrabajado = new Set();
+
+    registrosParaLiquidar.forEach(r => {
+      if (!r.fecha) return;
+      const f = r.fecha.trim();
+      const cat = categorizarRegistroLiquidacion(r);
+
+      if (cat === 'oficina') fechasOficina.add(f);
+      else if (cat === 'obra') fechasObra.add(f);
+      else if (cat === 'franco_obra_trab') fechasFrancoObraTrabajado.add(f);
+      else if (cat === 'franco_ofic_trab') fechasFrancoOficTrabajado.add(f);
+      else if (cat === 'feriado_trab') fechasFeriadoTrabajado.add(f);
+    });
+
+    return {
+      diasOficina: fechasOficina.size,
+      diasObra: fechasObra.size,
+      diasFrancoObraTrabajado: fechasFrancoObraTrabajado.size,
+      diasFrancoOficTrabajado: fechasFrancoOficTrabajado.size,
+      diasFeriadoTrabajado: fechasFeriadoTrabajado.size
+    };
+  }, [registrosParaLiquidar]);
+
+  const hayModoManual = (
+    diasOficinaManual !== '' ||
+    diasCampoManual !== '' ||
+    diasFrancoObraManual !== '' ||
+    diasFrancoOficManual !== '' ||
+    diasFeriadoManual !== ''
+  );
+
+  const cantDiasOficina = (diasOficinaManual !== '' && !isNaN(parseFloat(diasOficinaManual)))
+    ? Math.max(0, parseFloat(diasOficinaManual))
+    : conteosLiquidacion.diasOficina;
+
+  const cantDiasObra = (diasCampoManual !== '' && !isNaN(parseFloat(diasCampoManual)))
+    ? Math.max(0, parseFloat(diasCampoManual))
+    : conteosLiquidacion.diasObra;
+
+  const cantDiasFrancoObra = (diasFrancoObraManual !== '' && !isNaN(parseFloat(diasFrancoObraManual)))
+    ? Math.max(0, parseFloat(diasFrancoObraManual))
+    : conteosLiquidacion.diasFrancoObraTrabajado;
+
+  const cantDiasFrancoOfic = (diasFrancoOficManual !== '' && !isNaN(parseFloat(diasFrancoOficManual)))
+    ? Math.max(0, parseFloat(diasFrancoOficManual))
+    : conteosLiquidacion.diasFrancoOficTrabajado;
+
+  const cantDiasFeriadoTrabajado = (diasFeriadoManual !== '' && !isNaN(parseFloat(diasFeriadoManual)))
+    ? Math.max(0, parseFloat(diasFeriadoManual))
+    : conteosLiquidacion.diasFeriadoTrabajado;
+
+  // [FN-06.06] Suma de importes basada en costo_dia agrupado por (fecha, categoría)
+  const sumasCostoDiaPorCategoria = useMemo(() => {
+    const mapaFechaCat = new Map();
+
+    registrosParaLiquidar.forEach(r => {
+      if (!r.fecha) return;
+      const f = r.fecha.trim();
+      const cat = categorizarRegistroLiquidacion(r);
+      const clave = `${f}__${cat}`;
+      const c = Number(r.costo_dia) || 0;
+
+      if (!mapaFechaCat.has(clave)) {
+        mapaFechaCat.set(clave, { cat, fecha: f, costo_dia: c });
+      } else {
+        const actual = mapaFechaCat.get(clave);
+        if (c > actual.costo_dia) {
+          actual.costo_dia = c;
+        }
+      }
+    });
+
+    let sumOficina = 0;
+    let sumObra = 0;
+    let sumFrancoObra = 0;
+    let sumFrancoOfic = 0;
+    let sumFeriado = 0;
+    let totalDirecto = 0;
+
+    mapaFechaCat.forEach(({ cat, costo_dia }) => {
+      totalDirecto += costo_dia;
+      if (cat === 'oficina') sumOficina += costo_dia;
+      else if (cat === 'obra') sumObra += costo_dia;
+      else if (cat === 'franco_obra_trab') sumFrancoObra += costo_dia;
+      else if (cat === 'franco_ofic_trab') sumFrancoOfic += costo_dia;
+      else if (cat === 'feriado_trab') sumFeriado += costo_dia;
+      else sumOficina += costo_dia;
+    });
+
+    return {
+      oficina: Math.round(sumOficina * 100) / 100,
+      obra: Math.round(sumObra * 100) / 100,
+      francoObra: Math.round(sumFrancoObra * 100) / 100,
+      francoOfic: Math.round(sumFrancoOfic * 100) / 100,
+      feriado: Math.round(sumFeriado * 100) / 100,
+      totalDirecto: Math.round(totalDirecto * 100) / 100
+    };
+  }, [registrosParaLiquidar]);
+
+  const subtotalOficina = (diasOficinaManual !== '')
+    ? Math.round(cantDiasOficina * (tarifas.precioOficina || 0) * 100) / 100
+    : sumasCostoDiaPorCategoria.oficina;
+
+  const subtotalObra = (diasCampoManual !== '')
+    ? Math.round(cantDiasObra * (tarifas.precioObra || 0) * 100) / 100
+    : sumasCostoDiaPorCategoria.obra;
+
+  const subtotalFrancoObra = (diasFrancoObraManual !== '')
+    ? Math.round(cantDiasFrancoObra * (tarifas.precioFrancoObraTrabajado || 0) * 100) / 100
+    : sumasCostoDiaPorCategoria.francoObra;
+
+  const subtotalFrancoOfic = (diasFrancoOficManual !== '')
+    ? Math.round(cantDiasFrancoOfic * (tarifas.precioFrancoOficTrabajado || 0) * 100) / 100
+    : sumasCostoDiaPorCategoria.francoOfic;
+
+  const subtotalFeriado = (diasFeriadoManual !== '')
+    ? Math.round(cantDiasFeriadoTrabajado * (tarifas.precioFeriadoTrabajado || 0) * 100) / 100
+    : sumasCostoDiaPorCategoria.feriado;
+
+  const totalLiquidar = Math.round((subtotalOficina + subtotalObra + subtotalFrancoObra + subtotalFrancoOfic + subtotalFeriado) * 100) / 100;
+  const totalDiasComputados = cantDiasOficina + cantDiasObra + cantDiasFrancoObra + cantDiasFrancoOfic + cantDiasFeriadoTrabajado;
+
+  // [FN-06.05] Exportación oficial de informe de liquidación a Excel
+  const handleDescargarInformeLiquidacion = async () => {
+    if (!empleadoAuditar) return;
+    setExportandoInforme(true);
+    try {
+      const anio = fechaCalendario.getFullYear();
+      const mesStr = String(fechaCalendario.getMonth() + 1).padStart(2, '0');
+      const prefijoMes = `${anio}-${mesStr}`;
+
+      const registrosMes = registrosParaLiquidar
+        .filter(r => r.fecha && r.fecha.startsWith(prefijoMes))
+        .sort((a, b) => (a.fecha || '').localeCompare(b.fecha || ''));
+
+      const getTarifaEfectiva = (cat) => {
+        if (cat === 'oficina') return cantDiasOficina > 0 ? subtotalOficina / cantDiasOficina : (tarifas.precioOficina || 0);
+        if (cat === 'obra') return cantDiasObra > 0 ? subtotalObra / cantDiasObra : (tarifas.precioObra || 0);
+        if (cat === 'franco_obra_trab') return cantDiasFrancoObra > 0 ? subtotalFrancoObra / cantDiasFrancoObra : (tarifas.precioFrancoObraTrabajado || 0);
+        if (cat === 'franco_ofic_trab') return cantDiasFrancoOfic > 0 ? subtotalFrancoOfic / cantDiasFrancoOfic : (tarifas.precioFrancoOficTrabajado || 0);
+        if (cat === 'feriado_trab') return cantDiasFeriadoTrabajado > 0 ? subtotalFeriado / cantDiasFeriadoTrabajado : (tarifas.precioFeriadoTrabajado || 0);
+        return 0;
+      };
+
+      const mapaPorFecha = new Map();
+      registrosMes.forEach(r => {
+        const f = r.fecha || '';
+        if (!mapaPorFecha.has(f)) mapaPorFecha.set(f, []);
+        mapaPorFecha.get(f).push(r);
+      });
+
+      const mapaProyectos = new Map();
+      const registrosDetalle = [];
+
+      mapaPorFecha.forEach((regsDia, fechaStr) => {
+        const regsPorCat = new Map();
+        regsDia.forEach(r => {
+          const cat = categorizarRegistroLiquidacion(r);
+          if (!regsPorCat.has(cat)) regsPorCat.set(cat, []);
+          regsPorCat.get(cat).push(r);
+        });
+
+        regsPorCat.forEach((regsCat, cat) => {
+          const tarifaCat = getTarifaEfectiva(cat);
+          const costoDiaCat = Math.round(tarifaCat * 100) / 100;
+          const totHrsCat = regsCat.reduce((sum, r) => sum + (Number(r.horas) || 0), 0);
+
+          const regRepresentativo = [...regsCat].sort((a, b) => (Number(b.horas) || 0) - (Number(a.horas) || 0))[0];
+
+          const srv = (regRepresentativo.servicio || 'Sin servicio').trim();
+          if (!mapaProyectos.has(srv)) {
+            mapaProyectos.set(srv, { proyecto: srv, diasSet: new Set(), horas: 0, monto: 0 });
+          }
+          const itemP = mapaProyectos.get(srv);
+          itemP.diasSet.add(fechaStr);
+          itemP.horas += totHrsCat;
+          itemP.monto += costoDiaCat;
+
+          registrosDetalle.push({
+            fecha: regRepresentativo.fecha || fechaStr,
+            dia_semana: regRepresentativo.dia_semana || '',
+            tipo_ocf: obtenerEtiquetaModalidad(regRepresentativo),
+            servicio: srv,
+            horas: totHrsCat,
+            tipo_costo: regRepresentativo.tipo_costo || (cat === 'obra' || cat === 'franco_obra_trab' ? 'Campo' : 'Oficina'),
+            costo_dia: costoDiaCat
+          });
+        });
+      });
+
+      const proyectosImputados = Array.from(mapaProyectos.values()).map(p => ({
+        proyecto: p.proyecto,
+        dias: p.diasSet.size,
+        horas: Math.round(p.horas * 10) / 10,
+        monto: Math.round(p.monto * 100) / 100
+      })).sort((a, b) => b.horas - a.horas);
+
+      const resumenCategorias = [
+        {
+          concepto: 'Día de oficina',
+          dias: cantDiasOficina,
+          tarifa_diaria: tarifas.precioOficina || 0,
+          subtotal: subtotalOficina
+        },
+        {
+          concepto: 'Día de obra',
+          dias: cantDiasObra,
+          tarifa_diaria: tarifas.precioObra || 0,
+          subtotal: subtotalObra
+        },
+        {
+          concepto: 'Franco de obra trabajado',
+          dias: cantDiasFrancoObra,
+          tarifa_diaria: tarifas.precioFrancoObraTrabajado || 0,
+          subtotal: subtotalFrancoObra
+        },
+        {
+          concepto: 'Franco de oficina trabajado',
+          dias: cantDiasFrancoOfic,
+          tarifa_diaria: tarifas.precioFrancoOficTrabajado || 0,
+          subtotal: subtotalFrancoOfic
+        },
+        {
+          concepto: 'Feriado trabajado',
+          dias: cantDiasFeriadoTrabajado,
+          tarifa_diaria: tarifas.precioFeriadoTrabajado || 0,
+          subtotal: subtotalFeriado
+        }
+      ].filter(c => c.dias > 0 || c.subtotal > 0 || c.tarifa_diaria > 0);
+
+      const datosInforme = {
+        empleado: empActual?.nombre || empleadoAuditar,
+        dni: empActual?.dni || '',
+        email: empActual?.mail || empActual?.email || '',
+        area: empActual?.area || '',
+        nombre_mes: NOMBRES_MESES[fechaCalendario.getMonth()],
+        mes: fechaCalendario.getMonth() + 1,
+        anio: fechaCalendario.getFullYear(),
+        ciclo_cobro: prefijoMes,
+        total_liquidar: totalLiquidar,
+        resumen_categorias: resumenCategorias,
+        proyectos_imputados: proyectosImputados,
+        registros_detalle: registrosDetalle
+      };
+
+      const res = await api.exportarInformeLiquidacion(datosInforme);
+      if (res && res.exito) {
+        alert(`Informe de liquidación generado con éxito:\n${res.ruta || 'Archivo guardado'}`);
+      } else if (res && res.cancelado) {
+        // Cancelado por el usuario
+      } else {
+        alert(`No se pudo exportar el informe: ${res?.error || 'Error desconocido'}`);
+      }
+    } catch (err) {
+      console.error('Error al exportar informe de liquidación:', err);
+      alert('Error inesperado al generar el informe de liquidación.');
+    } finally {
+      setExportandoInforme(false);
+    }
+  };
+
   const handleEnfocarDiaCalendario = (item) => {
     if (item.empleado && item.empleado !== empleadoAuditar) {
       setEmpleadoAuditar(item.empleado);
@@ -712,6 +1120,38 @@ export default function OtherEmployeesHistoryView({
         setFechaCalendario(new Date(parseInt(partes[0], 10), parseInt(partes[1], 10) - 1, 1));
       }
       setDiaDestacado(item.fecha);
+    }
+  };
+
+  const handleConfirmarCrearRoster = async (bloquesSeleccionados) => {
+    if (!Array.isArray(bloquesSeleccionados) || bloquesSeleccionados.length === 0) return;
+    setCreandoRoster(true);
+    try {
+      const payload = bloquesSeleccionados.map((b) => ({
+        empleado: b.empleado || empleadoAuditar,
+        proyecto: b.proyecto,
+        tipo: b.tipo,
+        fecha_inicio: b.fecha_inicio,
+        fecha_fin: b.fecha_fin
+      }));
+      const res = await api.crearRostersDesdeAsistencias(payload);
+      if (res && res.exito) {
+        setModalCrearRosterAbierto(false);
+        setSeleccionados(new Set());
+        setDiasSeleccionadosCalendario(new Set());
+        setMensajeSync({
+          tipo: 'exito',
+          texto: `Se crearon ${res.guardados || payload.length} turno(s) de Roster (${res.absorbidos || 0} asistencias vinculadas).`
+        });
+        await cargarDatos();
+        if (empleadoAuditar) {
+          await cargarAuditoriaEmpleado(empleadoAuditar, fechaCalendario);
+        }
+      }
+    } catch (err) {
+      console.error('Error al crear Roster desde asistencias:', err);
+    } finally {
+      setCreandoRoster(false);
     }
   };
 
@@ -758,6 +1198,7 @@ export default function OtherEmployeesHistoryView({
           }
           setCargando(false);
         }}
+        handleLimpiarLocalYDescargar={handleLimpiarLocalYDescargar}
       />
 
       {/* Contenedor dividido: Lista de registros a la izquierda, Auditoría y Liquidación a la derecha */}
@@ -795,6 +1236,7 @@ export default function OtherEmployeesHistoryView({
           usuario={usuario}
           setRegistroEditando={setRegistroEditando}
           setRegistroEliminando={setRegistroEliminando}
+          onAbrirModalCrearRoster={() => setModalCrearRosterAbierto(true)}
         />
 
         <div className="other-right-panel">
@@ -816,12 +1258,44 @@ export default function OtherEmployeesHistoryView({
             diaDestacado={diaDestacado}
             setDiaSeleccionadoAuditoria={setDiaSeleccionadoAuditoria}
             handleAbrirModalCostoDia={handleAbrirModalCostoDia}
+            onAbrirModalCrearRoster={() => setModalCrearRosterAbierto(true)}
           />
 
           {puedeVerLiquidacion && (
             <HistoryLiquidationCard
+              isRpg={isRpg}
               empleadoAuditar={empleadoAuditar}
               fechaCalendario={fechaCalendario}
+              hayModoManual={hayModoManual}
+              totalDiasComputados={totalDiasComputados}
+              conteosLiquidacion={conteosLiquidacion}
+              diasOficinaManual={diasOficinaManual}
+              setDiasOficinaManual={setDiasOficinaManual}
+              diasCampoManual={diasCampoManual}
+              setDiasCampoManual={setDiasCampoManual}
+              diasFrancoObraManual={diasFrancoObraManual}
+              setDiasFrancoObraManual={setDiasFrancoObraManual}
+              diasFrancoOficManual={diasFrancoOficManual}
+              setDiasFrancoOficManual={setDiasFrancoOficManual}
+              diasFeriadoManual={diasFeriadoManual}
+              setDiasFeriadoManual={setDiasFeriadoManual}
+              exportandoInforme={exportandoInforme}
+              handleDescargarInformeLiquidacion={handleDescargarInformeLiquidacion}
+              tarifas={tarifas}
+              handleTarifaChange={handleTarifaChange}
+              cantDiasOficina={cantDiasOficina}
+              subtotalOficina={subtotalOficina}
+              cantDiasObra={cantDiasObra}
+              subtotalObra={subtotalObra}
+              cantDiasFrancoObra={cantDiasFrancoObra}
+              subtotalFrancoObra={subtotalFrancoObra}
+              cantDiasFrancoOfic={cantDiasFrancoOfic}
+              subtotalFrancoOfic={subtotalFrancoOfic}
+              cantDiasFeriadoTrabajado={cantDiasFeriadoTrabajado}
+              subtotalFeriado={subtotalFeriado}
+              totalLiquidar={totalLiquidar}
+              diasSeleccionadosCalendario={diasSeleccionadosCalendario}
+              seleccionados={seleccionados}
             />
           )}
         </div>
@@ -889,6 +1363,19 @@ export default function OtherEmployeesHistoryView({
         handleSeleccionarRegistroModalCostoDia={handleSeleccionarRegistroModalCostoDia}
         empActual={empActual}
         onClose={() => setModalCostoDia(null)}
+      />
+
+      <HistoryCreateRosterModal
+        abierto={modalCrearRosterAbierto}
+        onClose={() => setModalCrearRosterAbierto(false)}
+        empleadoAuditar={empleadoAuditar}
+        fechaCalendario={fechaCalendario}
+        registros={registros}
+        serviciosDisponibles={serviciosDisponibles}
+        diasSeleccionadosCalendario={diasSeleccionadosCalendario}
+        seleccionados={seleccionados}
+        creandoRoster={creandoRoster}
+        onConfirmarCreacion={handleConfirmarCrearRoster}
       />
     </>
   );

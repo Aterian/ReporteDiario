@@ -74,9 +74,20 @@ export const categorizarRegistroLiquidacion = (r) => {
   return 'oficina';
 };
 
-export const getBadgeClassLugar = (lugar, servicio = '') => {
+// [FN-07.03] Obtener clase CSS de insignia según modalidad e imputación
+export const getBadgeClassLugar = (lugar, servicio = '', modalidad = '') => {
   const l = (lugar || '').toLowerCase().trim();
   const s = (servicio || '').toLowerCase().trim();
+  const m = (modalidad || '').toLowerCase().trim();
+
+  if (m === 'oficina' || m === 'ofic') {
+    if (l === 'franco ofic trabajado' || s === 'franco trabajado' || (l === 'franco' && s.includes('trabajado'))) {
+      return 'badge-modalidad-franco-ofic-trabajado';
+    }
+    if (l.includes('franco')) return 'badge-modalidad-franco';
+    if (l.includes('oficina')) return 'badge-modalidad-oficina';
+  }
+
   if (l === 'franco obra' || l === 'franco de obra' || s.includes('franco de obra') || (l === 'franco' && s && !esServicioAreaInterna(s))) {
     return 'badge-modalidad-franco-obra';
   }

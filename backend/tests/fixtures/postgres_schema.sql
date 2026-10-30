@@ -13,6 +13,8 @@ CREATE TYPE "app_rrhh"."tipo_dedicacion" AS ENUM ('areas','proyectos');
 
 CREATE TYPE "app_rrhh"."tipo_lugar_habitual" AS ENUM ('oficina','obra');
 
+CREATE TYPE "app_rrhh"."tipo_operacion_auditoria" AS ENUM ('MODIFICACION','ELIMINACION');
+
 CREATE TABLE "app_proyectos"."b_1_proyectos_servicios" ("id_servicio" uuid DEFAULT gen_random_uuid() NOT NULL,
 "id_proyecto" uuid,
 "responsable_des" character varying(60),
@@ -111,6 +113,26 @@ CREATE TABLE "app_rrhh"."b_1_tarifas_roster" ("id_tarifa" uuid DEFAULT gen_rando
 "adicional_turno" numeric(12,2) DEFAULT 0.00 NOT NULL,
 "es_activa" boolean DEFAULT true NOT NULL,
 "creado_en" timestamp with time zone DEFAULT CURRENT_TIMESTAMP);
+
+CREATE TABLE "app_rrhh"."b_1_modificaciones_realizadas" ("id_modificacion" uuid DEFAULT gen_random_uuid() NOT NULL,
+"id_asistencia" uuid NOT NULL,
+"id_usuario" uuid NOT NULL,
+"fecha_asistencia" date NOT NULL,
+"tipo_operacion" app_rrhh.tipo_operacion_auditoria NOT NULL,
+"detalle_cambio" text NOT NULL,
+"valores_anteriores" jsonb NOT NULL,
+"valores_nuevos" jsonb,
+"modificado_por" uuid,
+"fecha_hora_modificacion" timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+"revisado" boolean DEFAULT false NOT NULL,
+"revisado_por" uuid,
+"fecha_hora_revision" timestamp with time zone);
+ALTER TABLE "app_rrhh"."b_1_modificaciones_realizadas" ADD CONSTRAINT "b_1_modificaciones_realizadas_pkey" PRIMARY KEY (id_modificacion);
+ALTER TABLE "app_rrhh"."b_1_modificaciones_realizadas" ADD CONSTRAINT "b_1_modificaciones_realizadas_id_usuario_fkey" FOREIGN KEY (id_usuario) REFERENCES app_rrhh.a_1_usuarios(id_usuario) ON DELETE RESTRICT;
+ALTER TABLE "app_rrhh"."b_1_modificaciones_realizadas" ADD CONSTRAINT "b_1_modificaciones_realizadas_modificado_por_fkey" FOREIGN KEY (modificado_por) REFERENCES app_rrhh.a_1_usuarios(id_usuario) ON DELETE SET NULL;
+ALTER TABLE "app_rrhh"."b_1_modificaciones_realizadas" ADD CONSTRAINT "b_1_modificaciones_realizadas_revisado_por_fkey" FOREIGN KEY (revisado_por) REFERENCES app_rrhh.a_1_usuarios(id_usuario) ON DELETE SET NULL;
+CREATE INDEX idx_modificaciones_asistencia ON app_rrhh.b_1_modificaciones_realizadas USING btree (id_asistencia);
+CREATE INDEX idx_modificaciones_revisado ON app_rrhh.b_1_modificaciones_realizadas USING btree (revisado, fecha_hora_modificacion DESC);
 
 ALTER TABLE "app_proyectos"."b_1_proyectos_servicios" ADD CONSTRAINT "b_1_proyectos_servicios_pkey" PRIMARY KEY (id_servicio);
 
@@ -666,9 +688,27 @@ DECLARE
 
     v_horas NUMERIC(4, 2);
 
+    v_preservados JSONB;
+
 BEGIN
 
     IF TG_OP = 'UPDATE' THEN
+
+        SELECT COALESCE(jsonb_agg(jsonb_build_object(
+            'fecha', fecha,
+            'costo_manual', costo_manual,
+            'costo_dia', costo_dia,
+            'tipo_dia', tipo_dia::text,
+            'hora_inicio', hora_inicio,
+            'hora_fin', hora_fin,
+            'horas_dedicadas', horas_dedicadas
+        )), '[]'::jsonb)
+        INTO v_preservados
+        FROM app_rrhh.b_1_asistencias
+        WHERE id_roster = NEW.id_roster
+          AND costo_manual = TRUE
+          AND fecha >= NEW.fecha_inicio
+          AND fecha <= NEW.fecha_fin;
 
         DELETE FROM app_rrhh.b_1_asistencias WHERE id_roster = NEW.id_roster;
 
@@ -719,6 +759,24 @@ BEGIN
         NEW.cargado_por
 
     FROM generate_series(NEW.fecha_inicio, NEW.fecha_fin, '1 day'::interval) AS d;
+
+    IF TG_OP = 'UPDATE' AND v_preservados IS NOT NULL AND jsonb_array_length(v_preservados) > 0 THEN
+
+        UPDATE app_rrhh.b_1_asistencias a
+        SET costo_manual = TRUE,
+            costo_dia = (elem->>'costo_dia')::NUMERIC(12, 2),
+            tipo_dia = COALESCE((elem->>'tipo_dia')::app_rrhh.clasificacion_dia, a.tipo_dia),
+            hora_inicio = COALESCE((elem->>'hora_inicio')::TIME, a.hora_inicio),
+            hora_fin = COALESCE((elem->>'hora_fin')::TIME, a.hora_fin),
+            horas_dedicadas = CASE 
+                WHEN (elem->>'horas_dedicadas')::NUMERIC > 0 THEN (elem->>'horas_dedicadas')::NUMERIC(4, 2)
+                ELSE a.horas_dedicadas
+            END
+        FROM jsonb_array_elements(v_preservados) AS elem
+        WHERE a.id_roster = NEW.id_roster
+          AND a.fecha = (elem->>'fecha')::DATE;
+
+    END IF;
 
     RETURN NULL;
 
@@ -774,7 +832,7 @@ DECLARE
 
 BEGIN
 
-    IF (TG_OP = 'DELETE' OR TG_OP = 'UPDATE') THEN
+    IF pg_trigger_depth() = 1 AND (TG_OP = 'DELETE' OR TG_OP = 'UPDATE') THEN
 
         IF NOT EXISTS (
 
@@ -836,7 +894,85 @@ END;
 
 $function$;
 
+CREATE OR REPLACE FUNCTION app_rrhh.fn_registrar_modificacion_asistencia()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+DECLARE
+    v_cambios TEXT[] := ARRAY[]::TEXT[];
+    v_detalle TEXT;
+    v_autor UUID;
+BEGIN
+    IF TG_OP = 'UPDATE' THEN
+        IF OLD.fecha IS DISTINCT FROM NEW.fecha THEN
+            v_cambios := array_append(v_cambios, format('Fecha: %s -> %s', OLD.fecha, NEW.fecha));
+        END IF;
+        IF OLD.activo_franco IS DISTINCT FROM NEW.activo_franco THEN
+            v_cambios := array_append(v_cambios, format('Estado: %s -> %s', OLD.activo_franco, NEW.activo_franco));
+        END IF;
+        IF OLD.lugar IS DISTINCT FROM NEW.lugar THEN
+            v_cambios := array_append(v_cambios, format('Modalidad: %s -> %s', OLD.lugar, NEW.lugar));
+        END IF;
+        IF OLD.tipo_dia IS DISTINCT FROM NEW.tipo_dia THEN
+            v_cambios := array_append(v_cambios, format('Tipo día: %s -> %s', OLD.tipo_dia, NEW.tipo_dia));
+        END IF;
+        IF OLD.dedicado_a IS DISTINCT FROM NEW.dedicado_a THEN
+            v_cambios := array_append(v_cambios, format('Dedicación: %s -> %s', OLD.dedicado_a, NEW.dedicado_a));
+        END IF;
+        IF OLD.id_proyecto IS DISTINCT FROM NEW.id_proyecto THEN
+            v_cambios := array_append(v_cambios, format('Proyecto: %s -> %s', COALESCE(OLD.id_proyecto::TEXT, 'Ninguno'), COALESCE(NEW.id_proyecto::TEXT, 'Ninguno')));
+        END IF;
+        IF OLD.horas_dedicadas IS DISTINCT FROM NEW.horas_dedicadas THEN
+            v_cambios := array_append(v_cambios, format('Horas: %s -> %s', OLD.horas_dedicadas, NEW.horas_dedicadas));
+        END IF;
+        IF OLD.costo_dia IS DISTINCT FROM NEW.costo_dia THEN
+            v_cambios := array_append(v_cambios, format('Costo día: $%s -> $%s', OLD.costo_dia, NEW.costo_dia));
+        END IF;
+        IF OLD.costo_manual IS DISTINCT FROM NEW.costo_manual THEN
+            v_cambios := array_append(v_cambios, format('Costo manual: %s -> %s', OLD.costo_manual, NEW.costo_manual));
+        END IF;
+
+        IF array_length(v_cambios, 1) IS NULL THEN
+            RETURN NEW;
+        END IF;
+
+        v_detalle := array_to_string(v_cambios, ' | ');
+        v_autor := COALESCE(NEW.cargado_por, OLD.cargado_por);
+
+        INSERT INTO app_rrhh.b_1_modificaciones_realizadas (
+            id_asistencia, id_usuario, fecha_asistencia, tipo_operacion,
+            detalle_cambio, valores_anteriores, valores_nuevos, modificado_por
+        ) VALUES (
+            OLD.id_asistencia, OLD.id_usuario, OLD.fecha, 'MODIFICACION',
+            v_detalle, to_jsonb(OLD), to_jsonb(NEW), v_autor
+        );
+
+        RETURN NEW;
+
+    ELSIF TG_OP = 'DELETE' THEN
+        v_detalle := format(
+            'Registro eliminado (Fecha: %s | Estado: %s | Modalidad: %s | Horas: %s | Costo: $%s)',
+            OLD.fecha, OLD.activo_franco, OLD.lugar, OLD.horas_dedicadas, OLD.costo_dia
+        );
+
+        INSERT INTO app_rrhh.b_1_modificaciones_realizadas (
+            id_asistencia, id_usuario, fecha_asistencia, tipo_operacion,
+            detalle_cambio, valores_anteriores, valores_nuevos, modificado_por
+        ) VALUES (
+            OLD.id_asistencia, OLD.id_usuario, OLD.fecha, 'ELIMINACION',
+            v_detalle, to_jsonb(OLD), NULL, OLD.cargado_por
+        );
+
+        RETURN OLD;
+    END IF;
+
+    RETURN NULL;
+END;
+$function$;
+
 CREATE TRIGGER trg_actualizar_total_adicionales AFTER INSERT OR DELETE OR UPDATE ON app_rrhh.a_1_adicionales_sueldo FOR EACH ROW EXECUTE FUNCTION app_rrhh.fn_sincronizar_total_adicionales();
+
+CREATE TRIGGER trg_auditar_modificaciones_asistencia AFTER DELETE OR UPDATE ON app_rrhh.b_1_asistencias FOR EACH ROW EXECUTE FUNCTION app_rrhh.fn_registrar_modificacion_asistencia();
 
 CREATE TRIGGER trg_calcular_costo_asistencia BEFORE INSERT OR UPDATE OF id_usuario, fecha, activo_franco, lugar, tipo_dia, costo_manual ON app_rrhh.b_1_asistencias FOR EACH ROW EXECUTE FUNCTION app_rrhh.fn_calcular_costo_asistencia();
 

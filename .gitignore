@@ -75,3 +75,5 @@ logs/
 
 .artifacts/
 output/
+
+backend/BBDD_asist_roster.xlsx

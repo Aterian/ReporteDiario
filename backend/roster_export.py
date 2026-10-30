@@ -11,4 +11,4 @@ def generar_excel_roster_mes(anio: int, mes: int, ruta_archivo: str, proyecto: s
     filas = obtener_rosters(inicio,fin)
     if proyecto and proyecto != "TODOS":
         filas = [f for f in filas if f["proyecto"] == proyecto]
-    return exportar_rosters(filas,ruta_archivo)
+    return exportar_rosters(filas, ruta_archivo, anio=anio, mes=mes)

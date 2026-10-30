@@ -10,26 +10,30 @@ export default function RosterEmployeeChecklist({
 }) {
   return (
     <div className="form-group-roster">
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px', flexWrap: 'wrap', gap: '4px' }}>
         <label className="roster-label" style={{ margin: 0 }}>
           <span className="roster-label-num">2</span>
           <span>Empleados (Ingeniería - I) <strong className="required">*</strong></span>
         </label>
-        <div className="roster-emp-actions-row">
+        <div className="roster-emp-actions-row" style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
           <button
             type="button"
             className="btn-link-action"
             onClick={onSeleccionarTodos}
+            style={{ padding: '2px 6px', background: 'var(--bg-surface-hover, #f1f5f9)', borderRadius: '4px', textDecoration: 'none' }}
+            title="Seleccionar todos los colaboradores disponibles"
           >
-            Seleccionar todos
+            Todos
           </button>
           <span style={{ color: 'var(--border-input)', fontSize: '11px' }}>•</span>
           <button
             type="button"
             className="btn-link-action"
             onClick={onDeseleccionarTodos}
+            style={{ padding: '2px 6px', background: 'var(--bg-surface-hover, #f1f5f9)', borderRadius: '4px', textDecoration: 'none' }}
+            title="Deseleccionar todos los colaboradores"
           >
-            Quitar selección
+            Ninguno
           </button>
         </div>
       </div>

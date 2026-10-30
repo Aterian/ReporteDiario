@@ -128,10 +128,9 @@ def verificar_actualizacion_github():
     Retorna si hay actualización disponible, versión actual, versión nueva y URL de descarga.
     """
     try:
-        cfg = cargar_configuracion()
-        repo = cfg.get("github_repo", "Aterian/ReporteDiario")
+        repo = os.environ.get("GITHUB_REPO", "Aterian/ReporteDiario").strip()
         if not repo:
-            return {"actualizacion_disponible": False, "version_actual": APP_VERSION}
+            return {"actualizacion_disponible": False, "version_actual": APP_VERSION, "verificacion_exitosa": True}
 
         url = f"https://api.github.com/repos/{repo}/releases/latest"
         req = urllib.request.Request(
@@ -143,7 +142,7 @@ def verificar_actualizacion_github():
         )
         import ssl
         ctx = ssl.create_default_context()
-        with urllib.request.urlopen(req, timeout=6, context=ctx) as response:
+        with urllib.request.urlopen(req, timeout=8, context=ctx) as response:
             data = json.loads(response.read().decode("utf-8"))
             tag_name = data.get("tag_name", "").strip()
             version_remota = tag_name.lstrip("v").strip()
@@ -167,18 +166,22 @@ def verificar_actualizacion_github():
 
             es_mas_nueva = parse_ver(version_remota) > parse_ver(APP_VERSION)
 
-            if es_mas_nueva and url_descarga:
-                return {
-                    "actualizacion_disponible": True,
-                    "version_actual": APP_VERSION,
-                    "version_nueva": version_remota,
-                    "notas": data.get("body", "") or "Mejoras y correcciones en esta versión.",
-                    "url_descarga": url_descarga
-                }
+            return {
+                "actualizacion_disponible": bool(es_mas_nueva and url_descarga),
+                "version_actual": APP_VERSION,
+                "version_nueva": version_remota,
+                "notas": data.get("body", "") or "Mejoras y correcciones en esta versión.",
+                "url_descarga": url_descarga,
+                "verificacion_exitosa": True
+            }
     except Exception as e:
-        print(f"[AutoUpdate] Verificación de actualización remota omitida: {e}")
-
-    return {"actualizacion_disponible": False, "version_actual": APP_VERSION}
+        print(f"[AutoUpdate] Verificación de actualización remota falló: {e}")
+        return {
+            "actualizacion_disponible": False,
+            "version_actual": APP_VERSION,
+            "verificacion_exitosa": False,
+            "error": str(e)
+        }
 
 
 # [FN-03.07] Mecanismo de Actualización Desacoplado para Windows 11 / Windows 10
@@ -289,6 +292,15 @@ def ejecutar_descarga_y_reinicio(url_descarga: str):
         return {"exito": False, "error": "La actualización automática solo aplica sobre el ejecutable (.exe)."}
 
     try:
+        import urllib.parse
+        parsed = urllib.parse.urlparse(str(url_descarga or "").strip())
+        if parsed.scheme != "https":
+            return {"exito": False, "error": "La URL de actualización debe utilizar HTTPS seguro."}
+        host = (parsed.netloc or "").lower().split(":")[0]
+        dominios_ok = ("github.com", "api.github.com", "objects.githubusercontent.com", "release-assets.githubusercontent.com", "github-releases.githubusercontent.com")
+        if not any(host == d or host.endswith("." + d) for d in dominios_ok):
+            return {"exito": False, "error": f"El dominio '{host}' no está autorizado para descargas de actualización."}
+
         temp_dir = os.environ.get("TEMP", os.path.expanduser("~"))
         nuevo_exe = os.path.join(temp_dir, "CheckDiarioIngeap_update.exe")
 
@@ -303,6 +315,14 @@ def ejecutar_descarga_y_reinicio(url_descarga: str):
         ctx = ssl.create_default_context()
         with urllib.request.urlopen(req, timeout=120, context=ctx) as resp, open(nuevo_exe, "wb") as f:
             f.write(resp.read())
+
+        with open(nuevo_exe, "rb") as check_f:
+            if check_f.read(2) != b"MZ":
+                try:
+                    os.remove(nuevo_exe)
+                except Exception:
+                    pass
+                return {"exito": False, "error": "El archivo descargado no es un ejecutable válido de Windows (cabecera corrupta o no ejecutable)."}
 
         no_window_flag = subprocess.CREATE_NO_WINDOW if hasattr(subprocess, "CREATE_NO_WINDOW") else 0
         try:

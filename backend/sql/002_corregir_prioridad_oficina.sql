@@ -1,4 +1,4 @@
--- [FN-07.11] Evitar restaurar el costo de Obra durante la prioridad de Oficina
+-- [FN-07.11] Evitar restaurar el costo de Obra durante la prioridad de Oficina y prevenir recursión
 CREATE OR REPLACE FUNCTION app_rrhh.fn_trigger_sincronizar_liquidacion()
  RETURNS trigger
  LANGUAGE plpgsql
@@ -7,7 +7,7 @@ DECLARE
     v_ciclo_nuevo VARCHAR(7);
     v_ciclo_viejo VARCHAR(7);
 BEGIN
-    IF TG_OP = 'DELETE' OR (TG_OP = 'UPDATE' AND (pg_trigger_depth() = 1 OR OLD.costo_dia IS NOT DISTINCT FROM NEW.costo_dia)) THEN
+    IF pg_trigger_depth() = 1 AND (TG_OP = 'DELETE' OR TG_OP = 'UPDATE') THEN
         IF NOT EXISTS (
             SELECT 1 FROM app_rrhh.b_1_asistencias
             WHERE id_usuario = OLD.id_usuario

@@ -10,6 +10,7 @@ import {
 } from './roster/rosterConstants';
 import RosterShiftForm from './roster/RosterShiftForm';
 import RosterGanttChart from './roster/RosterGanttChart';
+import RosterTarifaModal from './roster/RosterTarifaModal';
 
 // Re-exportamos para compatibilidad retroactiva con otros componentes (ej: RosterHistoryView)
 export { COLABORADORES_GANTT_INGENIERIA, normalizarTexto, buscarTarifaRoster };
@@ -56,6 +57,20 @@ export default function RosterView({ usuario, onVolver, tema }) {
   const [precioDomingo, setPrecioDomingo] = useState('');
   const [guardando, setGuardando] = useState(false);
   const [mensajeFeedback, setMensajeFeedback] = useState(null);
+  const [modalTarifa, setModalTarifa] = useState(false);
+
+  const handleTarifaGuardada = async (nuevaTarifa) => {
+    try {
+      const tarifas = await api.obtenerTarifasRoster();
+      if (Array.isArray(tarifas)) setTarifasRoster(tarifas);
+      setMensajeFeedback({
+        tipo: 'exito',
+        texto: `Tarifa para el proyecto "${nuevaTarifa.proyecto}" guardada exitosamente en PostgreSQL.`
+      });
+    } catch (e) {
+      console.error('Error al actualizar lista de tarifas tras guardar:', e);
+    }
+  };
 
   // Tarifa oficial para el proyecto seleccionado en el formulario
   const tarifaActual = useMemo(() => {
@@ -573,15 +588,17 @@ export default function RosterView({ usuario, onVolver, tema }) {
     return dias;
   }, [anioGantt, mesGantt]);
 
-  // Colaboradores canónicos en el Gantt
+  // Colaboradores canónicos y activos de Ingeniería en el Gantt
   const empleadosEnGantt = useMemo(() => {
     const mapa = {};
+    // 1. Prioridad: orden canónico de colaboradores de Ingeniería
     COLABORADORES_GANTT_INGENIERIA.forEach(nom => {
       const normKey = normalizarTexto(nom);
       const empCat = (empleadosDisponibles || []).find(e => normalizarTexto(e.nombre) === normKey)
         || (todosLosEmpleados || []).find(e => normalizarTexto(e.nombre) === normKey);
 
       mapa[normKey] = {
+        id_usuario: empCat ? empCat.id_usuario : normKey,
         nombre: nom,
         dni: empCat ? empCat.dni : '',
         area: empCat ? empCat.area : 'I',
@@ -590,6 +607,22 @@ export default function RosterView({ usuario, onVolver, tema }) {
       };
     });
 
+    // 2. Colaboradores activos de Ingeniería del catálogo no presentes en la lista fija
+    (empleadosDisponibles || []).forEach(emp => {
+      const normKey = normalizarTexto(emp.nombre);
+      if (!mapa[normKey]) {
+        mapa[normKey] = {
+          id_usuario: emp.id_usuario || normKey,
+          nombre: emp.nombre,
+          dni: emp.dni || '',
+          area: emp.area || 'I',
+          proyectosMap: {},
+          registros: []
+        };
+      }
+    });
+
+    // 3. Colaboradores con turnos registrados en el período
     const registrosAConsiderar = (filtroProyectoGantt && filtroProyectoGantt !== 'TODOS')
       ? rostersPeriodo.filter(r => (r.proyecto || '').trim() === filtroProyectoGantt.trim())
       : rostersPeriodo;
@@ -598,11 +631,20 @@ export default function RosterView({ usuario, onVolver, tema }) {
       const empNom = r.empleado;
       if (!empNom) return;
       const keyNorm = normalizarTexto(empNom);
-      if (mapa[keyNorm]) {
-        mapa[keyNorm].registros.push(r);
-        if (r.proyecto) {
-          mapa[keyNorm].proyectosMap[r.proyecto] = true;
-        }
+      if (!mapa[keyNorm]) {
+        const empCat = (todosLosEmpleados || []).find(e => normalizarTexto(e.nombre) === keyNorm);
+        mapa[keyNorm] = {
+          id_usuario: r.id_empleado || (empCat ? empCat.id_usuario : keyNorm),
+          nombre: empNom,
+          dni: empCat ? empCat.dni : '',
+          area: empCat ? empCat.area : 'I',
+          proyectosMap: {},
+          registros: []
+        };
+      }
+      mapa[keyNorm].registros.push(r);
+      if (r.proyecto) {
+        mapa[keyNorm].proyectosMap[r.proyecto] = true;
       }
     });
 
@@ -679,7 +721,18 @@ export default function RosterView({ usuario, onVolver, tema }) {
             {refrescando ? 'Sincronizando...' : (isRpg ? 'Consultar Oráculo' : 'Refrescar')}
           </button>
 
-
+          <button
+            type="button"
+            className={isRpg ? 'rpg-wood-btn' : 'btn-action-primary'}
+            onClick={() => setModalTarifa(true)}
+            title="Cargar o actualizar tarifas de roster para un proyecto"
+          >
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="3" />
+              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
+            </svg>
+            Cargar Tarifas
+          </button>
 
           <button
             type="button"
@@ -805,6 +858,14 @@ export default function RosterView({ usuario, onVolver, tema }) {
           />
         )}
       </div>
+
+      <RosterTarifaModal
+        isOpen={modalTarifa}
+        onClose={() => setModalTarifa(false)}
+        proyectosDisponibles={proyectosDisponibles}
+        onGuardadoExitoso={handleTarifaGuardada}
+        isRpg={isRpg}
+      />
     </>
   );
 

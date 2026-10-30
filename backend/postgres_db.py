@@ -11,7 +11,7 @@ from dotenv import load_dotenv
 from psycopg2.extras import RealDictCursor
 from psycopg2.pool import ThreadedConnectionPool
 
-from error_handler import DatabaseTransactionError, RegistroDuplicadoError, ValidacionError
+from error_handler import DatabaseTransactionError, RegistroDuplicadoError, ValidacionError, logger
 
 _base = Path(sys.executable).parent if getattr(sys, "frozen", False) else Path(__file__).resolve().parent.parent
 load_dotenv(_base / ".env", override=False)
@@ -31,7 +31,7 @@ def obtener_pool():
                 raise ValidacionError("Configure DATABASE_URL en el entorno o en .env.")
             try:
                 minimo = int(os.getenv("PG_POOL_MIN", "1"))
-                maximo = int(os.getenv("PG_POOL_MAX", "8"))
+                maximo = int(os.getenv("PG_POOL_MAX", "20"))
                 if not 1 <= minimo <= maximo <= 100:
                     raise ValueError
             except ValueError as exc:
@@ -39,10 +39,12 @@ def obtener_pool():
             try:
                 _pool = ThreadedConnectionPool(
                     minimo, maximo, dsn=dsn, connect_timeout=8,
+                    keepalives=1, keepalives_idle=30, keepalives_interval=10, keepalives_count=5,
                     application_name="CheckDiarioIngeap",
                     options="-c statement_timeout=30000 -c lock_timeout=10000",
                 )
-            except psycopg2.Error:
+            except psycopg2.Error as exc:
+                logger.error("[DB] Fallo al inicializar ThreadedConnectionPool: {}", str(exc).strip())
                 raise DatabaseTransactionError("No se pudo conectar a PostgreSQL. Revise la configuración y la red.") from None
             _slots = BoundedSemaphore(maximo)
         return _pool
@@ -53,13 +55,18 @@ def obtener_pool():
 def obtener_cursor_pg(commit=False):
     pool = obtener_pool()
     slots = _slots
-    if not slots.acquire(timeout=10):
+    timeout_espera = float(os.getenv("PG_POOL_ACQUIRE_TIMEOUT", "15"))
+    if not slots.acquire(timeout=timeout_espera):
         raise DatabaseTransactionError("Todas las conexiones están ocupadas. Reintente en unos instantes.")
     conn = None
     descartar = False
     try:
         conn = pool.getconn()
-        conn.set_session(readonly=not commit, autocommit=False)
+        if getattr(conn, "closed", 0):
+            pool.putconn(conn, close=True)
+            conn = pool.getconn()
+        if conn.autocommit:
+            conn.autocommit = False
         with conn.cursor(cursor_factory=RealDictCursor) as cursor:
             yield cursor
         if commit:
@@ -67,17 +74,22 @@ def obtener_cursor_pg(commit=False):
         else:
             conn.rollback()
     except BaseException as exc:
+        if isinstance(exc, (psycopg2.OperationalError, psycopg2.InterfaceError)):
+            descartar = True
         if conn is not None:
             try:
-                conn.rollback()
+                if not getattr(conn, "closed", 0):
+                    conn.rollback()
             except psycopg2.Error:
                 descartar = True
         if isinstance(exc, psycopg2.errors.UniqueViolation):
             raise RegistroDuplicadoError() from None
         if isinstance(exc, (psycopg2.errors.CheckViolation, psycopg2.errors.ForeignKeyViolation,
                             psycopg2.errors.InvalidTextRepresentation, psycopg2.errors.NotNullViolation)):
+            logger.warning("[DB] Restricción PostgreSQL ({}): {}", getattr(exc, "pgcode", type(exc).__name__), str(exc).strip())
             raise ValidacionError("Los datos no cumplen las restricciones de PostgreSQL.") from None
         if isinstance(exc, psycopg2.Error):
+            logger.error("[DB] Error PostgreSQL ({}): {}", getattr(exc, "pgcode", type(exc).__name__), str(exc).strip())
             raise DatabaseTransactionError("PostgreSQL no pudo completar la operación; no se guardaron cambios.") from None
         raise
     finally:

@@ -65,6 +65,7 @@ const mockApi = {
   verificar_actualizacion: async () => ({ actualizacion_disponible: false }),
   aplicar_actualizacion: async () => ({ exito: true }),
   guardar_roster: async (datos) => ({ exito: true, id: datos.id || 'mock-' + Date.now() }),
+  crear_rosters_desde_asistencias: async (lista) => ({ exito: true, guardados: (lista || []).length, absorbidos: 0, resultados: [] }),
   aplicar_tarifa_local_roster: async (datos) => ({
     exito: true,
     mensaje: 'Tarifa local asignada con éxito (modo simulado).',
@@ -117,6 +118,8 @@ const mockApi = {
     usuarios: []
   }),
   obtener_tarifas_roster: async () => [],
+  guardar_tarifa_roster: async (datos) => ({ exito: true, id_tarifa: 'mock-tarifa-' + Date.now() }),
+  actualizar_usuario_y_sueldo: async (datos) => ({ exito: true, id_usuario: datos.id_usuario }),
   obtener_liquidacion: async () => ({ exito: true, liquidacion: null }),
   actualizar_costo_dia_manual: async (datos) => ({ exito: true, mensaje: 'Costo actualizado (simulado).' })
 };
@@ -162,10 +165,10 @@ async function getApi() {
 }
 
 const apiBase = {
-  async obtenerLiquidacion(empleado, cicloCobro) {
+  async obtenerLiquidacion(empleado, cicloCobro, forzarRecalculo = false) {
     const bridge = await getApi();
     if (!bridge.obtener_liquidacion) return { exito: false, error: 'El puente no admite consultas de liquidación.' };
-    return await bridge.obtener_liquidacion(empleado, cicloCobro);
+    return await bridge.obtener_liquidacion(empleado, cicloCobro, forzarRecalculo);
   },
   async obtenerEstadoSesion() {
     const bridge = await getApi();
@@ -312,10 +315,10 @@ const apiBase = {
     return { exito: true, nuevas: 0 };
   },
 
-  async obtenerTodosUsuarios(area = null) {
+  async obtenerTodosUsuarios(area = null, incluirInactivos = false) {
     const bridge = await getApi();
     if (bridge.obtener_todos_usuarios) {
-      return await bridge.obtener_todos_usuarios(area);
+      return await bridge.obtener_todos_usuarios(area, incluirInactivos);
     }
     return [];
   },
@@ -330,6 +333,14 @@ const apiBase = {
       res.push(await this.guardarRoster(d));
     }
     return { exito: res.every(r => r && r.exito), resultados: res };
+  },
+
+  async crearRostersDesdeAsistencias(listaDatos) {
+    const bridge = await getApi();
+    if (bridge.crear_rosters_desde_asistencias) {
+      return await bridge.crear_rosters_desde_asistencias(listaDatos);
+    }
+    return await this.guardarRosterMultiple(listaDatos);
   },
 
   async deduplicarSheets() {
@@ -433,10 +444,10 @@ const apiBase = {
     return { exito: true };
   },
 
-  async obtenerHistorialOtrosEmpleados(filtroEmpleado = '') {
+  async obtenerHistorialOtrosEmpleados(filtroEmpleado = '', mesAnio = '', limite = null, offset = 0) {
     const bridge = await getApi();
     if (bridge.obtener_historial_otros_empleados) {
-      return await bridge.obtener_historial_otros_empleados(filtroEmpleado);
+      return await bridge.obtener_historial_otros_empleados(filtroEmpleado, mesAnio, limite, offset);
     }
     return [];
   },
@@ -449,10 +460,10 @@ const apiBase = {
     return { exito: false };
   },
 
-  async obtenerTodosRegistrosEmpleado(empleado, mesAnio = '') {
+  async obtenerTodosRegistrosEmpleado(empleado, mesAnio = '', limite = null, offset = 0) {
     const bridge = await getApi();
     if (bridge.obtener_todos_registros_empleado) {
-      return await bridge.obtener_todos_registros_empleado(empleado, mesAnio);
+      return await bridge.obtener_todos_registros_empleado(empleado, mesAnio, limite, offset);
     }
     return [];
   },
@@ -524,6 +535,22 @@ const apiBase = {
       return await bridge.obtener_tarifas_roster();
     }
     return [];
+  },
+
+  async guardarTarifaRoster(datos) {
+    const bridge = await getApi();
+    if (bridge.guardar_tarifa_roster) {
+      return await bridge.guardar_tarifa_roster(datos);
+    }
+    return { exito: false, error: 'Función no disponible en este entorno.' };
+  },
+
+  async actualizarUsuarioYSueldo(datos) {
+    const bridge = await getApi();
+    if (bridge.actualizar_usuario_y_sueldo) {
+      return await bridge.actualizar_usuario_y_sueldo(datos);
+    }
+    return { exito: false, error: 'Función no disponible en este entorno.' };
   },
 
   async actualizarCostoDiaManual(datos) {

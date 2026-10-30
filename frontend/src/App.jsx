@@ -8,10 +8,11 @@ import HistoryView from './components/HistoryView';
 import OtherEmployeesHistoryView from './components/OtherEmployeesHistoryView';
 import RosterView from './components/RosterView';
 import RosterHistoryView from './components/RosterHistoryView';
+import UsersManagementView from './components/UsersManagementView';
 import { ErrorBoundary } from 'react-error-boundary';
 import ErrorFallback from './components/ErrorFallback';
-import { Toaster } from 'sonner';
-import { puedeAccederRoster, puedeVerHistorialOtros, puedeVerModificaciones, esAreaAplicaciones } from './utils/permissions';
+import { Toaster, toast } from 'sonner';
+import { puedeAccederRoster, puedeVerHistorialOtros, puedeVerModificaciones, esAreaAplicaciones, puedeGestionarUsuarios } from './utils/permissions';
 
 // [MOD-00] App Principal
 export default function App() {
@@ -19,8 +20,6 @@ export default function App() {
   const [usuario, setUsuario] = useState(null);
   const [vistaActiva, setVistaActiva] = useState('home'); // 'home' | 'check' | 'historial' | 'historial-otros' | 'roster' | 'historial-roster'
   const [recordatorioPendiente, setRecordatorioPendiente] = useState(null);
-  const [refrescando, setRefrescando] = useState(false);
-  const [toastRefresco, setToastRefresco] = useState(null);
   const [notificacionesModificaciones, setNotificacionesModificaciones] = useState([]);
   const [navegacionAuditoria, setNavegacionAuditoria] = useState(null);
   const [actualizacion, setActualizacion] = useState(null);
@@ -31,34 +30,62 @@ export default function App() {
     return localStorage.getItem('ingeap_theme') || 'light';
   });
 
-  // [FN-04.08] Control de Zoom y persistencia local
+  // [FN-04.08] Control de Zoom y persistencia local (Escala 80% - 130%)
+  const MIN_ZOOM = 80;
+  const MAX_ZOOM = 130;
+
   const [zoom, setZoom] = useState(() => {
     const guardado = localStorage.getItem('ingeap_zoom');
-    return guardado ? Number(guardado) : 100;
+    const valor = guardado ? Number(guardado) : 100;
+    return isNaN(valor) ? 100 : Math.min(Math.max(valor, MIN_ZOOM), MAX_ZOOM);
   });
 
   useEffect(() => {
+    const factor = zoom / 100;
     document.documentElement.style.zoom = `${zoom}%`;
+    document.documentElement.style.setProperty('--ui-zoom', String(factor));
     localStorage.setItem('ingeap_zoom', String(zoom));
   }, [zoom]);
 
-  const nivelesZoom = [90, 100, 110, 120];
   const aumentarZoom = () => {
-    setZoom(prev => {
-      const idx = nivelesZoom.indexOf(prev);
-      if (idx !== -1 && idx < nivelesZoom.length - 1) return nivelesZoom[idx + 1];
-      if (prev < 120) return Math.min(prev + 10, 120);
-      return prev;
-    });
+    setZoom(prev => Math.min(prev + 10, MAX_ZOOM));
   };
   const disminuirZoom = () => {
-    setZoom(prev => {
-      const idx = nivelesZoom.indexOf(prev);
-      if (idx > 0) return nivelesZoom[idx - 1];
-      if (prev > 90) return Math.max(prev - 10, 90);
-      return prev;
-    });
+    setZoom(prev => Math.max(prev - 10, MIN_ZOOM));
   };
+
+  // [FN-04.09] Atajo Ctrl + Wheel y teclado para ajuste de Zoom fluido
+  useEffect(() => {
+    const handleWheel = (e) => {
+      if (e.ctrlKey) {
+        e.preventDefault();
+        const delta = e.deltaY < 0 ? 5 : -5;
+        setZoom(prev => Math.min(Math.max(prev + delta, MIN_ZOOM), MAX_ZOOM));
+      }
+    };
+
+    const handleKeyDown = (e) => {
+      if (e.ctrlKey) {
+        if (e.key === '+' || e.key === '=') {
+          e.preventDefault();
+          setZoom(prev => Math.min(prev + 5, MAX_ZOOM));
+        } else if (e.key === '-' || e.key === '_') {
+          e.preventDefault();
+          setZoom(prev => Math.max(prev - 5, MIN_ZOOM));
+        } else if (e.key === '0') {
+          e.preventDefault();
+          setZoom(100);
+        }
+      }
+    };
+
+    window.addEventListener('wheel', handleWheel, { passive: false });
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('wheel', handleWheel);
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, []);
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', tema);
@@ -163,15 +190,10 @@ export default function App() {
 
     cargarNotifs();
 
-    // Verificación periódica cada 45 segundos para descargar modificaciones remotas desde Google Sheets
-    const intervalo = setInterval(async () => {
-      try {
-        await api.verificarNuevasModificacionesSheets();
-        cargarNotifs();
-      } catch (e) {
-        // Silenciar fallos periódicos de conexión
-      }
-    }, 45000);
+    // Verificación periódica cada 60 segundos de notificaciones de auditoría
+    const intervalo = setInterval(() => {
+      cargarNotifs();
+    }, 60000);
 
     const handleCatalogos = () => {
       cargarNotifs();
@@ -192,6 +214,9 @@ export default function App() {
       setVistaActiva('home');
     }
     if (vistaActiva === 'historial-otros' && !puedeVerHistorialOtros(usuario)) {
+      setVistaActiva('home');
+    }
+    if (vistaActiva === 'usuarios' && !puedeGestionarUsuarios(usuario)) {
       setVistaActiva('home');
     }
   }, [vistaActiva, usuario]);
@@ -243,11 +268,16 @@ export default function App() {
 
   const handleDescartarNotificacion = async (idModificacion) => {
     try {
-      await api.marcarModificacionRevisada(idModificacion);
+      const res = await api.marcarModificacionRevisada(idModificacion);
+      if (res && res.exito === false) {
+        toast.error(res.error || 'No se pudo descartar la notificación');
+        return;
+      }
+      setNotificacionesModificaciones(prev => prev.filter(n => n.id_modificacion !== idModificacion));
     } catch (e) {
       console.error(e);
+      toast.error('Error de comunicación al descartar la notificación');
     }
-    setNotificacionesModificaciones(prev => prev.filter(n => n.id_modificacion !== idModificacion));
   };
 
 
@@ -269,27 +299,6 @@ export default function App() {
       await api.minimizar();
     } catch (err) {
       console.error('Error al minimizar:', err);
-    }
-  };
-
-  const handleRefrescarCatalogos = async () => {
-    if (refrescando) return;
-    setRefrescando(true);
-    setToastRefresco({ tipo: 'cargando', mensaje: 'Sincronizando información de Google Sheets...' });
-    try {
-      comprobarUpdate();
-      const res = await api.refrescarCatalogos();
-      if (res && res.exito) {
-        setToastRefresco({ tipo: 'exito', mensaje: res.mensaje || 'Información actualizada correctamente.' });
-        window.dispatchEvent(new CustomEvent('catalogos-actualizados'));
-      } else {
-        setToastRefresco({ tipo: 'error', mensaje: res?.error || 'Error al actualizar desde Google Sheets.' });
-      }
-    } catch (err) {
-      setToastRefresco({ tipo: 'error', mensaje: 'Error de red al actualizar desde Google Sheets.' });
-    } finally {
-      setRefrescando(false);
-      setTimeout(() => setToastRefresco(null), 4000);
     }
   };
 
@@ -355,7 +364,7 @@ export default function App() {
   }
 
   return (
-    <div className={`app-container ${['roster', 'historial-roster', 'historial', 'historial-otros'].includes(vistaActiva) ? 'app-panoramic' : ''}`}>
+    <div className={`app-container ${['roster', 'historial-roster', 'historial', 'historial-otros', 'usuarios'].includes(vistaActiva) ? 'app-panoramic' : ''}`}>
       {/* Input oculto para abrir el explorador de Windows al elegir avatar */}
       <input
         type="file"
@@ -401,21 +410,6 @@ export default function App() {
         </div>
 
         <div className="header-actions">
-          {/* Botón Refrescar catálogos de Google Sheets */}
-          <button
-            type="button"
-            className={`btn-header-icon ${refrescando ? 'btn-refresh-spinning' : ''}`}
-            onClick={handleRefrescarCatalogos}
-            disabled={refrescando}
-            title="Refrescar proyectos, empleados y feriados desde Google Sheets"
-          >
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round">
-              <polyline points="23 4 23 10 17 10" />
-              <polyline points="1 20 1 14 7 14" />
-              <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
-            </svg>
-          </button>
-
           {/* Botón selector de Tema (Claro / Oscuro / RPG Quest para Área A) */}
           <button
             type="button"
@@ -451,13 +445,13 @@ export default function App() {
           </button>
 
           {/* [FN-04.08] Control de Zoom Accesible */}
-          <div className="header-zoom-group" title="Ajustar zoom de pantalla">
+          <div className="header-zoom-group" title="Ajustar zoom de pantalla (Ctrl + Rueda del ratón)">
             <button
               type="button"
               className="btn-zoom"
               onClick={disminuirZoom}
-              disabled={zoom <= 90}
-              title="Reducir zoom (A-)"
+              disabled={zoom <= MIN_ZOOM}
+              title="Reducir zoom (A- o Ctrl + -)"
               aria-label="Reducir zoom"
             >
               A-
@@ -465,7 +459,7 @@ export default function App() {
             <span
               className="zoom-indicator"
               onClick={() => setZoom(100)}
-              title="Restablecer zoom al 100%"
+              title="Restablecer zoom al 100% (Ctrl + 0)"
             >
               {zoom}%
             </span>
@@ -473,8 +467,8 @@ export default function App() {
               type="button"
               className="btn-zoom"
               onClick={aumentarZoom}
-              disabled={zoom >= 120}
-              title="Aumentar zoom (A+)"
+              disabled={zoom >= MAX_ZOOM}
+              title="Aumentar zoom (A+ o Ctrl + +)"
               aria-label="Aumentar zoom"
             >
               A+
@@ -507,14 +501,6 @@ export default function App() {
           </button>
         </div>
       </header>
-
-      {/* Cartel flotante de refresco de catálogos */}
-      {toastRefresco && (
-        <div className={`refresh-toast-banner ${toastRefresco.tipo}`}>
-          <span>{toastRefresco.mensaje}</span>
-          <button type="button" onClick={() => setToastRefresco(null)}>✕</button>
-        </div>
-      )}
 
       {/* Cartel de Actualización Disponible */}
       {actualizacion && (
@@ -641,6 +627,7 @@ export default function App() {
             onNuevoRoster={() => setVistaActiva('roster')}
             onHistorialRoster={() => setVistaActiva('historial-roster')}
             onHistorialOtrosEmpleados={() => setVistaActiva('historial-otros')}
+            onGestionUsuarios={() => setVistaActiva('usuarios')}
             onAvatarClick={handleTriggerAvatar}
             notificacionesModificaciones={notificacionesModificaciones}
             onIrACalendarioModificacion={handleIrACalendarioModificacion}
@@ -692,6 +679,14 @@ export default function App() {
             tema={tema}
             onVolver={() => setVistaActiva('home')}
             onNuevoRoster={() => setVistaActiva('roster')}
+          />
+        )}
+
+        {vistaActiva === 'usuarios' && puedeGestionarUsuarios(usuario) && (
+          <UsersManagementView
+            usuario={usuario}
+            tema={tema}
+            onVolver={() => setVistaActiva('home')}
           />
         )}
       </ErrorBoundary>

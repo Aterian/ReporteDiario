@@ -2,6 +2,7 @@
 import React from 'react';
 import { getTituloRpg } from '../../utils/rpgTitles';
 import { NOMBRES_MESES, getBadgeClassLugar, categorizarRegistroLiquidacion } from './historyConstants';
+import { esFrancoDeObra } from '../../utils/francoUtils';
 
 export default function HistoryAuditCalendar({
   isRpg,
@@ -20,7 +21,8 @@ export default function HistoryAuditCalendar({
   diasMesCalendario,
   diaDestacado,
   setDiaSeleccionadoAuditoria,
-  handleAbrirModalCostoDia
+  handleAbrirModalCostoDia,
+  onAbrirModalCrearRoster
 }) {
   return (
     <div className="audit-panel-section">
@@ -34,26 +36,29 @@ export default function HistoryAuditCalendar({
             </svg>
             <span>{isRpg ? 'Aventurero a auditar:' : 'Auditar empleado:'}</span>
           </label>
-          <select
-            className="form-select form-select-clean audit-select-field"
-            value={empleadoAuditar}
-            onChange={(e) => {
-              const nuevo = e.target.value;
-              setEmpleadoAuditar(nuevo);
-              setFiltroEmpleadoLista(nuevo);
-            }}
-          >
-            {empleados.map(u => (
-              <option key={u.dni || u.nombre} value={u.nombre}>
-                {u.nombre} ({u.area || 'Sin área'})
-              </option>
-            ))}
-          </select>
-          {isRpg && empleadoAuditar && (
-            <span style={{ fontSize: '11px', color: '#f59e0b', fontWeight: 600, display: 'block', marginTop: '2px' }}>
-              {getTituloRpg(empleadoAuditar)}
-            </span>
-          )}
+          <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minWidth: '220px' }}>
+            <select
+              className="form-select form-select-clean audit-select-field"
+              value={empleadoAuditar}
+              onChange={(e) => {
+                const nuevo = e.target.value;
+                setEmpleadoAuditar(nuevo);
+                setFiltroEmpleadoLista(nuevo);
+              }}
+              style={{ width: '100%', minWidth: '220px' }}
+            >
+              {empleados.map(u => (
+                <option key={u.dni || u.nombre} value={u.nombre}>
+                  {u.nombre} ({u.area || 'Sin área'})
+                </option>
+              ))}
+            </select>
+            {isRpg && empleadoAuditar && (
+              <span className="rpg-card-role-chip" style={{ fontSize: '11px', color: '#b45309', fontWeight: 700, marginTop: '3px' }}>
+                {getTituloRpg(empleadoAuditar)}
+              </span>
+            )}
+          </div>
         </div>
 
         <div className="calendar-month-controls">
@@ -83,6 +88,23 @@ export default function HistoryAuditCalendar({
           >
             Hoy
           </button>
+          {puedeEditarCosto && onAbrirModalCrearRoster && (
+            <button
+              type="button"
+              className={isRpg ? 'rpg-wood-btn' : 'calendar-today-btn'}
+              style={{
+                background: '#cc3333',
+                color: '#ffffff',
+                borderColor: '#cc3333',
+                fontWeight: 600,
+                marginLeft: '4px'
+              }}
+              onClick={onAbrirModalCrearRoster}
+              title="Crear turnos de Roster a partir de las asistencias del colaborador"
+            >
+              📅 Crear Roster
+            </button>
+          )}
         </div>
       </div>
 
@@ -123,6 +145,34 @@ export default function HistoryAuditCalendar({
               >
                 Sin Asignar
               </button>
+              <button
+                type="button"
+                className="btn-floating-cost"
+                style={{ background: '#cc3333', color: '#ffffff', borderColor: '#cc3333', fontWeight: 600 }}
+                onClick={() => {
+                  const primerFecha = Array.from(diasSeleccionadosCalendario)[0];
+                  const celda = diasMesCalendario.find(c => c.fechaIso === primerFecha);
+                  if (celda && celda.registros && celda.registros.length > 0) {
+                    handleAbrirModalCostoDia(celda);
+                  }
+                }}
+                disabled={aplicandoCosto}
+                title="Editar manualmente costo_dia del día seleccionado"
+              >
+                💰 Costo ($) ✏️
+              </button>
+              {onAbrirModalCrearRoster && (
+                <button
+                  type="button"
+                  className="btn-floating-cost"
+                  style={{ background: '#0f766e', color: '#ffffff', borderColor: '#0f766e', fontWeight: 600 }}
+                  onClick={onAbrirModalCrearRoster}
+                  disabled={aplicandoCosto}
+                  title="Consolidar los días seleccionados en un turno de Roster"
+                >
+                  📅 Crear Roster
+                </button>
+              )}
               <button
                 type="button"
                 className="btn-floating-cost btn-cost-close"
@@ -242,11 +292,11 @@ export default function HistoryAuditCalendar({
                 <div className="cell-events-container">
                   {celda.registros.slice(0, 3).map((r, idx) => {
                     const lug = r.tipo_ocf || r.lugar || 'Oficina';
-                    const badgeClass = getBadgeClassLugar(lug, r.servicio);
+                    const badgeClass = getBadgeClassLugar(lug, r.servicio, r.modalidad || r.tipo_costo);
                     const fueModPendiente = r.modificacion_pendiente === 1 || (r.fue_modificado === 1 && r.modificacion_revisada !== 1);
                     const fueModRevisado = !fueModPendiente && r.modificacion_revisada === 1;
                     let labelText = lug;
-                    if (lug === 'Franco Obra' || r.servicio?.toLowerCase().includes('franco de obra')) {
+                    if (esFrancoDeObra(r) || lug === 'Franco Obra' || r.servicio?.toLowerCase().includes('franco de obra')) {
                       labelText = 'F. Obra';
                     } else if (lug === 'Franco Obra Trabajado') {
                       labelText = 'F. Obra Trab.';

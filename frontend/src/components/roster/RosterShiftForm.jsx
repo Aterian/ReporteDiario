@@ -66,11 +66,9 @@ export default function RosterShiftForm({
                   <span style={{ fontSize: '11px', fontWeight: 700, color: 'var(--color-primary, #cc3333)', letterSpacing: '0.5px' }}>
                     📊 TARIFAS ROSTER VINCULADAS
                   </span>
-                  {tarifaActual.id_proyecto && (
-                    <span style={{ fontSize: '10px', color: '#64748b' }}>
-                      ID: {tarifaActual.id_proyecto}
-                    </span>
-                  )}
+                  <span className="status-badge" style={{ background: '#f0fdf4', color: '#166534', borderColor: '#bbf7d0', fontSize: '10px', padding: '1px 6px', fontWeight: 700 }}>
+                    ✓ Tarifa Activa
+                  </span>
                 </div>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', fontSize: '12px' }}>
                   <span style={{ background: '#ffffff', padding: '3px 8px', borderRadius: '4px', border: '1px solid #e2e8f0' }}>

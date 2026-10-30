@@ -8,24 +8,13 @@ export default function RosterHistoryView({ usuario, onVolver, onNuevoRoster, te
   const isDark = tema === 'dark';
   const isRpg = tema === 'rpg';
 
-  if (!puedeAccederRoster(usuario)) {
-    return (
-      <div className="view-content" style={{ padding: '32px', textAlign: 'center' }}>
-        <p style={{ fontSize: '15px', color: 'var(--text-secondary)', marginBottom: '16px' }}>
-          Acceso denegado: El historial de Roster solo puede ser visualizado por Justina Bertolozzi e Iván Valentin.
-        </p>
-        <button type="button" className="btn-back" onClick={onVolver}>
-          Volver al Inicio
-        </button>
-      </div>
-    );
-  }
 
   // Poner la ventana en pantalla completa al entrar (se conserva el tamaño al salir)
   useEffect(() => {
+    if (!puedeAccederRoster(usuario)) return;
     localStorage.removeItem('ingeap_rosters_mock');
     api.maximizarVentana();
-  }, []);
+  }, [usuario]);
 
   const [refrescando, setRefrescando] = useState(false);
   const [mesSeleccionado, setMesSeleccionado] = useState(() => new Date().getMonth() + 1);
@@ -61,6 +50,7 @@ export default function RosterHistoryView({ usuario, onVolver, onNuevoRoster, te
 
   // Cargar proyectos, tarifas y empleados exclusivos de Ingeniería (I)
   useEffect(() => {
+    if (!puedeAccederRoster(usuario)) return;
     async function cargarCatalogos() {
       try {
         const [proys, emps, tarifas] = await Promise.all([
@@ -113,11 +103,13 @@ export default function RosterHistoryView({ usuario, onVolver, onNuevoRoster, te
   };
 
   useEffect(() => {
+    if (!puedeAccederRoster(usuario)) return;
     cargarRegistrosMes(anioSeleccionado, mesSeleccionado);
-  }, [anioSeleccionado, mesSeleccionado]);
+  }, [usuario, anioSeleccionado, mesSeleccionado]);
 
   // Escuchar evento de actualización de catálogos o sincronización
   useEffect(() => {
+    if (!puedeAccederRoster(usuario)) return;
     const handleCatalogosActualizados = () => {
       cargarRegistrosMes(anioSeleccionado, mesSeleccionado);
     };
@@ -125,7 +117,7 @@ export default function RosterHistoryView({ usuario, onVolver, onNuevoRoster, te
     return () => {
       window.removeEventListener('catalogos-actualizados', handleCatalogosActualizados);
     };
-  }, [anioSeleccionado, mesSeleccionado]);
+  }, [usuario, anioSeleccionado, mesSeleccionado]);
 
   const handleRefrescar = async () => {
     setRefrescando(true);
@@ -267,6 +259,19 @@ export default function RosterHistoryView({ usuario, onVolver, onNuevoRoster, te
       return true;
     });
   }, [rosters, filtrarTablaPorProyecto, proyectoSeleccionado, filtroEmpleado]);
+
+  if (!puedeAccederRoster(usuario)) {
+    return (
+      <div className="view-content" style={{ padding: '32px', textAlign: 'center' }}>
+        <p style={{ fontSize: '15px', color: 'var(--text-secondary)', marginBottom: '16px' }}>
+          Acceso denegado: El historial de Roster solo puede ser visualizado por Justina Bertolozzi e Iván Valentin.
+        </p>
+        <button type="button" className="btn-back" onClick={onVolver}>
+          Volver al Inicio
+        </button>
+      </div>
+    );
+  }
 
   const contenidoPrincipal = (
     <>

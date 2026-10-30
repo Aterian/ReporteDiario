@@ -69,9 +69,7 @@ class ApiPuente:
 
     def iniciar_sesion(self, nombre: str, dni: str):
         db.perfil_esquema.cache_clear()
-        usuario = db.resolver_usuario(dni.strip())
-        if db.normalizar_texto(nombre) != db.normalizar_texto(usuario["nombre"]):
-            raise ValidacionError("El nombre y DNI no coinciden con un empleado activo.")
+        usuario = db.autenticar_usuario(nombre, dni)
         db.guardar_sesion_activa(usuario)
         return {"exito":True,"usuario":usuario,"roles_disponibles":db.perfil_esquema()["roles_disponibles"]}
 
@@ -93,6 +91,7 @@ class ApiPuente:
     def refrescar_catalogos_sheets(self):
         self._sesion()
         db.perfil_esquema.cache_clear()
+        db.invalidar_caches_repositorio()
         db.inicializar_bd()
         self._notificar_cambios()
         return {"exito":True,"mensaje":"Datos actualizados desde PostgreSQL."}
@@ -114,7 +113,10 @@ class ApiPuente:
         fechas = db.fechas_captura(datos)
         if not admin and len(fechas)>1 and not (estado=="franco" and all(f.weekday()>=5 for f in fechas)):
             raise PermisoDenegadoError("Los rangos de fechas requieren permisos de RRHH.")
-        modelos = db.preparar_asistencias(datos,usuario["id_usuario"])
+        modelos = db.preparar_asistencias(datos,usuario["id_usuario"],permitir_costo_manual=admin)
+        if not admin:
+            if any(m.costo_manual or m.costo_dia is not None or m.activo_franco.value in ("vacaciones","licencia") or m.tipo_dia != "dia_normal" for m in modelos):
+                raise PermisoDenegadoError("La modalidad o costo manual requiere permisos de RRHH.")
         if len(modelos)>1500:
             raise ValidacionError("La carga supera el máximo de 1500 registros.")
         resultados = db.guardar_asistencias_atomicas(modelos,sesion["id_usuario"])
@@ -144,11 +146,11 @@ class ApiPuente:
             combinado.pop("modalidad",None)
         if "costo_manual" not in datos:
             combinado["costo_manual"] = anterior["costo_manual"]
-        modelos = db.preparar_asistencias(combinado,usuario["id_usuario"])
+        modelos = db.preparar_asistencias(combinado,usuario["id_usuario"],permitir_costo_manual=admin)
         if len(modelos)!=1:
             raise ValidacionError("La edición debe corresponder a una asistencia.")
         m = modelos[0]
-        if not admin and (m.costo_manual or m.activo_franco.value in ("vacaciones","licencia") or m.tipo_dia!="dia_normal"):
+        if not admin and (m.costo_manual or m.costo_dia is not None or m.activo_franco.value in ("vacaciones","licencia") or m.tipo_dia!="dia_normal"):
             raise PermisoDenegadoError("La edición de costos y estados especiales requiere RRHH.")
         if not admin and sesion["rol_app"] == "user_2" and m.lugar != "oficina":
             raise PermisoDenegadoError("El rol user_2 solo puede registrar modalidad Oficina.")
@@ -162,25 +164,27 @@ class ApiPuente:
 
     def obtener_resumen_modificaciones(self):
         self._sesion(auditor=True)
-        return {"total_modificaciones":0,"ultimas_24h":0,"no_sincronizadas":0,"ultima_modificacion":None,"disponible":False}
+        return db.obtener_resumen_modificaciones()
 
     def obtener_modificaciones_recientes(self, limite: int = 50):
         self._sesion(auditor=True)
-        return []
+        return db.obtener_modificaciones_recientes(limite)
 
     def obtener_notificaciones_modificaciones(self, solo_no_revisadas: bool = True):
         self._sesion(auditor=True)
-        return []
+        return db.obtener_notificaciones_modificaciones(solo_no_revisadas)
 
     def marcar_modificacion_revisada(self, id_modificacion: str):
-        self._sesion(admin=True)
-        return self._no_disponible("El esquema PostgreSQL no incluye la auditoría de modificaciones.")
+        sesion = self._sesion(admin=True)
+        return db.marcar_modificacion_revisada(id_modificacion, sesion.get("id_usuario"))
 
     def marcar_modificacion_por_asistencia_revisada(self, id_asistencia: str):
-        return self.marcar_modificacion_revisada(id_asistencia)
+        sesion = self._sesion(admin=True)
+        return db.marcar_modificacion_por_asistencia_revisada(id_asistencia, sesion.get("id_usuario"))
 
     def marcar_todas_modificaciones_revisadas(self):
-        return self.marcar_modificacion_revisada("")
+        sesion = self._sesion(admin=True)
+        return db.marcar_todas_modificaciones_revisadas(sesion.get("id_usuario"))
 
     def verificar_nuevas_modificaciones_sheets(self):
         self._sesion()
@@ -194,13 +198,13 @@ class ApiPuente:
         self._notificar_cambios()
         return {"exito":True,"actualizados":cantidad,"afectados":cantidad}
 
-    def obtener_historial_otros_empleados(self, filtro_empleado: str = ""):
+    def obtener_historial_otros_empleados(self, filtro_empleado: str = "", mes_anio: str = "", limite: int | None = None, offset: int = 0):
         self._sesion(auditor=True)
-        return db.consultar_asistencias("" if filtro_empleado=="TODOS" else filtro_empleado)
+        return db.consultar_asistencias("" if filtro_empleado=="TODOS" else filtro_empleado, mes_anio, limite=limite, offset=offset)
 
-    def obtener_todos_registros_empleado(self, empleado: str, mes_anio: str = ""):
+    def obtener_todos_registros_empleado(self, empleado: str, mes_anio: str = "", limite: int | None = None, offset: int = 0):
         self._sesion(auditor=True)
-        return db.consultar_asistencias(empleado,mes_anio)
+        return db.consultar_asistencias(empleado, mes_anio, limite=limite, offset=offset)
 
     def obtener_actividad_dia_anterior(self):
         self._sesion(auditor=True)
@@ -210,13 +214,15 @@ class ApiPuente:
         self._sesion()
         return db.eliminar_registro_asistencia(id_registro)
 
-    def obtener_todos_usuarios(self, area: str | None = None):
+    def obtener_todos_usuarios(self, area: str | None = None, incluir_inactivos: bool = False):
         sesion = self._sesion()
-        usuarios = db.obtener_usuarios_cache()
-        if area and area.upper()!="TODOS":
-            usuarios = [u for u in usuarios if u["area"].upper()==area.upper()]
-        if sesion["rol_app"] not in ("admin","sub_admin"):
-            usuarios = [{k:v for k,v in u.items() if k not in ("costo_dia_ofi","costo_dia_obra")} for u in usuarios]
+        es_autorizado = sesion.get("rol_app") in ("admin", "sub_admin", "core")
+        usuarios = db.obtener_usuarios_cache(incluir_inactivos=incluir_inactivos and es_autorizado)
+        if area and area.upper() != "TODOS":
+            usuarios = [u for u in usuarios if (u.get("area") or "").upper() == area.upper()]
+        if not es_autorizado:
+            claves_publicas = {"id_usuario", "id_origen", "nombre", "primer_nombre", "apellido", "area", "lugar_habitual", "activo"}
+            usuarios = [{k: v for k, v in u.items() if k in claves_publicas} for u in usuarios]
         return usuarios
 
     def obtener_historial(self):
@@ -232,6 +238,7 @@ class ApiPuente:
         return verificar_actualizacion_github()
 
     def aplicar_actualizacion(self, url_descarga: str):
+        self._sesion()
         from main import ejecutar_descarga_y_reinicio
         return ejecutar_descarga_y_reinicio(url_descarga)
 
@@ -290,6 +297,12 @@ class ApiPuente:
         self._notificar_cambios()
         return {"exito":True,"resultados":resultados,"guardados":len(resultados),"errores":[]}
 
+    def crear_rosters_desde_asistencias(self, lista_datos: list):
+        sesion = self._sesion(admin=True)
+        res = db.crear_rosters_desde_asistencias(lista_datos,sesion["id_usuario"])
+        self._notificar_cambios()
+        return {"exito":True,**res,"errores":[]}
+
     def deduplicar_sheets(self):
         return self._no_disponible("La deduplicación de Google Sheets fue retirada.")
 
@@ -312,7 +325,8 @@ class ApiPuente:
         if not self._ventana:
             return None
         import webview
-        resultado = self._ventana.create_file_dialog(webview.FileDialog.SAVE,save_filename=nombre,file_types=("Archivos Excel (*.xlsx)",))
+        modo = getattr(getattr(webview,"FileDialog",object),"SAVE",getattr(webview,"SAVE_DIALOG",0))
+        resultado = self._ventana.create_file_dialog(modo,save_filename=nombre,file_types=("Archivos Excel (*.xlsx)","Todos los archivos (*.*)"))
         return resultado if isinstance(resultado,str) else resultado[0] if resultado else None
 
     def exportar_roster_excel(self, anio: int, mes: int, proyecto: str = ""):
@@ -322,26 +336,66 @@ class ApiPuente:
         destino = self._destino_excel(f"Roster_{anio}_{mes:02d}.xlsx")
         return generar_excel_roster_mes(anio,mes,destino,proyecto) if destino else {"exito":False,"cancelado":True}
 
-    def obtener_liquidacion(self, empleado: str, ciclo_cobro: str):
+    def obtener_liquidacion(self, empleado: str, ciclo_cobro: str, forzar_recalculo: bool = False):
         self._sesion(admin=True)
-        return {"exito":True,"liquidacion":db.obtener_liquidacion(empleado,ciclo_cobro)}
+        return {"exito":True,"liquidacion":db.obtener_liquidacion(empleado,ciclo_cobro,forzar_recalculo)}
 
     def exportar_informe_liquidacion(self, datos_informe: dict):
         self._sesion(admin=True)
+        import re
+        from decimal import Decimal
         from liquidacion_export import generar_excel_informe_liquidacion
-        ciclo = datos_informe.get("ciclo_cobro") or f"{int(datos_informe['anio']):04d}-{int(datos_informe['mes']):02d}"
+        meses_es = {"enero":1,"febrero":2,"marzo":3,"abril":4,"mayo":5,"junio":6,
+                    "julio":7,"agosto":8,"septiembre":9,"setiembre":9,"octubre":10,"noviembre":11,"diciembre":12}
+        ciclo = datos_informe.get("ciclo_cobro")
+        if not ciclo:
+            anio = int(datos_informe.get("anio") or date.today().year)
+            mes_val = datos_informe.get("mes")
+            if mes_val is None and datos_informe.get("nombre_mes"):
+                mes_val = meses_es.get(db.normalizar_texto(datos_informe.get("nombre_mes")))
+            if mes_val is None:
+                raise ValidacionError("Mes o ciclo de cobro inválido para el informe.")
+            ciclo = f"{anio:04d}-{int(mes_val):02d}"
         usuario = db.resolver_usuario(datos_informe["empleado"])
+        detalle = db.consultar_asistencias(usuario["id_usuario"],ciclo)
         liquidacion = db.obtener_liquidacion(usuario["id_usuario"],ciclo)
         if liquidacion is None:
-            raise ValidacionError("No hay liquidación registrada para el ciclo.")
-        destino = self._destino_excel(f"Liquidacion_{ciclo}.xlsx")
-        informe = {"empleado":usuario["nombre"],"ciclo_cobro":ciclo,"liquidacion":liquidacion,
-                   "detalle":db.consultar_asistencias(usuario["id_usuario"],ciclo)}
+            total_calc = Decimal(str(datos_informe.get("total_liquidar") or sum(Decimal(str(r.get("costo_dia") or 0)) for r in detalle)))
+            fechas_ofi = {r["fecha"] for r in detalle if r.get("modalidad") == "oficina"}
+            fechas_obra = {r["fecha"] for r in detalle if r.get("modalidad") in ("obra","roster")} - fechas_ofi
+            liquidacion = {
+                "ciclo_cobro":ciclo,
+                "cant_dias_ofi":len(fechas_ofi),
+                "cant_dias_obra":len(fechas_obra),
+                "subtotal_ofi":"0.00",
+                "subtotal_obra":"0.00",
+                "subtotal_estimado":f"{total_calc:.2f}",
+                "total_real":f"{total_calc:.2f}",
+                "total_adicionales":"0.00",
+                "sueldo_total":f"{total_calc:.2f}",
+                "cerrado":False,
+                "adicionales":[],
+            }
+        emp_slug = re.sub(r'[\\/*?:"<>|]',"",usuario["nombre"]).strip().replace(" ","_")
+        destino = self._destino_excel(f"Liquidacion_{emp_slug}_{ciclo}.xlsx")
+        informe = {**datos_informe,"empleado":usuario["nombre"],"ciclo_cobro":ciclo,"liquidacion":liquidacion,"detalle":detalle}
         return generar_excel_informe_liquidacion(informe,destino) if destino else {"exito":False,"cancelado":True}
 
     def obtener_tarifas_roster(self):
         self._sesion(admin=True)
         return db.obtener_tarifas_roster_cache()
+
+    def guardar_tarifa_roster(self, datos: dict):
+        self._sesion(admin=True)
+        resultado = db.guardar_tarifa_roster(datos)
+        self._notificar_cambios()
+        return {"exito": True, **resultado}
+
+    def actualizar_usuario_y_sueldo(self, datos: dict):
+        sesion = self._sesion(admin=True)
+        resultado = db.actualizar_usuario_y_sueldo(datos, operador_sesion=sesion)
+        self._notificar_cambios()
+        return resultado
 
     def actualizar_costo_dia_manual(self, datos: dict):
         sesion = self._sesion(admin=True)

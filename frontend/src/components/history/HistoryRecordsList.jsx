@@ -1,7 +1,7 @@
 // [FN-02.03] Listado y filtrado de registros de asistencia para otros empleados
 import React from 'react';
 import { getTituloRpg } from '../../utils/rpgTitles';
-import { obtenerEtiquetaModalidad } from '../../utils/francoUtils';
+import { obtenerEtiquetaModalidad, resolverNombreCargador } from '../../utils/francoUtils';
 import { getBadgeClassLugar, getIniciales } from './historyConstants';
 
 export default function HistoryRecordsList({
@@ -36,8 +36,22 @@ export default function HistoryRecordsList({
   puedeModificarRegistro,
   usuario,
   setRegistroEditando,
-  setRegistroEliminando
+  setRegistroEliminando,
+  onAbrirModalCrearRoster
 }) {
+  // [FN-02.03] Renderizado progresivo para listas extensas de asistencias
+  const [limiteVisible, setLimiteVisible] = React.useState(50);
+
+  React.useEffect(() => {
+    setLimiteVisible(50);
+  }, [filtroTexto, filtroEmpleadoLista, filtroSoloMes]);
+
+  const registrosVisibles = React.useMemo(() => {
+    return registrosFiltrados.slice(0, limiteVisible);
+  }, [registrosFiltrados, limiteVisible]);
+
+  const hayMasRegistros = limiteVisible < registrosFiltrados.length;
+
   return (
     <div className="other-left-panel">
       <div className="other-panel-header">
@@ -166,6 +180,18 @@ export default function HistoryRecordsList({
                 >
                   Sin Asignar
                 </button>
+                {onAbrirModalCrearRoster && (
+                  <button
+                    type="button"
+                    className="btn-action-ghost"
+                    style={{ fontSize: '11px', padding: '3px 8px', background: '#cc333315', color: '#cc3333', borderColor: '#cc333340', fontWeight: 600 }}
+                    onClick={onAbrirModalCrearRoster}
+                    disabled={aplicandoCosto}
+                    title="Consolidar registros seleccionados en un turno de Roster"
+                  >
+                    📅 Crear Roster
+                  </button>
+                )}
                 <button
                   type="button"
                   className="btn-action-ghost"
@@ -203,9 +229,9 @@ export default function HistoryRecordsList({
           </div>
         ) : (
           <div className="other-cards-col">
-            {registrosFiltrados.map((item) => {
+            {registrosVisibles.map((item) => {
               const lugarDisplay = obtenerEtiquetaModalidad(item);
-              const badgeClass = getBadgeClassLugar(lugarDisplay, item.servicio);
+              const badgeClass = getBadgeClassLugar(lugarDisplay, item.servicio, item.modalidad || item.tipo_costo);
               const horasDisplay = item.horas > 0 ? `${item.horas} hs` : (item.jornada || '0 hs');
               const estaSincronizado = item.sincronizado === 1;
               const isChecked = seleccionados.has(item.id);
@@ -241,7 +267,7 @@ export default function HistoryRecordsList({
                           )}
                           {item.cargado_por && (
                             <span className="other-user-sub">
-                              Cargado por: <strong>{item.cargado_por}</strong>
+                              Cargado por: <strong>{resolverNombreCargador(item, usuario, empleados)}</strong>
                             </span>
                           )}
                         </div>
@@ -275,6 +301,15 @@ export default function HistoryRecordsList({
                           }}
                         >
                           💰 ${Number(item.costo_dia).toLocaleString('es-AR')}{puedeEditarCosto ? ' ✏️' : ''}
+                        </span>
+                      )}
+                      {Boolean(item.id_roster) && (
+                        <span
+                          className="status-badge"
+                          style={{ background: '#f0fdf4', color: '#166534', borderColor: '#bbf7d0' }}
+                          title="Vinculado a turno de Roster"
+                        >
+                          📅 Roster
                         </span>
                       )}
                       <span className={`status-badge ${estaSincronizado ? 'status-synced' : 'status-pending'}`}>
@@ -318,8 +353,7 @@ export default function HistoryRecordsList({
                   <div className="other-card-actions">
                     <button
                       type="button"
-                      className="btn-card-action"
-                      style={{ color: '#2563eb', borderColor: '#3b82f640' }}
+                      className="btn-card-action btn-card-calendar"
                       onClick={() => onEnfocarDiaCalendario(item)}
                       title="Ver y enfocar este día en el calendario"
                     >
@@ -329,8 +363,7 @@ export default function HistoryRecordsList({
                     {puedeVerModif && Boolean(item.fue_modificado || item.modificado || (item.modificaciones && item.modificaciones.length > 0)) && (
                       <button
                         type="button"
-                        className="btn-card-action btn-comparativa-action"
-                        style={{ color: '#7c3aed', borderColor: '#8b5cf650', background: '#8b5cf615', fontWeight: 600 }}
+                        className="btn-card-action btn-card-comparativa"
                         onClick={() => abrirComparativa(item)}
                         title="Auditar modificación: ver comparativa dividida antes y después"
                       >
@@ -341,8 +374,7 @@ export default function HistoryRecordsList({
                     {puedeVerModif && (item.modificacion_pendiente === 1 || (Boolean(item.fue_modificado || item.modificado) && item.modificacion_revisada !== 1)) && (
                       <button
                         type="button"
-                        className="btn-card-action"
-                        style={{ color: '#059669', borderColor: '#10b98150', background: '#10b98115', fontWeight: 600 }}
+                        className="btn-card-action btn-card-reviewed"
                         disabled={marcandoRevisadoId === (item.id_asistencia || item.id)}
                         onClick={() => handleMarcarRevisado(item)}
                         title="Marcar modificación como revisada por RRHH para quitar la alerta"
@@ -354,8 +386,7 @@ export default function HistoryRecordsList({
                     {puedeEditarCosto && (
                       <button
                         type="button"
-                        className="btn-card-action"
-                        style={{ color: '#059669', borderColor: '#10b98150', background: '#10b98115', fontWeight: 600 }}
+                        className="btn-card-action btn-card-cost"
                         onClick={() => handleAbrirModalCostoDia({ fechaIso: item.fecha, registros: [item] }, item)}
                         title="Editar manualmente costo_dia de este registro"
                       >
@@ -400,6 +431,31 @@ export default function HistoryRecordsList({
                 </div>
               );
             })}
+            {hayMasRegistros && (
+              <div style={{ padding: '14px 10px', textAlign: 'center', width: '100%' }}>
+                <button
+                  type="button"
+                  className="btn-action-primary"
+                  style={{
+                    margin: '0 auto',
+                    padding: '8px 18px',
+                    fontSize: '12px',
+                    cursor: 'pointer',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '6px'
+                  }}
+                  onClick={() => setLimiteVisible(prev => prev + 50)}
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="6 9 12 15 18 9" />
+                  </svg>
+                  {isRpg
+                    ? `📜 Cargar más expediciones (${registrosVisibles.length} de ${registrosFiltrados.length})`
+                    : `Mostrar más registros (${registrosVisibles.length} de ${registrosFiltrados.length})`}
+                </button>
+              </div>
+            )}
           </div>
         )}
       </div>

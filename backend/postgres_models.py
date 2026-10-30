@@ -122,3 +122,43 @@ class LiquidacionResponse(BaseModel):
     sueldo_total: Decimal | None
     cerrado: bool
     adicionales: list[AdicionalResponse]
+
+
+# [FN-07.04] Creación de tarifa de proyecto para roster
+class TarifaRosterCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    id_proyecto: UUID
+    dia_normal: Decimal = Field(ge=0, allow_inf_nan=False)
+    dia_domingo: Decimal = Field(ge=0, allow_inf_nan=False)
+    subida: Decimal = Field(default=Decimal("0"), ge=0, allow_inf_nan=False)
+    bajada: Decimal = Field(default=Decimal("0"), ge=0, allow_inf_nan=False)
+    adicional_turno: Decimal = Field(default=Decimal("0"), ge=0, allow_inf_nan=False)
+
+
+# [FN-04.12] Edición administrativa de usuario y sueldo base
+class UsuarioSueldoUpdate(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id_usuario: UUID
+    nombre: str = Field(min_length=1, max_length=100)
+    apellido: str = Field(default="", max_length=100)
+    dni: str = Field(min_length=1, max_length=20)
+    correo: str = Field(min_length=3, max_length=150)
+    area: str = Field(min_length=1, max_length=50)
+    rol_app: str = Field(default="user_1", pattern="^(admin|sub_admin|core|user_1|user_2)$")
+    activo: bool = True
+    sueldo_oficina: Decimal = Field(default=Decimal("0"), ge=0, allow_inf_nan=False)
+    sueldo_obra: Decimal = Field(default=Decimal("0"), ge=0, allow_inf_nan=False)
+    lugar_habitual: Literal["oficina", "obra"] = "oficina"
+    cumpleanos: str | None = None
+    vigente_desde: date | str | None = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def normalizar_campos(cls, data):
+        if isinstance(data, dict):
+            if "correo" not in data and "email" in data:
+                data["correo"] = data["email"]
+            if "nombre" not in data and "primer_nombre" in data:
+                data["nombre"] = data["primer_nombre"]
+        return data
+

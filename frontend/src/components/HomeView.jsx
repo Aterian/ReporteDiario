@@ -2,7 +2,7 @@ import React from 'react';
 import RpgTavernBoard from './RpgTavernBoard';
 import DailyStatusWidget from './DailyStatusWidget';
 import { getTituloRpg } from '../utils/rpgTitles';
-import { puedeAccederRoster, puedeVerHistorialOtros, puedeVerModificaciones, puedeVerActividadAyer, getEtiquetaRol } from '../utils/permissions';
+import { puedeAccederRoster, puedeVerHistorialOtros, puedeVerModificaciones, puedeVerActividadAyer, getEtiquetaRol, puedeGestionarUsuarios } from '../utils/permissions';
 
 // [MOD-01] HomeView
 export default function HomeView({
@@ -14,6 +14,7 @@ export default function HomeView({
   onNuevoRoster,
   onHistorialRoster,
   onHistorialOtrosEmpleados,
+  onGestionUsuarios,
   notificacionesModificaciones = [],
   onIrACalendarioModificacion,
   onDescartarNotificacion
@@ -28,6 +29,7 @@ export default function HomeView({
         onHistorialOtrosEmpleados={onHistorialOtrosEmpleados}
         onNuevoRoster={onNuevoRoster}
         onHistorialRoster={onHistorialRoster}
+        onGestionUsuarios={onGestionUsuarios}
       />
     );
   }
@@ -38,7 +40,8 @@ export default function HomeView({
   const puedeOtros = puedeVerHistorialOtros(usuario);
   const puedeVerAyer = puedeVerActividadAyer(usuario);
   const puedeVerModif = puedeVerModificaciones(usuario);
-  const tieneModulosGestion = puedeRoster || puedeOtros || puedeVerAyer;
+  const puedeGestionar = puedeGestionarUsuarios(usuario);
+  const tieneModulosGestion = puedeRoster || puedeOtros || puedeVerAyer || puedeGestionar;
 
   const getFechaFormateada = () => {
     const hoy = new Date();
@@ -287,6 +290,36 @@ export default function HomeView({
                     <span className="action-card-title">Historial de otros empleados</span>
                     <span className="action-card-desc">
                       Supervisión y auditoría de reportes cargados para colaboradores
+                    </span>
+                  </div>
+                  <div className="action-card-arrow">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                      <polyline points="9 18 15 12 9 6" />
+                    </svg>
+                  </div>
+                </button>
+              )}
+
+              {/* Botón: Módulo de Empleados (Solo Admin, SubAdmin y Core) */}
+              {puedeGestionar && (
+                <button 
+                  type="button" 
+                  className="home-action-card card-users-mgmt" 
+                  onClick={onGestionUsuarios}
+                  style={{ borderLeft: '4px solid #cc3333' }}
+                >
+                  <div className="action-card-icon-box" style={{ background: '#fee2e2', color: '#cc3333' }}>
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+                      <circle cx="9" cy="7" r="4" />
+                      <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
+                      <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+                    </svg>
+                  </div>
+                  <div className="action-card-content">
+                    <span className="action-card-title">Empleados</span>
+                    <span className="action-card-desc">
+                      Visualización y edición de personal, área, lugar habitual, sueldo base y última asistencia
                     </span>
                   </div>
                   <div className="action-card-arrow">

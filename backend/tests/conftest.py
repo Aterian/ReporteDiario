@@ -54,8 +54,9 @@ def pg_repository(pg_connection,monkeypatch):
     db.borrar_sesion()
     with cursor_prueba(True) as cur:
         usuario,proyecto = str(uuid4()),str(uuid4())
+        dni_sintetico = f"{uuid4().int % 90000000 + 10000000}"
         cur.execute("""INSERT INTO app_rrhh.a_1_usuarios (id_usuario,dni,nombre,apellido,correo,area,rol_app)
-            VALUES (%s,%s,%s,%s,%s,%s,%s)""",(usuario,uuid4().hex[:8],"Empleado","Sintético",uuid4().hex+"@example.test","I","admin"))
+            VALUES (%s,%s,%s,%s,%s,%s,%s)""",(usuario,dni_sintetico,"Empleado","Sintético",uuid4().hex+"@example.test","I","admin"))
         cur.execute("INSERT INTO app_proyectos.b_1_proyectos_servicios (id_proyecto,codificacion_serv) VALUES (%s,%s)",(proyecto,"Proyecto Sintético "+uuid4().hex[:8]))
         cur.execute("INSERT INTO app_rrhh.a_1_sueldos_base (id_usuario,sueldo_oficina,sueldo_obra) VALUES (%s,%s,%s)",(usuario,300000,600000))
         cur.execute("""INSERT INTO app_rrhh.b_1_tarifas_roster

@@ -121,7 +121,7 @@ export const puedeCargarParaOtro = (usuario) => {
  */
 export const puedeVerHistorialOtros = (usuario) => {
   const rol = getRolUsuario(usuario);
-  return rol === 'admin' || rol === 'sub_admin' || rol === 'core';
+  return rol === 'admin' || rol === 'sub_admin';
 };
 
 /**
@@ -166,7 +166,7 @@ export const puedeVerModificaciones = (usuario) => {
  */
 export const puedeVerActividadAyer = (usuario) => {
   const rol = getRolUsuario(usuario);
-  return rol === 'admin' || rol === 'sub_admin' || rol === 'core';
+  return rol === 'admin' || rol === 'sub_admin';
 };
 
 /**
@@ -223,6 +223,20 @@ export const getEtiquetaRol = (usuario) => {
     default:
       return { rol: 'user_1', nombre: 'Colaborador', badge: '👤 Colaborador', clase: 'badge-rol-user1' };
   }
+};
+
+/**
+ * 8. Gestión de Usuarios y Sueldos:
+ * - Disponible exclusivamente para admin y sub_admin
+ */
+export const puedeGestionarUsuarios = (usuario) => {
+  const rol = getRolUsuario(usuario);
+  return rol === 'admin' || rol === 'sub_admin' || rol === 'core';
+};
+
+export const puedeEditarUsuarios = (usuario) => {
+  const rol = getRolUsuario(usuario);
+  return rol === 'admin' || rol === 'sub_admin';
 };
 
 

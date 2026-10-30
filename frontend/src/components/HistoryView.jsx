@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { api } from '../services/apiBridge';
 import { puedeVerHistorialOtros, puedeModificarRegistro, esAdmin, esSubAdmin, puedeCargarCampo } from '../utils/permissions';
-import { esServicioAreaInterna, obtenerEtiquetaModalidad } from '../utils/francoUtils';
+import { esServicioAreaInterna, esFrancoDeObra, obtenerEtiquetaModalidad, resolverNombreCargador } from '../utils/francoUtils';
 
 // [MOD-02] HistoryView
 
@@ -67,13 +67,18 @@ const TIPOS_LICENCIA = [
 ];
 
 export const getTagAutorInfo = (item, usuario) => {
-  const cargadoPor = (item?.cargado_por || '').trim();
-  const nombreUsuario = (usuario?.nombre || '').trim().toLowerCase();
+  const cargadoPorRaw = (item?.cargado_por || '').trim();
+  const nombreCargador = resolverNombreCargador(item, usuario);
+  const idUsuario = (usuario?.id_usuario || usuario?.id_origen || '').toLowerCase();
+  const cargadoPorId = (item?.cargado_por_id || (cargadoPorRaw.includes('-') ? cargadoPorRaw : '')).toLowerCase();
+  const nombreUsuario = (usuario?.nombre || usuario?.nombre_completo || '').trim().toLowerCase();
   const nombreEmpleado = (item?.empleado || '').trim().toLowerCase();
 
-  const esPropio = !cargadoPor || 
-                   (nombreUsuario && cargadoPor.toLowerCase() === nombreUsuario) ||
-                   (nombreEmpleado && cargadoPor.toLowerCase() === nombreEmpleado);
+  const esPropio = !cargadoPorRaw ||
+                   (cargadoPorId && idUsuario && cargadoPorId === idUsuario) ||
+                   (cargadoPorRaw && idUsuario && cargadoPorRaw.toLowerCase() === idUsuario) ||
+                   (nombreUsuario && nombreCargador.toLowerCase() === nombreUsuario) ||
+                   (nombreEmpleado && nombreCargador.toLowerCase() === nombreEmpleado);
 
   if (esPropio) {
     return {
@@ -83,10 +88,10 @@ export const getTagAutorInfo = (item, usuario) => {
     };
   }
 
-  const esRRHH = cargadoPor.toLowerCase().includes('rrhh');
+  const esRRHH = nombreCargador.toLowerCase().includes('rrhh');
   return {
     tipo: 'rrhh',
-    label: esRRHH ? 'Cargado por RRHH' : `Cargado por ${cargadoPor}`,
+    label: esRRHH ? 'Cargado por RRHH' : `Cargado por ${nombreCargador}`,
     badgeClass: 'badge-autor-rrhh'
   };
 };
@@ -196,14 +201,16 @@ export default function HistoryView({ onVolver, tema, onNuevoReporte, usuario, o
 
       const payload = {
         fecha: fechasArray[0],
-        lugar: 'Franco',
+        lugar: 'Oficina',
+        modalidad: 'oficina',
+        tipo_costo: 'Oficina',
         tipo_ocf: 'Franco',
         tipo_franco: 'Franco de Oficina',
         sub_franco: 'Franco de Oficina',
-        tipo_costo: 'Oficina',
         costo_dia: Number(usuario?.costo_dia_ofi) || 0.0,
-        area: areaDestino,
-        servicio: areaDestino,
+        area: areaDestino || usuario?.area || 'Oficina',
+        servicio: 'Franco de Oficina',
+        dedicado_a: 'areas',
         horas: 0.0,
         fechas: fechasArray,
         empleado: usuario?.nombre || '',
@@ -216,7 +223,7 @@ export default function HistoryView({ onVolver, tema, onNuevoReporte, usuario, o
         setModalFinesDeSemanaOpen(false);
         setMensajeSync({
           tipo: 'exito',
-          texto: `✓ Se registraron exitosamente ${fechasArray.length} fines de semana como Franco.`
+          texto: `✓ Se registraron exitosamente ${fechasArray.length} fines de semana como Franco de Oficina.`
         });
         await cargarHistorial();
       } else {
@@ -423,9 +430,19 @@ export default function HistoryView({ onVolver, tema, onNuevoReporte, usuario, o
     'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
   ];
 
-  const getBadgeClassLugar = (lugar, servicio = '') => {
+  const getBadgeClassLugar = (lugar, servicio = '', modalidad = '') => {
     const l = (lugar || '').toLowerCase().trim();
     const s = (servicio || '').toLowerCase().trim();
+    const m = (modalidad || '').toLowerCase().trim();
+
+    if (m === 'oficina' || m === 'ofic') {
+      if (l === 'franco ofic trabajado' || s === 'franco trabajado' || (l === 'franco' && s.includes('trabajado'))) {
+        return 'badge-modalidad-franco-ofic-trabajado';
+      }
+      if (l.includes('franco')) return 'badge-modalidad-franco';
+      if (l.includes('oficina')) return 'badge-modalidad-oficina';
+    }
+
     if (l === 'franco obra' || l === 'franco de obra' || s.includes('franco de obra') || (l === 'franco' && s && !esServicioAreaInterna(s))) {
       return 'badge-modalidad-franco-obra';
     }
@@ -476,7 +493,7 @@ export default function HistoryView({ onVolver, tema, onNuevoReporte, usuario, o
           )}
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
           {puedeVerHistorialOtros(usuario) && onHistorialOtrosEmpleados && (
             <button
               type="button"
@@ -681,7 +698,7 @@ export default function HistoryView({ onVolver, tema, onNuevoReporte, usuario, o
                 {registrosFiltrados.map((item) => {
                   const horasDisplay = item.horas > 0 ? `${item.horas} hs` : (item.jornada || '0 hs');
                   const lugarDisplay = obtenerEtiquetaModalidad(item);
-                  const badgeClass = getBadgeClassLugar(lugarDisplay, item.servicio);
+                  const badgeClass = getBadgeClassLugar(lugarDisplay, item.servicio, item.modalidad || item.tipo_costo);
                   const estaSincronizado = item.sincronizado === 1;
 
                   return (
@@ -849,9 +866,9 @@ export default function HistoryView({ onVolver, tema, onNuevoReporte, usuario, o
                   <div className="cell-events-container">
                     {celda.registros.slice(0, 3).map((r, idx) => {
                       const lug = r.tipo_ocf || r.lugar || 'Oficina';
-                      const badgeClass = getBadgeClassLugar(lug, r.servicio);
+                      const badgeClass = getBadgeClassLugar(lug, r.servicio, r.modalidad || r.tipo_costo);
                       let labelText = lug;
-                      if (lug === 'Franco Obra' || r.servicio?.toLowerCase().includes('franco de obra') || (lug === 'Franco' && r.servicio && !esServicioAreaInterna(r.servicio))) {
+                      if (esFrancoDeObra(r) || lug === 'Franco Obra' || r.servicio?.toLowerCase().includes('franco de obra')) {
                         labelText = 'F. Obra';
                       } else if (lug === 'Franco Obra Trabajado') {
                         labelText = 'F. Obra Trab.';
@@ -861,6 +878,8 @@ export default function HistoryView({ onVolver, tema, onNuevoReporte, usuario, o
                         labelText = 'Feriado Trab.';
                       } else if (lug === 'Campaña / Campo' || lug === 'Campo') {
                         labelText = 'Campo';
+                      } else if (lug.toLowerCase().includes('franco')) {
+                        labelText = 'Franco';
                       }
 
                       const tagCell = getTagAutorInfo(r, usuario);
@@ -1235,7 +1254,7 @@ export default function HistoryView({ onVolver, tema, onNuevoReporte, usuario, o
 
             <div style={{ padding: '6px 0 16px 0' }}>
               <p style={{ fontSize: '0.9rem', color: 'var(--text-secondary, #94a3b8)', margin: '0 0 12px 0', lineHeight: 1.5 }}>
-                Se registrarán como <strong>Franco</strong> (0 hs imputadas a <strong>{areaDestino}</strong>) los siguientes <strong>{finesDeSemanaPendientes.length}</strong> días de fin de semana que aún no poseen registro en <strong>{nombreMesFinesDeSemana}</strong>:
+                Se registrarán como <strong>Franco de Oficina</strong> (0 hs, valor de oficina) los siguientes <strong>{finesDeSemanaPendientes.length}</strong> días de fin de semana que aún no poseen registro en <strong>{nombreMesFinesDeSemana}</strong>:
               </p>
 
               <div className="weekend-pills-container">
