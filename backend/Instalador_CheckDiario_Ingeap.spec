@@ -7,6 +7,7 @@ base_dir = SPECPATH
 
 added_files = [
     (os.path.join(base_dir, "..", "instalador", "CheckDiarioIngeap.exe"), "."),
+    (os.path.join(base_dir, ".env"), "."),
 ]
 
 a = Analysis(

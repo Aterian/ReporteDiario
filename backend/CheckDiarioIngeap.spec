@@ -9,6 +9,7 @@ base_dir = SPECPATH
 added_files = [
     (os.path.join(base_dir, "dist"), "dist"),
     (os.path.join(base_dir, "assets"), "assets"),
+    (os.path.join(base_dir, ".env"), "."),
 ]
 
 hidden_imports = [

@@ -16,6 +16,8 @@ from error_handler import DatabaseTransactionError, RegistroDuplicadoError, Vali
 _base = Path(sys.executable).parent if getattr(sys, "frozen", False) else Path(__file__).resolve().parent.parent
 load_dotenv(_base / ".env", override=False)
 load_dotenv(_base / "backend" / ".env", override=False)
+if getattr(sys, "frozen", False) and hasattr(sys, "_MEIPASS"):
+    load_dotenv(Path(sys._MEIPASS) / ".env", override=False)
 _pool = None
 _slots = None
 _lock = Lock()

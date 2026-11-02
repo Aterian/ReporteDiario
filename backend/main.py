@@ -444,7 +444,29 @@ def main():
     # 1. Asegurar inicio automático en el sistema
     asegurar_inicio_automatico()
 
-    inicializar_bd()
+    # Auto-aprovisionar .env en target_dir si la aplicacion fue actualizada via updater
+    if getattr(sys, "frozen", False) and hasattr(sys, "_MEIPASS"):
+        meipass_env = os.path.join(sys._MEIPASS, ".env")
+        local_env = os.path.join(os.path.dirname(sys.executable), ".env")
+        if os.path.exists(meipass_env) and not os.path.exists(local_env):
+            try:
+                import shutil
+                shutil.copy2(meipass_env, local_env)
+            except Exception:
+                pass
+
+    try:
+        inicializar_bd()
+    except Exception as e:
+        import ctypes
+        ctypes.windll.user32.MessageBoxW(
+            0,
+            f"No fue posible conectar con la base de datos de Ingeap:\n\n{str(e)}\n\n"
+            "Compruebe su conexion a internet o contacte al administrador.",
+            "Error de Base de Datos - Check Diario Ingeap",
+            0x10
+        )
+        sys.exit(1)
 
     api = ApiPuente()
     ruta_dist = recurso_path(os.path.join("dist", "index.html"))

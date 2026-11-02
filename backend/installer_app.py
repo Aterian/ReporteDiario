@@ -39,6 +39,12 @@ def main():
 
         shutil.copy2(payload_exe, target_exe)
 
+        # Extraer y asegurar archivo .env con configuracion de base de datos
+        payload_env = resource_path(".env")
+        target_env = os.path.join(target_dir, ".env")
+        if os.path.exists(payload_env):
+            shutil.copy2(payload_env, target_env)
+
         # Desbloquear permisos de Windows 11 SmartScreen (quitar Zone.Identifier) en el ejecutable instalado
         ps_unblock = f"Unblock-File -LiteralPath '{target_exe}' -ErrorAction SilentlyContinue"
         subprocess.run(["powershell", "-NoProfile", "-NonInteractive", "-Command", ps_unblock], capture_output=True, creationflags=no_window_flag)
