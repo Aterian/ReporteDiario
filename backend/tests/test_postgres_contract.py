@@ -1,6 +1,6 @@
 # [MOD-07] Contratos de tipos, SQL y autorizaciones
 from contextlib import contextmanager
-from datetime import date
+from datetime import date, datetime
 from decimal import Decimal
 from unittest.mock import MagicMock
 from uuid import uuid4
@@ -835,3 +835,124 @@ def test_puente_actualizar_configuracion_sueldo_rbac(monkeypatch):
 
     assert res["exito"] is False
     assert res["codigo_error"] == "ACCESO_DENEGADO"
+
+
+# [FN-07.21] Contrato de Registro y Consulta de Errores Remotos
+def test_registrar_y_consultar_errores_remotos(monkeypatch):
+    cursor = MagicMock()
+    cursor.fetchall.return_value = [
+        {
+            "id_error": "00000000-0000-0000-0000-000000000001",
+            "nombre_usuario": "Iván Valentin",
+            "codigo_error": "ERROR_BASE_DATOS",
+            "mensaje_error": "Timeout simulado",
+            "fecha_hora": datetime(2026, 11, 2, 10, 0, 0),
+            "resuelto": False
+        }
+    ]
+
+    @contextmanager
+    def conexion(commit=False):
+        yield cursor
+
+    monkeypatch.setattr(db, "obtener_cursor_pg", conexion)
+
+    # 1. Registro seguro
+    res_reg = db.registrar_error_remoto({
+        "codigo_error": "ERROR_BASE_DATOS",
+        "mensaje_error": "Timeout simulado"
+    }, sesion={"id_usuario": "11111111-1111-1111-1111-111111111111", "nombre": "Iván Valentin", "rol_app": "admin"})
+    assert res_reg["exito"] is True
+
+    # 2. Consulta
+    errores = db.obtener_errores_remotos(solo_pendientes=True)
+    assert len(errores) == 1
+    assert errores[0]["codigo_error"] == "ERROR_BASE_DATOS"
+
+
+# [FN-07.21] RBAC en ApiPuente para Errores Remotos
+def test_puente_errores_remotos_rbac(monkeypatch):
+    from postgres_bridge import ApiPuente
+    puente = ApiPuente()
+
+    # Usuario no admin no puede listar errores remotos
+    monkeypatch.setattr(db, "obtener_sesion_activa", lambda: {"id_usuario": "1111", "rol_app": "user_1"})
+    res = puente.obtener_errores_remotos()
+    assert res["exito"] is False
+    assert res["codigo_error"] == "ACCESO_DENEGADO"
+
+
+# [FN-07.22] Contrato de Gestión de Proyectos por Administrador
+def test_creacion_y_edicion_proyectos_admin(monkeypatch):
+    cursor = MagicMock()
+    cursor.fetchone.side_effect = [
+        None,  # SELECT id_proyecto (no existe colisión)
+        {      # RETURNING insert
+            "id_servicio": "22222222-2222-2222-2222-222222222222",
+            "id_proyecto": "33333333-3333-3333-3333-333333333333",
+            "codificacion_serv": "228-SF-I-626",
+            "n_serv": Decimal("626"),
+            "responsable_des": "Santiago Destefanis",
+            "area": "I",
+            "url_des": "https://ingeap.com",
+            "activo": True
+        }
+    ]
+
+    @contextmanager
+    def conexion(commit=False):
+        yield cursor
+
+    monkeypatch.setattr(db, "obtener_cursor_pg", conexion)
+    monkeypatch.setattr(db, "invalidar_caches_repositorio", lambda *a: None)
+
+    res = db.crear_proyecto({
+        "id_proyecto": "33333333-3333-3333-3333-333333333333",
+        "codificacion_serv": "228-SF-I-626",
+        "n_serv": 626,
+        "responsable_des": "Santiago Destefanis",
+        "area": "I",
+        "url_des": "https://ingeap.com",
+        "activo": True
+    })
+
+    assert res["exito"] is True
+    assert res["codificacion_serv"] == "228-SF-I-626"
+    assert res["id_proyecto"] == "33333333-3333-3333-3333-333333333333"
+
+
+# [FN-07.22] RBAC en ApiPuente para Gestión de Proyectos
+def test_puente_proyectos_admin_rbac(monkeypatch):
+    from postgres_bridge import ApiPuente
+    puente = ApiPuente()
+
+    # Usuario no admin no puede gestionar proyectos
+    monkeypatch.setattr(db, "obtener_sesion_activa", lambda: {"id_usuario": "1111", "rol_app": "sub_admin"})
+    res = puente.crear_proyecto({"id_proyecto": "33333333-3333-3333-3333-333333333333", "codificacion_serv": "TEST"})
+    assert res["exito"] is False
+    assert res["codigo_error"] == "ACCESO_DENEGADO"
+
+
+# [FN-07.23] Detección de Días Faltantes en Fin de Mes
+def test_obtener_dias_faltantes_mes(monkeypatch):
+    cursor = MagicMock()
+    # Simula que registró solo los días 1, 2 y 3 en un mes de 31 días
+    cursor.fetchall.return_value = [{"dia": 1}, {"dia": 2}, {"dia": 3}]
+
+    @contextmanager
+    def conexion(commit=False):
+        yield cursor
+
+    monkeypatch.setattr(db, "obtener_cursor_pg", conexion)
+
+    # Evaluación el día 31 (último día de octubre)
+    res = db.obtener_dias_faltantes_mes("11111111-1111-1111-1111-111111111111", fecha_ref=date(2026, 10, 31))
+    assert res["es_ultimo_dia_mes"] is True
+    assert res["ultimo_dia"] == 31
+    assert res["cantidad_faltantes"] == 28
+    assert 4 in res["dias_faltantes"]
+    assert 31 in res["dias_faltantes"]
+
+    # Evaluación a mitad de mes (día 15)
+    res_mitad = db.obtener_dias_faltantes_mes("11111111-1111-1111-1111-111111111111", fecha_ref=date(2026, 10, 15))
+    assert res_mitad["es_ultimo_dia_mes"] is False

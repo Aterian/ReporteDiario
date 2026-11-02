@@ -1341,6 +1341,7 @@ def obtener_dias_faltantes_mes(id_usuario, fecha_ref=None):
     return {
         "es_ultimo_dia_mes": es_ultimo_dia,
         "dia_hoy": fecha_base.day,
+        "ultimo_dia": ultimo_dia,
         "ultimo_dia_mes": ultimo_dia,
         "mes_anio": mes_anio,
         "dias_faltantes": dias_faltantes,

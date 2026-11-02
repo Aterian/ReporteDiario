@@ -648,3 +648,36 @@
   2. La compensación automática a 30 días SOLO se activa si la suma total de días registrados en el mes es mayor o igual a los días calendario del mes (28, 29, 30 o 31) o superior a 30. En meses incompletos (ingreso a mitad de mes o ausencias), se liquidan únicamente los días reales registrados sin ajuste.
   3. Los montos adicionales por `feriado_trabajado`, `franco_trabajado` y `a_1_adicionales_sueldo` se preservan intactos sin verse reducidos por el ajuste a 30 días.
   4. Al modificar `modalidad_calculo` o `lugar_habitual` en `a_1_sueldos_base`, el trigger `trg_recalcular_liquidacion_config_sueldo` dispara automáticamente `fn_recalcular_liquidacion_mes` para todos los ciclos de cobro abiertos del usuario.
+
+
+## [FN-07.21] Sistema de Telemetría y Auditoría de Errores Remotos
+- **Módulo**: [MOD-00] / [MOD-07] Persistencia Relacional PostgreSQL y Auditoría RRHH
+- **Flujo Operativo**: Captura excepciones no controladas de frontend (`ErrorBoundary`, `window.onerror`, `unhandledrejection`) y backend, persistiendo en `app_rrhh.b_1_errores_remotos`. Los administradores pueden visualizar errores pendientes en tiempo real, inspeccionar trazas técnicas y resolverlos individual o masivamente.
+- **Tablas afectadas**: `app_rrhh.b_1_errores_remotos`.
+- **Reglas de negocio e invariantes**:
+  1. El registro de errores es no bloqueante y aislado de las transacciones principales del usuario; los métodos de telemetría son silenciosos en el cliente.
+  2. Los usuarios no autenticados registran errores con `id_usuario = NULL` y `nombre_usuario = 'Sesión no iniciada'`.
+  3. La consulta y resolución de errores remotos está estrictamente reservada a usuarios con `rol_app = 'admin'`.
+
+## [FN-07.22] Catálogo y Gestión Centralizada de Proyectos
+- **Módulo**: [MOD-04] / [MOD-07] Persistencia Relacional PostgreSQL y Auditoría RRHH
+- **Flujo Operativo**: Vista exclusiva `ProjectsManagementView` para administradores que permite auditar, crear y editar obras y servicios con filtros por área y estado (`activo`), buscador en tiempo real y métricas resumidas.
+- **Tablas afectadas**: `app_proyectos.b_1_proyectos_servicios`.
+- **Reglas de negocio e invariantes**:
+  1. `id_servicio` es la clave primaria UUID autogenerada (`DEFAULT gen_random_uuid()`), mientras que `id_proyecto` es el identificador UUID canónico ingresado por el Administrador.
+  2. La creación y edición de proyectos invalida automáticamente la caché de catálogo (`proyectos` y `tarifas_roster`).
+  3. Acceso estrictamente restringido a usuarios con `rol_app = 'admin'`.
+
+## [FN-07.23] Alerta Temprana de Cierre de Mes por Días sin Cargar
+- **Módulo**: [MOD-01] / [MOD-07] Persistencia Relacional PostgreSQL y Auditoría RRHH
+- **Flujo Operativo**: Detección dinámica en el último día calendario del mes (28, 29, 30 o 31) de las fechas pendientes de registro del colaborador en `b_1_asistencias`, presentando un banner destacado con accesos directos a "Cargar Ahora" y "Ver Mi Historial".
+- **Tablas afectadas**: `app_rrhh.b_1_asistencias`.
+- **Reglas de negocio e invariantes**:
+  1. El cálculo se ejecuta dinámicamente con `calendar.monthrange(año, mes)[1]`.
+  2. La alerta se activa únicamente si la fecha actual es el último día del mes calendario y `cantidad_faltantes > 0`.
+  3. Se recalcula automáticamente tras guardar un nuevo registro en `CheckForm`.
+
+## [FN-06.10] Buzón de Sugerencias, Participación y Consulta
+- **Módulo**: [MOD-01] / [MOD-06] Interfaz de Usuario y Experiencia Colaborativa
+- **Flujo Operativo**: Botón interactivo en la pantalla principal para todos los usuarios. Al ser accionado, despliega la notificación toast "Próximamente." indicando que el canal participativo se encuentra en etapa de diseño.
+- **Tablas afectadas**: Ninguna (canal en fase de planificación).

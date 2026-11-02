@@ -2,6 +2,31 @@
 
 Historial cronológico de cambios, nuevas características y mejoras aplicadas al sistema **Check Diario Ingeap**.
 
+## [2.10.0] - 2026-11-02
+
+### ✨ Nuevas Características
+- **Auditoría de Errores Remotos (`[FN-07.21]`)**:
+  - Telemetría automática en backend y frontend para captura de excepciones y fallos de persistencia.
+  - Almacenamiento seguro en `app_rrhh.b_1_errores_remotos`.
+  - Panel y modal `RemoteErrorsModal` exclusivo para usuarios `admin` con detalle técnico / stack trace y resolución de incidentes individual o por lote.
+- **Alta de Nuevos Empleados (`[FN-04.14]`)**:
+  - Botón `+ Nuevo Empleado` en `UsersManagementView` para roles `admin` y `sub_admin`.
+  - Creación atómica de usuario y sueldo base con validación de DNI y blindaje contra elevación de privilegios no autorizada.
+- **Gestión Centralizada de Proyectos (`[FN-07.22]`)**:
+  - Nueva vista exclusiva `ProjectsManagementView` para administradores.
+  - Administración de obras, número de servicio (`n_serv`), codificación, responsable, área y estado activo/inactivo.
+  - Integración de acceso directo en `HomeView` y `RpgTavernBoard`.
+- **Alerta de Cierre de Mes por Días sin Cargar (`[FN-07.23]`)**:
+  - Detección en el último día del mes (28, 29, 30 o 31) de días pendientes de registro.
+  - Banner destacado con detalle de fechas faltantes y botones para carga inmediata y consulta de historial.
+- **Buzón de Sugerencias / Participación y Consulta (`[FN-06.10]`)**:
+  - Nuevo botón en menú inicial para todos los usuarios con notificación informativa 'Próximamente.'.
+
+### 🛠️ Correcciones y Mejoras Técnicas
+- Corrección de sintaxis en imports de repositorios y normalización de firmas en `postgres_bridge.py`.
+- Integración de migración `005_errores_remotos_y_gestion_proyectos.sql` en PostgreSQL Railway.
+- Pruebas automatizadas de contrato RBAC en `test_postgres_contract.py` y permisos en `permissions.test.js`.
+
 ## [2.9.0] - 2026-11-02
 
 ### ⚖️ Modalidad Dual de Cálculo Salarial ('base_30' vs 'por_dia') y Ajuste de Días Mixtos (`[FN-07.20]`)

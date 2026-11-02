@@ -9,17 +9,23 @@ import OtherEmployeesHistoryView from './components/OtherEmployeesHistoryView';
 import RosterView from './components/RosterView';
 import RosterHistoryView from './components/RosterHistoryView';
 import UsersManagementView from './components/UsersManagementView';
+import ProjectsManagementView from './components/ProjectsManagementView';
+import RemoteErrorsModal from './components/RemoteErrorsModal';
 import { ErrorBoundary } from 'react-error-boundary';
 import ErrorFallback from './components/ErrorFallback';
 import { Toaster, toast } from 'sonner';
-import { puedeAccederRoster, puedeVerHistorialOtros, puedeVerModificaciones, esAreaAplicaciones, puedeGestionarUsuarios } from './utils/permissions';
+import { puedeAccederRoster, puedeVerHistorialOtros, puedeVerModificaciones, esAreaAplicaciones, puedeGestionarUsuarios, puedeGestionarProyectos, esAdmin } from './utils/permissions';
 
 // [MOD-00] App Principal
 export default function App() {
   const [cargandoSesion, setCargandoSesion] = useState(true);
   const [usuario, setUsuario] = useState(null);
-  const [vistaActiva, setVistaActiva] = useState('home'); // 'home' | 'check' | 'historial' | 'historial-otros' | 'roster' | 'historial-roster'
+  const [vistaActiva, setVistaActiva] = useState('home'); // 'home' | 'check' | 'historial' | 'historial-otros' | 'roster' | 'historial-roster' | 'usuarios' | 'proyectos'
   const [recordatorioPendiente, setRecordatorioPendiente] = useState(null);
+  const [recordatorioFinMes, setRecordatorioFinMes] = useState(null);
+  const [erroresRemotos, setErroresRemotos] = useState([]);
+  const [modalErroresAbierto, setModalErroresAbierto] = useState(false);
+  const [cargandoErrores, setCargandoErrores] = useState(false);
   const [notificacionesModificaciones, setNotificacionesModificaciones] = useState([]);
   const [navegacionAuditoria, setNavegacionAuditoria] = useState(null);
   const [actualizacion, setActualizacion] = useState(null);
@@ -87,6 +93,44 @@ export default function App() {
     };
   }, []);
 
+  // [FN-07.21] Captura global de excepciones no controladas de ventana y promesas rechazadas
+  useEffect(() => {
+    const handleWindowError = (event) => {
+      try {
+        api.reportarErrorCliente({
+          origen: 'frontend_window',
+          accion_metodo: 'window.onerror',
+          mensaje_error: event.message || 'Error no capturado en interfaz',
+          detalle_tecnico: event.error?.stack || `${event.filename || 'app'}:${event.lineno || 0}:${event.colno || 0}`,
+          codigo_error: 'ERROR_VENTANA_CLIENTE'
+        });
+      } catch (_err) {
+        // Silenciar fallos de telemetria
+      }
+    };
+
+    const handleUnhandledRejection = (event) => {
+      try {
+        api.reportarErrorCliente({
+          origen: 'frontend_promise',
+          accion_metodo: 'unhandledrejection',
+          mensaje_error: event.reason?.message || String(event.reason || 'Promesa rechazada no controlada'),
+          detalle_tecnico: event.reason?.stack || String(event.reason || ''),
+          codigo_error: 'PROMISE_REJECTION'
+        });
+      } catch (_err) {
+        // Silenciar fallos de telemetria
+      }
+    };
+
+    window.addEventListener('error', handleWindowError);
+    window.addEventListener('unhandledrejection', handleUnhandledRejection);
+    return () => {
+      window.removeEventListener('error', handleWindowError);
+      window.removeEventListener('unhandledrejection', handleUnhandledRejection);
+    };
+  }, []);
+
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', tema);
     localStorage.setItem('ingeap_theme', tema);
@@ -133,27 +177,38 @@ export default function App() {
     };
   }, []);
 
-  // Verificar si el usuario activo ya completó el registro de hoy al iniciar o iniciar sesión
-  useEffect(() => {
+  // [FN-07.23] Verificar si el usuario completó el registro de hoy y alerta de fin de mes
+  const chequearRegistroHoy = async () => {
     if (!usuario) return;
-    let activo = true;
-    async function chequearRegistroHoy() {
-      try {
-        const res = await api.verificarRegistroHoy();
-        if (activo && res && !res.registrado) {
+    try {
+      const res = await api.verificarRegistroHoy();
+      if (res) {
+        if (!res.registrado) {
           setRecordatorioPendiente({
             tipo: 'inicio',
             mensaje: 'Buenos días, ¡recordá registrar tu jornada antes de que finalice el día!'
           });
+        } else {
+          setRecordatorioPendiente(null);
         }
-      } catch (err) {
-        console.error('Error al chequear registro de hoy:', err);
+
+        if (res.es_ultimo_dia_mes && res.cantidad_faltantes > 0) {
+          setRecordatorioFinMes({
+            diasFaltantes: res.dias_faltantes || [],
+            cantidadFaltantes: res.cantidad_faltantes,
+            ultimoDia: res.ultimo_dia
+          });
+        } else {
+          setRecordatorioFinMes(null);
+        }
       }
+    } catch (err) {
+      console.error('Error al chequear registro de hoy:', err);
     }
+  };
+
+  useEffect(() => {
     chequearRegistroHoy();
-    return () => {
-      activo = false;
-    };
   }, [usuario]);
 
   // Escuchar señal de recordatorio enviada a las 16:30 desde Python
@@ -207,6 +262,63 @@ export default function App() {
     };
   }, [usuario]);
 
+  // [FN-07.21] Carga y polling de errores remotos del sistema (Exclusivo Administrador)
+  const cargarErroresRemotos = async () => {
+    if (!usuario || !esAdmin(usuario)) return;
+    try {
+      const lista = await api.obtenerErroresRemotos(true);
+      if (Array.isArray(lista)) {
+        setErroresRemotos(lista);
+      }
+    } catch (err) {
+      console.error('Error al cargar errores remotos:', err);
+    }
+  };
+
+  useEffect(() => {
+    if (!usuario || !esAdmin(usuario)) {
+      setErroresRemotos([]);
+      return;
+    }
+    cargarErroresRemotos();
+    const intervalErr = setInterval(cargarErroresRemotos, 60000);
+    return () => clearInterval(intervalErr);
+  }, [usuario]);
+
+  const handleMarcarErrorResuelto = async (idError) => {
+    setCargandoErrores(true);
+    try {
+      const res = await api.marcarErrorRemotoResuelto(idError);
+      if (res && res.exito) {
+        toast.success('Error marcado como resuelto.');
+        setErroresRemotos(prev => prev.filter(e => e.id_error !== idError));
+      } else {
+        toast.error(res?.error || 'No se pudo resolver el error.');
+      }
+    } catch (e) {
+      toast.error('Fallo de comunicación al resolver error.');
+    } finally {
+      setCargandoErrores(false);
+    }
+  };
+
+  const handleMarcarTodosErroresResueltos = async () => {
+    setCargandoErrores(true);
+    try {
+      const res = await api.marcarErrorRemotoResuelto(null, true);
+      if (res && res.exito) {
+        toast.success(`Se marcaron ${res.afectados || 'todos los'} errores como resueltos.`);
+        setErroresRemotos([]);
+      } else {
+        toast.error(res?.error || 'No se pudieron resolver los errores.');
+      }
+    } catch (e) {
+      toast.error('Fallo de comunicación al resolver errores.');
+    } finally {
+      setCargandoErrores(false);
+    }
+  };
+
   // Guardia de navegación por permisos y roles
   useEffect(() => {
     if (!usuario) return;
@@ -217,6 +329,9 @@ export default function App() {
       setVistaActiva('home');
     }
     if (vistaActiva === 'usuarios' && !puedeGestionarUsuarios(usuario)) {
+      setVistaActiva('home');
+    }
+    if (vistaActiva === 'proyectos' && !puedeGestionarProyectos(usuario)) {
       setVistaActiva('home');
     }
   }, [vistaActiva, usuario]);
@@ -364,7 +479,7 @@ export default function App() {
   }
 
   return (
-    <div className={`app-container ${['roster', 'historial-roster', 'historial', 'historial-otros', 'usuarios'].includes(vistaActiva) ? 'app-panoramic' : ''}`}>
+    <div className={`app-container ${['roster', 'historial-roster', 'historial', 'historial-otros', 'usuarios', 'proyectos'].includes(vistaActiva) ? 'app-panoramic' : ''}`}>
       {/* Input oculto para abrir el explorador de Windows al elegir avatar */}
       <input
         type="file"
@@ -581,6 +696,49 @@ export default function App() {
         </div>
       )}
 
+      {/* [FN-07.23] Cartel / Banner de Recordatorio de Cierre de Mes */}
+      {recordatorioFinMes && vistaActiva !== 'check' && (
+        <div className="reminder-banner reminder-cierre-mes">
+          <div className="reminder-text">
+            <span className="reminder-icon">⚠️</span>
+            <span>
+              ¡Atención! Hoy es el último día del mes y tenés{' '}
+              <b>{recordatorioFinMes.cantidadFaltantes} día{recordatorioFinMes.cantidadFaltantes > 1 ? 's' : ''} sin cargar</b>{' '}
+              (días: {recordatorioFinMes.diasFaltantes.join(', ')}). Completá tus registros para el cierre mensual.
+            </span>
+          </div>
+          <div className="reminder-actions">
+            <button
+              type="button"
+              className="reminder-btn"
+              onClick={() => {
+                setVistaActiva('check');
+              }}
+            >
+              Cargar Ahora
+            </button>
+            <button
+              type="button"
+              className="reminder-btn"
+              style={{ background: '#475569' }}
+              onClick={() => {
+                setVistaActiva('historial');
+              }}
+            >
+              Ver Mi Historial
+            </button>
+            <button
+              type="button"
+              className="reminder-close"
+              onClick={() => setRecordatorioFinMes(null)}
+              title="Cerrar recordatorio"
+            >
+              ✕
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Cartel / Pop-up de Recordatorio de Registro Diario */}
       {recordatorioPendiente && vistaActiva !== 'check' && (
         <div className={`reminder-banner ${recordatorioPendiente.tipo === '16:30' ? 'reminder-alert' : 'reminder-normal'}`}>
@@ -628,6 +786,9 @@ export default function App() {
             onHistorialRoster={() => setVistaActiva('historial-roster')}
             onHistorialOtrosEmpleados={() => setVistaActiva('historial-otros')}
             onGestionUsuarios={() => setVistaActiva('usuarios')}
+            onGestionProyectos={() => setVistaActiva('proyectos')}
+            erroresRemotos={erroresRemotos}
+            onVerErroresRemotos={() => setModalErroresAbierto(true)}
             onAvatarClick={handleTriggerAvatar}
             notificacionesModificaciones={notificacionesModificaciones}
             onIrACalendarioModificacion={handleIrACalendarioModificacion}
@@ -638,7 +799,10 @@ export default function App() {
         {vistaActiva === 'check' && (
           <CheckForm
             tema={tema}
-            onRegistroGuardado={() => setRecordatorioPendiente(null)}
+            onRegistroGuardado={() => {
+              setRecordatorioPendiente(null);
+              chequearRegistroHoy();
+            }}
             onVolver={() => setVistaActiva('home')}
           />
         )}
@@ -689,7 +853,27 @@ export default function App() {
             onVolver={() => setVistaActiva('home')}
           />
         )}
+
+        {vistaActiva === 'proyectos' && puedeGestionarProyectos(usuario) && (
+          <ProjectsManagementView
+            usuario={usuario}
+            tema={tema}
+            onVolver={() => setVistaActiva('home')}
+          />
+        )}
       </ErrorBoundary>
+
+      {/* [FN-07.21] Modal de Auditoría de Errores Remotos para Administradores */}
+      {esAdmin(usuario) && (
+        <RemoteErrorsModal
+          isOpen={modalErroresAbierto}
+          onClose={() => setModalErroresAbierto(false)}
+          errores={erroresRemotos}
+          onMarcarResuelto={handleMarcarErrorResuelto}
+          onMarcarTodosResueltos={handleMarcarTodosErroresResueltos}
+          cargando={cargandoErrores}
+        />
+      )}
     </div>
   );
 }

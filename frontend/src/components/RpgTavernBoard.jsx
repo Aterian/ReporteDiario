@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { getTituloRpg } from '../utils/rpgTitles';
 import { api } from '../services/apiBridge';
-import { puedeVerHistorialOtros, puedeAccederRoster, puedeGestionarUsuarios } from '../utils/permissions';
+import { puedeVerHistorialOtros, puedeAccederRoster, puedeGestionarUsuarios, puedeGestionarProyectos } from '../utils/permissions';
+import { toast } from 'sonner';
 
 // Iconos vectoriales medievales para garantizar renderizado perfecto sin depender de compatibilidad de emojis
 const QuillIcon = ({ size = 16, color = "#6b4317" }) => (
@@ -56,7 +57,8 @@ export default function RpgTavernBoard({
   onHistorialOtrosEmpleados,
   onNuevoRoster,
   onHistorialRoster,
-  onGestionUsuarios
+  onGestionUsuarios,
+  onGestionProyectos
 }) {
   const puedeOtros = puedeVerHistorialOtros(usuario);
   const puedeRoster = puedeAccederRoster(usuario);
@@ -296,6 +298,33 @@ export default function RpgTavernBoard({
                 📜 Libro de Aventureros y Soldadas (Empleados)
               </button>
             )}
+
+            {puedeGestionarProyectos(usuario) && onGestionProyectos && (
+              <button 
+                type="button" 
+                className="rpg-parchment-btn-sec"
+                style={{ marginTop: '6px', borderColor: '#0284c7', color: '#0284c7', fontWeight: 700 }}
+                onClick={onGestionProyectos}
+                title="Catálogo maestro de fortalezas y proyectos del gremio"
+              >
+                🏰 Catálogo de Fortalezas (Proyectos)
+              </button>
+            )}
+
+            <button 
+              type="button" 
+              className="rpg-parchment-btn-sec"
+              style={{ marginTop: '6px', borderColor: '#7c3aed', color: '#7c3aed', fontWeight: 600 }}
+              onClick={() => {
+                toast.info('Próximamente.', {
+                  description: 'El buzón de sugerencias del gremio se encuentra en etapa de planificación.',
+                  duration: 4000
+                });
+              }}
+              title="Envía tus propuestas o consultas a los maestres del gremio"
+            >
+              📬 Buzón de Sugerencias y Consultas
+            </button>
 
             {/* Botón de Historial de Roster en desuso oculto */}
           </div>

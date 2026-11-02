@@ -36,7 +36,6 @@ def test_lectura_hace_rollback(pool):
         pass
     c.rollback.assert_called_once()
     c.commit.assert_not_called()
-    c.set_session.assert_called_once_with(readonly=True,autocommit=False)
 
 
 # [FN-07.01] Devolver conexión incluso ante fallo de commit

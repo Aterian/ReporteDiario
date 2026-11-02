@@ -2,7 +2,17 @@ import React from 'react';
 import RpgTavernBoard from './RpgTavernBoard';
 import DailyStatusWidget from './DailyStatusWidget';
 import { getTituloRpg } from '../utils/rpgTitles';
-import { puedeAccederRoster, puedeVerHistorialOtros, puedeVerModificaciones, puedeVerActividadAyer, getEtiquetaRol, puedeGestionarUsuarios } from '../utils/permissions';
+import { 
+  puedeAccederRoster, 
+  puedeVerHistorialOtros, 
+  puedeVerModificaciones, 
+  puedeVerActividadAyer, 
+  getEtiquetaRol, 
+  puedeGestionarUsuarios,
+  puedeGestionarProyectos,
+  esAdmin
+} from '../utils/permissions';
+import { toast } from 'sonner';
 
 // [MOD-01] HomeView
 export default function HomeView({
@@ -15,6 +25,9 @@ export default function HomeView({
   onHistorialRoster,
   onHistorialOtrosEmpleados,
   onGestionUsuarios,
+  onGestionProyectos,
+  erroresRemotos = [],
+  onVerErroresRemotos,
   notificacionesModificaciones = [],
   onIrACalendarioModificacion,
   onDescartarNotificacion
@@ -30,6 +43,7 @@ export default function HomeView({
         onNuevoRoster={onNuevoRoster}
         onHistorialRoster={onHistorialRoster}
         onGestionUsuarios={onGestionUsuarios}
+        onGestionProyectos={onGestionProyectos}
       />
     );
   }
@@ -41,7 +55,8 @@ export default function HomeView({
   const puedeVerAyer = puedeVerActividadAyer(usuario);
   const puedeVerModif = puedeVerModificaciones(usuario);
   const puedeGestionar = puedeGestionarUsuarios(usuario);
-  const tieneModulosGestion = puedeRoster || puedeOtros || puedeVerAyer || puedeGestionar;
+  const puedeProyectos = puedeGestionarProyectos(usuario);
+  const tieneModulosGestion = puedeRoster || puedeOtros || puedeVerAyer || puedeGestionar || puedeProyectos;
 
   const getFechaFormateada = () => {
     const hoy = new Date();
@@ -207,6 +222,37 @@ export default function HomeView({
                 </svg>
               </div>
             </button>
+
+            {/* [FN-06.10] Botón 3: Buzón de sugerencias / Participación y Consulta */}
+            <button 
+              type="button" 
+              className="home-action-card card-suggestions" 
+              onClick={() => {
+                toast.info('Próximamente.', {
+                  description: 'El módulo de Buzón de sugerencias / Participación y Consulta se encuentra en etapa de planificación.',
+                  duration: 4000
+                });
+              }}
+              style={{ borderLeft: '4px solid #a855f7' }}
+            >
+              <div className="action-card-icon-box" style={{ background: '#f3e8ff', color: '#9333ea' }}>
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+                  <path d="M8 9h8M8 13h5" />
+                </svg>
+              </div>
+              <div className="action-card-content">
+                <span className="action-card-title">Buzón de sugerencias / Participación y Consulta</span>
+                <span className="action-card-desc">
+                  Canal de propuestas, retroalimentación e inquietudes de los colaboradores
+                </span>
+              </div>
+              <div className="action-card-arrow">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="9 18 15 12 9 6" />
+                </svg>
+              </div>
+            </button>
           </div>
 
           <div className="home-quick-info">
@@ -329,7 +375,66 @@ export default function HomeView({
                   </div>
                 </button>
               )}
+
+              {/* [FN-07.22] Botón: Módulo de Proyectos (Exclusivo Administrador) */}
+              {puedeProyectos && (
+                <button 
+                  type="button" 
+                  className="home-action-card card-projects-mgmt" 
+                  onClick={onGestionProyectos}
+                  style={{ borderLeft: '4px solid #0284c7' }}
+                >
+                  <div className="action-card-icon-box" style={{ background: '#e0f2fe', color: '#0284c7' }}>
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                      <rect x="2" y="7" width="20" height="14" rx="2" ry="2" />
+                      <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16" />
+                    </svg>
+                  </div>
+                  <div className="action-card-content">
+                    <span className="action-card-title">Proyectos</span>
+                    <span className="action-card-desc">
+                      Catálogo integral de obras, codificación de servicios, áreas y estados operativos
+                    </span>
+                  </div>
+                  <div className="action-card-arrow">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                      <polyline points="9 18 15 12 9 6" />
+                    </svg>
+                  </div>
+                </button>
+              )}
             </div>
+
+            {/* [FN-07.21] Alerta de Errores Remotos del Sistema (Exclusivo Administrador) */}
+            {esAdmin(usuario) && erroresRemotos && erroresRemotos.length > 0 && (
+              <div className="home-modificaciones-card" style={{ borderColor: 'rgba(239, 68, 68, 0.4)', background: 'rgba(239, 68, 68, 0.08)' }}>
+                <div className="home-mod-card-header">
+                  <div className="home-mod-card-title" style={{ color: '#ef4444' }}>
+                    <span className="home-mod-bell">🚨</span>
+                    <span>Errores Remotos Detectados</span>
+                    <span className="home-mod-count-pill" style={{ background: '#ef4444', color: '#ffffff' }}>
+                      {erroresRemotos.length}
+                    </span>
+                  </div>
+                  <span className="home-mod-subtitle" style={{ color: '#f87171' }}>
+                    Fallos no controlados registrados en equipos de usuarios
+                  </span>
+                </div>
+                <div style={{ padding: '0 16px 14px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px' }}>
+                  <div style={{ fontSize: '12px', color: 'var(--text-secondary, #94a3b8)' }}>
+                    Último reporte: <b>{erroresRemotos[0].usuario_nombre || erroresRemotos[0].nombre_usuario}</b> ({erroresRemotos[0].codigo_error || 'ERROR'})
+                  </div>
+                  <button
+                    type="button"
+                    className="btn-home-mod-view"
+                    onClick={onVerErroresRemotos}
+                    style={{ background: '#ef4444', color: '#ffffff', borderColor: '#dc2626' }}
+                  >
+                    Auditar Fallos ➔
+                  </button>
+                </div>
+              </div>
+            )}
 
             {/* [FN-02.02] Alerta y avisos de modificaciones pendientes (Exclusivo Justina Bertolozzi e Iván Valentin) */}
             {puedeVerModif && notificacionesModificaciones && notificacionesModificaciones.length > 0 && (

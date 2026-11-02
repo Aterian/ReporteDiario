@@ -449,30 +449,26 @@ class ApiPuente:
     def _no_disponible(self,mensaje):
         return {"exito":False,"error":mensaje,"codigo_error":"FUNCION_RETIRADA"}
 
-
-for _nombre,_metodo in list(vars(ApiPuente).items()):
-    if not _nombre.startswith("_") and callable(_metodo):
-        setattr(ApiPuente,_nombre,respuesta_segura(_metodo))
     # [FN-07.21] Telemetría y captura de errores remotos
-    @respuesta_segura
     def reportar_error_cliente(self, datos: dict):
         sesion = db.obtener_sesion_activa()
         return db.registrar_error_remoto(datos, sesion=sesion)
 
-    @respuesta_segura
     def obtener_errores_remotos(self, solo_pendientes: bool = True, limite: int = 50):
-        self._sesion(admin=True)
+        sesion = self._sesion()
+        if sesion.get("rol_app") != "admin":
+            raise PermisoDenegadoError("Solo los administradores pueden consultar el log de errores remotos.")
         return db.obtener_errores_remotos(solo_pendientes=solo_pendientes, limite=limite)
 
-    @respuesta_segura
     def marcar_error_remoto_resuelto(self, id_error: str | None = None, todos: bool = False):
-        sesion = self._sesion(admin=True)
+        sesion = self._sesion()
+        if sesion.get("rol_app") != "admin":
+            raise PermisoDenegadoError("Solo los administradores pueden resolver errores remotos.")
         res = db.marcar_error_remoto_resuelto(id_error=id_error, todos=todos, id_operador=sesion.get("id_usuario"))
         self._notificar_cambios()
         return res
 
     # [FN-04.14] Alta de nuevo usuario y sueldo base
-    @respuesta_segura
     def crear_usuario_y_sueldo(self, datos: dict):
         sesion = self._sesion()
         if sesion.get("rol_app") not in ("admin", "sub_admin"):
@@ -482,21 +478,29 @@ for _nombre,_metodo in list(vars(ApiPuente).items()):
         return res
 
     # [FN-07.22] Gestión integral de proyectos por administradores
-    @respuesta_segura
     def obtener_proyectos_admin(self, incluir_inactivos: bool = True):
-        self._sesion(admin=True)
+        sesion = self._sesion()
+        if sesion.get("rol_app") != "admin":
+            raise PermisoDenegadoError("La gestión de proyectos es exclusiva para administradores.")
         return db.obtener_proyectos_gestion(incluir_inactivos=incluir_inactivos)
 
-    @respuesta_segura
     def crear_proyecto(self, datos: dict):
-        self._sesion(admin=True)
+        sesion = self._sesion()
+        if sesion.get("rol_app") != "admin":
+            raise PermisoDenegadoError("La gestión de proyectos es exclusiva para administradores.")
         res = db.crear_proyecto(datos)
         self._notificar_cambios()
         return res
 
-    @respuesta_segura
     def actualizar_proyecto(self, datos: dict):
-        self._sesion(admin=True)
+        sesion = self._sesion()
+        if sesion.get("rol_app") != "admin":
+            raise PermisoDenegadoError("La gestión de proyectos es exclusiva para administradores.")
         res = db.actualizar_proyecto(datos)
         self._notificar_cambios()
         return res
+
+
+for _nombre,_metodo in list(vars(ApiPuente).items()):
+    if not _nombre.startswith("_") and callable(_metodo):
+        setattr(ApiPuente,_nombre,respuesta_segura(_metodo))

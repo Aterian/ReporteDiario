@@ -1978,6 +1978,24 @@ html, body {
   color: #ffffff;
 }
 
+.reminder-banner.reminder-cierre-mes {
+  background: rgba(220, 38, 38, 0.12);
+  border: 1px solid rgba(220, 38, 38, 0.4);
+}
+
+.reminder-banner.reminder-cierre-mes .reminder-text {
+  color: #ef4444;
+}
+
+.reminder-banner.reminder-cierre-mes .reminder-btn {
+  background: #dc2626;
+  color: #ffffff;
+}
+
+.reminder-banner.reminder-cierre-mes .reminder-btn:hover {
+  background: #b91c1c;
+}
+
 .reminder-text {
   font-size: 11px;
   display: flex;

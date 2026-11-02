@@ -18,7 +18,8 @@ import {
   puedeAccederRoster,
   puedeVerCalculadoraLiquidacion,
   puedeVerModificaciones,
-  puedeModificarRegistro
+  puedeModificarRegistro,
+  puedeGestionarProyectos
 } from '../utils/permissions';
 
 describe('RBAC - Control de Roles y Capacidades', () => {
@@ -120,6 +121,15 @@ describe('RBAC - Control de Roles y Capacidades', () => {
       expect(puedeVerCalculadoraLiquidacion(adminUser)).toBe(true);
       expect(puedeVerCalculadoraLiquidacion(subAdminUser)).toBe(true);
       expect(puedeVerCalculadoraLiquidacion(user1)).toBe(false);
+    });
+
+    it('permite gestionar proyectos exclusivamente al rol admin', () => {
+      expect(puedeGestionarProyectos(adminUser)).toBe(true);
+      expect(puedeGestionarProyectos(subAdminUser)).toBe(false);
+      expect(puedeGestionarProyectos(coreUser)).toBe(false);
+      expect(puedeGestionarProyectos(user1)).toBe(false);
+      expect(puedeGestionarProyectos(user2)).toBe(false);
+      expect(puedeGestionarProyectos(null)).toBe(false);
     });
 
     it('permite ver historial de otros empleados sólo a roles autorizados', () => {
