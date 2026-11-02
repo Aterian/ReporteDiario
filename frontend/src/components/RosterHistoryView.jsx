@@ -1,14 +1,20 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { api } from '../services/apiBridge';
+import { puedeAccederRoster } from '../utils/permissions';
+import { buscarTarifaRoster } from './RosterView';
 
-export default function RosterHistoryView({ onVolver, onNuevoRoster, tema }) {
+// [MOD-06] RosterHistoryView
+export default function RosterHistoryView({ usuario, onVolver, onNuevoRoster, tema }) {
   const isDark = tema === 'dark';
+  const isRpg = tema === 'rpg';
+
 
   // Poner la ventana en pantalla completa al entrar (se conserva el tamaño al salir)
   useEffect(() => {
+    if (!puedeAccederRoster(usuario)) return;
     localStorage.removeItem('ingeap_rosters_mock');
     api.maximizarVentana();
-  }, []);
+  }, [usuario]);
 
   const [refrescando, setRefrescando] = useState(false);
   const [mesSeleccionado, setMesSeleccionado] = useState(() => new Date().getMonth() + 1);
@@ -16,7 +22,9 @@ export default function RosterHistoryView({ onVolver, onNuevoRoster, tema }) {
   const [proyectosDisponibles, setProyectosDisponibles] = useState([]);
   const [proyectoSeleccionado, setProyectoSeleccionado] = useState('');
   const [filtrarTablaPorProyecto, setFiltrarTablaPorProyecto] = useState(false);
+  const [filtroEmpleado, setFiltroEmpleado] = useState('TODOS');
   const [rosters, setRosters] = useState([]);
+  const [tarifasRoster, setTarifasRoster] = useState([]);
   const [cargando, setCargando] = useState(true);
   const [exportando, setExportando] = useState(false);
   const [mensaje, setMensaje] = useState(null); // { tipo: 'exito'|'error', texto: '' }
@@ -40,18 +48,29 @@ export default function RosterHistoryView({ onVolver, onNuevoRoster, tema }) {
   const [editPrecioDomingo, setEditPrecioDomingo] = useState('');
   const [guardandoEdit, setGuardandoEdit] = useState(false);
 
-  // Cargar proyectos y empleados exclusivos de Ingeniería (I)
+  // Cargar proyectos, tarifas y empleados exclusivos de Ingeniería (I)
   useEffect(() => {
+    if (!puedeAccederRoster(usuario)) return;
     async function cargarCatalogos() {
       try {
-        const [proys, emps] = await Promise.all([
+        const [proys, emps, tarifas] = await Promise.all([
           api.obtenerServicios('I'),
-          api.obtenerTodosUsuarios('I')
+          api.obtenerTodosUsuarios('I'),
+          api.obtenerTarifasRoster()
         ]);
+        if (Array.isArray(tarifas)) {
+          setTarifasRoster(tarifas);
+        }
         if (Array.isArray(proys)) {
-          setProyectosDisponibles(proys);
-          if (proys.length > 0) {
-            setProyectoSeleccionado(proys[0]);
+          const setP = new Set();
+          proys.forEach(p => { if (p) setP.add(p.trim()); });
+          if (Array.isArray(tarifas)) {
+            tarifas.forEach(t => { if (t.proyecto) setP.add(t.proyecto.trim()); });
+          }
+          const proysTotales = Array.from(setP);
+          setProyectosDisponibles(proysTotales);
+          if (proysTotales.length > 0) {
+            setProyectoSeleccionado(proysTotales[0]);
           }
         }
         if (Array.isArray(emps)) {
@@ -84,11 +103,13 @@ export default function RosterHistoryView({ onVolver, onNuevoRoster, tema }) {
   };
 
   useEffect(() => {
+    if (!puedeAccederRoster(usuario)) return;
     cargarRegistrosMes(anioSeleccionado, mesSeleccionado);
-  }, [anioSeleccionado, mesSeleccionado]);
+  }, [usuario, anioSeleccionado, mesSeleccionado]);
 
   // Escuchar evento de actualización de catálogos o sincronización
   useEffect(() => {
+    if (!puedeAccederRoster(usuario)) return;
     const handleCatalogosActualizados = () => {
       cargarRegistrosMes(anioSeleccionado, mesSeleccionado);
     };
@@ -96,7 +117,7 @@ export default function RosterHistoryView({ onVolver, onNuevoRoster, tema }) {
     return () => {
       window.removeEventListener('catalogos-actualizados', handleCatalogosActualizados);
     };
-  }, [anioSeleccionado, mesSeleccionado]);
+  }, [usuario, anioSeleccionado, mesSeleccionado]);
 
   const handleRefrescar = async () => {
     setRefrescando(true);
@@ -137,12 +158,14 @@ export default function RosterHistoryView({ onVolver, onNuevoRoster, tema }) {
     setGuardandoEdit(true);
     try {
       const empObj = empleadosDisponibles.find(emp => emp.nombre === editEmpleado);
+      const tarifaRef = buscarTarifaRoster(editProyecto, tarifasRoster);
       const res = await api.guardarRoster({
         id: editId,
         empleado: editEmpleado,
         dni: empObj ? empObj.dni : '',
         usuario_mail: empObj ? (empObj.mail || empObj.email || '') : '',
         proyecto: editProyecto,
+        id_proyecto: tarifaRef ? tarifaRef.id_proyecto : '',
         fecha_inicio: editFechaInicio,
         fecha_fin: editFechaFin,
         tipo: editTipo,
@@ -216,20 +239,48 @@ export default function RosterHistoryView({ onVolver, onNuevoRoster, tema }) {
     }
   };
 
-  // Filtrado de la tabla según el checkbox
-  const rostersFiltrados = useMemo(() => {
-    if (!filtrarTablaPorProyecto || !proyectoSeleccionado) return rosters;
-    return rosters.filter(r => r.proyecto === proyectoSeleccionado);
-  }, [rosters, filtrarTablaPorProyecto, proyectoSeleccionado]);
+  // Lista combinada de empleados para el selector de filtro
+  const listaEmpleadosFiltro = useMemo(() => {
+    const setEmps = new Set();
+    empleadosDisponibles.forEach(e => { if (e.nombre) setEmps.add(e.nombre.trim()); });
+    rosters.forEach(r => { if (r.empleado) setEmps.add(r.empleado.trim()); });
+    return Array.from(setEmps).sort();
+  }, [empleadosDisponibles, rosters]);
 
-  return (
-    <div className={`roster-history-container ${isDark ? 'dark-theme' : ''}`}>
+  // Filtrado de la tabla según proyecto y empleado
+  const rostersFiltrados = useMemo(() => {
+    return rosters.filter(r => {
+      if (filtrarTablaPorProyecto && proyectoSeleccionado && r.proyecto !== proyectoSeleccionado) {
+        return false;
+      }
+      if (filtroEmpleado && filtroEmpleado !== 'TODOS' && r.empleado !== filtroEmpleado) {
+        return false;
+      }
+      return true;
+    });
+  }, [rosters, filtrarTablaPorProyecto, proyectoSeleccionado, filtroEmpleado]);
+
+  if (!puedeAccederRoster(usuario)) {
+    return (
+      <div className="view-content" style={{ padding: '32px', textAlign: 'center' }}>
+        <p style={{ fontSize: '15px', color: 'var(--text-secondary)', marginBottom: '16px' }}>
+          Acceso denegado: El historial de Roster solo puede ser visualizado por Justina Bertolozzi e Iván Valentin.
+        </p>
+        <button type="button" className="btn-back" onClick={onVolver}>
+          Volver al Inicio
+        </button>
+      </div>
+    );
+  }
+
+  const contenidoPrincipal = (
+    <>
       {/* Barra de navegación superior */}
       <div className="roster-top-nav">
         <div className="roster-top-nav-left">
           <button
             type="button"
-            className="btn-roster-back"
+            className={isRpg ? 'rpg-wood-btn' : 'btn-roster-back'}
             onClick={onVolver}
             title="Volver al Menú Principal"
           >
@@ -239,8 +290,8 @@ export default function RosterHistoryView({ onVolver, onNuevoRoster, tema }) {
             Volver al Menú
           </button>
           <div className="roster-header-title">
-            <span className="roster-title-badge">RRHH</span>
-            <h2>Historial y Exportación de Rosters</h2>
+            <span className="roster-title-badge">{isRpg ? 'REINO • ARCHIVOS' : 'RRHH'}</span>
+            <h2>{isRpg ? 'Archivos de Campañas y Roster del Reino' : 'Historial y Exportación de Rosters'}</h2>
           </div>
         </div>
 
@@ -248,10 +299,10 @@ export default function RosterHistoryView({ onVolver, onNuevoRoster, tema }) {
           {/* Botón Refrescar: Sincroniza y depura registros de Sheets y BD local */}
           <button
             type="button"
-            className={`btn-roster-refresh ${refrescando ? 'btn-refresh-spinning' : ''}`}
+            className={isRpg ? `rpg-wood-btn ${refrescando ? 'btn-refresh-spinning' : ''}` : `btn-roster-refresh ${refrescando ? 'btn-refresh-spinning' : ''}`}
             onClick={handleRefrescar}
             disabled={refrescando || cargando}
-            title="Refrescar y sincronizar con Google Sheets"
+            title="Recargar datos desde PostgreSQL"
           >
             <svg
               width="14"
@@ -268,19 +319,19 @@ export default function RosterHistoryView({ onVolver, onNuevoRoster, tema }) {
               <polyline points="1 20 1 14 7 14" />
               <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
             </svg>
-            {refrescando ? 'Sincronizando...' : 'Refrescar'}
+            {refrescando ? (isRpg ? 'Sintonizando oráculos...' : 'Sincronizando...') : (isRpg ? 'Consultar Oráculo' : 'Refrescar')}
           </button>
 
           <button
             type="button"
-            className="btn-go-new-roster"
+            className={isRpg ? 'rpg-wood-btn' : 'btn-go-new-roster'}
             onClick={onNuevoRoster}
           >
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
               <line x1="12" y1="5" x2="12" y2="19" />
               <line x1="5" y1="12" x2="19" y2="12" />
             </svg>
-            Cargar Nuevo Roster
+            {isRpg ? 'Decretar Guardias' : 'Cargar Nuevo Roster'}
           </button>
         </div>
       </div>
@@ -315,7 +366,7 @@ export default function RosterHistoryView({ onVolver, onNuevoRoster, tema }) {
             </div>
 
             {/* Selector de Proyecto de Ingeniería a Exportar */}
-            <div className="history-period-selector" style={{ flex: 1, minWidth: '260px' }}>
+            <div className="history-period-selector" style={{ flex: 1, minWidth: '220px' }}>
               <label className="history-filter-label">Proyecto (Área de Ingeniería - I):</label>
               <select
                 value={proyectoSeleccionado}
@@ -329,11 +380,27 @@ export default function RosterHistoryView({ onVolver, onNuevoRoster, tema }) {
               </select>
             </div>
 
+            {/* Selector para filtrar por empleado */}
+            <div className="history-period-selector" style={{ minWidth: '200px' }}>
+              <label className="history-filter-label">Filtrar por Empleado:</label>
+              <select
+                value={filtroEmpleado}
+                onChange={(e) => setFiltroEmpleado(e.target.value)}
+                className="period-select"
+                style={{ width: '100%' }}
+              >
+                <option value="TODOS">Todos los Empleados</option>
+                {listaEmpleadosFiltro.map((nom, idx) => (
+                  <option key={idx} value={nom}>{nom}</option>
+                ))}
+              </select>
+            </div>
+
             {/* BOTÓN DE DESCARGA EXCEL EN 3 HOJAS POR PROYECTO */}
             <div className="history-download-action">
               <button
                 type="button"
-                className="btn-download-excel"
+                className={isRpg ? 'rpg-wood-btn' : 'btn-download-excel'}
                 disabled={exportando || !proyectoSeleccionado}
                 onClick={handleExportarExcel}
                 title="Descargar archivo Excel oficial con 3 hojas para el proyecto seleccionado"
@@ -341,7 +408,7 @@ export default function RosterHistoryView({ onVolver, onNuevoRoster, tema }) {
                 {exportando ? (
                   <>
                     <div className="spinner-mini"></div>
-                    Generando archivo Excel...
+                    {isRpg ? 'Transcribiendo pergamino...' : 'Generando archivo Excel...'}
                   </>
                 ) : (
                   <>
@@ -350,7 +417,7 @@ export default function RosterHistoryView({ onVolver, onNuevoRoster, tema }) {
                       <polyline points="7 10 12 15 17 10" />
                       <line x1="12" y1="15" x2="12" y2="3" />
                     </svg>
-                    Descargar Archivo .xlsx
+                    {isRpg ? 'Descargar Códice .xlsx' : 'Descargar Archivo .xlsx'}
                   </>
                 )}
               </button>
@@ -432,8 +499,8 @@ export default function RosterHistoryView({ onVolver, onNuevoRoster, tema }) {
                       <td className="date-cell">{r.fecha_inicio}</td>
                       <td className="date-cell">{r.fecha_fin}</td>
                       <td>
-                        <span className={`status-pill ${r.tipo === 'Campo' ? 'status-campo' : 'status-franco'}`}>
-                          {r.tipo === 'Campo' ? '🚜 Campo' : '🏠 Franco'}
+                        <span className={`status-pill status-${(r.tipo || 'campo').toLowerCase()}`}>
+                          {r.tipo === 'Campo' ? '🚜 Campo' : r.tipo === 'Franco' ? '🏠 Franco' : r.tipo === 'Vacaciones' ? '🏖️ Vacaciones' : r.tipo === 'Licencia' ? '🏥 Licencia' : r.tipo}
                         </span>
                       </td>
                       <td className="num-cell">
@@ -490,7 +557,7 @@ export default function RosterHistoryView({ onVolver, onNuevoRoster, tema }) {
                 <span className="roster-title-badge" style={{ margin: 0, background: '#2563eb' }}>EDITAR</span>
                 <h3>Modificar Registro de Roster</h3>
               </div>
-              <p>Actualiza la asignación, fechas o tarifas del empleado. Los cambios se sincronizarán con Google Sheets.</p>
+              <p>Actualiza la asignación, fechas o tarifas del empleado. Los cambios se guardarán en PostgreSQL.</p>
             </div>
 
             <form onSubmit={handleGuardarEdicion} className="roster-modal-body">
@@ -569,6 +636,20 @@ export default function RosterHistoryView({ onVolver, onNuevoRoster, tema }) {
                   >
                     🏠 Franco / Descanso
                   </button>
+                  <button
+                    type="button"
+                    className={`btn-type-pill pill-vacaciones ${editTipo === 'Vacaciones' ? 'active' : ''}`}
+                    onClick={() => setEditTipo('Vacaciones')}
+                  >
+                    🏖️ Vacaciones
+                  </button>
+                  <button
+                    type="button"
+                    className={`btn-type-pill pill-licencia ${editTipo === 'Licencia' ? 'active' : ''}`}
+                    onClick={() => setEditTipo('Licencia')}
+                  >
+                    🏥 Licencia
+                  </button>
                 </div>
               </div>
 
@@ -624,6 +705,47 @@ export default function RosterHistoryView({ onVolver, onNuevoRoster, tema }) {
           </div>
         </div>
       )}
+    </>
+  );
+
+  // En modo RPG: envuelto dentro del Tablón de Madera de la Taberna con herrajes y estandarte curvado
+  if (isRpg) {
+    return (
+      <div className="rpg-board-viewport rpg-roster-history-viewport">
+        <div className="rpg-notice-board">
+          {/* Herrajes de hierro forjado en las 4 esquinas */}
+          <div className="rpg-iron-bracket top-left" />
+          <div className="rpg-iron-bracket top-right" />
+          <div className="rpg-iron-bracket bottom-left" />
+          <div className="rpg-iron-bracket bottom-right" />
+
+          {/* Estandarte de Pergamino Curvado */}
+          <div className="rpg-curved-banner">
+            <div className="rpg-banner-scroll-roll left" />
+            <div className="rpg-banner-body">
+              <div className="rpg-banner-heading-wrap">
+                <div className="rpg-illuminated-box">A</div>
+                <h1 className="rpg-banner-main-title">ARCHIVOS DE CAMPAÑA Y TURNOS</h1>
+              </div>
+              <span className="rpg-banner-subtitle">
+                REGISTRO HISTÓRICO DE GUARDIAS Y EXPEDICIONES DEL GREMIO
+              </span>
+            </div>
+            <div className="rpg-banner-scroll-roll right" />
+          </div>
+
+          <div className="roster-history-container rpg-roster-history-content">
+            {contenidoPrincipal}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // En modo Normal / Corporativo
+  return (
+    <div className={`roster-history-container ${isDark ? 'dark-theme' : ''}`}>
+      {contenidoPrincipal}
     </div>
   );
 }

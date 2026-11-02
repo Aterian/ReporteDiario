@@ -121,7 +121,7 @@ export default function LoginView({ onLoginSuccess, tema, onToggleTema }) {
               id="dni"
               type="text"
               className="form-input"
-              placeholder="Ej. 33357062"
+              placeholder="99999999"
               value={dni}
               onChange={(e) => setDni(e.target.value)}
               disabled={cargando}

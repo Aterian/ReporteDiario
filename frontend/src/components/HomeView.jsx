@@ -1,7 +1,20 @@
 import React from 'react';
 import RpgTavernBoard from './RpgTavernBoard';
+import DailyStatusWidget from './DailyStatusWidget';
 import { getTituloRpg } from '../utils/rpgTitles';
+import { 
+  puedeAccederRoster, 
+  puedeVerHistorialOtros, 
+  puedeVerModificaciones, 
+  puedeVerActividadAyer, 
+  getEtiquetaRol, 
+  puedeGestionarUsuarios,
+  puedeGestionarProyectos,
+  esAdmin
+} from '../utils/permissions';
+import { toast } from 'sonner';
 
+// [MOD-01] HomeView
 export default function HomeView({
   usuario,
   tema,
@@ -10,7 +23,14 @@ export default function HomeView({
   onAvatarClick,
   onNuevoRoster,
   onHistorialRoster,
-  onHistorialOtrosEmpleados
+  onHistorialOtrosEmpleados,
+  onGestionUsuarios,
+  onGestionProyectos,
+  erroresRemotos = [],
+  onVerErroresRemotos,
+  notificacionesModificaciones = [],
+  onIrACalendarioModificacion,
+  onDescartarNotificacion
 }) {
   if (tema === 'rpg') {
     return (
@@ -19,13 +39,24 @@ export default function HomeView({
         onNuevoReporte={onNuevoReporte}
         onVerHistorial={onVerHistorial}
         onAvatarClick={onAvatarClick}
+        onHistorialOtrosEmpleados={onHistorialOtrosEmpleados}
+        onNuevoRoster={onNuevoRoster}
+        onHistorialRoster={onHistorialRoster}
+        onGestionUsuarios={onGestionUsuarios}
+        onGestionProyectos={onGestionProyectos}
       />
     );
   }
 
   const isRpg = false;
-  const esRRHH = (usuario?.area || '').trim().toUpperCase() === 'RRHH' ||
-                 (usuario?.area || '').trim().toUpperCase() === 'A';
+  const areaUpper = (usuario?.area || '').toUpperCase().trim();
+  const puedeRoster = puedeAccederRoster(usuario);
+  const puedeOtros = puedeVerHistorialOtros(usuario);
+  const puedeVerAyer = puedeVerActividadAyer(usuario);
+  const puedeVerModif = puedeVerModificaciones(usuario);
+  const puedeGestionar = puedeGestionarUsuarios(usuario);
+  const puedeProyectos = puedeGestionarProyectos(usuario);
+  const tieneModulosGestion = puedeRoster || puedeOtros || puedeVerAyer || puedeGestionar || puedeProyectos;
 
   const getFechaFormateada = () => {
     const hoy = new Date();
@@ -51,7 +82,7 @@ export default function HomeView({
       'A': 'Aplicaciones',
       'RRHH': 'Recursos Humanos',
       'VYM': 'Ventas y Marketing',
-      'S': 'Sistemas'
+      'S': 'SIG'
     };
     return mapa[cod] || `Área ${cod}`;
   };
@@ -91,6 +122,11 @@ export default function HomeView({
                   {isRpg ? `${getTituloRpg(usuario.nombre)} (Nv. 42)` : getNombreArea(usuario.area)}
                 </span>
               )}
+              {!isRpg && (
+                <span className="home-area-chip" style={{ background: '#cc333315', color: '#cc3333', borderColor: '#cc333335', fontWeight: 600 }}>
+                  {getEtiquetaRol(usuario).badge}
+                </span>
+              )}
             </div>
             <h2 className="home-employee-name">{usuario.nombre}</h2>
             {usuario.mail && (
@@ -116,8 +152,8 @@ export default function HomeView({
         </div>
       </div>
 
-      {/* Contenedor de módulos (registro propio y gestión de RRHH en 2 bloques verticales en pantalla completa) */}
-      <div className={`home-sections-container ${esRRHH ? 'has-rrhh' : ''}`}>
+      {/* Contenedor de módulos (registro propio y gestión/supervisión en 2 bloques verticales en pantalla completa) */}
+      <div className={`home-sections-container ${tieneModulosGestion ? 'has-rrhh' : ''}`}>
         {/* Bloque 1: Registro propio del colaborador */}
         <div className="home-section-column home-column-propio">
           <div className="home-actions-title">
@@ -186,6 +222,37 @@ export default function HomeView({
                 </svg>
               </div>
             </button>
+
+            {/* [FN-06.10] Botón 3: Buzón de sugerencias / Participación y Consulta */}
+            <button 
+              type="button" 
+              className="home-action-card card-suggestions" 
+              onClick={() => {
+                toast.info('Próximamente.', {
+                  description: 'El módulo de Buzón de sugerencias / Participación y Consulta se encuentra en etapa de planificación.',
+                  duration: 4000
+                });
+              }}
+              style={{ borderLeft: '4px solid #a855f7' }}
+            >
+              <div className="action-card-icon-box" style={{ background: '#f3e8ff', color: '#9333ea' }}>
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+                  <path d="M8 9h8M8 13h5" />
+                </svg>
+              </div>
+              <div className="action-card-content">
+                <span className="action-card-title">Buzón de sugerencias / Participación y Consulta</span>
+                <span className="action-card-desc">
+                  Canal de propuestas, retroalimentación e inquietudes de los colaboradores
+                </span>
+              </div>
+              <div className="action-card-arrow">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="9 18 15 12 9 6" />
+                </svg>
+              </div>
+            </button>
           </div>
 
           <div className="home-quick-info">
@@ -202,96 +269,229 @@ export default function HomeView({
           </div>
         </div>
 
-        {/* Bloque 2: Gestión de RRHH - Rosters y Turnos (Exclusivo RRHH) */}
-        {esRRHH && (
+        {/* Bloque 2: Gestión y Supervisión (Roster exclusivo Justina e Iván; Historial de otros RRHH, Núcleo e Iván) */}
+        {tieneModulosGestion && (
           <div className="home-section-column home-column-rrhh">
             <div className="home-actions-title rrhh-title-divider">
-              Gestión de RRHH - Rosters y Turnos
+              {puedeRoster ? 'Gestión de RRHH - Rosters y Turnos' : 'Supervisión y Gestión de Equipo'}
             </div>
             <div className="home-actions-grid rrhh-actions-grid">
-              {/* Botón: Cargar Nuevo Roster */}
-              <button 
-                type="button" 
-                className="home-action-card card-roster" 
-                onClick={onNuevoRoster}
-              >
-                <div className="action-card-icon-box roster-icon">
-                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                    <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
-                    <line x1="16" y1="2" x2="16" y2="6" />
-                    <line x1="8" y1="2" x2="8" y2="6" />
-                    <line x1="3" y1="10" x2="21" y2="10" />
-                    <path d="M8 14h.01M12 14h.01M16 14h.01M8 18h.01M12 18h.01M16 18h.01" />
-                  </svg>
-                </div>
-                <div className="action-card-content">
-                  <span className="action-card-title">Cargar Nuevo Roster</span>
-                  <span className="action-card-desc">
-                    Asignación de turnos, obra, francos y tarifas con calendario Gantt
-                  </span>
-                </div>
-                <div className="action-card-arrow">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                    <polyline points="9 18 15 12 9 6" />
-                  </svg>
-                </div>
-              </button>
+              {/* Botón: Cargar Nuevo Roster (Solo Justina Bertolozzi e Iván Valentin) */}
+              {puedeRoster && (
+                <button 
+                  type="button" 
+                  className="home-action-card card-roster" 
+                  onClick={onNuevoRoster}
+                >
+                  <div className="action-card-icon-box roster-icon">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                      <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+                      <line x1="16" y1="2" x2="16" y2="6" />
+                      <line x1="8" y1="2" x2="8" y2="6" />
+                      <line x1="3" y1="10" x2="21" y2="10" />
+                      <path d="M8 14h.01M12 14h.01M16 14h.01M8 18h.01M12 18h.01M16 18h.01" />
+                    </svg>
+                  </div>
+                  <div className="action-card-content">
+                    <span className="action-card-title">Cargar Nuevo Roster</span>
+                    <span className="action-card-desc">
+                      Asignación de turnos, obra, francos y tarifas con calendario Gantt
+                    </span>
+                  </div>
+                  <div className="action-card-arrow">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                      <polyline points="9 18 15 12 9 6" />
+                    </svg>
+                  </div>
+                </button>
+              )}
 
-              {/* Botón: Historial de Roster */}
-              <button 
-                type="button" 
-                className="home-action-card card-roster-hist" 
-                onClick={onHistorialRoster}
-              >
-                <div className="action-card-icon-box roster-hist-icon">
-                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-                    <polyline points="14 2 14 8 20 8" />
-                    <line x1="16" y1="13" x2="8" y2="13" />
-                    <line x1="16" y1="17" x2="8" y2="17" />
-                    <polyline points="10 9 9 9 8 9" />
-                  </svg>
-                </div>
-                <div className="action-card-content">
-                  <span className="action-card-title">Historial de Roster</span>
-                  <span className="action-card-desc">
-                    Consultar turnos y descargar reporte .xlsx mensual en 3 hojas
-                  </span>
-                </div>
-                <div className="action-card-arrow">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                    <polyline points="9 18 15 12 9 6" />
-                  </svg>
-                </div>
-              </button>
+              {/* Botón: Historial de Roster oculto por estar en desuso */}
+              {/* {puedeRoster && (
+                <button 
+                  type="button" 
+                  className="home-action-card card-roster-hist" 
+                  onClick={onHistorialRoster}
+                >
+                  ...
+                </button>
+              )} */}
 
-              {/* Botón: Historial de otros empleados */}
-              <button 
-                type="button" 
-                className="home-action-card card-other-hist" 
-                onClick={onHistorialOtrosEmpleados}
-              >
-                <div className="action-card-icon-box other-hist-icon">
-                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
-                    <circle cx="9" cy="7" r="4" />
-                    <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
-                    <path d="M16 3.13a4 4 0 0 1 0 7.75" />
-                  </svg>
-                </div>
-                <div className="action-card-content">
-                  <span className="action-card-title">Historial de otros empleados</span>
-                  <span className="action-card-desc">
-                    Gestiona y edita los reportes cargados para otros colaboradores
-                  </span>
-                </div>
-                <div className="action-card-arrow">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                    <polyline points="9 18 15 12 9 6" />
-                  </svg>
-                </div>
-              </button>
+              {/* Botón: Historial de otros empleados (RRHH, Núcleo e Iván Valentin) */}
+              {puedeOtros && (
+                <button 
+                  type="button" 
+                  className="home-action-card card-other-hist" 
+                  onClick={onHistorialOtrosEmpleados}
+                >
+                  <div className="action-card-icon-box other-hist-icon">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+                      <circle cx="9" cy="7" r="4" />
+                      <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+                      <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+                    </svg>
+                  </div>
+                  <div className="action-card-content">
+                    <span className="action-card-title">Historial de otros empleados</span>
+                    <span className="action-card-desc">
+                      Supervisión y auditoría de reportes cargados para colaboradores
+                    </span>
+                  </div>
+                  <div className="action-card-arrow">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                      <polyline points="9 18 15 12 9 6" />
+                    </svg>
+                  </div>
+                </button>
+              )}
+
+              {/* Botón: Módulo de Empleados (Solo Admin, SubAdmin y Core) */}
+              {puedeGestionar && (
+                <button 
+                  type="button" 
+                  className="home-action-card card-users-mgmt" 
+                  onClick={onGestionUsuarios}
+                  style={{ borderLeft: '4px solid #cc3333' }}
+                >
+                  <div className="action-card-icon-box" style={{ background: '#fee2e2', color: '#cc3333' }}>
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+                      <circle cx="9" cy="7" r="4" />
+                      <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
+                      <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+                    </svg>
+                  </div>
+                  <div className="action-card-content">
+                    <span className="action-card-title">Empleados</span>
+                    <span className="action-card-desc">
+                      Visualización y edición de personal, área, lugar habitual, sueldo base y última asistencia
+                    </span>
+                  </div>
+                  <div className="action-card-arrow">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                      <polyline points="9 18 15 12 9 6" />
+                    </svg>
+                  </div>
+                </button>
+              )}
+
+              {/* [FN-07.22] Botón: Módulo de Proyectos (Exclusivo Administrador) */}
+              {puedeProyectos && (
+                <button 
+                  type="button" 
+                  className="home-action-card card-projects-mgmt" 
+                  onClick={onGestionProyectos}
+                  style={{ borderLeft: '4px solid #0284c7' }}
+                >
+                  <div className="action-card-icon-box" style={{ background: '#e0f2fe', color: '#0284c7' }}>
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                      <rect x="2" y="7" width="20" height="14" rx="2" ry="2" />
+                      <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16" />
+                    </svg>
+                  </div>
+                  <div className="action-card-content">
+                    <span className="action-card-title">Proyectos</span>
+                    <span className="action-card-desc">
+                      Catálogo integral de obras, codificación de servicios, áreas y estados operativos
+                    </span>
+                  </div>
+                  <div className="action-card-arrow">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                      <polyline points="9 18 15 12 9 6" />
+                    </svg>
+                  </div>
+                </button>
+              )}
             </div>
+
+            {/* [FN-07.21] Alerta de Errores Remotos del Sistema (Exclusivo Administrador) */}
+            {esAdmin(usuario) && erroresRemotos && erroresRemotos.length > 0 && (
+              <div className="home-modificaciones-card" style={{ borderColor: 'rgba(239, 68, 68, 0.4)', background: 'rgba(239, 68, 68, 0.08)' }}>
+                <div className="home-mod-card-header">
+                  <div className="home-mod-card-title" style={{ color: '#ef4444' }}>
+                    <span className="home-mod-bell">🚨</span>
+                    <span>Errores Remotos Detectados</span>
+                    <span className="home-mod-count-pill" style={{ background: '#ef4444', color: '#ffffff' }}>
+                      {erroresRemotos.length}
+                    </span>
+                  </div>
+                  <span className="home-mod-subtitle" style={{ color: '#f87171' }}>
+                    Fallos no controlados registrados en equipos de usuarios
+                  </span>
+                </div>
+                <div style={{ padding: '0 16px 14px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px' }}>
+                  <div style={{ fontSize: '12px', color: 'var(--text-secondary, #94a3b8)' }}>
+                    Último reporte: <b>{erroresRemotos[0].usuario_nombre || erroresRemotos[0].nombre_usuario}</b> ({erroresRemotos[0].codigo_error || 'ERROR'})
+                  </div>
+                  <button
+                    type="button"
+                    className="btn-home-mod-view"
+                    onClick={onVerErroresRemotos}
+                    style={{ background: '#ef4444', color: '#ffffff', borderColor: '#dc2626' }}
+                  >
+                    Auditar Fallos ➔
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* [FN-02.02] Alerta y avisos de modificaciones pendientes (Exclusivo Justina Bertolozzi e Iván Valentin) */}
+            {puedeVerModif && notificacionesModificaciones && notificacionesModificaciones.length > 0 && (
+              <div className="home-modificaciones-card">
+                <div className="home-mod-card-header">
+                  <div className="home-mod-card-title">
+                    <span className="home-mod-bell">🔔</span>
+                    <span>Modificaciones pendientes de revisión</span>
+                    <span className="home-mod-count-pill">{notificacionesModificaciones.length}</span>
+                  </div>
+                  <span className="home-mod-subtitle">Cambios realizados por colaboradores</span>
+                </div>
+                <div className="home-mod-items-list">
+                  {notificacionesModificaciones.slice(0, 3).map((item) => (
+                    <div key={item.id_modificacion} className="home-mod-item">
+                      <div className="home-mod-item-main">
+                        <div className="home-mod-item-top">
+                          <span className="home-mod-emp">{item.empleado}</span>
+                          <span className="home-mod-fecha">{item.fecha}</span>
+                        </div>
+                        <div className="home-mod-diff-row">
+                          <span className="home-mod-diff-tag">
+                            {item.tipo_antes || 'Sin asignar'} ({item.horas_antes || 0}hs) ➔ {item.tipo_despues} ({item.horas_despues || 0}hs)
+                          </span>
+                          {item.quien_modifica && (
+                            <span className="home-mod-author">• Por {item.quien_modifica}</span>
+                          )}
+                        </div>
+                      </div>
+                      <div className="home-mod-item-actions">
+                        <button
+                          type="button"
+                          className="btn-home-mod-view"
+                          onClick={() => onIrACalendarioModificacion && onIrACalendarioModificacion(item)}
+                          title="Abrir directamente en el calendario del empleado"
+                        >
+                          Ver en calendario ➔
+                        </button>
+                        <button
+                          type="button"
+                          className="btn-home-mod-check"
+                          onClick={() => onDescartarNotificacion && onDescartarNotificacion(item.id_modificacion)}
+                          title="Marcar como revisado"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* [FN-06.05] Widget de Actividad de ayer (Exclusivo Núcleo, Aplicaciones y Justina Bertolozzi) */}
+            {puedeVerAyer && (
+              <DailyStatusWidget usuario={usuario} />
+            )}
           </div>
         )}
       </div>

@@ -1,25 +1,41 @@
+// [MOD-05] RosterView - Orquestador modular de Gestión y Carga de Rosters
 import React, { useState, useEffect, useMemo } from 'react';
 import { api } from '../services/apiBridge';
+import { puedeAccederRoster } from '../utils/permissions';
+import {
+  COLABORADORES_GANTT_INGENIERIA,
+  normalizarTexto,
+  buscarTarifaRoster,
+  NOMBRES_MESES
+} from './roster/rosterConstants';
+import RosterShiftForm from './roster/RosterShiftForm';
+import RosterGanttChart from './roster/RosterGanttChart';
+import RosterTarifaModal from './roster/RosterTarifaModal';
+
+// Re-exportamos para compatibilidad retroactiva con otros componentes (ej: RosterHistoryView)
+export { COLABORADORES_GANTT_INGENIERIA, normalizarTexto, buscarTarifaRoster };
 
 export default function RosterView({ usuario, onVolver, tema }) {
   const isDark = tema === 'dark';
+  const isRpg = tema === 'rpg';
 
-  // Al entrar a Roster, la ventana se maximiza a pantalla completa.
-  // El tamaño se preserva al volver al menú principal para mantener una experiencia consistente.
+
+  // Al entrar a Roster, la ventana se maximiza a pantalla completa
   useEffect(() => {
     localStorage.removeItem('ingeap_rosters_mock');
     api.maximizarVentana();
   }, []);
 
-  // Estado para el botón de refrescar / sincronización con Google Sheets
+  // Estados de control de vista
   const [refrescando, setRefrescando] = useState(false);
-
-  // Control de vista: Calendario Gantt visible u oculto
   const [mostrarCalendario, setMostrarCalendario] = useState(true);
+  const limpiando = false;
 
   // Catálogos
   const [proyectosDisponibles, setProyectosDisponibles] = useState([]);
   const [empleadosDisponibles, setEmpleadosDisponibles] = useState([]);
+  const [todosLosEmpleados, setTodosLosEmpleados] = useState([]);
+  const [tarifasRoster, setTarifasRoster] = useState([]);
   const [cargandoCatalogos, setCargandoCatalogos] = useState(true);
 
   // Fechas por defecto: hoy
@@ -32,113 +48,66 @@ export default function RosterView({ usuario, onVolver, tema }) {
   };
 
   // Estado del Formulario de Roster
-  // IMPORTANTE: Según especificación del usuario, la selección de Proyecto va PRIMERO y es obligatoria
   const [proyecto, setProyecto] = useState('');
   const [empleadosSeleccionados, setEmpleadosSeleccionados] = useState([]);
   const [fechaInicio, setFechaInicio] = useState(getFechaHoy());
   const [fechaFin, setFechaFin] = useState(getFechaHoy());
-  const [tipo, setTipo] = useState('Campo'); // 'Campo' | 'Franco'
+  const [tipo, setTipo] = useState('Campo'); // 'Campo' | 'Franco' | 'Vacaciones' | 'Licencia'
   const [precioDia, setPrecioDia] = useState('');
   const [precioDomingo, setPrecioDomingo] = useState('');
+  const [guardando, setGuardando] = useState(false);
+  const [mensajeFeedback, setMensajeFeedback] = useState(null);
+  const [modalTarifa, setModalTarifa] = useState(false);
 
-  // Helpers para selección múltiple
+  const handleTarifaGuardada = async (nuevaTarifa) => {
+    try {
+      const tarifas = await api.obtenerTarifasRoster();
+      if (Array.isArray(tarifas)) setTarifasRoster(tarifas);
+      setMensajeFeedback({
+        tipo: 'exito',
+        texto: `Tarifa para el proyecto "${nuevaTarifa.proyecto}" guardada exitosamente en PostgreSQL.`
+      });
+    } catch (e) {
+      console.error('Error al actualizar lista de tarifas tras guardar:', e);
+    }
+  };
+
+  // Tarifa oficial para el proyecto seleccionado en el formulario
+  const tarifaActual = useMemo(() => {
+    return buscarTarifaRoster(proyecto, tarifasRoster);
+  }, [proyecto, tarifasRoster]);
+
+  useEffect(() => {
+    if (tarifaActual) {
+      if (tarifaActual.dia_normal != null) setPrecioDia(String(tarifaActual.dia_normal));
+      if (tarifaActual.domingo != null) setPrecioDomingo(String(tarifaActual.domingo));
+    } else {
+      setPrecioDia('0');
+      setPrecioDomingo('0');
+    }
+  }, [tarifaActual]);
+
+  // Selección múltiple de empleados
   const toggleSeleccionEmpleado = (nom) => {
     setEmpleadosSeleccionados(prev =>
       prev.includes(nom) ? prev.filter(n => n !== nom) : [...prev, nom]
     );
   };
-
   const seleccionarTodosEmpleados = () => {
     setEmpleadosSeleccionados(empleadosDisponibles.map(e => e.nombre));
   };
-
   const deseleccionarTodosEmpleados = () => {
     setEmpleadosSeleccionados([]);
   };
 
-  // Estados para Modal de Modificación de Roster desde el Gantt
-  const [modalEditar, setModalEditar] = useState(false);
-  const [editId, setEditId] = useState('');
-  const [editEmpleado, setEditEmpleado] = useState('');
-  const [editProyecto, setEditProyecto] = useState('');
-  const [editFechaInicio, setEditFechaInicio] = useState('');
-  const [editFechaFin, setEditFechaFin] = useState('');
-  const [editTipo, setEditTipo] = useState('Campo');
-  const [editPrecioDia, setEditPrecioDia] = useState('');
-  const [editPrecioDomingo, setEditPrecioDomingo] = useState('');
-  const [guardandoEdit, setGuardandoEdit] = useState(false);
-
-  const handleAbrirEditarGantt = (r) => {
-    if (!r) return;
-    setEditId(r.id);
-    setEditEmpleado(r.empleado);
-    setEditProyecto(r.proyecto);
-    setEditFechaInicio(r.fecha_inicio);
-    setEditFechaFin(r.fecha_fin);
-    setEditTipo(r.tipo || 'Campo');
-    setEditPrecioDia(r.precio_dia != null ? String(r.precio_dia) : '');
-    setEditPrecioDomingo(r.precio_domingo != null ? String(r.precio_domingo) : '');
-    setModalEditar(true);
-  };
-
-  const handleGuardarEdicionGantt = async (e) => {
-    e.preventDefault();
-    if (!editEmpleado || !editProyecto || !editFechaInicio || !editFechaFin) {
-      alert('Por favor completa todos los campos requeridos.');
-      return;
-    }
-    if (editFechaInicio > editFechaFin) {
-      alert('La fecha de inicio no puede ser posterior a la fecha fin.');
-      return;
-    }
-    setGuardandoEdit(true);
-    try {
-      const empObj = empleadosDisponibles.find(emp => emp.nombre === editEmpleado);
-      const res = await api.guardarRoster({
-        id: editId,
-        empleado: editEmpleado,
-        dni: empObj ? empObj.dni : '',
-        usuario_mail: empObj ? (empObj.mail || empObj.email || '') : '',
-        proyecto: editProyecto,
-        fecha_inicio: editFechaInicio,
-        fecha_fin: editFechaFin,
-        tipo: editTipo,
-        precio_dia: editTipo === 'Campo' ? Number(editPrecioDia) || 0 : 0,
-        precio_domingo: editTipo === 'Campo' ? Number(editPrecioDomingo) || 0 : 0
-      });
-      if (res && res.exito) {
-        setModalEditar(false);
-        setMensajeFeedback({
-          tipo: 'exito',
-          texto: `Turno de roster de ${editEmpleado} modificado y sincronizado correctamente.`
-        });
-        await cargarRostersMes(anioGantt, mesGantt);
-      } else {
-        alert(res?.error || 'Error al guardar la modificación.');
-      }
-    } catch (err) {
-      console.error(err);
-      alert('Error de conexión al modificar el registro.');
-    } finally {
-      setGuardandoEdit(false);
-    }
-  };
-
-  // Estados de carga y feedback ágil
-  const [guardando, setGuardando] = useState(false);
-  const [exportandoExcel, setExportandoExcel] = useState(false);
-  const [mensajeFeedback, setMensajeFeedback] = useState(null); // { tipo: 'exito'|'error', texto: '' }
-
-  // Estado de navegación del Calendario Gantt (Mes y Año actual)
+  // Estados de navegación del Gantt
   const [mesGantt, setMesGantt] = useState(() => new Date().getMonth() + 1);
   const [anioGantt, setAnioGantt] = useState(() => new Date().getFullYear());
   const [rostersPeriodo, setRostersPeriodo] = useState([]);
   const [cargandoRosters, setCargandoRosters] = useState(false);
   const [filtroProyectoGantt, setFiltroProyectoGantt] = useState('TODOS');
 
-  // =========================================================================
-  // CONTROL DE TAMAÑO DE COLUMNAS MANUAL EN EL GANTT
-  // =========================================================================
+  // Dimensiones manuales de columnas del Gantt
   const [anchoColEmp, setAnchoColEmp] = useState(() => {
     return Number(localStorage.getItem('roster_col_emp_width')) || 270;
   });
@@ -149,7 +118,6 @@ export default function RosterView({ usuario, onVolver, tema }) {
     return Number(localStorage.getItem('roster_col_dia_width')) || 38;
   });
 
-  // Manejador de arrastre de borde de columnas (Drag-to-resize)
   const handleMouseDownResize = (e, tipoCol) => {
     e.preventDefault();
     e.stopPropagation();
@@ -184,34 +152,154 @@ export default function RosterView({ usuario, onVolver, tema }) {
     window.addEventListener('mouseup', handleMouseUp);
   };
 
-  // Modal de exportación por proyecto específico
+  const handleStepColDia = (delta) => {
+    setAnchoColDia(prev => {
+      const newW = Math.max(26, Math.min(80, prev + delta));
+      localStorage.setItem('roster_col_dia_width', String(newW));
+      return newW;
+    });
+  };
+
+  const handleResetColWidths = () => {
+    setAnchoColEmp(270);
+    setAnchoColTotal(150);
+    setAnchoColDia(38);
+    localStorage.removeItem('roster_col_emp_width');
+    localStorage.removeItem('roster_col_total_width');
+    localStorage.removeItem('roster_col_dia_width');
+  };
+
+  // Estados del modal de edición de turno en Gantt
+  const [modalEditar, setModalEditar] = useState(false);
+  const [editId, setEditId] = useState('');
+  const [editEmpleado, setEditEmpleado] = useState('');
+  const [editProyecto, setEditProyecto] = useState('');
+  const [editFechaInicio, setEditFechaInicio] = useState('');
+  const [editFechaFin, setEditFechaFin] = useState('');
+  const [editTipo, setEditTipo] = useState('Campo');
+  const [editPrecioDia, setEditPrecioDia] = useState('');
+  const [editPrecioDomingo, setEditPrecioDomingo] = useState('');
+  const [guardandoEdit, setGuardandoEdit] = useState(false);
+  const [eliminandoEdit, setEliminandoEdit] = useState(false);
+
+  // Tarifa oficial vinculada al proyecto que se está editando en el modal
+  const tarifaModalEdit = useMemo(() => {
+    return buscarTarifaRoster(editProyecto, tarifasRoster);
+  }, [editProyecto, tarifasRoster]);
+
+  const handleAbrirEditarGantt = (r) => {
+    if (!r) return;
+    setEditId(r.id);
+    setEditEmpleado(r.empleado);
+    setEditProyecto(r.proyecto);
+    setEditFechaInicio(r.fecha_inicio);
+    setEditFechaFin(r.fecha_fin);
+    setEditTipo(r.tipo || 'Campo');
+    setEditPrecioDia(r.precio_dia != null ? String(r.precio_dia) : '');
+    setEditPrecioDomingo(r.precio_domingo != null ? String(r.precio_domingo) : '');
+    setModalEditar(true);
+  };
+
+  // [FN-03.08] Asignar tarifas oficiales de roster al turno en edición en base local (sin sincronizar con Sheets ni tocar historial)
+  const handleAsignarTarifasOficiales = async () => {
+    if (!tarifaModalEdit) {
+      alert(`No se encontraron tarifas configuradas para el proyecto "${editProyecto}" en b_1_tarifas_roster.`);
+      return;
+    }
+    const diaNorm = Number(tarifaModalEdit.dia_normal || 0);
+    const dom = Number(tarifaModalEdit.domingo || 0);
+
+    try {
+      const res = await api.aplicarTarifaLocalRoster({
+        id_roster: editId,
+        id: editId,
+        empleado: editEmpleado,
+        proyecto: editProyecto,
+        id_proyecto: tarifaModalEdit.id_proyecto || '',
+        precio_dia: diaNorm,
+        precio_domingo: dom
+      });
+
+      if (res && res.exito) {
+        const pdiaFinal = res.precio_dia != null ? Number(res.precio_dia) : diaNorm;
+        const pdomFinal = res.precio_domingo != null ? Number(res.precio_domingo) : dom;
+
+        setEditPrecioDia(String(pdiaFinal));
+        setEditPrecioDomingo(String(pdomFinal));
+
+
+        setMensajeFeedback({
+          tipo: 'exito',
+          texto: `Tarifa de referencia seleccionada para ${editEmpleado} (${editProyecto}): Normal: $${pdiaFinal.toLocaleString('es-AR')} | Dom: $${pdomFinal.toLocaleString('es-AR')}. PostgreSQL determina la tarifa aplicada al guardar el turno.`
+        });
+      } else {
+        alert(res?.error || 'No se pudo guardar la tarifa en la base local.');
+      }
+    } catch (err) {
+      console.error('Error al asignar tarifa oficial en base local:', err);
+      alert('Error de conexión al asignar la tarifa en la base local.');
+    }
+  };
+
+  // Modal de exportación de Excel
   const [mostrarModalExport, setMostrarModalExport] = useState(false);
   const [proyectoAExportar, setProyectoAExportar] = useState('');
+  const [exportandoExcel, setExportandoExcel] = useState(false);
 
-  // 1. Cargar catálogo de proyectos (exclusivamente del Área de Ingeniería 'I') y empleados
+  // 1. Cargar catálogos iniciales
   useEffect(() => {
     let activo = true;
     async function cargarCatalogos() {
       setCargandoCatalogos(true);
       try {
-        const [proys, emps] = await Promise.all([
-          api.obtenerServicios('I'), // Exclusivamente área de Ingeniería (I)
-          api.obtenerTodosUsuarios('I') // Exclusivamente empleados del área de Ingeniería (I)
+        const [proys, emps, tarifas] = await Promise.all([
+          api.obtenerServicios('I'),
+          api.obtenerTodosUsuarios('I'),
+          api.obtenerTarifasRoster()
         ]);
         if (activo) {
+          if (Array.isArray(tarifas)) {
+            setTarifasRoster(tarifas);
+          }
           if (Array.isArray(proys)) {
-            setProyectosDisponibles(proys);
-            if (proys.length > 0 && !proyecto) {
-              setProyecto(proys[0]);
-              setProyectoAExportar(proys[0]);
+            const setProys = new Set();
+            proys.forEach(p => { if (p) setProys.add(p.trim()); });
+            if (Array.isArray(tarifas)) {
+              tarifas.forEach(t => {
+                if (t.proyecto) setProys.add(t.proyecto.trim());
+              });
+            }
+            const proysUnificados = Array.from(setProys);
+            setProyectosDisponibles(proysUnificados);
+            if (proysUnificados.length > 0 && !proyecto) {
+              setProyecto(proysUnificados[0]);
+              setProyectoAExportar(proysUnificados[0]);
             }
           }
           if (Array.isArray(emps)) {
-            // Filtrado defensivo adicional por área 'I' (Ingeniería)
-            const empsIngenieria = emps.filter(
-              (e) => (e.area || '').trim().toUpperCase() === 'I'
-            );
-            setEmpleadosDisponibles(empsIngenieria.length > 0 ? empsIngenieria : emps);
+            setTodosLosEmpleados(emps);
+            const setNombres = new Set();
+            const empsIngenieria = [];
+
+            COLABORADORES_GANTT_INGENIERIA.forEach(nom => {
+              const normKey = normalizarTexto(nom);
+              const eRef = emps.find(e => normalizarTexto(e.nombre) === normKey);
+              if (eRef && !setNombres.has(normKey)) {
+                setNombres.add(normKey);
+                empsIngenieria.push(eRef);
+              }
+            });
+
+            emps.forEach(e => {
+              const areaNorm = (e.area || '').trim().toUpperCase();
+              const normNom = normalizarTexto(e.nombre);
+              if (['I', 'INGENIERÍA', 'INGENIERIA'].includes(areaNorm) && !setNombres.has(normNom)) {
+                setNombres.add(normNom);
+                empsIngenieria.push(e);
+              }
+            });
+
+            setEmpleadosDisponibles(empsIngenieria);
           }
         }
       } catch (err) {
@@ -226,7 +314,7 @@ export default function RosterView({ usuario, onVolver, tema }) {
     };
   }, []);
 
-  // 2. Cargar registros de roster para el mes visualizado en el Gantt
+  // 2. Cargar registros de roster del mes
   const cargarRostersMes = async (anio, mes) => {
     setCargandoRosters(true);
     try {
@@ -248,7 +336,6 @@ export default function RosterView({ usuario, onVolver, tema }) {
     cargarRostersMes(anioGantt, mesGantt);
   }, [anioGantt, mesGantt]);
 
-  // Escuchar evento de actualización de catálogos o sincronización externa
   useEffect(() => {
     const handleCatalogosActualizados = () => {
       cargarRostersMes(anioGantt, mesGantt);
@@ -259,12 +346,15 @@ export default function RosterView({ usuario, onVolver, tema }) {
     };
   }, [anioGantt, mesGantt]);
 
-  // Manejo de refrescar manual: depura huérfanos y recarga desde Google Sheets
+  // Manejo de sincronización y limpieza
   const handleRefrescar = async () => {
     setRefrescando(true);
     try {
       localStorage.removeItem('ingeap_rosters_mock');
-      await api.refrescarCatalogos();
+      const [proyectos, empleados, tarifas] = await Promise.all([api.obtenerServicios('I'), api.obtenerTodosUsuarios('I'), api.obtenerTarifasRoster()]);
+      if (Array.isArray(proyectos)) setProyectosDisponibles(proyectos);
+      if (Array.isArray(empleados)) { setTodosLosEmpleados(empleados); setEmpleadosDisponibles(empleados); }
+      if (Array.isArray(tarifas)) setTarifasRoster(tarifas);
     } catch (err) {
       console.error('Error al refrescar catálogos de Roster:', err);
     } finally {
@@ -273,7 +363,7 @@ export default function RosterView({ usuario, onVolver, tema }) {
     }
   };
 
-  // Manejo de cambio de mes en el Gantt
+  // Navegación de meses
   const cambiarMes = (delta) => {
     let nuevoMes = mesGantt + delta;
     let nuevoAnio = anioGantt;
@@ -288,7 +378,7 @@ export default function RosterView({ usuario, onVolver, tema }) {
     setAnioGantt(nuevoAnio);
   };
 
-  // Abrir modal para elegir qué proyecto exportar para el mes
+  // Exportar Excel
   const abrirModalExportar = () => {
     if (filtroProyectoGantt && filtroProyectoGantt !== 'TODOS') {
       setProyectoAExportar(filtroProyectoGantt);
@@ -300,7 +390,6 @@ export default function RosterView({ usuario, onVolver, tema }) {
     setMostrarModalExport(true);
   };
 
-  // Exportar Excel directo por proyecto desde la ventana de registro de Roster
   const handleExportarExcelDirecto = async () => {
     if (!proyectoAExportar) {
       setMensajeFeedback({ tipo: 'error', texto: 'Debes seleccionar un proyecto de Ingeniería para exportar.' });
@@ -314,7 +403,7 @@ export default function RosterView({ usuario, onVolver, tema }) {
         setMostrarModalExport(false);
         setMensajeFeedback({
           tipo: 'exito',
-          texto: res.mensaje || `¡Archivo Excel oficial para "${proyectoAExportar}" (${nombresMeses[mesGantt]} ${anioGantt}) generado con éxito en 3 hojas!`
+          texto: res.mensaje || `¡Archivo Excel oficial para "${proyectoAExportar}" (${NOMBRES_MESES[mesGantt]} ${anioGantt}) generado con éxito en 3 hojas!`
         });
       } else if (res && !res.cancelado) {
         setMensajeFeedback({
@@ -330,7 +419,7 @@ export default function RosterView({ usuario, onVolver, tema }) {
     }
   };
 
-  // Envío del formulario con soporte para múltiples empleados
+  // Envío del formulario de guardado múltiple
   const handleGuardarRoster = async (e) => {
     e.preventDefault();
     setMensajeFeedback(null);
@@ -363,11 +452,12 @@ export default function RosterView({ usuario, onVolver, tema }) {
           dni: dniEmp,
           usuario_mail: mailEmp,
           proyecto: proyecto,
+          id_proyecto: tarifaActual ? tarifaActual.id_proyecto : '',
           fecha_inicio: fechaInicio,
           fecha_fin: fechaFin,
           tipo: tipo,
-          precio_dia: tipo === 'Campo' ? Number(precioDia) || 0 : 0,
-          precio_domingo: tipo === 'Campo' ? Number(precioDomingo) || 0 : 0
+          precio_dia: tipo === 'Campo' ? (tarifaActual ? Number(tarifaActual.dia_normal) || 0 : Number(precioDia) || 0) : 0,
+          precio_domingo: tipo === 'Campo' ? (tarifaActual ? Number(tarifaActual.domingo) || 0 : Number(precioDomingo) || 0) : 0
         };
       });
 
@@ -378,12 +468,10 @@ export default function RosterView({ usuario, onVolver, tema }) {
         const cant = empleadosSeleccionados.length;
         setMensajeFeedback({
           tipo: 'exito',
-          texto: `¡Roster registrado y sincronizado en Google Sheets para ${cant} empleado${cant > 1 ? 's' : ''} (${empleadosSeleccionados.join(', ')})! Podés continuar cargando los siguientes turnos.`
+          texto: `¡Roster registrado y sincronizado en PostgreSQL para ${cant} empleado${cant > 1 ? 's' : ''} (${empleadosSeleccionados.join(', ')})! Podés continuar cargando los siguientes turnos.`
         });
-        // Actualizar el Gantt en tiempo real
         await cargarRostersMes(anioGantt, mesGantt);
 
-        // Dejar el formulario listo para el siguiente turno (ej: cargar el franco consecutivo)
         if (tipo === 'Campo') {
           const partes = fechaFin.split('-');
           const finObj = new Date(Number(partes[0]), Number(partes[1]) - 1, Number(partes[2]));
@@ -397,7 +485,7 @@ export default function RosterView({ usuario, onVolver, tema }) {
           setTipo('Franco');
         }
       } else {
-        setMensajeFeedback({ tipo: 'error', texto: fallo?.error || 'Ocurrió un error al guardar el roster para algunos empleados.' });
+        setMensajeFeedback({ tipo: 'error', texto: resMultiple?.error || 'Ocurrió un error al guardar el roster para algunos empleados.' });
       }
     } catch (err) {
       console.error('Error guardando roster:', err);
@@ -407,14 +495,89 @@ export default function RosterView({ usuario, onVolver, tema }) {
     }
   };
 
-  // Cálculos para la grilla del Gantt
+  // Guardar edición de un turno existente en Gantt
+  const handleGuardarEdicionGantt = async (e) => {
+    e.preventDefault();
+    if (!editEmpleado || !editProyecto || !editFechaInicio || !editFechaFin) {
+      alert('Por favor completa todos los campos requeridos.');
+      return;
+    }
+    if (editFechaInicio > editFechaFin) {
+      alert('La fecha de inicio no puede ser posterior a la fecha fin.');
+      return;
+    }
+    setGuardandoEdit(true);
+    try {
+      const empObj = empleadosDisponibles.find(emp => emp.nombre === editEmpleado) || (todosLosEmpleados || []).find(emp => emp.nombre === editEmpleado);
+      const res = await api.guardarRoster({
+        id: editId,
+        empleado: editEmpleado,
+        dni: empObj ? empObj.dni : '',
+        usuario_mail: empObj ? (empObj.mail || empObj.email || '') : '',
+        proyecto: editProyecto,
+        id_proyecto: tarifaModalEdit ? tarifaModalEdit.id_proyecto : '',
+        fecha_inicio: editFechaInicio,
+        fecha_fin: editFechaFin,
+        tipo: editTipo,
+        precio_dia: editTipo === 'Campo' ? (Number(editPrecioDia) || (tarifaModalEdit ? Number(tarifaModalEdit.dia_normal) || 0 : 0)) : 0,
+        precio_domingo: editTipo === 'Campo' ? (Number(editPrecioDomingo) || (tarifaModalEdit ? Number(tarifaModalEdit.domingo) || 0 : 0)) : 0
+      });
+      if (res && res.exito) {
+        setModalEditar(false);
+        setMensajeFeedback({
+          tipo: 'exito',
+          texto: `Turno de roster de ${editEmpleado} modificado y sincronizado correctamente.`
+        });
+        await cargarRostersMes(anioGantt, mesGantt);
+      } else {
+        const errorMsg = res?.error || 'Error al guardar la modificación.';
+        const textoUsuario = errorMsg.toLowerCase().includes('locked')
+          ? 'La base de datos estaba ocupada sincronizando en segundo plano. Por favor, reintenta guardar en unos segundos.'
+          : errorMsg;
+        alert(textoUsuario);
+      }
+    } catch (err) {
+      console.error(err);
+      alert('Error de conexión al modificar el registro.');
+    } finally {
+      setGuardandoEdit(false);
+    }
+  };
+
+  const handleEliminarTurnoGantt = async () => {
+    if (!editId) return;
+    if (!window.confirm(`¿Estás seguro de eliminar el registro de roster de ${editEmpleado}?`)) {
+      return;
+    }
+    setEliminandoEdit(true);
+    try {
+      const res = await api.eliminarRoster(editId);
+      if (res && res.exito) {
+        setModalEditar(false);
+        setMensajeFeedback({
+          tipo: 'exito',
+          texto: `Turno de roster de ${editEmpleado} eliminado correctamente.`
+        });
+        await cargarRostersMes(anioGantt, mesGantt);
+      } else {
+        alert(res?.error || 'No se pudo eliminar el registro de roster.');
+      }
+    } catch (err) {
+      console.error(err);
+      alert('Error de conexión al eliminar el turno.');
+    } finally {
+      setEliminandoEdit(false);
+    }
+  };
+
+  // Cálculos para la grilla de días del Gantt
   const diasEnMes = useMemo(() => {
     const ultimoDia = new Date(anioGantt, mesGantt, 0).getDate();
     const dias = [];
     const nombresDias = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
     for (let d = 1; d <= ultimoDia; d++) {
       const fechaObj = new Date(anioGantt, mesGantt - 1, d);
-      const diaSemana = fechaObj.getDay(); // 0 = Domingo
+      const diaSemana = fechaObj.getDay();
       dias.push({
         numero: d,
         diaSemanaNombre: nombresDias[diaSemana],
@@ -425,73 +588,120 @@ export default function RosterView({ usuario, onVolver, tema }) {
     return dias;
   }, [anioGantt, mesGantt]);
 
-  // Filtrar rosters por proyecto en el Gantt si se especifica
-  const rostersFiltrados = useMemo(() => {
-    if (filtroProyectoGantt === 'TODOS') return rostersPeriodo;
-    return rostersPeriodo.filter(r => r.proyecto === filtroProyectoGantt);
-  }, [rostersPeriodo, filtroProyectoGantt]);
-
-  // Agrupar los registros por Empleado e identificar todos los proyectos a los que pertenece
+  // Colaboradores canónicos y activos de Ingeniería en el Gantt
   const empleadosEnGantt = useMemo(() => {
     const mapa = {};
-    rostersFiltrados.forEach(r => {
-      const emp = r.empleado;
-      if (!mapa[emp]) {
-        mapa[emp] = {
-          nombre: emp,
-          dni: r.dni,
+    // 1. Prioridad: orden canónico de colaboradores de Ingeniería
+    COLABORADORES_GANTT_INGENIERIA.forEach(nom => {
+      const normKey = normalizarTexto(nom);
+      const empCat = (empleadosDisponibles || []).find(e => normalizarTexto(e.nombre) === normKey)
+        || (todosLosEmpleados || []).find(e => normalizarTexto(e.nombre) === normKey);
+
+      mapa[normKey] = {
+        id_usuario: empCat ? empCat.id_usuario : normKey,
+        nombre: nom,
+        dni: empCat ? empCat.dni : '',
+        area: empCat ? empCat.area : 'I',
+        proyectosMap: {},
+        registros: []
+      };
+    });
+
+    // 2. Colaboradores activos de Ingeniería del catálogo no presentes en la lista fija
+    (empleadosDisponibles || []).forEach(emp => {
+      const normKey = normalizarTexto(emp.nombre);
+      if (!mapa[normKey]) {
+        mapa[normKey] = {
+          id_usuario: emp.id_usuario || normKey,
+          nombre: emp.nombre,
+          dni: emp.dni || '',
+          area: emp.area || 'I',
           proyectosMap: {},
           registros: []
         };
       }
-      mapa[emp].registros.push(r);
+    });
+
+    // 3. Colaboradores con turnos registrados en el período
+    const registrosAConsiderar = (filtroProyectoGantt && filtroProyectoGantt !== 'TODOS')
+      ? rostersPeriodo.filter(r => (r.proyecto || '').trim() === filtroProyectoGantt.trim())
+      : rostersPeriodo;
+
+    registrosAConsiderar.forEach(r => {
+      const empNom = r.empleado;
+      if (!empNom) return;
+      const keyNorm = normalizarTexto(empNom);
+      if (!mapa[keyNorm]) {
+        const empCat = (todosLosEmpleados || []).find(e => normalizarTexto(e.nombre) === keyNorm);
+        mapa[keyNorm] = {
+          id_usuario: r.id_empleado || (empCat ? empCat.id_usuario : keyNorm),
+          nombre: empNom,
+          dni: empCat ? empCat.dni : '',
+          area: empCat ? empCat.area : 'I',
+          proyectosMap: {},
+          registros: []
+        };
+      }
+      mapa[keyNorm].registros.push(r);
       if (r.proyecto) {
-        mapa[emp].proyectosMap[r.proyecto] = true;
+        mapa[keyNorm].proyectosMap[r.proyecto] = true;
       }
     });
 
-    return Object.values(mapa).map(empObj => ({
+    const lista = Object.values(mapa).map(empObj => ({
       ...empObj,
       proyectos: Object.keys(empObj.proyectosMap)
-    })).sort((a, b) => a.nombre.localeCompare(b.nombre));
-  }, [rostersFiltrados]);
+    }));
 
-  // Nombres de los meses en español
-  const nombresMeses = [
-    '', 'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
-    'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
-  ];
+    if (filtroProyectoGantt && filtroProyectoGantt !== 'TODOS') {
+      return lista.filter(empObj => empObj.registros.length > 0);
+    }
 
-  return (
-    <div className={`roster-view-container ${isDark ? 'dark-theme' : ''}`}>
-      {/* Barra superior de la vista de Roster */}
+    return lista;
+  }, [rostersPeriodo, filtroProyectoGantt, empleadosDisponibles, todosLosEmpleados]);
+
+  if (!puedeAccederRoster(usuario)) {
+    return (
+      <div className="view-content" style={{ padding: '32px', textAlign: 'center' }}>
+        <p style={{ fontSize: '15px', color: 'var(--text-secondary)', marginBottom: '16px' }}>
+          Acceso denegado: El módulo de Roster solo puede ser visualizado por personal autorizado (Justina Bertolozzi e Iván Valentin).
+        </p>
+        <button type="button" className="btn-back" onClick={onVolver}>
+          Volver al Inicio
+        </button>
+      </div>
+    );
+  }
+
+  const contenidoPrincipal = (
+    <>
+      {/* Barra superior de navegación y acciones */}
       <div className="roster-top-nav">
         <div className="roster-top-nav-left">
           <button
             type="button"
-            className="btn-roster-back"
+            className={isRpg ? 'rpg-wood-btn' : 'btn-roster-back'}
             onClick={onVolver}
-            title="Volver al menú principal"
+            title={isRpg ? 'Regresar a la Taberna' : 'Volver al menú principal'}
           >
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
               <polyline points="15 18 9 12 15 6" />
             </svg>
-            Volver al Menú
+            {isRpg ? 'Taberna' : 'Volver al Menú'}
           </button>
           <div className="roster-header-title">
-            <span className="roster-title-badge">RRHH</span>
-            <h2>Gestión y Carga de Rosters</h2>
+            <span className="roster-title-badge">{isRpg ? 'GREMIO' : 'RRHH'}</span>
+            <h2>{isRpg ? 'Decreto de Guardias y Expediciones (Roster)' : 'Gestión y Carga de Rosters'}</h2>
           </div>
         </div>
 
         <div className="roster-top-nav-actions">
-          {/* Botón Refrescar: Sincroniza y depura registros de Sheets y BD local */}
           <button
             type="button"
-            className={`btn-roster-refresh ${refrescando ? 'btn-refresh-spinning' : ''}`}
+            className={isRpg ? 'rpg-wood-btn' : `btn-roster-refresh ${refrescando ? 'btn-refresh-spinning' : ''}`}
             onClick={handleRefrescar}
-            disabled={refrescando || cargandoRosters}
-            title="Refrescar y sincronizar con Google Sheets"
+            disabled={refrescando || cargandoRosters || limpiando}
+            title="Recargar datos desde PostgreSQL"
           >
             <svg
               width="14"
@@ -508,16 +718,28 @@ export default function RosterView({ usuario, onVolver, tema }) {
               <polyline points="1 20 1 14 7 14" />
               <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
             </svg>
-            {refrescando ? 'Sincronizando...' : 'Refrescar'}
+            {refrescando ? 'Sincronizando...' : (isRpg ? 'Consultar Oráculo' : 'Refrescar')}
           </button>
 
-          {/* NUEVO: Botón para exportar Excel directo desde esta ventana */}
           <button
             type="button"
-            className="btn-export-excel-header"
+            className={isRpg ? 'rpg-wood-btn' : 'btn-action-primary'}
+            onClick={() => setModalTarifa(true)}
+            title="Cargar o actualizar tarifas de roster para un proyecto"
+          >
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="3" />
+              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
+            </svg>
+            Cargar Tarifas
+          </button>
+
+          <button
+            type="button"
+            className={isRpg ? 'rpg-wood-btn' : 'btn-export-excel-header'}
             disabled={exportandoExcel}
             onClick={abrirModalExportar}
-            title={`Descargar archivo Excel oficial por proyecto de ${nombresMeses[mesGantt]} ${anioGantt}`}
+            title={`Descargar archivo Excel oficial por proyecto de ${NOMBRES_MESES[mesGantt]} ${anioGantt}`}
           >
             {exportandoExcel ? (
               <>
@@ -531,15 +753,14 @@ export default function RosterView({ usuario, onVolver, tema }) {
                   <polyline points="7 10 12 15 17 10" />
                   <line x1="12" y1="15" x2="12" y2="3" />
                 </svg>
-                Descargar Excel ({nombresMeses[mesGantt]})
+                {isRpg ? `Exportar Pergamino (${NOMBRES_MESES[mesGantt]})` : `Descargar Excel (${NOMBRES_MESES[mesGantt]})`}
               </>
             )}
           </button>
 
-          {/* Botón para Mostrar / Esconder Calendario Gantt */}
           <button
             type="button"
-            className={`btn-toggle-gantt ${!mostrarCalendario ? 'gantt-hidden' : ''}`}
+            className={`${isRpg ? 'rpg-wood-btn' : 'btn-toggle-gantt'} ${!mostrarCalendario ? 'gantt-hidden' : ''}`}
             onClick={() => setMostrarCalendario(prev => !prev)}
             title={mostrarCalendario ? 'Ocultar calendario y centrar formulario' : 'Mostrar calendario Gantt'}
           >
@@ -564,790 +785,128 @@ export default function RosterView({ usuario, onVolver, tema }) {
         </div>
       </div>
 
-      {/* Contenido principal: Dividido o Centrado */}
+      {/* Disposición principal: Dividido (Formulario + Gantt) o Centrado (Formulario) */}
       <div className={`roster-main-layout ${!mostrarCalendario ? 'layout-centered' : 'layout-split'}`}>
-        
-        {/* =================================================================== */}
-        {/* PANEL IZQUIERDO: FORMULARIO DE CARGA CONTINUA                      */}
-        {/* =================================================================== */}
-        <div className="roster-form-panel">
-          <div className="roster-form-card">
-            <div className="roster-form-header">
-              <h3>Nuevo Registro de Roster</h3>
-              <p>Asigna turnos, obra, descansos y tarifas para el cálculo automático.</p>
-            </div>
+        <RosterShiftForm
+          proyecto={proyecto}
+          onProyectoChange={setProyecto}
+          proyectosDisponibles={proyectosDisponibles}
+          tarifaActual={tarifaActual}
+          empleadosDisponibles={empleadosDisponibles}
+          empleadosSeleccionados={empleadosSeleccionados}
+          onToggleEmpleado={toggleSeleccionEmpleado}
+          onSeleccionarTodos={seleccionarTodosEmpleados}
+          onDeseleccionarTodos={deseleccionarTodosEmpleados}
+          fechaInicio={fechaInicio}
+          onFechaInicioChange={setFechaInicio}
+          fechaFin={fechaFin}
+          onFechaFinChange={setFechaFin}
+          tipo={tipo}
+          onTipoChange={setTipo}
+          guardando={guardando}
+          onSubmit={handleGuardarRoster}
+          mensajeFeedback={mensajeFeedback}
+          onDismissFeedback={() => setMensajeFeedback(null)}
+        />
 
-            {/* Mensajes de feedback ágil */}
-            {mensajeFeedback && (
-              <div className={`roster-alert ${mensajeFeedback.tipo === 'exito' ? 'alert-success' : 'alert-error'}`}>
-                <span>{mensajeFeedback.tipo === 'exito' ? '✓' : '⚠️'}</span>
-                <p>{mensajeFeedback.texto}</p>
-                <button type="button" onClick={() => setMensajeFeedback(null)}>✕</button>
-              </div>
-            )}
-
-            <form onSubmit={handleGuardarRoster} className="roster-form-fields">
-              
-              {/* 1. SELECCIÓN DE PROYECTO (PRIMERO Y OBLIGATORIO) */}
-              <div className="form-group-roster highlight-project">
-                <label className="roster-label">
-                  <span className="roster-label-num">1</span>
-                  <span>Proyecto Asignado (Ingeniería - I) <strong className="required">*</strong></span>
-                </label>
-                <select
-                  value={proyecto}
-                  onChange={(e) => setProyecto(e.target.value)}
-                  className="roster-select"
-                  required
-                >
-                  <option value="" disabled>Selecciona el proyecto (Ingeniería)...</option>
-                  {proyectosDisponibles.map((p, idx) => (
-                    <option key={idx} value={p}>{p}</option>
-                  ))}
-                </select>
-                <span className="form-hint">Proyectos exclusivos de Ingeniería. Los francos deben asignarse a este mismo proyecto para cerrar el ciclo.</span>
-              </div>
-
-              {/* 2. SELECCIÓN DE EMPLEADOS (CARGA MÚLTIPLE - INGENIERÍA) */}
-              <div className="form-group-roster">
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
-                  <label className="roster-label" style={{ margin: 0 }}>
-                    <span className="roster-label-num">2</span>
-                    <span>Empleados (Ingeniería - I) <strong className="required">*</strong></span>
-                  </label>
-                  <div className="roster-emp-actions-row">
-                    <button
-                      type="button"
-                      className="btn-link-action"
-                      onClick={seleccionarTodosEmpleados}
-                    >
-                      Seleccionar todos
-                    </button>
-                    <span style={{ color: 'var(--border-input)', fontSize: '11px' }}>•</span>
-                    <button
-                      type="button"
-                      className="btn-link-action"
-                      onClick={deseleccionarTodosEmpleados}
-                    >
-                      Limpiar
-                    </button>
-                  </div>
-                </div>
-
-                <div className="roster-multi-emp-container">
-                  {empleadosDisponibles.length === 0 ? (
-                    <div className="roster-multi-emp-empty">No hay empleados disponibles en el área de Ingeniería.</div>
-                  ) : (
-                    empleadosDisponibles.map((emp, idx) => {
-                      const isSelected = empleadosSeleccionados.includes(emp.nombre);
-                      return (
-                        <div
-                          key={idx}
-                          className={`emp-multi-chip ${isSelected ? 'selected' : ''}`}
-                          onClick={() => toggleSeleccionEmpleado(emp.nombre)}
-                          title={`Click para ${isSelected ? 'quitar' : 'seleccionar'} a ${emp.nombre}`}
-                        >
-                          <div className={`chip-checkbox ${isSelected ? 'checked' : ''}`}>
-                            {isSelected ? '✓' : ''}
-                          </div>
-                          <span className="chip-emp-name">{emp.nombre}</span>
-                          {emp.area && <span className="chip-emp-area">({emp.area})</span>}
-                        </div>
-                      );
-                    })
-                  )}
-                </div>
-
-                <div className="roster-emp-selected-summary">
-                  {empleadosSeleccionados.length === 0 ? (
-                    <span className="summary-empty">⚠️ Seleccioná uno o más empleados para asignar el roster.</span>
-                  ) : (
-                    <span className="summary-filled">
-                      ✓ <strong>{empleadosSeleccionados.length}</strong> seleccionado{empleadosSeleccionados.length > 1 ? 's' : ''}: {empleadosSeleccionados.join(', ')}
-                    </span>
-                  )}
-                </div>
-              </div>
-
-              {/* 3. RANGO DE FECHAS (DISPONIBLE TANTO PARA CAMPO COMO PARA FRANCO) */}
-              <div className="form-group-roster">
-                <label className="roster-label">
-                  <span className="roster-label-num">3</span>
-                  <span>Rango de Fechas del Turno <strong className="required">*</strong></span>
-                </label>
-                <div className="roster-dates-row">
-                  <div className="date-field-box">
-                    <span className="date-sublabel">Desde:</span>
-                    <input
-                      type="date"
-                      value={fechaInicio}
-                      onChange={(e) => setFechaInicio(e.target.value)}
-                      className="roster-input date-input"
-                      required
-                    />
-                  </div>
-                  <div className="date-field-box">
-                    <span className="date-sublabel">Hasta:</span>
-                    <input
-                      type="date"
-                      value={fechaFin}
-                      onChange={(e) => setFechaFin(e.target.value)}
-                      className="roster-input date-input"
-                      required
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {/* 4. ESTADO DE ROSTER: CAMPO O FRANCO */}
-              <div className="form-group-roster">
-                <label className="roster-label">
-                  <span className="roster-label-num">4</span>
-                  <span>Tipo de Jornada</span>
-                </label>
-                <div className="roster-type-selector">
-                  <button
-                    type="button"
-                    className={`btn-type-pill pill-campo ${tipo === 'Campo' ? 'active' : ''}`}
-                    onClick={() => setTipo('Campo')}
-                  >
-                    <span className="pill-dot"></span>
-                    🚜 Activo en Campo / Obra
-                  </button>
-                  <button
-                    type="button"
-                    className={`btn-type-pill pill-franco ${tipo === 'Franco' ? 'active' : ''}`}
-                    onClick={() => setTipo('Franco')}
-                  >
-                    <span className="pill-dot"></span>
-                    🏠 Días de Franco
-                  </button>
-                </div>
-              </div>
-
-              {/* 5. TARIFAS: PRECIO DÍA NORMAL Y PRECIO DOMINGO */}
-              {tipo === 'Campo' ? (
-                <div className="form-group-roster tariffs-container">
-                  <label className="roster-label">
-                    <span className="roster-label-num">5</span>
-                    <span>Tarifas a Liquidar por Día Trabajado</span>
-                  </label>
-                  <div className="tariffs-inputs-row">
-                    <div className="tariff-input-box">
-                      <span className="tariff-title">Día Normal en Obra</span>
-                      <div className="input-currency-wrapper">
-                        <span className="currency-symbol">$</span>
-                        <input
-                          type="number"
-                          step="0.01"
-                          min="0"
-                          placeholder="0.00"
-                          value={precioDia}
-                          onChange={(e) => setPrecioDia(e.target.value)}
-                          className="roster-input tariff-input"
-                        />
-                      </div>
-                    </div>
-
-                    <div className="tariff-input-box sunday-tariff">
-                      <span className="tariff-title">
-                        Día Domingo <span className="sunday-badge-mini">DOM</span>
-                      </span>
-                      <div className="input-currency-wrapper">
-                        <span className="currency-symbol">$</span>
-                        <input
-                          type="number"
-                          step="0.01"
-                          min="0"
-                          placeholder="0.00"
-                          value={precioDomingo}
-                          onChange={(e) => setPrecioDomingo(e.target.value)}
-                          className="roster-input tariff-input"
-                        />
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              ) : (
-                <div className="franco-info-box">
-                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <circle cx="12" cy="12" r="10" />
-                    <line x1="12" y1="16" x2="12" y2="12" />
-                    <line x1="12" y1="8" x2="12.01" y2="8" />
-                  </svg>
-                  <span>Los días de franco se registran como descanso del proyecto y no computan tarifas de liquidación de obra.</span>
-                </div>
-              )}
-
-              {/* BOTÓN PRINCIPAL DE GUARDADO CONTINUO */}
-              <div className="roster-form-actions">
-                <button
-                  type="submit"
-                  disabled={guardando}
-                  className="btn-roster-submit"
-                >
-                  {guardando ? (
-                    'Guardando...'
-                  ) : (
-                    <>
-                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
-                        <polyline points="17 21 17 13 7 13 7 21" />
-                        <polyline points="7 3 7 8 15 8" />
-                      </svg>
-                      Guardar Registro de Roster
-                    </>
-                  )}
-                </button>
-                <span className="save-hint">Al guardar, permanecerás aquí para continuar cargando todos los turnos que necesites.</span>
-              </div>
-            </form>
-          </div>
-        </div>
-
-        {/* =================================================================== */}
-        {/* PANEL DERECHO: CALENDARIO ESTILO GANTT INTERACTIVO                  */}
-        {/* =================================================================== */}
         {mostrarCalendario && (
-          <div className="roster-gantt-panel">
-            <div className="roster-gantt-card">
-              
-              {/* Encabezado del Gantt: Navegación de meses, filtros y redimensionamiento */}
-              <div className="gantt-header-controls">
-                <div className="gantt-month-navigator">
-                  <button
-                    type="button"
-                    className="btn-gantt-nav"
-                    onClick={() => cambiarMes(-1)}
-                    title="Mes anterior"
-                  >
-                    ◀
-                  </button>
-                  <span className="gantt-current-month">
-                    {nombresMeses[mesGantt]} {anioGantt}
-                  </span>
-                  <button
-                    type="button"
-                    className="btn-gantt-nav"
-                    onClick={() => cambiarMes(1)}
-                    title="Mes siguiente"
-                  >
-                    ▶
-                  </button>
-                </div>
-
-                <div className="gantt-right-controls-group">
-                  {/* Selector de Proyecto */}
-                  <div className="gantt-project-filter">
-                    <label>Proyecto:</label>
-                    <select
-                      value={filtroProyectoGantt}
-                      onChange={(e) => setFiltroProyectoGantt(e.target.value)}
-                      className="gantt-filter-select"
-                    >
-                      <option value="TODOS">Todos los proyectos (Ingeniería)</option>
-                      {proyectosDisponibles.map((p, i) => (
-                        <option key={i} value={p}>{p}</option>
-                      ))}
-                    </select>
-                  </div>
-
-                  {/* NUEVO: Controles manuales de tamaño de columnas de días */}
-                  <div className="gantt-col-size-bar">
-                    <span className="size-label" title="Ancho de columnas de días">Zoom días:</span>
-                    <button
-                      type="button"
-                      className="btn-col-step"
-                      onClick={() => {
-                        const newW = Math.max(26, anchoColDia - 4);
-                        setAnchoColDia(newW);
-                        localStorage.setItem('roster_col_dia_width', String(newW));
-                      }}
-                      title="Reducir ancho de días"
-                    >
-                      -
-                    </button>
-                    <span className="size-num-indicator">{anchoColDia}px</span>
-                    <button
-                      type="button"
-                      className="btn-col-step"
-                      onClick={() => {
-                        const newW = Math.min(80, anchoColDia + 4);
-                        setAnchoColDia(newW);
-                        localStorage.setItem('roster_col_dia_width', String(newW));
-                      }}
-                      title="Aumentar ancho de días"
-                    >
-                      +
-                    </button>
-                    <button
-                      type="button"
-                      className="btn-col-reset"
-                      onClick={() => {
-                        setAnchoColEmp(270);
-                        setAnchoColTotal(150);
-                        setAnchoColDia(38);
-                        localStorage.removeItem('roster_col_emp_width');
-                        localStorage.removeItem('roster_col_total_width');
-                        localStorage.removeItem('roster_col_dia_width');
-                      }}
-                      title="Restablecer anchos de columnas por defecto"
-                    >
-                      ↺ Reset
-                    </button>
-                  </div>
-                </div>
-              </div>
-
-              {/* Leyenda explicativa de colores y ayuda de columnas */}
-              <div className="gantt-legend-bar">
-                <div className="legend-items-left">
-                  <div className="legend-item">
-                    <span className="legend-box campo"></span>
-                    <span>Activo en Campo / Obra</span>
-                  </div>
-                  <div className="legend-item">
-                    <span className="legend-box franco"></span>
-                    <span>Franco / Descanso</span>
-                  </div>
-                  <div className="legend-item">
-                    <span className="legend-box domingo"></span>
-                    <span>Domingo Resaltado (Tarifa especial)</span>
-                  </div>
-                </div>
-                <div className="legend-resizer-hint">
-                  <span>💡 Podés arrastrar los bordes de los encabezados para cambiar el ancho de las columnas.</span>
-                </div>
-              </div>
-
-              {/* Grilla Gantt con scroll horizontal y vertical suave */}
-              <div className="gantt-table-container">
-                {cargandoRosters ? (
-                  <div className="gantt-loading">
-                    <div className="spinner-mini"></div>
-                    <span>Cargando planificación del mes...</span>
-                  </div>
-                ) : empleadosEnGantt.length === 0 ? (
-                  <div className="gantt-empty">
-                    <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-                      <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
-                      <line x1="16" y1="2" x2="16" y2="6" />
-                      <line x1="8" y1="2" x2="8" y2="6" />
-                      <line x1="3" y1="10" x2="21" y2="10" />
-                    </svg>
-                    <h4>No hay registros de roster en {nombresMeses[mesGantt]} {anioGantt}</h4>
-                    <p>Completa el formulario de la izquierda para comenzar a planificar turnos y francos.</p>
-                  </div>
-                ) : (
-                  <table className="gantt-table">
-                    <thead>
-                      <tr>
-                        {/* Columna Empleado redimensionable */}
-                        <th
-                          className="gantt-th-emp"
-                          style={{
-                            width: `${anchoColEmp}px`,
-                            minWidth: `${anchoColEmp}px`,
-                            maxWidth: `${anchoColEmp}px`
-                          }}
-                        >
-                          <div className="th-content-resizable">
-                            <span>Empleado / Proyecto</span>
-                            <div
-                              className="col-resizer"
-                              onMouseDown={(e) => handleMouseDownResize(e, 'emp')}
-                              title="Arrastrar para ajustar ancho de la columna Empleado"
-                            />
-                          </div>
-                        </th>
-
-                        {/* Columna Total a Liquidar redimensionable */}
-                        <th
-                          className="gantt-th-totales"
-                          style={{
-                            left: `${anchoColEmp}px`,
-                            width: `${anchoColTotal}px`,
-                            minWidth: `${anchoColTotal}px`,
-                            maxWidth: `${anchoColTotal}px`
-                          }}
-                        >
-                          <div className="th-content-resizable">
-                            <span>Total a Liquidar</span>
-                            <div
-                              className="col-resizer"
-                              onMouseDown={(e) => handleMouseDownResize(e, 'total')}
-                              title="Arrastrar para ajustar ancho de la columna Total"
-                            />
-                          </div>
-                        </th>
-
-                        {/* Columnas de los días del mes redimensionables */}
-                        {diasEnMes.map(d => (
-                          <th
-                            key={d.numero}
-                            className={`gantt-th-day ${d.esDomingo ? 'col-domingo' : ''}`}
-                            style={{
-                              width: `${anchoColDia}px`,
-                              minWidth: `${anchoColDia}px`,
-                              maxWidth: `${anchoColDia}px`
-                            }}
-                            title={d.esDomingo ? 'Día Domingo' : ''}
-                          >
-                            <div className="th-content-resizable day-header-cell">
-                              <span className="th-day-name">{d.diaSemanaNombre}</span>
-                              <span className="th-day-num">{d.numero}</span>
-                              {d.esDomingo && <span className="dom-tag">DOM</span>}
-                              <div
-                                className="col-resizer day-resizer"
-                                onMouseDown={(e) => handleMouseDownResize(e, 'dia')}
-                                title="Arrastrar para ajustar ancho de los días"
-                              />
-                            </div>
-                          </th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {empleadosEnGantt.map(emp => {
-                        let diasNormActivos = 0;
-                        let domingosActivos = 0;
-                        let dineroTotal = 0;
-
-                        // Mapeo de días para este empleado
-                        const estadoDia = {}; // d.numero -> { tipo, proyecto, precio_dia, precio_domingo }
-
-                        diasEnMes.forEach(d => {
-                          for (const r of emp.registros) {
-                            if (r.fecha_inicio <= d.fechaStr && d.fechaStr <= r.fecha_fin) {
-                              estadoDia[d.numero] = r;
-                              if (r.tipo === 'Campo') {
-                                if (d.esDomingo) {
-                                  domingosActivos += 1;
-                                  dineroTotal += Number(r.precio_domingo) || 0;
-                                } else {
-                                  diasNormActivos += 1;
-                                  dineroTotal += Number(r.precio_dia) || 0;
-                                }
-                              }
-                              break;
-                            }
-                          }
-                        });
-
-                        return (
-                          <tr key={emp.nombre} className="gantt-row">
-                            {/* Columna Empleado con distinción clara de Proyecto asignado */}
-                            <td
-                              className="gantt-td-emp"
-                              style={{
-                                width: `${anchoColEmp}px`,
-                                minWidth: `${anchoColEmp}px`,
-                                maxWidth: `${anchoColEmp}px`
-                              }}
-                            >
-                              <div className="emp-info-pill">
-                                <div className="emp-avatar-mini">
-                                  {emp.nombre.substring(0, 2).toUpperCase()}
-                                </div>
-                                <div className="emp-text-col">
-                                  <span className="emp-name-text" title={emp.nombre}>{emp.nombre}</span>
-                                  
-                                  {/* Distinción del proyecto asignado (muy visible cuando está en 'Todos los proyectos') */}
-                                  <div className="emp-projects-badge-row">
-                                    {emp.proyectos && emp.proyectos.length > 0 ? (
-                                      emp.proyectos.map((proy, pIdx) => (
-                                        <span
-                                          key={pIdx}
-                                          className="emp-proy-chip"
-                                          title={`Proyecto asignado: ${proy}`}
-                                        >
-                                          <span className="proy-dot"></span>
-                                          <span className="proy-text">{proy}</span>
-                                        </span>
-                                      ))
-                                    ) : (
-                                      <span className="emp-proy-chip unassigned">Sin proyecto</span>
-                                    )}
-                                  </div>
-                                </div>
-                              </div>
-                            </td>
-
-                            {/* Columna Total a Liquidar y Desglose */}
-                            <td
-                              className="gantt-td-totales"
-                              style={{
-                                left: `${anchoColEmp}px`,
-                                width: `${anchoColTotal}px`,
-                                minWidth: `${anchoColTotal}px`,
-                                maxWidth: `${anchoColTotal}px`
-                              }}
-                            >
-                              <div className="totals-card-mini">
-                                <span className="total-money">
-                                  ${dineroTotal.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                                </span>
-                                <span className="total-days-detail">
-                                  {diasNormActivos}d norm. + {domingosActivos} dom.
-                                </span>
-                              </div>
-                            </td>
-
-                            {/* Celdas de los días del mes */}
-                            {diasEnMes.map(d => {
-                              const rInfo = estadoDia[d.numero];
-                              const esDom = d.esDomingo;
-
-                              return (
-                                <td
-                                  key={d.numero}
-                                  className={`gantt-td-day ${esDom ? 'col-domingo' : ''}`}
-                                  style={{
-                                    width: `${anchoColDia}px`,
-                                    minWidth: `${anchoColDia}px`,
-                                    maxWidth: `${anchoColDia}px`
-                                  }}
-                                >
-                                  {rInfo && (
-                                    <div
-                                      className={`gantt-bar-cell ${rInfo.tipo === 'Campo' ? 'bar-campo' : 'bar-franco'}`}
-                                      title={`${rInfo.tipo === 'Campo' ? '🚜 Campo / Obra' : '🏠 Franco'}\nEmpleado: ${emp.nombre}\nProyecto: ${rInfo.proyecto}\nTarifa día: $${rInfo.precio_dia || 0} | Dom: $${rInfo.precio_domingo || 0}\n\n(Click para modificar este turno)`}
-                                      onClick={() => handleAbrirEditarGantt(rInfo)}
-                                      style={{ cursor: 'pointer' }}
-                                    >
-                                      {rInfo.tipo === 'Campo' ? 'C' : 'F'}
-                                    </div>
-                                  )}
-                                </td>
-                              );
-                            })}
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                )}
-              </div>
-
-            </div>
-          </div>
+          <RosterGanttChart
+            mesGantt={mesGantt}
+            anioGantt={anioGantt}
+            onCambiarMes={cambiarMes}
+            filtroProyectoGantt={filtroProyectoGantt}
+            onFiltroProyectoChange={setFiltroProyectoGantt}
+            proyectosDisponibles={proyectosDisponibles}
+            cargandoRosters={cargandoRosters}
+            diasEnMes={diasEnMes}
+            empleadosEnGantt={empleadosEnGantt}
+            anchoColEmp={anchoColEmp}
+            anchoColTotal={anchoColTotal}
+            anchoColDia={anchoColDia}
+            onResizeStart={handleMouseDownResize}
+            onStepColDia={handleStepColDia}
+            onResetColWidths={handleResetColWidths}
+            onAbrirEditar={handleAbrirEditarGantt}
+            // Props Modal Edición
+            modalEditar={modalEditar}
+            onCerrarModalEdit={() => !guardandoEdit && setModalEditar(false)}
+            editEmpleado={editEmpleado}
+            onEditEmpleadoChange={setEditEmpleado}
+            editProyecto={editProyecto}
+            onEditProyectoChange={setEditProyecto}
+            editFechaInicio={editFechaInicio}
+            onEditFechaInicioChange={setEditFechaInicio}
+            editFechaFin={editFechaFin}
+            onEditFechaFinChange={setEditFechaFin}
+            editTipo={editTipo}
+            onEditTipoChange={setEditTipo}
+            tarifaModalEdit={tarifaModalEdit}
+            editPrecioDia={editPrecioDia}
+            editPrecioDomingo={editPrecioDomingo}
+            onAsignarTarifasOficiales={handleAsignarTarifasOficiales}
+            guardandoEdit={guardandoEdit}
+            eliminandoEdit={eliminandoEdit}
+            onGuardarEdicion={handleGuardarEdicionGantt}
+            onEliminarTurno={handleEliminarTurnoGantt}
+            // Props Modal Exportación
+            mostrarModalExport={mostrarModalExport}
+            onCerrarModalExport={() => !exportandoExcel && setMostrarModalExport(false)}
+            proyectoAExportar={proyectoAExportar}
+            onProyectoAExportarChange={setProyectoAExportar}
+            exportandoExcel={exportandoExcel}
+            onConfirmarExportar={handleExportarExcelDirecto}
+          />
         )}
       </div>
 
-      {/* Modal interactivo para seleccionar el proyecto a exportar a Excel */}
-      {mostrarModalExport && (
-        <div className="roster-modal-overlay" onClick={() => !exportandoExcel && setMostrarModalExport(false)}>
-          <div className="roster-modal-card" onClick={(e) => e.stopPropagation()}>
-            <div className="roster-modal-header">
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <span className="roster-title-badge" style={{ margin: 0, background: '#059669' }}>EXCEL</span>
-                <h3>Exportar Roster por Proyecto</h3>
-              </div>
-              <p>
-                El archivo .xlsx oficial contendrá las 3 hojas reglamentarias (Ciclo Completo, 1ra Quincena y 2da Quincena) para <strong>{nombresMeses[mesGantt]} {anioGantt}</strong>, exclusivamente con los registros del proyecto seleccionado.
-              </p>
-            </div>
+      <RosterTarifaModal
+        isOpen={modalTarifa}
+        onClose={() => setModalTarifa(false)}
+        proyectosDisponibles={proyectosDisponibles}
+        onGuardadoExitoso={handleTarifaGuardada}
+        isRpg={isRpg}
+      />
+    </>
+  );
 
-            <div className="roster-modal-body">
-              <div className="form-group-roster highlight-project">
-                <label className="roster-label">
-                  <span>Proyecto a Exportar (Ingeniería - I) <strong className="required">*</strong></span>
-                </label>
-                <select
-                  value={proyectoAExportar}
-                  onChange={(e) => setProyectoAExportar(e.target.value)}
-                  className="roster-select"
-                  disabled={exportandoExcel}
-                >
-                  {proyectosDisponibles.map((p, idx) => (
-                    <option key={idx} value={p}>{p}</option>
-                  ))}
-                </select>
-                <span className="form-hint">
-                  Mostrando únicamente proyectos del área de Ingeniería (I).
-                </span>
-              </div>
-            </div>
+  // Renderizado temático RPG
+  if (isRpg) {
+    return (
+      <div className="rpg-board-viewport rpg-roster-viewport">
+        <div className="rpg-notice-board">
+          <div className="rpg-iron-bracket top-left" />
+          <div className="rpg-iron-bracket top-right" />
+          <div className="rpg-iron-bracket bottom-left" />
+          <div className="rpg-iron-bracket bottom-right" />
 
-            <div className="roster-modal-footer">
-              <button
-                type="button"
-                className="btn-modal-cancel"
-                onClick={() => setMostrarModalExport(false)}
-                disabled={exportandoExcel}
-              >
-                Cancelar
-              </button>
-              <button
-                type="button"
-                className="btn-modal-confirm"
-                onClick={handleExportarExcelDirecto}
-                disabled={exportandoExcel || !proyectoAExportar}
-              >
-                {exportandoExcel ? (
-                  <>
-                    <div className="spinner-mini" style={{ width: '13px', height: '13px', margin: 0, borderWidth: '2px' }}></div>
-                    Exportando Excel...
-                  </>
-                ) : (
-                  <>
-                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
-                      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                      <polyline points="7 10 12 15 17 10" />
-                      <line x1="12" y1="15" x2="12" y2="3" />
-                    </svg>
-                    Descargar Archivo .xlsx
-                  </>
-                )}
-              </button>
+          <div className="rpg-curved-banner">
+            <div className="rpg-banner-scroll-roll left" />
+            <div className="rpg-banner-body">
+              <div className="rpg-banner-heading-wrap">
+                <div className="rpg-illuminated-box">R</div>
+                <h1 className="rpg-banner-main-title">DECRETO DE GUARDIAS Y EXPEDICIONES</h1>
+              </div>
+              <span className="rpg-banner-subtitle">
+                TABLÓN DE ASIGNACIÓN DE TURNOS • GREMIO INGEAP
+              </span>
             </div>
+            <div className="rpg-banner-scroll-roll right" />
+          </div>
+
+          <div className="roster-view-container rpg-roster-content">
+            {contenidoPrincipal}
           </div>
         </div>
-      )}
+      </div>
+    );
+  }
 
-      {/* Modal interactivo para modificar el turno de Roster seleccionado en el Gantt */}
-      {modalEditar && (
-        <div className="roster-modal-overlay" onClick={() => !guardandoEdit && setModalEditar(false)}>
-          <div className="roster-modal-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '540px' }}>
-            <div className="roster-modal-header">
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <span className="roster-title-badge" style={{ margin: 0, background: '#2563eb' }}>EDITAR</span>
-                <h3>Modificar Turno de Roster</h3>
-              </div>
-              <p>Actualiza la asignación, fechas o tarifas. Los cambios impactarán en el Gantt y se sincronizarán con Google Sheets.</p>
-            </div>
+  // Renderizado corporativo habitual
 
-            <form onSubmit={handleGuardarEdicionGantt} className="roster-modal-body">
-              {/* Empleado */}
-              <div className="form-group-roster" style={{ marginBottom: '10px' }}>
-                <label className="roster-label" style={{ fontSize: '12px' }}>Empleado (Ingeniería - I):</label>
-                <select
-                  value={editEmpleado}
-                  onChange={(e) => setEditEmpleado(e.target.value)}
-                  className="roster-select"
-                  required
-                >
-                  {empleadosDisponibles.map((emp, i) => (
-                    <option key={i} value={emp.nombre}>{emp.nombre}</option>
-                  ))}
-                </select>
-              </div>
 
-              {/* Proyecto */}
-              <div className="form-group-roster" style={{ marginBottom: '10px' }}>
-                <label className="roster-label" style={{ fontSize: '12px' }}>Proyecto Asignado:</label>
-                <select
-                  value={editProyecto}
-                  onChange={(e) => setEditProyecto(e.target.value)}
-                  className="roster-select"
-                  required
-                >
-                  {proyectosDisponibles.map((p, i) => (
-                    <option key={i} value={p}>{p}</option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Rango de Fechas */}
-              <div className="form-group-roster" style={{ marginBottom: '10px' }}>
-                <label className="roster-label" style={{ fontSize: '12px' }}>Rango de Fechas:</label>
-                <div className="roster-dates-row">
-                  <div className="date-field-box">
-                    <span className="date-sublabel">Desde:</span>
-                    <input
-                      type="date"
-                      value={editFechaInicio}
-                      onChange={(e) => setEditFechaInicio(e.target.value)}
-                      className="roster-input date-input"
-                      required
-                    />
-                  </div>
-                  <div className="date-field-box">
-                    <span className="date-sublabel">Hasta:</span>
-                    <input
-                      type="date"
-                      value={editFechaFin}
-                      onChange={(e) => setEditFechaFin(e.target.value)}
-                      className="roster-input date-input"
-                      required
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {/* Tipo */}
-              <div className="form-group-roster" style={{ marginBottom: '10px' }}>
-                <label className="roster-label" style={{ fontSize: '12px' }}>Tipo de Jornada:</label>
-                <div className="roster-type-selector">
-                  <button
-                    type="button"
-                    className={`btn-type-pill pill-campo ${editTipo === 'Campo' ? 'active' : ''}`}
-                    onClick={() => setEditTipo('Campo')}
-                  >
-                    🚜 Campo / Obra
-                  </button>
-                  <button
-                    type="button"
-                    className={`btn-type-pill pill-franco ${editTipo === 'Franco' ? 'active' : ''}`}
-                    onClick={() => setEditTipo('Franco')}
-                  >
-                    🏠 Franco / Descanso
-                  </button>
-                </div>
-              </div>
-
-              {/* Tarifas si es Campo */}
-              {editTipo === 'Campo' && (
-                <div className="tariffs-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginTop: '6px' }}>
-                  <div className="tariff-input-box">
-                    <label style={{ fontSize: '11px', fontWeight: 600 }}>Tarifa Día Normal ($):</label>
-                    <input
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      value={editPrecioDia}
-                      onChange={(e) => setEditPrecioDia(e.target.value)}
-                      placeholder="0.00"
-                      className="roster-input"
-                    />
-                  </div>
-                  <div className="tariff-input-box">
-                    <label style={{ fontSize: '11px', fontWeight: 600 }}>Tarifa Día Domingo ($):</label>
-                    <input
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      value={editPrecioDomingo}
-                      onChange={(e) => setEditPrecioDomingo(e.target.value)}
-                      placeholder="0.00"
-                      className="roster-input"
-                    />
-                  </div>
-                </div>
-              )}
-
-              <div className="roster-modal-footer" style={{ marginTop: '12px' }}>
-                <button
-                  type="button"
-                  className="btn-modal-cancel"
-                  disabled={guardandoEdit}
-                  onClick={() => setModalEditar(false)}
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="submit"
-                  className="btn-modal-confirm"
-                  disabled={guardandoEdit}
-                  style={{ background: '#2563eb' }}
-                >
-                  {guardandoEdit ? 'Guardando...' : 'Guardar Modificación'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+  return (
+    <div className={`roster-view-container ${isDark ? 'dark-theme' : ''}`}>
+      {contenidoPrincipal}
     </div>
   );
 }

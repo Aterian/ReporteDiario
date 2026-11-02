@@ -1,5 +1,9 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { api } from '../services/apiBridge';
+import { puedeVerHistorialOtros, puedeModificarRegistro, esAdmin, esSubAdmin, puedeCargarCampo } from '../utils/permissions';
+import { esServicioAreaInterna, esFrancoDeObra, obtenerEtiquetaModalidad, resolverNombreCargador } from '../utils/francoUtils';
+
+// [MOD-02] HistoryView
 
 // Iconos vectoriales medievales para garantizar renderizado perfecto sin depender de compatibilidad de emojis
 const QuillIcon = ({ size = 16, color = "#78350f" }) => (
@@ -19,15 +23,62 @@ const CalendarRpgIcon = ({ size = 16, color = "#78350f" }) => (
   </svg>
 );
 
+const LISTADO_AREAS_CORPORATIVAS = [
+  'Aplicaciones',
+  'Ingeniería',
+  'Mensura',
+  'SIG',
+  'Administración',
+  'RRHH',
+  'CyF',
+  'Marketing',
+  'Inventario',
+  'I+D',
+  'Ventas',
+  'CD'
+];
+
+const MAPA_AREAS = {
+  'A': 'Aplicaciones',
+  'APLICACIONES': 'Aplicaciones',
+  'N': 'Núcleo',
+  'NUCLEO': 'Núcleo',
+  'NÚCLEO': 'Núcleo',
+  'I': 'Ingeniería',
+  'INGENIERIA': 'Ingeniería',
+  'INGENIERÍA': 'Ingeniería',
+  'M': 'Mensura',
+  'MENSURA': 'Mensura',
+  'S': 'SIG',
+  'SIG': 'SIG',
+  'RRHH': 'RRHH',
+  'VYM': 'Ventas y Marketing',
+  'VENTAS Y MARKETING': 'Ventas y Marketing'
+};
+
+const TIPOS_LICENCIA = [
+  'Licencia - Médica',
+  'Licencia - Examen',
+  'Licencia - Fallecimiento',
+  'Licencia - Paternidad / Maternidad',
+  'Licencia - Mudanza',
+  'Licencia - Especial',
+  'Licencia - Otra'
+];
 
 export const getTagAutorInfo = (item, usuario) => {
-  const cargadoPor = (item?.cargado_por || '').trim();
-  const nombreUsuario = (usuario?.nombre || '').trim().toLowerCase();
+  const cargadoPorRaw = (item?.cargado_por || '').trim();
+  const nombreCargador = resolverNombreCargador(item, usuario);
+  const idUsuario = (usuario?.id_usuario || usuario?.id_origen || '').toLowerCase();
+  const cargadoPorId = (item?.cargado_por_id || (cargadoPorRaw.includes('-') ? cargadoPorRaw : '')).toLowerCase();
+  const nombreUsuario = (usuario?.nombre || usuario?.nombre_completo || '').trim().toLowerCase();
   const nombreEmpleado = (item?.empleado || '').trim().toLowerCase();
 
-  const esPropio = !cargadoPor || 
-                   (nombreUsuario && cargadoPor.toLowerCase() === nombreUsuario) ||
-                   (nombreEmpleado && cargadoPor.toLowerCase() === nombreEmpleado);
+  const esPropio = !cargadoPorRaw ||
+                   (cargadoPorId && idUsuario && cargadoPorId === idUsuario) ||
+                   (cargadoPorRaw && idUsuario && cargadoPorRaw.toLowerCase() === idUsuario) ||
+                   (nombreUsuario && nombreCargador.toLowerCase() === nombreUsuario) ||
+                   (nombreEmpleado && nombreCargador.toLowerCase() === nombreEmpleado);
 
   if (esPropio) {
     return {
@@ -37,10 +88,10 @@ export const getTagAutorInfo = (item, usuario) => {
     };
   }
 
-  const esRRHH = cargadoPor.toLowerCase().includes('rrhh');
+  const esRRHH = nombreCargador.toLowerCase().includes('rrhh');
   return {
     tipo: 'rrhh',
-    label: esRRHH ? 'Cargado por RRHH' : `Cargado por ${cargadoPor}`,
+    label: esRRHH ? 'Cargado por RRHH' : `Cargado por ${nombreCargador}`,
     badgeClass: 'badge-autor-rrhh'
   };
 };
@@ -84,7 +135,7 @@ export default function HistoryView({ onVolver, tema, onNuevoReporte, usuario, o
     return new Date(hoy.getFullYear(), hoy.getMonth(), 1);
   });
 
-  // Estado para la carga asistida de fines de semana (RRHH y Aplicaciones)
+  // [FN-01.11] Carga asistida de fines de semana a Franco en historial propio
   const [modalFinesDeSemanaOpen, setModalFinesDeSemanaOpen] = useState(false);
   const [cargandoFinesDeSemana, setCargandoFinesDeSemana] = useState(false);
   const [finesDeSemanaPendientes, setFinesDeSemanaPendientes] = useState([]);
@@ -92,7 +143,7 @@ export default function HistoryView({ onVolver, tema, onNuevoReporte, usuario, o
   const [nombreMesFinesDeSemana, setNombreMesFinesDeSemana] = useState('');
 
   const areaUsuarioUpper = (usuario?.area || '').toUpperCase().trim();
-  const esRRHHoAplicaciones = areaUsuarioUpper === 'RRHH' || areaUsuarioUpper === 'A' || areaUsuarioUpper === 'APLICACIONES';
+  const areaDestino = MAPA_AREAS[areaUsuarioUpper] || usuario?.area || 'General';
 
   const handleAbrirModalFinesDeSemana = () => {
     const hoy = new Date();
@@ -146,17 +197,20 @@ export default function HistoryView({ onVolver, tema, onNuevoReporte, usuario, o
     setCargandoFinesDeSemana(true);
 
     try {
-      const areaDestino = areaUsuarioUpper === 'RRHH' ? 'RRHH' : 'Aplicaciones';
       const fechasArray = finesDeSemanaPendientes.map((f) => f.fecha);
 
       const payload = {
         fecha: fechasArray[0],
-        lugar: 'Franco',
+        lugar: 'Oficina',
+        modalidad: 'oficina',
+        tipo_costo: 'Oficina',
         tipo_ocf: 'Franco',
         tipo_franco: 'Franco de Oficina',
         sub_franco: 'Franco de Oficina',
-        area: areaDestino,
-        servicio: areaDestino,
+        costo_dia: Number(usuario?.costo_dia_ofi) || 0.0,
+        area: areaDestino || usuario?.area || 'Oficina',
+        servicio: 'Franco de Oficina',
+        dedicado_a: 'areas',
         horas: 0.0,
         fechas: fechasArray,
         empleado: usuario?.nombre || '',
@@ -169,7 +223,7 @@ export default function HistoryView({ onVolver, tema, onNuevoReporte, usuario, o
         setModalFinesDeSemanaOpen(false);
         setMensajeSync({
           tipo: 'exito',
-          texto: `✓ Se registraron exitosamente ${fechasArray.length} fines de semana como Franco.`
+          texto: `✓ Se registraron exitosamente ${fechasArray.length} fines de semana como Franco de Oficina.`
         });
         await cargarHistorial();
       } else {
@@ -208,14 +262,14 @@ export default function HistoryView({ onVolver, tema, onNuevoReporte, usuario, o
     try {
       const res = await api.sincronizarSheets();
       if (res && res.exito) {
-        setMensajeSync({ tipo: 'exito', texto: res.mensaje || 'Sincronizado correctamente con Google Sheets.' });
+        setMensajeSync({ tipo: 'exito', texto: res.mensaje || 'Sincronizado correctamente con PostgreSQL.' });
         await cargarHistorial();
       } else {
-        setMensajeSync({ tipo: 'error', texto: res?.error || 'No se pudo sincronizar con Google Sheets.' });
+        setMensajeSync({ tipo: 'error', texto: res?.error || 'No se pudo sincronizar con PostgreSQL.' });
       }
     } catch (err) {
       console.error(err);
-      setMensajeSync({ tipo: 'error', texto: 'Error de red o comunicación con Google Sheets.' });
+      setMensajeSync({ tipo: 'error', texto: 'Error de red o comunicación con PostgreSQL.' });
     } finally {
       setSincronizando(false);
     }
@@ -247,6 +301,12 @@ export default function HistoryView({ onVolver, tema, onNuevoReporte, usuario, o
     e.preventDefault();
     if (!registroEditando) return;
 
+    if (!puedeModificarRegistro(usuario, registroEditando)) {
+      alert('Solo Justina Bertolozzi e Iván Valentin pueden modificar registros de otros empleados.');
+      setRegistroEditando(null);
+      return;
+    }
+
     setGuardandoEdicion(true);
     try {
       const res = await api.modificarRegistro({
@@ -261,7 +321,10 @@ export default function HistoryView({ onVolver, tema, onNuevoReporte, usuario, o
       });
 
       if (res && res.exito) {
-        setMensajeSync({ tipo: 'exito', texto: 'Reporte modificado y programado para sincronización.' });
+        setMensajeSync({
+          tipo: 'exito',
+          texto: 'Reporte modificado exitosamente. Guardado en PostgreSQL.'
+        });
         setRegistroEditando(null);
         await cargarHistorial();
       } else {
@@ -367,10 +430,20 @@ export default function HistoryView({ onVolver, tema, onNuevoReporte, usuario, o
     'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
   ];
 
-  const getBadgeClassLugar = (lugar, servicio = '') => {
+  const getBadgeClassLugar = (lugar, servicio = '', modalidad = '') => {
     const l = (lugar || '').toLowerCase().trim();
     const s = (servicio || '').toLowerCase().trim();
-    if (l === 'franco obra' || l === 'franco de obra' || s.includes('franco de obra')) {
+    const m = (modalidad || '').toLowerCase().trim();
+
+    if (m === 'oficina' || m === 'ofic') {
+      if (l === 'franco ofic trabajado' || s === 'franco trabajado' || (l === 'franco' && s.includes('trabajado'))) {
+        return 'badge-modalidad-franco-ofic-trabajado';
+      }
+      if (l.includes('franco')) return 'badge-modalidad-franco';
+      if (l.includes('oficina')) return 'badge-modalidad-oficina';
+    }
+
+    if (l === 'franco obra' || l === 'franco de obra' || s.includes('franco de obra') || (l === 'franco' && s && !esServicioAreaInterna(s))) {
       return 'badge-modalidad-franco-obra';
     }
     if (l === 'franco obra trabajado') {
@@ -420,8 +493,8 @@ export default function HistoryView({ onVolver, tema, onNuevoReporte, usuario, o
           )}
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-          {esRRHH && onHistorialOtrosEmpleados && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+          {puedeVerHistorialOtros(usuario) && onHistorialOtrosEmpleados && (
             <button
               type="button"
               className={isRpg ? 'rpg-wood-btn' : 'btn-action-ghost'}
@@ -438,23 +511,21 @@ export default function HistoryView({ onVolver, tema, onNuevoReporte, usuario, o
             </button>
           )}
 
-          {esRRHHoAplicaciones && (
-            <button
-              type="button"
-              className={isRpg ? 'rpg-wood-btn' : 'btn-action-ghost'}
-              onClick={handleAbrirModalFinesDeSemana}
-              title="Cargar automáticamente los sábados y domingos del mes actual como Franco"
-              style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
-            >
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
-                <line x1="16" y1="2" x2="16" y2="6" />
-                <line x1="8" y1="2" x2="8" y2="6" />
-                <line x1="3" y1="10" x2="21" y2="10" />
-              </svg>
-              <span>{isRpg ? 'Descanso Fines de Semana' : 'Fines de Semana a Franco'}</span>
-            </button>
-          )}
+          <button
+            type="button"
+            className={isRpg ? 'rpg-wood-btn' : 'btn-action-ghost'}
+            onClick={handleAbrirModalFinesDeSemana}
+            title="Cargar automáticamente los sábados y domingos del mes actual como Franco"
+            style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+          >
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+              <line x1="16" y1="2" x2="16" y2="6" />
+              <line x1="8" y1="2" x2="8" y2="6" />
+              <line x1="3" y1="10" x2="21" y2="10" />
+            </svg>
+            <span>{isRpg ? 'Descanso Fines de Semana' : 'Fines de Semana a Franco'}</span>
+          </button>
 
           {onNuevoReporte && (
             <button
@@ -471,20 +542,25 @@ export default function HistoryView({ onVolver, tema, onNuevoReporte, usuario, o
           )}
 
           {pendientesCount > 0 && (
-            <button
-              type="button"
-              className={isRpg ? 'rpg-wood-btn' : 'btn-sync'}
-              onClick={ejecutarSincronizacion}
-              disabled={sincronizando}
-              title="Sincronizar reportes pendientes con Google Sheets"
-            >
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M3 12a9 9 0 0 1 15-6.7L21 8" />
-                <path d="M3 22v-6h6" />
-                <path d="M21 12a9 9 0 0 1-15 6.7L3 16" />
-              </svg>
-              <span>{sincronizando ? 'Enviando...' : `Subir (${pendientesCount})`}</span>
-            </button>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span className="sync-auto-helper" title="La aplicación sincroniza en segundo plano automáticamente">
+                <span className="sync-dot-pulse" /> Sincronización automática activa (~3-5s)
+              </span>
+              <button
+                type="button"
+                className={isRpg ? 'rpg-wood-btn' : 'btn-sync'}
+                onClick={ejecutarSincronizacion}
+                disabled={sincronizando}
+                title="Sincronizar reportes pendientes inmediatamente con PostgreSQL (No requerido: se sincroniza solo)"
+              >
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M3 12a9 9 0 0 1 15-6.7L21 8" />
+                  <path d="M3 22v-6h6" />
+                  <path d="M21 12a9 9 0 0 1-15 6.7L3 16" />
+                </svg>
+                <span>{sincronizando ? 'Enviando...' : `Subir ahora (${pendientesCount})`}</span>
+              </button>
+            </div>
           )}
 
           <button
@@ -535,7 +611,7 @@ export default function HistoryView({ onVolver, tema, onNuevoReporte, usuario, o
               <div className="parchment-header-row" style={{ padding: '8px 14px 4px 14px', marginBottom: 0 }}>
                 <div className="parchment-title-group">
                   <QuillIcon size={16} color="#78350f" />
-                  <h3 className="parchment-title">ANALES DE MISIONES</h3>
+                  <h3 className="parchment-title">HISTORIAL DE MISIONES</h3>
                 </div>
                 <span className="parchment-date">{registrosFiltrados.length} Registros</span>
               </div>
@@ -621,8 +697,8 @@ export default function HistoryView({ onVolver, tema, onNuevoReporte, usuario, o
               <div className="history-cards-col">
                 {registrosFiltrados.map((item) => {
                   const horasDisplay = item.horas > 0 ? `${item.horas} hs` : (item.jornada || '0 hs');
-                  const lugarDisplay = item.tipo_ocf || item.lugar || 'Oficina';
-                  const badgeClass = getBadgeClassLugar(lugarDisplay, item.servicio);
+                  const lugarDisplay = obtenerEtiquetaModalidad(item);
+                  const badgeClass = getBadgeClassLugar(lugarDisplay, item.servicio, item.modalidad || item.tipo_costo);
                   const estaSincronizado = item.sincronizado === 1;
 
                   return (
@@ -671,17 +747,23 @@ export default function HistoryView({ onVolver, tema, onNuevoReporte, usuario, o
                       </div>
 
                       <div className="item-card-footer">
-                        <button
-                          type="button"
-                          className="btn-edit-record"
-                          onClick={() => setRegistroEditando({ ...item })}
-                        >
-                          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
-                            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
-                          </svg>
-                          Modificar
-                        </button>
+                        {puedeModificarRegistro(usuario, item) ? (
+                          <button
+                            type="button"
+                            className="btn-edit-record"
+                            onClick={() => setRegistroEditando({ ...item })}
+                          >
+                            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                              <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                              <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                            </svg>
+                            Modificar
+                          </button>
+                        ) : (
+                          <span className="badge-solo-lectura" title="Solo Justina Bertolozzi e Iván Valentin pueden modificar registros de otros empleados">
+                            🔒 Solo lectura
+                          </span>
+                        )}
                       </div>
                     </div>
                   );
@@ -784,9 +866,9 @@ export default function HistoryView({ onVolver, tema, onNuevoReporte, usuario, o
                   <div className="cell-events-container">
                     {celda.registros.slice(0, 3).map((r, idx) => {
                       const lug = r.tipo_ocf || r.lugar || 'Oficina';
-                      const badgeClass = getBadgeClassLugar(lug, r.servicio);
+                      const badgeClass = getBadgeClassLugar(lug, r.servicio, r.modalidad || r.tipo_costo);
                       let labelText = lug;
-                      if (lug === 'Franco Obra' || r.servicio?.toLowerCase().includes('franco de obra')) {
+                      if (esFrancoDeObra(r) || lug === 'Franco Obra' || r.servicio?.toLowerCase().includes('franco de obra')) {
                         labelText = 'F. Obra';
                       } else if (lug === 'Franco Obra Trabajado') {
                         labelText = 'F. Obra Trab.';
@@ -796,6 +878,8 @@ export default function HistoryView({ onVolver, tema, onNuevoReporte, usuario, o
                         labelText = 'Feriado Trab.';
                       } else if (lug === 'Campaña / Campo' || lug === 'Campo') {
                         labelText = 'Campo';
+                      } else if (lug.toLowerCase().includes('franco')) {
+                        labelText = 'Franco';
                       }
 
                       const tagCell = getTagAutorInfo(r, usuario);
@@ -805,10 +889,12 @@ export default function HistoryView({ onVolver, tema, onNuevoReporte, usuario, o
                           className={`cell-event-pill ${badgeClass}`}
                           onClick={(e) => {
                             e.stopPropagation();
-                            setRegistroEditando({ ...r });
+                            if (puedeModificarRegistro(usuario, r)) {
+                              setRegistroEditando({ ...r });
+                            }
                           }}
-                          style={{ cursor: 'pointer' }}
-                          title={`${lug} - ${r.servicio} (${r.horas} hs) • ${tagCell.label} • Clic para modificar`}
+                          style={{ cursor: puedeModificarRegistro(usuario, r) ? 'pointer' : 'default' }}
+                          title={`${lug} - ${r.servicio} (${r.horas} hs) • ${tagCell.label}${puedeModificarRegistro(usuario, r) ? ' • Clic para modificar' : ' • Solo lectura'}`}
                         >
                           <span className="cell-event-label">{labelText}</span>
                           {tagCell.tipo === 'rrhh' && (
@@ -923,18 +1009,22 @@ export default function HistoryView({ onVolver, tema, onNuevoReporte, usuario, o
               <div className="form-group-clean">
                 <label className="form-label-clean">Modalidad / Lugar:</label>
                 {(() => {
-                  const esRRHHUsuario = (usuario?.area || '').toUpperCase() === 'RRHH';
-                  const esSoloOficinaEditando = !esRRHHUsuario && (
-                    usuario?.area === 'M' ||
-                    (usuario?.nombre || '').toLowerCase().includes('camila llovio') ||
-                    (usuario?.nombre || '').toLowerCase().includes('llovio') ||
-                    (registroEditando?.empleado || '').toLowerCase().includes('camila llovio') ||
-                    (registroEditando?.empleado || '').toLowerCase().includes('llovio') ||
-                    registroEditando?.area === 'M'
+                  const esAdminOSubAdmin = esAdmin(usuario) || esSubAdmin(usuario);
+                  const esSoloOficinaEditando = !esAdminOSubAdmin && !puedeCargarCampo(usuario, registroEditando);
+                  const esMensuraEditando = !esAdminOSubAdmin && (
+                    (usuario?.area || '').toUpperCase() === 'M' ||
+                    (usuario?.area || '').toUpperCase() === 'MENSURA' ||
+                    (registroEditando?.area || '').toUpperCase() === 'M' ||
+                    (registroEditando?.area || '').toUpperCase() === 'MENSURA'
                   );
-                  const opcionesModal = esSoloOficinaEditando
-                    ? ['Oficina', 'Franco']
-                    : LUGARES_OPCIONES;
+
+                  const opcionesModal = esAdminOSubAdmin
+                    ? LUGARES_OPCIONES
+                    : esSoloOficinaEditando
+                      ? ['Oficina', 'Franco']
+                      : esMensuraEditando
+                        ? ['Oficina', 'Campo', 'Franco', 'Vacaciones', 'Licencia']
+                        : LUGARES_OPCIONES;
 
                   return (
                     <select
@@ -950,9 +1040,18 @@ export default function HistoryView({ onVolver, tema, onNuevoReporte, usuario, o
                           if (nuevoLugar === 'Vacaciones') nuevoServicio = 'Vacaciones';
                           if (nuevoLugar === 'Franco Obra' || nuevoLugar === 'Franco de Obra') nuevoServicio = '';
                           if (nuevoLugar === 'Franco') {
-                            nuevoServicio = esSoloOficinaEditando
-                              ? ((registroEditando?.empleado || '').toLowerCase().includes('llovio') || (usuario?.nombre || '').toLowerCase().includes('llovio') ? 'Ingeniería' : 'Mensura')
-                              : (registroEditando.servicio || 'Área');
+                            const esSigEdit = (usuario?.area || '').toUpperCase() === 'S' ||
+                              (usuario?.area || '').toUpperCase() === 'SIG' ||
+                              (registroEditando?.area || '').toUpperCase() === 'S' ||
+                              (registroEditando?.area || '').toUpperCase() === 'SIG';
+
+                            nuevoServicio = esSigEdit
+                              ? 'SIG'
+                              : esMensuraEditando
+                              ? 'Mensura'
+                              : (esSoloOficinaEditando
+                                ? ((registroEditando?.empleado || '').toLowerCase().includes('llovio') || (usuario?.nombre || '').toLowerCase().includes('llovio') ? 'Ingeniería' : 'Mensura')
+                                : (registroEditando.servicio || 'Área'));
                           }
                         } else if (nuevoLugar === 'Franco Ofic Trabajado' || nuevoLugar === 'Franco Trabajado') {
                           nuevoServicio = 'Tiempo dedicado al Área';
@@ -985,18 +1084,23 @@ export default function HistoryView({ onVolver, tema, onNuevoReporte, usuario, o
                 })()}
               </div>
 
-              {/* Si es Licencia, detalle */}
+              {/* Si es Licencia: enum de tipos de licencia */}
               {(registroEditando.tipo_ocf === 'Licencia' || registroEditando.lugar === 'Licencia') ? (
                 <div className="form-group-clean">
                   <label className="form-label-clean">Tipo de Licencia:</label>
-                  <input
-                    type="text"
-                    className="form-input form-input-clean"
-                    value={registroEditando.servicio}
+                  <select
+                    className="form-select form-select-clean"
+                    value={registroEditando.servicio || 'Licencia - Médica'}
                     onChange={(e) => setRegistroEditando({ ...registroEditando, servicio: e.target.value })}
-                    placeholder="Ej: Médica, Especial, Examen..."
                     required
-                  />
+                  >
+                    {TIPOS_LICENCIA.map(tl => (
+                      <option key={tl} value={tl}>{tl}</option>
+                    ))}
+                    {registroEditando.servicio && !TIPOS_LICENCIA.includes(registroEditando.servicio) && (
+                      <option value={registroEditando.servicio}>{registroEditando.servicio}</option>
+                    )}
+                  </select>
                 </div>
               ) : (['Franco Obra', 'Franco de Obra', 'Franco Obra Trabajado', 'Feriado Trabajado', 'Campo', 'Campaña / Campo', 'Roster'].includes(registroEditando.tipo_ocf || registroEditando.lugar)) ? (
                 <div className="form-group-clean">
@@ -1013,46 +1117,82 @@ export default function HistoryView({ onVolver, tema, onNuevoReporte, usuario, o
                     required
                   >
                     <option value="">-- Seleccionar proyecto asignado --</option>
-                    {serviciosDisponibles.map((srv, idx) => (
-                      <option key={idx} value={srv}>{srv}</option>
-                    ))}
+                    <optgroup label="Proyectos Activos">
+                      {serviciosDisponibles.map((srv, idx) => (
+                        <option key={idx} value={srv}>{srv}</option>
+                      ))}
+                    </optgroup>
+                    {registroEditando.servicio && !serviciosDisponibles.includes(registroEditando.servicio) && (
+                      <option value={registroEditando.servicio}>{registroEditando.servicio}</option>
+                    )}
                   </select>
                 </div>
               ) : (registroEditando.tipo_ocf === 'Franco' || registroEditando.lugar === 'Franco') ? (
                 <div className="form-group-clean">
                   <label className="form-label-clean">Área / Asignación (Franco):</label>
-                  <input
-                    type="text"
-                    className="form-input form-input-clean"
+                  <select
+                    className="form-select form-select-clean"
                     value={registroEditando.servicio || ''}
                     onChange={(e) => setRegistroEditando({ ...registroEditando, servicio: e.target.value })}
-                    placeholder="Área del empleado (o proyecto si roster)"
                     required
-                  />
+                  >
+                    <option value="">-- Seleccionar asignación de Franco --</option>
+                    <optgroup label="Áreas Corporativas (Franco de Oficina)">
+                      {LISTADO_AREAS_CORPORATIVAS.map(a => (
+                        <option key={a} value={a}>{a}</option>
+                      ))}
+                    </optgroup>
+                    <optgroup label="Proyectos Activos (Franco de Obra)">
+                      {serviciosDisponibles.map((srv, idx) => (
+                        <option key={idx} value={srv}>{srv}</option>
+                      ))}
+                    </optgroup>
+                    {registroEditando.servicio &&
+                      !LISTADO_AREAS_CORPORATIVAS.includes(registroEditando.servicio) &&
+                      !serviciosDisponibles.includes(registroEditando.servicio) && (
+                        <option value={registroEditando.servicio}>{registroEditando.servicio}</option>
+                    )}
+                  </select>
                 </div>
               ) : (registroEditando.tipo_ocf === 'Vacaciones' || registroEditando.lugar === 'Vacaciones') ? (
                 <div className="form-group-clean">
                   <label className="form-label-clean">Detalle:</label>
-                  <input
-                    type="text"
-                    className="form-input form-input-clean"
-                    value={registroEditando.servicio || 'Vacaciones'}
+                  <select
+                    className="form-select form-select-clean"
+                    value="Vacaciones"
                     disabled
-                  />
+                  >
+                    <option value="Vacaciones">Vacaciones</option>
+                  </select>
                 </div>
               ) : (
                 <div className="form-group-clean">
-                  <label className="form-label-clean">Proyecto / Tarea:</label>
+                  <label className="form-label-clean">Proyecto / Tarea asignada:</label>
                   <select
                     className="form-select form-select-clean"
-                    value={registroEditando.servicio}
+                    value={registroEditando.servicio || 'Tiempo dedicado al Área'}
                     onChange={(e) => setRegistroEditando({ ...registroEditando, servicio: e.target.value })}
                     required
                   >
-                    <option value="Tiempo dedicado al Área">Tiempo dedicado al Área</option>
-                    {serviciosDisponibles.map((srv, idx) => (
-                      <option key={idx} value={srv}>{srv}</option>
-                    ))}
+                    <optgroup label="Tareas y Áreas Internas">
+                      <option value="Tiempo dedicado al Área">Tiempo dedicado al Área</option>
+                      <option value="Dedicado al área">Dedicado al área</option>
+                      {LISTADO_AREAS_CORPORATIVAS.map(a => (
+                        <option key={a} value={`Dedicado al área - ${a}`}>Dedicado al área - {a}</option>
+                      ))}
+                    </optgroup>
+                    <optgroup label="Proyectos Activos">
+                      {serviciosDisponibles.map((srv, idx) => (
+                        <option key={idx} value={srv}>{srv}</option>
+                      ))}
+                    </optgroup>
+                    {registroEditando.servicio &&
+                      registroEditando.servicio !== 'Tiempo dedicado al Área' &&
+                      registroEditando.servicio !== 'Dedicado al área' &&
+                      !LISTADO_AREAS_CORPORATIVAS.some(a => `Dedicado al área - ${a}` === registroEditando.servicio) &&
+                      !serviciosDisponibles.includes(registroEditando.servicio) && (
+                        <option value={registroEditando.servicio}>{registroEditando.servicio}</option>
+                    )}
                   </select>
                 </div>
               )}
@@ -1114,7 +1254,7 @@ export default function HistoryView({ onVolver, tema, onNuevoReporte, usuario, o
 
             <div style={{ padding: '6px 0 16px 0' }}>
               <p style={{ fontSize: '0.9rem', color: 'var(--text-secondary, #94a3b8)', margin: '0 0 12px 0', lineHeight: 1.5 }}>
-                Se registrarán como <strong>Franco</strong> (0 hs imputadas a <strong>{areaUsuarioUpper === 'RRHH' ? 'RRHH' : 'Aplicaciones'}</strong>) los siguientes <strong>{finesDeSemanaPendientes.length}</strong> días de fin de semana que aún no poseen registro en <strong>{nombreMesFinesDeSemana}</strong>:
+                Se registrarán como <strong>Franco de Oficina</strong> (0 hs, valor de oficina) los siguientes <strong>{finesDeSemanaPendientes.length}</strong> días de fin de semana que aún no poseen registro en <strong>{nombreMesFinesDeSemana}</strong>:
               </p>
 
               <div className="weekend-pills-container">
@@ -1174,7 +1314,7 @@ export default function HistoryView({ onVolver, tema, onNuevoReporte, usuario, o
             <div className="rpg-banner-body">
               <div className="rpg-banner-heading-wrap">
                 <div className="rpg-illuminated-box">H</div>
-                <h1 className="rpg-banner-main-title">ANALES DE MISIONES Y CRÓNICAS</h1>
+                <h1 className="rpg-banner-main-title">ISTORIAL DE MISIONES Y CRÓNICAS</h1>
               </div>
               <span className="rpg-banner-subtitle">LIBRO DE REGISTRO HISTÓRICO • GREMIO INGEAP</span>
             </div>

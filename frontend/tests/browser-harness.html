@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="es">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Pruebas aisladas de interfaz</title></head>
+<body><div id="root"></div><script type="module">
+import React, { useState } from 'react';
+import { createRoot } from 'react-dom/client';
+import { QueryClientProvider } from '@tanstack/react-query';
+import { queryClient } from '/src/services/queryClient.js';
+import RosterView from '/src/components/RosterView.jsx';
+import CheckForm from '/src/components/CheckForm.jsx';
+import OtherEmployeesHistoryView from '/src/components/OtherEmployeesHistoryView.jsx';
+import '/src/index.css';
+import '/src/postgres.css';
+
+const usuario = { id_usuario: '00000000-0000-4000-8000-000000000001', nombre: 'Gabriel Juarez', dni: '00000001', area: 'I', rol_app: 'admin' };
+const rosters = [
+  { id: '00000000-0000-4000-8000-000000000003', empleado: usuario.nombre, proyecto: 'Proyecto de prueba', tipo: 'Campo', fecha_inicio: '2026-10-01', fecha_fin: '2026-10-03', precio_dia: '100', precio_domingo: '200', total_viaticos: '390.00' },
+  { id: '00000000-0000-4000-8000-000000000004', empleado: usuario.nombre, proyecto: 'Proyecto de prueba', tipo: 'Franco', fecha_inicio: '2026-10-04', fecha_fin: '2026-10-06', precio_dia: '100', precio_domingo: '200', total_viaticos: '30.00' }
+];
+const liquidacion = { ciclo_cobro: '2026-10', cant_dias_ofi: 2, cant_dias_obra: 3, subtotal_estimado: '555.55', total_real: '12345.67', total_adicionales: '54.33', sueldo_total: '12400.00', cerrado: false, adicionales: [{ id_adicional: 'adicional-sintetico', fecha: '2026-10-02', descripcion: 'Adicional sintético', cantidad_adicional: '54.33' }] };
+const registros = [{ id: '00000000-0000-4000-8000-000000000005', id_asistencia: '00000000-0000-4000-8000-000000000005', id_empleado: usuario.id_usuario, empleado: usuario.nombre, fecha: '2026-10-01', tipo_ocf: 'Oficina', lugar: 'Oficina', modalidad: 'oficina', servicio: 'Proyecto de prueba', horas: '8', costo_dia: '100.00', costo_manual: false, sincronizado: 1 }];
+window.pywebview = { api: new Proxy({
+  obtener_estado_sesion: async () => ({ logueado: true, usuario }),
+  obtener_servicios: async () => ['Proyecto de prueba'],
+  obtener_todos_usuarios: async () => [usuario],
+  obtener_tarifas_roster: async () => [],
+  obtener_rosters: async () => rosters,
+  obtener_historial_otros_empleados: async () => registros,
+  obtener_todos_registros_empleado: async () => registros,
+  obtener_liquidacion: async () => ({ exito: true, liquidacion }),
+  guardar_check_diario: async datos => { window.ultimoPayload = datos; return { exito: true }; },
+  obtener_notificaciones_modificaciones: async () => [],
+}, { get: (target, key) => key === 'then' ? undefined : target[key] ?? (async () => ({ exito: true })) }) };
+
+function Harness() {
+  const [vista, setVista] = useState('roster');
+  return React.createElement(QueryClientProvider, { client: queryClient },
+    React.createElement('div', { style: { padding: '12px', maxWidth: '100%', overflowX: 'hidden' } },
+      React.createElement('nav', { style: { display: 'flex', gap: '10px', flexWrap: 'wrap' } }, ...['roster', 'ausencias', 'liquidacion'].map(v => React.createElement('button', { key: v, onClick: () => setVista(v), style: { minHeight: '44px' } }, v))),
+      vista === 'roster' ? React.createElement(RosterView, { usuario, tema: 'light' }) : vista === 'ausencias' ? React.createElement(CheckForm, { tema: 'light' }) : React.createElement(OtherEmployeesHistoryView, { usuario, tema: 'light' })
+    ));
+}
+createRoot(document.getElementById('root')).render(React.createElement(Harness));
+</script></body></html>

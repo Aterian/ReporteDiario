@@ -1,3 +1,5 @@
+import { toast } from 'sonner';
+
 // Purgar inmediatamente cualquier dato simulado residual de versiones anteriores
 try {
   localStorage.removeItem('ingeap_rosters_mock');
@@ -45,6 +47,14 @@ const mockApi = {
     if (!area || ['N', 'RRHH', 'TODOS'].includes(area.toUpperCase())) {
       return todos;
     }
+    if (['S', 'SIG'].includes(area.toUpperCase())) {
+      const filtradosSig = todos.filter(t => t.includes('-S-') || t.includes('-A-'));
+      return filtradosSig.length > 0 ? filtradosSig : todos;
+    }
+    if (['I', 'INGENIERIA', 'INGENIERÍA', 'M', 'MENSURA'].includes(area.toUpperCase())) {
+      const filtradosIM = todos.filter(t => t.includes('-I-') || t.includes('-M-'));
+      return filtradosIM.length > 0 ? filtradosIM : todos;
+    }
     const cod = `-${area.toUpperCase()}-`;
     const filtrados = todos.filter(t => t.includes(cod));
     return filtrados.length > 0 ? filtrados : todos;
@@ -55,12 +65,23 @@ const mockApi = {
   verificar_actualizacion: async () => ({ actualizacion_disponible: false }),
   aplicar_actualizacion: async () => ({ exito: true }),
   guardar_roster: async (datos) => ({ exito: true, id: datos.id || 'mock-' + Date.now() }),
+  crear_rosters_desde_asistencias: async (lista) => ({ exito: true, guardados: (lista || []).length, absorbidos: 0, resultados: [] }),
+  aplicar_tarifa_local_roster: async (datos) => ({
+    exito: true,
+    mensaje: 'Tarifa local asignada con éxito (modo simulado).',
+    precio_dia: Number(datos.precio_dia) || 0,
+    precio_domingo: Number(datos.precio_domingo) || 0
+  }),
   obtener_rosters: async (desde, hasta) => ([]),
   eliminar_roster: async (id) => ({ exito: true }),
   purgar_rosters_locales: async () => ({ exito: true }),
   exportar_roster_excel: async (anio, mes, proyecto = '') => {
     alert(`[Modo Simulado] Se exportaría el Excel para "${proyecto || 'Todos'}" del mes ${mes}/${anio}.`);
     return { exito: true, mensaje: 'Excel generado (modo simulado).' };
+  },
+  exportar_informe_liquidacion: async (datosInforme) => {
+    alert(`[Modo Simulado] Se exportaría el Informe de Liquidación para "${datosInforme?.empleado || 'Colaborador'}".`);
+    return { exito: true, mensaje: 'Informe de liquidación generado (modo simulado).' };
   },
   redimensionar_ventana: async () => ({ exito: true }),
   maximizar_ventana: async () => ({ exito: true }),
@@ -69,7 +90,38 @@ const mockApi = {
   obtener_historial_otros_empleados: async (filtroEmpleado = '') => ([]),
   eliminar_registro_asistencia: async (idRegistro) => ({ exito: true, mensaje: 'Registro eliminado (simulado).' }),
   obtener_todos_registros_empleado: async (empleado, mesAnio = '') => ([]),
-  obtener_todos_usuarios: async (area = null) => []
+  obtener_todos_usuarios: async (area = null) => [],
+  obtener_estado_diario_empleados: async (fecha = '') => ({
+    fecha: fecha || new Date().toISOString().slice(0, 10),
+    total_empleados: 0,
+    registrados: 0,
+    pendientes: 0,
+    lista: []
+  }),
+  obtener_resumen_modificaciones: async () => ({
+    total_modificaciones: 0,
+    ultimas_24h: 0,
+    no_sincronizadas: 0,
+    ultima_modificacion: null
+  }),
+  obtener_modificaciones_recientes: async (limite = 30) => [],
+  marcar_modificacion_por_asistencia_revisada: async (idAsistencia) => ({ exito: true }),
+  actualizar_tipo_costo_masivo: async (idsAsistencia = [], tipoCosto = '') => ({
+    exito: true,
+    actualizados: idsAsistencia.length
+  }),
+  obtener_actividad_dia_anterior: async () => ({
+    fecha: new Date(Date.now() - 86400000).toISOString().slice(0, 10),
+    total: 0,
+    enviados: 0,
+    pendientes: 0,
+    usuarios: []
+  }),
+  obtener_tarifas_roster: async () => [],
+  guardar_tarifa_roster: async (datos) => ({ exito: true, id_tarifa: 'mock-tarifa-' + Date.now() }),
+  actualizar_usuario_y_sueldo: async (datos) => ({ exito: true, id_usuario: datos.id_usuario }),
+  obtener_liquidacion: async () => ({ exito: true, liquidacion: null }),
+  actualizar_costo_dia_manual: async (datos) => ({ exito: true, mensaje: 'Costo actualizado (simulado).' })
 };
 
 let cachedApi = null;
@@ -105,14 +157,19 @@ async function getApi() {
         } else {
           console.info('[apiBridge] Corriendo en modo navegador web con datos simulados.');
           // NO bloquear permanentemente cachedApi con mockApi para permitir reintento
-          resolve(mockApi);
+          resolve(import.meta.env.DEV ? mockApi : new Proxy({}, { get: (_target, key) => key === 'then' ? undefined : async () => ({ exito: false, error: 'El puente de escritorio no está disponible.', codigo_error: 'PUENTE_NO_DISPONIBLE' }) }));
         }
       }
     }, 3500);
   });
 }
 
-export const api = {
+const apiBase = {
+  async obtenerLiquidacion(empleado, cicloCobro, forzarRecalculo = false) {
+    const bridge = await getApi();
+    if (!bridge.obtener_liquidacion) return { exito: false, error: 'El puente no admite consultas de liquidación.' };
+    return await bridge.obtener_liquidacion(empleado, cicloCobro, forzarRecalculo);
+  },
   async obtenerEstadoSesion() {
     const bridge = await getApi();
     return await bridge.obtener_estado_sesion();
@@ -218,10 +275,50 @@ export const api = {
     return { exito: false, error: 'Función no disponible' };
   },
 
-  async obtenerTodosUsuarios(area = null) {
+  async obtenerNotificacionesModificaciones(soloNoRevisadas = true) {
+    const bridge = await getApi();
+    if (bridge.obtener_notificaciones_modificaciones) {
+      return await bridge.obtener_notificaciones_modificaciones(soloNoRevisadas);
+    }
+    return [];
+  },
+
+  async marcarModificacionRevisada(idModificacion) {
+    const bridge = await getApi();
+    if (bridge.marcar_modificacion_revisada) {
+      return await bridge.marcar_modificacion_revisada(idModificacion);
+    }
+    return { exito: true };
+  },
+
+  async marcarModificacionPorAsistenciaRevisada(idAsistencia) {
+    const bridge = await getApi();
+    if (bridge.marcar_modificacion_por_asistencia_revisada) {
+      return await bridge.marcar_modificacion_por_asistencia_revisada(idAsistencia);
+    }
+    return { exito: true };
+  },
+
+  async marcarTodasModificacionesRevisadas() {
+    const bridge = await getApi();
+    if (bridge.marcar_todas_modificaciones_revisadas) {
+      return await bridge.marcar_todas_modificaciones_revisadas();
+    }
+    return { exito: true };
+  },
+
+  async verificarNuevasModificacionesSheets() {
+    const bridge = await getApi();
+    if (bridge.verificar_nuevas_modificaciones_sheets) {
+      return await bridge.verificar_nuevas_modificaciones_sheets();
+    }
+    return { exito: true, nuevas: 0 };
+  },
+
+  async obtenerTodosUsuarios(area = null, incluirInactivos = false) {
     const bridge = await getApi();
     if (bridge.obtener_todos_usuarios) {
-      return await bridge.obtener_todos_usuarios(area);
+      return await bridge.obtener_todos_usuarios(area, incluirInactivos);
     }
     return [];
   },
@@ -238,10 +335,26 @@ export const api = {
     return { exito: res.every(r => r && r.exito), resultados: res };
   },
 
+  async crearRostersDesdeAsistencias(listaDatos) {
+    const bridge = await getApi();
+    if (bridge.crear_rosters_desde_asistencias) {
+      return await bridge.crear_rosters_desde_asistencias(listaDatos);
+    }
+    return await this.guardarRosterMultiple(listaDatos);
+  },
+
   async deduplicarSheets() {
     const bridge = await getApi();
     if (bridge.deduplicar_sheets) {
       return await bridge.deduplicar_sheets();
+    }
+    return { exito: false, error: 'Función no disponible' };
+  },
+
+  async limpiarYDescargarSheets() {
+    const bridge = await getApi();
+    if (bridge.limpiar_y_descargar_sheets) {
+      return await bridge.limpiar_y_descargar_sheets();
     }
     return { exito: false, error: 'Función no disponible' };
   },
@@ -278,6 +391,27 @@ export const api = {
     return { exito: false, error: 'Función no disponible' };
   },
 
+  async aplicarTarifaLocalRoster(datos) {
+    const bridge = await getApi();
+    if (bridge.aplicar_tarifa_local_roster) {
+      return await bridge.aplicar_tarifa_local_roster(datos);
+    }
+    return {
+      exito: true,
+      mensaje: 'Tarifa guardada localmente.',
+      precio_dia: Number(datos.precio_dia) || 0,
+      precio_domingo: Number(datos.precio_domingo) || 0
+    };
+  },
+
+  async exportarInformeLiquidacion(datosInforme) {
+    const bridge = await getApi();
+    if (bridge.exportar_informe_liquidacion) {
+      return await bridge.exportar_informe_liquidacion(datosInforme);
+    }
+    return { exito: false, error: 'Función no disponible' };
+  },
+
   async redimensionarVentana(ancho, alto) {
     const bridge = await getApi();
     if (bridge.redimensionar_ventana) {
@@ -310,10 +444,10 @@ export const api = {
     return { exito: true };
   },
 
-  async obtenerHistorialOtrosEmpleados(filtroEmpleado = '') {
+  async obtenerHistorialOtrosEmpleados(filtroEmpleado = '', mesAnio = '', limite = null, offset = 0) {
     const bridge = await getApi();
     if (bridge.obtener_historial_otros_empleados) {
-      return await bridge.obtener_historial_otros_empleados(filtroEmpleado);
+      return await bridge.obtener_historial_otros_empleados(filtroEmpleado, mesAnio, limite, offset);
     }
     return [];
   },
@@ -326,10 +460,10 @@ export const api = {
     return { exito: false };
   },
 
-  async obtenerTodosRegistrosEmpleado(empleado, mesAnio = '') {
+  async obtenerTodosRegistrosEmpleado(empleado, mesAnio = '', limite = null, offset = 0) {
     const bridge = await getApi();
     if (bridge.obtener_todos_registros_empleado) {
-      return await bridge.obtener_todos_registros_empleado(empleado, mesAnio);
+      return await bridge.obtener_todos_registros_empleado(empleado, mesAnio, limite, offset);
     }
     return [];
   },
@@ -340,7 +474,229 @@ export const api = {
       return await bridge.purgar_rosters_locales();
     }
     return { exito: true };
+  },
+
+  async obtenerEstadoDiarioEmpleados(fecha = '') {
+    const bridge = await getApi();
+    if (bridge.obtener_estado_diario_empleados) {
+      return await bridge.obtener_estado_diario_empleados(fecha);
+    }
+    return { fecha: fecha || new Date().toISOString().slice(0, 10), total_empleados: 0, registrados: 0, pendientes: 0, lista: [] };
+  },
+
+  async obtenerResumenModificaciones() {
+    const bridge = await getApi();
+    if (bridge.obtener_resumen_modificaciones) {
+      return await bridge.obtener_resumen_modificaciones();
+    }
+    return { total_modificaciones: 0, ultimas_24h: 0, no_sincronizadas: 0, ultima_modificacion: null };
+  },
+
+  async obtenerModificacionesRecientes(limite = 30) {
+    const bridge = await getApi();
+    if (bridge.obtener_modificaciones_recientes) {
+      return await bridge.obtener_modificaciones_recientes(limite);
+    }
+    return [];
+  },
+
+  async actualizarTipoCostoMasivo(idsAsistencia, tipoCosto) {
+    const bridge = await getApi();
+    if (bridge.actualizar_tipo_costo_masivo) {
+      try {
+        return await bridge.actualizar_tipo_costo_masivo(idsAsistencia, tipoCosto);
+      } catch (err) {
+        return await bridge.actualizar_tipo_costo_masivo({
+          ids: idsAsistencia,
+          tipo_costo: tipoCosto
+        });
+      }
+    }
+    return { exito: true, actualizados: (idsAsistencia || []).length };
+  },
+
+  async obtenerActividadDiaAnterior() {
+    const bridge = await getApi();
+    if (bridge.obtener_actividad_dia_anterior) {
+      return await bridge.obtener_actividad_dia_anterior();
+    }
+    return {
+      fecha: new Date(Date.now() - 86400000).toISOString().slice(0, 10),
+      total: 0,
+      enviados: 0,
+      pendientes: 0,
+      usuarios: []
+    };
+  },
+
+  async obtenerTarifasRoster() {
+    const bridge = await getApi();
+    if (bridge.obtener_tarifas_roster) {
+      return await bridge.obtener_tarifas_roster();
+    }
+    return [];
+  },
+
+  async guardarTarifaRoster(datos) {
+    const bridge = await getApi();
+    if (bridge.guardar_tarifa_roster) {
+      return await bridge.guardar_tarifa_roster(datos);
+    }
+    return { exito: false, error: 'Función no disponible en este entorno.' };
+  },
+
+  async actualizarUsuarioYSueldo(datos) {
+    const bridge = await getApi();
+    if (bridge.actualizar_usuario_y_sueldo) {
+      return await bridge.actualizar_usuario_y_sueldo(datos);
+    }
+    return { exito: false, error: 'Función no disponible en este entorno.' };
+  },
+
+  async actualizarConfiguracionSueldoUsuario(datos) {
+    const bridge = await getApi();
+    if (bridge.actualizar_configuracion_sueldo_usuario) {
+      return await bridge.actualizar_configuracion_sueldo_usuario(datos);
+    }
+    return { exito: false, error: 'Función no disponible en este entorno.' };
+  },
+
+  async actualizarCostoDiaManual(datos) {
+    const bridge = await getApi();
+    if (bridge.actualizar_costo_dia_manual) {
+      return await bridge.actualizar_costo_dia_manual(datos);
+    }
+    if (bridge.guardar_costo_dia) {
+      return await bridge.guardar_costo_dia(datos);
+    }
+    return { exito: false, error: 'El puente no admite la actualización de costos.' };
+  },
+
+  // [FN-06.07] Guardar costo del día directamente
+  async guardarCostoDia(datos) {
+    const bridge = await getApi();
+    if (bridge.guardar_costo_dia) {
+      return await bridge.guardar_costo_dia(datos);
+    }
+    return await this.actualizarCostoDiaManual(datos);
+  },
+
+  // [FN-07.21] Telemetría y captura de errores remotos
+  async reportarErrorCliente(datos) {
+    try {
+      const bridge = await getApi();
+      if (bridge.reportar_error_cliente) {
+        return await bridge.reportar_error_cliente(datos);
+      }
+    } catch {
+      // Silencioso para evitar bucles
+    }
+    return { exito: false };
+  },
+
+  async obtenerErroresRemotos(soloPendientes = true, limite = 50) {
+    const bridge = await getApi();
+    if (bridge.obtener_errores_remotos) {
+      return await bridge.obtener_errores_remotos(soloPendientes, limite);
+    }
+    return [];
+  },
+
+  async marcarErrorRemotoResuelto(idError = null, todos = false) {
+    const bridge = await getApi();
+    if (bridge.marcar_error_remoto_resuelto) {
+      return await bridge.marcar_error_remoto_resuelto(idError, todos);
+    }
+    return { exito: false, error: 'Función no disponible en el puente.' };
+  },
+
+  // [FN-04.14] Alta de nuevo empleado y sueldo base
+  async crearUsuarioYSueldo(datos) {
+    const bridge = await getApi();
+    if (bridge.crear_usuario_y_sueldo) {
+      return await bridge.crear_usuario_y_sueldo(datos);
+    }
+    return { exito: false, error: 'Función no disponible en el puente.' };
+  },
+
+  // [FN-07.22] Gestión integral de proyectos para administradores
+  async obtenerProyectosAdmin(incluirInactivos = true) {
+    const bridge = await getApi();
+    if (bridge.obtener_proyectos_admin) {
+      return await bridge.obtener_proyectos_admin(incluirInactivos);
+    }
+    return [];
+  },
+
+  async crearProyecto(datos) {
+    const bridge = await getApi();
+    if (bridge.crear_proyecto) {
+      return await bridge.crear_proyecto(datos);
+    }
+    return { exito: false, error: 'Función no disponible en el puente.' };
+  },
+
+  async actualizarProyecto(datos) {
+    const bridge = await getApi();
+    if (bridge.actualizar_proyecto) {
+      return await bridge.actualizar_proyecto(datos);
+    }
+    return { exito: false, error: 'Función no disponible en el puente.' };
   }
 };
+
+/**
+ * [FN-00.03] Interceptor centralizado para métodos de la API.
+ * Captura excepciones y valida automáticamente el contrato canónico.
+ * Si !respuesta.exito, dispara un toast.error() elegante sin bloquear el hilo.
+ */
+function envolverLlamadaApi(nombreMetodo, fn) {
+  return async function (...args) {
+    try {
+      const res = await fn(...args);
+
+      if (res && typeof res === 'object') {
+        // Métodos de verificación o polling en segundo plano no deben molestar con toasts de error
+        const metodosSilenciosos = ['verificarRegistroHoy', 'verificarActualizacion', 'obtenerEstadoSesion', 'obtenerServicios', 'reportarErrorCliente', 'obtenerErroresRemotos'];
+
+        if (res.exito === false && res.error && !metodosSilenciosos.includes(nombreMetodo)) {
+          toast.error(res.error, {
+            description: res.codigo_error ? `Código: ${res.codigo_error}` : undefined,
+            duration: 4500
+          });
+        }
+      }
+
+      return res;
+    } catch (error) {
+      console.error(`[apiBridge] Error al invocar ${nombreMetodo}:`, error);
+      const mensaje = error?.message || 'Error de comunicación con el sistema.';
+      toast.error(mensaje, {
+        description: 'Verifique la conexión interna con el servidor.',
+        duration: 5000
+      });
+      return {
+        exito: false,
+        datos: null,
+        error: mensaje,
+        codigo_error: 'ERROR_CONEXION_PUENTE'
+      };
+    }
+  };
+}
+
+// Proxificamos apiBase para interceptar transparentemente todas las llamadas
+export const api = new Proxy(apiBase, {
+  get(target, prop, receiver) {
+    const orig = Reflect.get(target, prop, receiver);
+    if (typeof orig === 'function') {
+      return envolverLlamadaApi(prop, orig.bind(target));
+    }
+    return orig;
+  }
+});
+
+export { toast };
+
 
 

@@ -1,30 +1,58 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { api } from '../services/apiBridge';
+// [FN-02.03] Orquestador de Historial de Otros Empleados, Auditoría y Liquidación
+import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { api, toast } from '../services/apiBridge';
+import {
+  puedeVerHistorialOtros,
+  puedeModificarRegistro,
+  puedeGestionarTipoCosto,
+  puedeVerModificaciones,
+  esAreaNucleo,
+  puedeVerCalculadoraLiquidacion,
+  esCore,
+  puedeModificarHistorialOtros
+} from '../utils/permissions';
+import { obtenerEtiquetaModalidad } from '../utils/francoUtils';
 
-const LUGARES_OPCIONES = [
-  'Oficina',
-  'Campo',
-  'Roster',
-  'Franco',
-  'Franco Obra',
-  'Franco Ofic Trabajado',
-  'Franco Obra Trabajado',
-  'Feriado Trabajado',
-  'Vacaciones',
-  'Licencia'
-];
+import {
+  categorizarRegistroLiquidacion,
+  NOMBRES_MESES
+} from './history/historyConstants';
+import HistoryTopBar from './history/HistoryTopBar';
+import HistoryRecordsList from './history/HistoryRecordsList';
+import HistoryAuditCalendar from './history/HistoryAuditCalendar';
+import HistoryLiquidationCard from './history/HistoryLiquidationCard';
+import HistoryDayRecordsModal from './history/HistoryDayRecordsModal';
+import HistoryEditRecordModal from './history/HistoryEditRecordModal';
+import HistoryDeleteRecordModal from './history/HistoryDeleteRecordModal';
+import HistoryDiffModal from './history/HistoryDiffModal';
+import HistoryCostDayModal from './history/HistoryCostDayModal';
+import HistoryCreateRosterModal from './history/HistoryCreateRosterModal';
 
-export default function OtherEmployeesHistoryView({ usuario, onVolver, tema, onVerMiHistorial, onNuevoReporte }) {
+// Re-exportar para preservar compatibilidad con posibles importadores externos
+export { categorizarRegistroLiquidacion };
+
+export default function OtherEmployeesHistoryView({
+  usuario,
+  onVolver,
+  tema,
+  onVerMiHistorial,
+  onNuevoReporte,
+  navegacionAuditoria,
+  onConsumirNavegacion
+}) {
   const isRpg = tema === 'rpg';
 
   // Maximizar ventana para experiencia panorámica
   useEffect(() => {
-    api.maximizarVentana();
-  }, []);
+    if (puedeVerHistorialOtros(usuario)) {
+      api.maximizarVentana();
+    }
+  }, [usuario]);
 
   const [registros, setRegistros] = useState([]);
   const [cargando, setCargando] = useState(true);
   const [sincronizando, setSincronizando] = useState(false);
+  const [limpiando, setLimpiando] = useState(false);
   const [mensajeSync, setMensajeSync] = useState(null);
 
   // Catálogos auxiliares
@@ -43,6 +71,7 @@ export default function OtherEmployeesHistoryView({ usuario, onVolver, tema, onV
   const [registrosEmpleadoAuditar, setRegistrosEmpleadoAuditar] = useState([]);
   const [cargandoAuditoria, setCargandoAuditoria] = useState(false);
   const [diaSeleccionadoAuditoria, setDiaSeleccionadoAuditoria] = useState(null);
+  const [diaDestacado, setDiaDestacado] = useState(null);
 
   // Modal de edición
   const [registroEditando, setRegistroEditando] = useState(null);
@@ -52,21 +81,75 @@ export default function OtherEmployeesHistoryView({ usuario, onVolver, tema, onV
   const [registroEliminando, setRegistroEliminando] = useState(null);
   const [eliminando, setEliminando] = useState(false);
 
-  // Cantidad manual de Francos Trabajados para la calculadora de liquidación
-  const [diasFrancoManual, setDiasFrancoManual] = useState('');
+  // Selección múltiple para asignación masiva de costo (RRHH)
+  const [seleccionados, setSeleccionados] = useState(new Set());
+  const [aplicandoCosto, setAplicandoCosto] = useState(false);
+
+  // Filtro por empleado en lista izquierda y selección de días en calendario
+  const [filtroEmpleadoLista, setFiltroEmpleadoLista] = useState('');
+  const [filtroSoloMes, setFiltroSoloMes] = useState(false);
+  const [diasSeleccionadosCalendario, setDiasSeleccionadosCalendario] = useState(new Set());
+  const [marcandoRevisadoId, setMarcandoRevisadoId] = useState(null);
+  const [comparativaModificacion, setComparativaModificacion] = useState(null);
+
+  // [FN-02.03] Control secuencial para prevención de carreras de peticiones (race conditions)
+  const requestSeqRef = useRef(0);
+  const empleadoAuditarRef = useRef(empleadoAuditar);
+  const fechaCalendarioRef = useRef(fechaCalendario);
+
+  useEffect(() => {
+    empleadoAuditarRef.current = empleadoAuditar;
+  }, [empleadoAuditar]);
+
+  useEffect(() => {
+    fechaCalendarioRef.current = fechaCalendario;
+  }, [fechaCalendario]);
+
+  // [FN-04.11] Controles de permisos según rol RBAC
+  const esSoloLectura = esCore(usuario) || esAreaNucleo(usuario) || !puedeModificarHistorialOtros(usuario);
+  const esSoloLecturaNucleo = esSoloLectura;
+  const puedeVerModif = puedeVerModificaciones(usuario);
+  const puedeEditarCosto = !esSoloLectura && puedeGestionarTipoCosto(usuario);
+  const puedeVerLiquidacion = puedeVerCalculadoraLiquidacion(usuario);
+
+  // Cantidad manual de días para las 5 categorías de liquidación (RRHH)
+  const [diasOficinaManual, setDiasOficinaManual] = useState('');
+  const [diasCampoManual, setDiasCampoManual] = useState('');
+  const [diasFrancoObraManual, setDiasFrancoObraManual] = useState('');
+  const [diasFrancoOficManual, setDiasFrancoOficManual] = useState('');
+  const [diasFeriadoManual, setDiasFeriadoManual] = useState('');
+  const [exportandoInforme, setExportandoInforme] = useState(false);
+  const [liquidacionPg, setLiquidacionPg] = useState(null);
+  const [guardandoConfigSueldo, setGuardandoConfigSueldo] = useState(false);
+
+  // [FN-06.07] Modal exclusivo e independiente para edición manual de costo_dia
+  const [modalCostoDia, setModalCostoDia] = useState(null);
+  const [guardandoCostoDia, setGuardandoCostoDia] = useState(false);
+  const [modalCrearRosterAbierto, setModalCrearRosterAbierto] = useState(false);
+  const [creandoRoster, setCreandoRoster] = useState(false);
 
   // Tarifas de Liquidación (guardadas en localStorage)
   const [tarifas, setTarifas] = useState(() => {
     try {
       const guardadas = localStorage.getItem('ingeap_tarifas_rrhh');
-      if (guardadas) return JSON.parse(guardadas);
+      if (guardadas) {
+        const parsed = JSON.parse(guardadas);
+        return {
+          precioOficina: parsed.precioOficina || 0,
+          precioObra: parsed.precioObra || 0,
+          precioFrancoObraTrabajado: parsed.precioFrancoObraTrabajado ?? (parsed.precioFrancoTrabajado || 0),
+          precioFrancoOficTrabajado: parsed.precioFrancoOficTrabajado ?? (parsed.precioFrancoTrabajado || 0),
+          precioFeriadoTrabajado: parsed.precioFeriadoTrabajado || 0
+        };
+      }
     } catch (e) {
       console.error(e);
     }
     return {
       precioOficina: 0,
       precioObra: 0,
-      precioFrancoTrabajado: 0,
+      precioFrancoObraTrabajado: 0,
+      precioFrancoOficTrabajado: 0,
       precioFeriadoTrabajado: 0
     };
   });
@@ -82,6 +165,30 @@ export default function OtherEmployeesHistoryView({ usuario, onVolver, tema, onV
     }
   };
 
+  // Colaborador actualmente seleccionado para auditar
+  const empActual = useMemo(() => {
+    if (!empleadoAuditar || !Array.isArray(empleados)) return null;
+    const n = empleadoAuditar.trim().toLowerCase();
+    return empleados.find(e => (e.nombre || '').trim().toLowerCase() === n);
+  }, [empleadoAuditar, empleados]);
+
+  // [FN-01.02] Pre-cargar tarifas con los costos reales de nómina del empleado si existen
+  useEffect(() => {
+    if (empActual) {
+      const cOfi = Number(empActual.costo_dia_ofi) || 0;
+      const cObra = Number(empActual.costo_dia_obra) || 0;
+      if (cOfi > 0 || cObra > 0) {
+        setTarifas(prev => ({
+          precioOficina: cOfi > 0 ? cOfi : prev.precioOficina,
+          precioObra: cObra > 0 ? cObra : prev.precioObra,
+          precioFrancoObraTrabajado: cObra > 0 ? Math.round(cObra * 1.5 * 100) / 100 : (cOfi > 0 ? Math.round(cOfi * 1.5 * 100) / 100 : (prev.precioFrancoObraTrabajado || 0)),
+          precioFrancoOficTrabajado: cOfi > 0 ? Math.round(cOfi * 1.5 * 100) / 100 : (cObra > 0 ? Math.round(cObra * 1.5 * 100) / 100 : (prev.precioFrancoOficTrabajado || 0)),
+          precioFeriadoTrabajado: cObra > 0 ? Math.round(cObra * 2.0 * 100) / 100 : (cOfi > 0 ? Math.round(cOfi * 2.0 * 100) / 100 : prev.precioFeriadoTrabajado)
+        }));
+      }
+    }
+  }, [empActual]);
+
   const cargarDatos = async () => {
     setCargando(true);
     try {
@@ -94,7 +201,11 @@ export default function OtherEmployeesHistoryView({ usuario, onVolver, tema, onV
       if (Array.isArray(dataRegs)) setRegistros(dataRegs);
       if (Array.isArray(dataEmps) && dataEmps.length > 0) {
         setEmpleados(dataEmps);
-        setEmpleadoAuditar(prev => prev || dataEmps[0].nombre);
+        setEmpleadoAuditar(prev => {
+          const emp = prev || dataEmps[0].nombre;
+          setFiltroEmpleadoLista(fPrev => (!fPrev ? emp : fPrev));
+          return emp;
+        });
       }
       if (Array.isArray(dataServs)) setServiciosDisponibles(dataServs);
     } catch (err) {
@@ -106,40 +217,112 @@ export default function OtherEmployeesHistoryView({ usuario, onVolver, tema, onV
 
   const cargarAuditoriaEmpleado = async (emp, fechaCal) => {
     if (!emp) return;
+    const reqSeq = ++requestSeqRef.current;
     setCargandoAuditoria(true);
     try {
       const anio = fechaCal.getFullYear();
       const mesStr = String(fechaCal.getMonth() + 1).padStart(2, '0');
       const mesAnio = `${anio}-${mesStr}`;
-      const data = await api.obtenerTodosRegistrosEmpleado(emp, mesAnio);
-      if (Array.isArray(data)) {
-        setRegistrosEmpleadoAuditar(data);
+      const [data, resLiq] = await Promise.all([
+        api.obtenerTodosRegistrosEmpleado(emp, mesAnio),
+        puedeVerLiquidacion ? api.obtenerLiquidacion(emp, mesAnio) : Promise.resolve(null)
+      ]);
+      if (reqSeq === requestSeqRef.current) {
+        if (Array.isArray(data)) {
+          setRegistrosEmpleadoAuditar(data);
+        }
+        if (resLiq && resLiq.exito && resLiq.liquidacion) {
+          setLiquidacionPg(resLiq.liquidacion);
+        } else if (resLiq && !resLiq.liquidacion) {
+          setLiquidacionPg(null);
+        }
       }
     } catch (err) {
-      console.error('Error al cargar registros del empleado para auditoría:', err);
+      if (reqSeq === requestSeqRef.current) {
+        console.error('Error al cargar registros del empleado para auditoría:', err);
+      }
     } finally {
-      setCargandoAuditoria(false);
+      if (reqSeq === requestSeqRef.current) {
+        setCargandoAuditoria(false);
+      }
     }
   };
 
   useEffect(() => {
+    if (!puedeVerHistorialOtros(usuario)) return;
     cargarDatos();
 
     const handleCatalogos = () => {
       cargarDatos();
-      if (empleadoAuditar) {
-        cargarAuditoriaEmpleado(empleadoAuditar, fechaCalendario);
+      if (empleadoAuditarRef.current) {
+        cargarAuditoriaEmpleado(empleadoAuditarRef.current, fechaCalendarioRef.current);
       }
     };
     window.addEventListener('catalogos-actualizados', handleCatalogos);
     return () => {
       window.removeEventListener('catalogos-actualizados', handleCatalogos);
     };
-  }, []);
+  }, [usuario]);
+
+  // [FN-02.04] Abrir panel flotante dividido comparativo de modificación
+  const abrirComparativa = (item, modEspecifica = null) => {
+    if (!item) return;
+    const mods = Array.isArray(item.modificaciones) ? item.modificaciones : [];
+    const modActiva = modEspecifica || (mods.length > 0 ? mods[mods.length - 1] : null);
+    setComparativaModificacion({
+      registro: item,
+      modificaciones: mods,
+      modActiva: modActiva,
+      indiceActivo: modActiva ? mods.findIndex(m => m.id_modificacion === modActiva.id_modificacion) : (mods.length - 1)
+    });
+  };
+
+  // [FN-02.02] Responder a navegación directa desde aviso/notificación de RRHH
+  useEffect(() => {
+    if (navegacionAuditoria && navegacionAuditoria.empleado) {
+      const emp = navegacionAuditoria.empleado;
+      setEmpleadoAuditar(emp);
+      setFiltroEmpleadoLista(emp);
+      if (navegacionAuditoria.fecha) {
+        const partes = String(navegacionAuditoria.fecha).split('-');
+        if (partes.length === 3) {
+          const anio = parseInt(partes[0], 10);
+          const mes = parseInt(partes[1], 10);
+          setFechaCalendario(new Date(anio, mes - 1, 1));
+        }
+        setDiaDestacado(navegacionAuditoria.fecha);
+      }
+      if (navegacionAuditoria.idAsistencia) {
+        const targetId = String(navegacionAuditoria.idAsistencia).trim();
+        const targetItem = registros.find(r => String(r.id_asistencia || r.id).trim() === targetId);
+        if (targetItem) {
+          abrirComparativa(targetItem);
+        }
+      }
+      if (onConsumirNavegacion) {
+        onConsumirNavegacion();
+      }
+    }
+  }, [navegacionAuditoria, registros]);
+
+  // Si hay un día destacado por auditoría, intentar abrir comparativa automáticamente al cargar datos
+  useEffect(() => {
+    if (diaDestacado && registrosEmpleadoAuditar.length > 0 && !comparativaModificacion) {
+      const itemDestacado = registrosEmpleadoAuditar.find(r => r.fecha === diaDestacado && Boolean(r.fue_modificado || r.modificado || (r.modificaciones && r.modificaciones.length > 0)));
+      if (itemDestacado) {
+        abrirComparativa(itemDestacado);
+      }
+    }
+  }, [diaDestacado, registrosEmpleadoAuditar]);
 
   useEffect(() => {
     if (empleadoAuditar) {
-      setDiasFrancoManual('');
+      setDiasOficinaManual('');
+      setDiasCampoManual('');
+      setDiasFrancoObraManual('');
+      setDiasFrancoOficManual('');
+      setDiasFeriadoManual('');
+      setDiasSeleccionadosCalendario(new Set());
       cargarAuditoriaEmpleado(empleadoAuditar, fechaCalendario);
     }
   }, [empleadoAuditar, fechaCalendario]);
@@ -150,19 +333,50 @@ export default function OtherEmployeesHistoryView({ usuario, onVolver, tema, onV
     try {
       const res = await api.sincronizarSheets();
       if (res && res.exito) {
-        setMensajeSync({ tipo: 'exito', texto: res.mensaje || 'Sincronizado correctamente con Google Sheets.' });
+        setMensajeSync({ tipo: 'exito', texto: res.mensaje || 'Sincronizado correctamente con el servidor.' });
         await cargarDatos();
         if (empleadoAuditar) {
           await cargarAuditoriaEmpleado(empleadoAuditar, fechaCalendario);
         }
       } else {
-        setMensajeSync({ tipo: 'error', texto: res?.error || 'No se pudo sincronizar con Google Sheets.' });
+        setMensajeSync({ tipo: 'error', texto: res?.error || 'No se pudo sincronizar con el servidor.' });
       }
     } catch (err) {
       console.error(err);
-      setMensajeSync({ tipo: 'error', texto: 'Error de red o comunicación con Google Sheets.' });
+      setMensajeSync({ tipo: 'error', texto: 'Error de red o comunicación con el servidor.' });
     } finally {
       setSincronizando(false);
+    }
+  };
+
+  const handleLimpiarLocalYDescargar = async () => {
+    if (!window.confirm('¿Deseas limpiar todos los registros locales y volver a descargar la información oficial desde la base de datos? Esta acción descarta datos locales y previene registros duplicados.')) {
+      return;
+    }
+    setLimpiando(true);
+    setMensajeSync(null);
+    try {
+      const res = await api.limpiarYDescargarSheets();
+      if (res && res.exito) {
+        setMensajeSync({
+          tipo: 'exito',
+          texto: res.mensaje || 'Registros locales limpiados y sincronizados desde el servidor.'
+        });
+        await cargarDatos();
+        if (empleadoAuditar) {
+          await cargarAuditoriaEmpleado(empleadoAuditar, fechaCalendario);
+        }
+      } else {
+        setMensajeSync({
+          tipo: 'error',
+          texto: res?.error || 'No se pudo completar la limpieza y descarga desde el servidor.'
+        });
+      }
+    } catch (err) {
+      console.error(err);
+      setMensajeSync({ tipo: 'error', texto: 'Error de comunicación al limpiar y descargar.' });
+    } finally {
+      setLimpiando(false);
     }
   };
 
@@ -170,21 +384,39 @@ export default function OtherEmployeesHistoryView({ usuario, onVolver, tema, onV
     e.preventDefault();
     if (!registroEditando) return;
 
+    if (!puedeModificarRegistro(usuario, registroEditando)) {
+      alert('Solo Justina Bertolozzi e Iván Valentin pueden modificar registros de otros empleados.');
+      setRegistroEditando(null);
+      return;
+    }
+
     setGuardandoEdicion(true);
     try {
+      const empData = empleados.find(u => u.nombre === registroEditando.empleado);
+      const idEmp = registroEditando.id_empleado || (empData ? (empData.id_origen || empData.id_usuario || empData.dni || '') : '');
+      const mailEmp = registroEditando.usuario_mail || (empData ? (empData.email || empData.mail || '') : '');
+
       const res = await api.modificarRegistro({
         id: registroEditando.id,
         fecha: registroEditando.fecha,
         lugar: registroEditando.tipo_ocf || registroEditando.lugar || 'Oficina',
         servicio: registroEditando.servicio,
         horas: Number(registroEditando.horas) || 0,
+        hora_inicio: registroEditando.hora_inicio || '',
+        hora_fin: registroEditando.hora_fin || '',
+        tipo_costo: registroEditando.tipo_costo || '',
         empleado: registroEditando.empleado,
-        id_empleado: registroEditando.id_empleado || '',
-        id_proyecto: registroEditando.id_proyecto || ''
+        id_empleado: idEmp,
+        usuario_mail: mailEmp,
+        id_proyecto: registroEditando.id_proyecto || '',
+        quien_modifica: usuario?.nombre || ''
       });
 
       if (res && res.exito) {
-        setMensajeSync({ tipo: 'exito', texto: 'Registro modificado exitosamente.' });
+        setMensajeSync({
+          tipo: 'exito',
+          texto: 'Registro modificado exitosamente y sincronizado con el servidor.'
+        });
         setRegistroEditando(null);
         await cargarDatos();
         if (empleadoAuditar) {
@@ -203,6 +435,13 @@ export default function OtherEmployeesHistoryView({ usuario, onVolver, tema, onV
 
   const handleConfirmarEliminacion = async () => {
     if (!registroEliminando) return;
+
+    if (!puedeModificarRegistro(usuario, registroEliminando)) {
+      alert('Solo Justina Bertolozzi e Iván Valentin pueden eliminar registros de otros empleados.');
+      setRegistroEliminando(null);
+      return;
+    }
+
     setEliminando(true);
     try {
       const res = await api.eliminarRegistroAsistencia(registroEliminando.id);
@@ -224,9 +463,254 @@ export default function OtherEmployeesHistoryView({ usuario, onVolver, tema, onV
     }
   };
 
-  // Filtrado en memoria para la lista de registros de RRHH (lado izquierdo)
+  // [FN-02.02] Marcar modificación de una asistencia como revisada por RRHH
+  const handleMarcarRevisado = async (item) => {
+    const idAsistencia = item.id_asistencia || item.id;
+    if (!idAsistencia) return;
+    setMarcandoRevisadoId(idAsistencia);
+    try {
+      const res = await api.marcarModificacionPorAsistenciaRevisada(idAsistencia);
+      if (res && res.exito === false) {
+        setMensajeSync({ tipo: 'error', texto: res.error || 'No se pudo marcar la modificación como revisada.' });
+        return;
+      }
+      setRegistros(prev => prev.map(r => {
+        if (r.id_asistencia === idAsistencia || r.id === item.id) {
+          return { ...r, modificacion_pendiente: 0, modificacion_revisada: 1 };
+        }
+        return r;
+      }));
+      setRegistrosEmpleadoAuditar(prev => prev.map(r => {
+        if (r.id_asistencia === idAsistencia || r.id === item.id) {
+          return { ...r, modificacion_pendiente: 0, modificacion_revisada: 1 };
+        }
+        return r;
+      }));
+      if (diaSeleccionadoAuditoria) {
+        setDiaSeleccionadoAuditoria(prev => {
+          if (!prev) return null;
+          return {
+            ...prev,
+            registros: prev.registros.map(r => {
+              if (r.id_asistencia === idAsistencia || r.id === item.id) {
+                return { ...r, modificacion_pendiente: 0, modificacion_revisada: 1 };
+              }
+              return r;
+            })
+          };
+        });
+      }
+      if (comparativaModificacion) {
+        setComparativaModificacion(prev => {
+          if (!prev) return null;
+          const targetId = prev.registro?.id_asistencia || prev.registro?.id;
+          if (targetId === idAsistencia || targetId === item.id) {
+            const modsUpdated = (prev.modificaciones || []).map(m => ({ ...m, revisado: 1 }));
+            return {
+              ...prev,
+              modificaciones: modsUpdated,
+              modActiva: prev.modActiva ? { ...prev.modActiva, revisado: 1 } : null,
+              registro: { ...prev.registro, modificacion_pendiente: 0, modificacion_revisada: 1 }
+            };
+          }
+          return prev;
+        });
+      }
+      setMensajeSync({
+        tipo: 'exito',
+        texto: 'Modificación marcada como revisada. La alerta visual fue desactivada.'
+      });
+      window.dispatchEvent(new CustomEvent('catalogos-actualizados'));
+    } catch (err) {
+      console.error('Error al marcar modificación como revisada:', err);
+      setMensajeSync({ tipo: 'error', texto: 'No se pudo marcar la modificación como revisada.' });
+    } finally {
+      setMarcandoRevisadoId(null);
+    }
+  };
+
+
+  const handleMarcarRevisadoDesdeComparativa = async () => {
+    if (!comparativaModificacion?.registro) return;
+    await handleMarcarRevisado(comparativaModificacion.registro);
+  };
+
+  const handleCambiarModificacionActiva = (idx) => {
+    if (!comparativaModificacion || !comparativaModificacion.modificaciones[idx]) return;
+    setComparativaModificacion(prev => ({
+      ...prev,
+      modActiva: prev.modificaciones[idx],
+      indiceActivo: idx
+    }));
+  };
+
+  // [FN-06.07] Apertura de modal exclusivo para edición de costo_dia
+  const handleAbrirModalCostoDia = (celda, regEspecifico = null) => {
+    if (!celda || !celda.registros || celda.registros.length === 0) return;
+    const reg = regEspecifico || celda.registros[0];
+    setModalCostoDia({
+      fecha: celda.fechaIso,
+      empleado: reg.empleado || empleadoAuditar,
+      registros: celda.registros,
+      registroSeleccionado: reg,
+      costoDiaActual: Number(reg.costo_dia) || 0,
+      nuevoCostoDia: String(reg.costo_dia !== undefined && reg.costo_dia !== null ? reg.costo_dia : 0),
+      motivo: ''
+    });
+  };
+
+  const handleSeleccionarRegistroModalCostoDia = (reg) => {
+    if (!modalCostoDia || !reg) return;
+    setModalCostoDia(prev => ({
+      ...prev,
+      registroSeleccionado: reg,
+      costoDiaActual: Number(reg.costo_dia) || 0,
+      nuevoCostoDia: String(reg.costo_dia !== undefined && reg.costo_dia !== null ? reg.costo_dia : 0)
+    }));
+  };
+
+  const handleGuardarCostoDia = async (e) => {
+    e.preventDefault();
+    if (!modalCostoDia || !modalCostoDia.registroSeleccionado) return;
+    const target = modalCostoDia.registroSeleccionado;
+    const idTarget = target.id_asistencia || target.id;
+    if (!idTarget) {
+      alert('No se pudo identificar el registro para actualizar.');
+      return;
+    }
+
+    setGuardandoCostoDia(true);
+    try {
+      const valorNum = parseFloat(modalCostoDia.nuevoCostoDia) || 0;
+      const res = await api.actualizarCostoDiaManual({
+        id_asistencia: idTarget,
+        costo_dia: valorNum,
+        motivo: modalCostoDia.motivo?.trim() || 'Ajuste manual de costo_dia desde calendario'
+      });
+
+      if (res && res.exito) {
+        setRegistros(prev => prev.map(r => {
+          if ((r.id_asistencia && r.id_asistencia === idTarget) || (r.id && r.id === idTarget)) {
+            return { ...r, costo_dia: valorNum };
+          }
+          return r;
+        }));
+
+        setRegistrosEmpleadoAuditar(prev => prev.map(r => {
+          if ((r.id_asistencia && r.id_asistencia === idTarget) || (r.id && r.id === idTarget)) {
+            return { ...r, costo_dia: valorNum };
+          }
+          return r;
+        }));
+
+        if (diaSeleccionadoAuditoria) {
+          setDiaSeleccionadoAuditoria(prev => {
+            if (!prev) return null;
+            return {
+              ...prev,
+              registros: prev.registros.map(r => {
+                if ((r.id_asistencia && r.id_asistencia === idTarget) || (r.id && r.id === idTarget)) {
+                  return { ...r, costo_dia: valorNum };
+                }
+                return r;
+              })
+            };
+          });
+        }
+
+        setMensajeSync({
+          tipo: 'exito',
+          texto: `Costo del día ($${valorNum.toLocaleString('es-AR')}) guardado para ${target.empleado} (${modalCostoDia.fecha}).`
+        });
+        setModalCostoDia(null);
+        cargarDatos();
+        if (empleadoAuditar) {
+          cargarAuditoriaEmpleado(empleadoAuditar, fechaCalendario);
+        }
+      } else {
+        alert(res?.error || 'No se pudo guardar el costo del día.');
+      }
+    } catch (err) {
+      console.error('Error al guardar costo_dia manual:', err);
+      alert('Error de comunicación al actualizar el costo del día.');
+    } finally {
+      setGuardandoCostoDia(false);
+    }
+  };
+
+  // Manejo de asignación masiva de tipo_costo (RRHH)
+  const handleToggleSelect = (id) => {
+    setSeleccionados(prev => {
+      const nuevo = new Set(prev);
+      if (nuevo.has(id)) {
+        nuevo.delete(id);
+      } else {
+        nuevo.add(id);
+      }
+      return nuevo;
+    });
+  };
+
+  const handleToggleSelectAll = () => {
+    const visiblesIds = registrosFiltrados.map(r => r.id);
+    const todosSeleccionados = visiblesIds.length > 0 && visiblesIds.every(id => seleccionados.has(id));
+    if (todosSeleccionados) {
+      setSeleccionados(prev => {
+        const nuevo = new Set(prev);
+        visiblesIds.forEach(id => nuevo.delete(id));
+        return nuevo;
+      });
+    } else {
+      setSeleccionados(prev => {
+        const nuevo = new Set(prev);
+        visiblesIds.forEach(id => nuevo.add(id));
+        return nuevo;
+      });
+    }
+  };
+
+  const handleAplicarTipoCostoLote = async (tipoCosto) => {
+    if (seleccionados.size === 0) return;
+    setAplicandoCosto(true);
+    try {
+      const idsArray = Array.from(seleccionados);
+      const res = await api.actualizarTipoCostoMasivo(idsArray, tipoCosto);
+      if (res && res.exito) {
+        setMensajeSync({
+          tipo: 'exito',
+          texto: `Se aplicó tipo de costo '${tipoCosto || 'Sin asignar'}' a ${res.actualizados || idsArray.length} registros.`
+        });
+        setSeleccionados(new Set());
+        await cargarDatos();
+        if (empleadoAuditar) {
+          await cargarAuditoriaEmpleado(empleadoAuditar, fechaCalendario);
+        }
+      } else {
+        setMensajeSync({ tipo: 'error', texto: res?.error || 'No se pudo actualizar el tipo de costo en lote.' });
+      }
+    } catch (err) {
+      console.error('Error al aplicar tipo de costo masivo:', err);
+      setMensajeSync({ tipo: 'error', texto: 'Error al comunicarse con la aplicación.' });
+    } finally {
+      setAplicandoCosto(false);
+    }
+  };
+
+  // Filtrado en memoria para la lista de registros (lado izquierdo)
   const registrosFiltrados = useMemo(() => {
+    const anio = fechaCalendario.getFullYear();
+    const mesStr = String(fechaCalendario.getMonth() + 1).padStart(2, '0');
+    const prefijoMes = `${anio}-${mesStr}`;
+
     return registros.filter(r => {
+      if (filtroEmpleadoLista && (r.empleado || '').trim().toLowerCase() !== filtroEmpleadoLista.trim().toLowerCase()) {
+        return false;
+      }
+      if (filtroSoloMes) {
+        if (!r.fecha || !r.fecha.startsWith(prefijoMes)) {
+          return false;
+        }
+      }
       if (filtroTexto) {
         const q = filtroTexto.toLowerCase();
         const emp = (r.empleado || '').toLowerCase();
@@ -240,9 +724,9 @@ export default function OtherEmployeesHistoryView({ usuario, onVolver, tema, onV
       }
       return true;
     });
-  }, [registros, filtroTexto]);
+  }, [registros, filtroTexto, filtroEmpleadoLista, filtroSoloMes, fechaCalendario]);
 
-  // Mapa de registros del empleado seleccionado indexados por fecha (YYYY-MM-DD) para el calendario
+  // Mapa de registros del empleado seleccionado indexados por fecha para el calendario
   const mapaRegistrosAuditoria = useMemo(() => {
     const mapa = {};
     registrosEmpleadoAuditar.forEach(r => {
@@ -259,7 +743,7 @@ export default function OtherEmployeesHistoryView({ usuario, onVolver, tema, onV
   // Generador de días del mes para el calendario del empleado
   const diasMesCalendario = useMemo(() => {
     const anio = fechaCalendario.getFullYear();
-    const mes = fechaCalendario.getMonth(); // 0-indexed
+    const mes = fechaCalendario.getMonth();
 
     const primerDiaMes = new Date(anio, mes, 1);
     const ultimoDiaMes = new Date(anio, mes + 1, 0);
@@ -294,6 +778,58 @@ export default function OtherEmployeesHistoryView({ usuario, onVolver, tema, onV
     return celdas;
   }, [fechaCalendario, mapaRegistrosAuditoria]);
 
+  // [FN-02.02] Auto-abrir modal de auditoría al navegar desde notificación de RRHH
+  useEffect(() => {
+    if (diaDestacado && diasMesCalendario.length > 0) {
+      const celdaTarget = diasMesCalendario.find(c => c.fechaIso === diaDestacado);
+      if (celdaTarget && celdaTarget.registros && celdaTarget.registros.length > 0) {
+        setDiaSeleccionadoAuditoria(celdaTarget);
+      }
+    }
+  }, [diaDestacado, diasMesCalendario]);
+
+  // Asignar tipo de costo a todos los registros de los días seleccionados en el calendario
+  const handleAplicarTipoCostoDiasCalendario = async (tipoCosto) => {
+    const ids = [];
+    diasMesCalendario.forEach(celda => {
+      if (!celda.esVacio && diasSeleccionadosCalendario.has(celda.fechaIso)) {
+        (celda.registros || []).forEach(r => {
+          const id = r.id_asistencia || r.id;
+          if (id) ids.push(id);
+        });
+      }
+    });
+
+    if (ids.length === 0) {
+      alert('No se encontraron registros de asistencia en los días seleccionados.');
+      return;
+    }
+
+    setAplicandoCosto(true);
+    try {
+      const res = await api.actualizarTipoCostoMasivo(ids, tipoCosto);
+      if (res && res.exito) {
+        setMensajeSync({
+          tipo: 'exito',
+          texto: `Se asignó costo "${tipoCosto || 'Sin Asignar'}" a ${res.actualizados || ids.length} registro(s) de los días seleccionados.`
+        });
+        setDiasSeleccionadosCalendario(new Set());
+        await cargarAuditoriaEmpleado(empleadoAuditar, fechaCalendario);
+        await cargarDatos();
+      } else {
+        setMensajeSync({
+          tipo: 'error',
+          texto: res?.error || 'No se pudo actualizar el costo de los días seleccionados.'
+        });
+      }
+    } catch (err) {
+      console.error('Error al actualizar tipo de costo para días del calendario:', err);
+      setMensajeSync({ tipo: 'error', texto: 'Error al comunicarse con la aplicación.' });
+    } finally {
+      setAplicandoCosto(false);
+    }
+  };
+
   const navegarMes = (delta) => {
     setFechaCalendario(prev => new Date(prev.getFullYear(), prev.getMonth() + delta, 1));
   };
@@ -303,1048 +839,662 @@ export default function OtherEmployeesHistoryView({ usuario, onVolver, tema, onV
     setFechaCalendario(new Date(hoy.getFullYear(), hoy.getMonth(), 1));
   };
 
-  const nombresMeses = [
-    'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
-    'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
-  ];
-
-  // Cálculo de conteos para la calculadora de liquidación
-  // Regla de RRHH: Francos normales cuentan como oficina, francos de obra cuentan como obra
-  const conteosLiquidacion = useMemo(() => {
+  // [FN-06.04] Registros seleccionados para liquidación
+  const registrosParaLiquidar = useMemo(() => {
     const anio = fechaCalendario.getFullYear();
     const mesStr = String(fechaCalendario.getMonth() + 1).padStart(2, '0');
     const prefijoMes = `${anio}-${mesStr}`;
 
+    if (diasSeleccionadosCalendario && diasSeleccionadosCalendario.size > 0) {
+      return registrosEmpleadoAuditar.filter(r => r.fecha && diasSeleccionadosCalendario.has(r.fecha));
+    }
+    if (seleccionados && seleccionados.size > 0) {
+      return registrosEmpleadoAuditar.filter(r => seleccionados.has(r.id || r.id_asistencia));
+    }
+    return registrosEmpleadoAuditar.filter(r => r.fecha && r.fecha.startsWith(prefijoMes));
+  }, [registrosEmpleadoAuditar, fechaCalendario, diasSeleccionadosCalendario, seleccionados]);
+
+  // [FN-06.04] Conteo de días para la calculadora de liquidación
+  const conteosLiquidacion = useMemo(() => {
     const fechasOficina = new Set();
     const fechasObra = new Set();
-    const fechasFrancoTrabajado = new Set();
+    const fechasFrancoObraTrabajado = new Set();
+    const fechasFrancoOficTrabajado = new Set();
     const fechasFeriadoTrabajado = new Set();
 
-    registrosEmpleadoAuditar.forEach(r => {
-      if (!r.fecha || !r.fecha.startsWith(prefijoMes)) return;
+    registrosParaLiquidar.forEach(r => {
+      if (!r.fecha) return;
       const f = r.fecha.trim();
-      const lug = (r.tipo_ocf || r.lugar || '').trim();
-      const srv = (r.servicio || '').trim();
-      const srvLower = srv.toLowerCase();
-      const hrs = Number(r.horas) || 0;
-      const esFer = (r.feriado || '').toUpperCase() === 'SI';
+      const cat = categorizarRegistroLiquidacion(r);
 
-      // 1. Franco trabajado (oficina u obra)
-      if (
-        lug.toLowerCase() === 'franco ofic trabajado' ||
-        lug.toLowerCase() === 'franco obra trabajado' ||
-        srv === 'Franco Trabajado' ||
-        (lug === 'Franco' && hrs > 0 && srvLower.includes('trabajado'))
-      ) {
-        fechasFrancoTrabajado.add(f);
-      }
-      // 2. Feriado trabajado
-      else if (lug.toLowerCase() === 'feriado trabajado' || (esFer && hrs > 0)) {
-        fechasFeriadoTrabajado.add(f);
-      }
-      // 3. Franco de Obra -> Contar como días de Obra
-      else if (
-        lug.toLowerCase() === 'franco obra' ||
-        lug.toLowerCase() === 'franco de obra' ||
-        srvLower.includes('franco de obra') ||
-        (lug === 'Franco' && srvLower.includes('obra'))
-      ) {
-        fechasObra.add(f);
-      }
-      // 4. Franco normal o de oficina -> Contar como días de Oficina
-      else if (
-        lug.toLowerCase() === 'franco' ||
-        lug.toLowerCase() === 'franco de oficina' ||
-        srvLower.includes('franco de oficina') ||
-        srvLower === 'franco'
-      ) {
-        fechasOficina.add(f);
-      }
-      // 5. Obra / Campo habitual
-      else if (['campaña / campo', 'campo', 'obra', 'roster'].includes(lug.toLowerCase())) {
-        fechasObra.add(f);
-      }
-      // 6. Oficina habitual
-      else if (['oficina', 'home office'].includes(lug.toLowerCase())) {
-        fechasOficina.add(f);
-      }
+      if (cat === 'oficina') fechasOficina.add(f);
+      else if (cat === 'obra') fechasObra.add(f);
+      else if (cat === 'franco_obra_trab') fechasFrancoObraTrabajado.add(f);
+      else if (cat === 'franco_ofic_trab') fechasFrancoOficTrabajado.add(f);
+      else if (cat === 'feriado_trab') fechasFeriadoTrabajado.add(f);
     });
 
     return {
       diasOficina: fechasOficina.size,
       diasObra: fechasObra.size,
-      diasFrancoTrabajado: fechasFrancoTrabajado.size,
+      diasFrancoObraTrabajado: fechasFrancoObraTrabajado.size,
+      diasFrancoOficTrabajado: fechasFrancoOficTrabajado.size,
       diasFeriadoTrabajado: fechasFeriadoTrabajado.size
     };
-  }, [registrosEmpleadoAuditar, fechaCalendario]);
+  }, [registrosParaLiquidar]);
 
-  // Cantidad efectiva de Francos Trabajados (manual o automática)
-  const cantDiasFrancoTrabajado = (diasFrancoManual !== '' && !isNaN(Number(diasFrancoManual)))
-    ? Math.max(0, Number(diasFrancoManual))
-    : conteosLiquidacion.diasFrancoTrabajado;
+  const modalidadCalculoActual = liquidacionPg?.modalidad_calculo || empActual?.modalidad_calculo || 'base_30';
+  const lugarHabitualActual = liquidacionPg?.lugar_habitual || empActual?.lugar_habitual || 'oficina';
 
-  const subtotalOficina = conteosLiquidacion.diasOficina * (tarifas.precioOficina || 0);
-  const subtotalObra = conteosLiquidacion.diasObra * (tarifas.precioObra || 0);
-  const subtotalFranco = cantDiasFrancoTrabajado * (tarifas.precioFrancoTrabajado || 0);
-  const subtotalFeriado = conteosLiquidacion.diasFeriadoTrabajado * (tarifas.precioFeriadoTrabajado || 0);
-  const totalLiquidar = subtotalOficina + subtotalObra + subtotalFranco + subtotalFeriado;
-
-  const formatMoneda = (val) => {
-    return new Intl.NumberFormat('es-AR', {
-      style: 'currency',
-      currency: 'ARS',
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2
-    }).format(val || 0);
+  const handleCambiarConfiguracionSueldo = async (nuevaModalidad, nuevoLugar) => {
+    if (!empActual || !empActual.id_usuario) return;
+    setGuardandoConfigSueldo(true);
+    try {
+      const anio = fechaCalendario.getFullYear();
+      const mesStr = String(fechaCalendario.getMonth() + 1).padStart(2, '0');
+      const cicloCobro = `${anio}-${mesStr}`;
+      const payload = {
+        id_usuario: empActual.id_usuario,
+        empleado: empActual.nombre,
+        modalidad_calculo: nuevaModalidad,
+        lugar_habitual: nuevoLugar,
+        ciclo_cobro: cicloCobro
+      };
+      const res = await api.actualizarConfiguracionSueldoUsuario(payload);
+      if (res && res.exito) {
+        toast.success(`Modalidad actualizada a "${nuevaModalidad === 'base_30' ? 'Base 30 días' : 'Por día individual'}" (${nuevoLugar === 'obra' ? 'Obra' : 'Oficina'}).`);
+        const resLiq = await api.obtenerLiquidacion(empActual.nombre, cicloCobro, true);
+        if (resLiq && resLiq.exito && resLiq.liquidacion) {
+          setLiquidacionPg(resLiq.liquidacion);
+        }
+        await cargarDatos();
+      } else {
+        toast.error(res?.error || 'No se pudo actualizar la configuración salarial.');
+      }
+    } catch (err) {
+      console.error('Error al actualizar configuración salarial:', err);
+      toast.error('Error al comunicar la nueva configuración salarial.');
+    } finally {
+      setGuardandoConfigSueldo(false);
+    }
   };
 
-  const getBadgeClassLugar = (lugar, servicio = '') => {
-    const l = (lugar || '').toLowerCase().trim();
-    const s = (servicio || '').toLowerCase().trim();
-    if (l === 'franco obra' || l === 'franco de obra' || s.includes('franco de obra')) {
-      return 'badge-modalidad-franco-obra';
+  const diasEnMesCalendario = useMemo(() => {
+    return new Date(fechaCalendario.getFullYear(), fechaCalendario.getMonth() + 1, 0).getDate();
+  }, [fechaCalendario]);
+
+  const ajusteBase30 = useMemo(() => {
+    if (modalidadCalculoActual !== 'base_30') return { deltaOfi: 0, deltaObra: 0, activo: false };
+    const totalReales = conteosLiquidacion.diasOficina + conteosLiquidacion.diasObra;
+    if (totalReales < diasEnMesCalendario && totalReales <= 30) {
+      return { deltaOfi: 0, deltaObra: 0, activo: false };
     }
-    if (l === 'franco obra trabajado') {
-      return 'badge-modalidad-franco-obra-trabajado';
+    const deltaTotal = 30 - totalReales;
+    if (lugarHabitualActual === 'oficina') {
+      const ofiFinal = conteosLiquidacion.diasOficina + deltaTotal;
+      if (ofiFinal >= 0) {
+        return { deltaOfi: deltaTotal, deltaObra: 0, activo: true };
+      }
+      return { deltaOfi: -conteosLiquidacion.diasOficina, deltaObra: Math.max(0, conteosLiquidacion.diasObra + ofiFinal), activo: true };
+    } else {
+      const obraFinal = conteosLiquidacion.diasObra + deltaTotal;
+      if (obraFinal >= 0) {
+        return { deltaOfi: 0, deltaObra: deltaTotal, activo: true };
+      }
+      return { deltaOfi: Math.max(0, conteosLiquidacion.diasOficina + obraFinal), deltaObra: -conteosLiquidacion.diasObra, activo: true };
     }
-    if (l === 'franco ofic trabajado' || s === 'franco trabajado' || (l === 'franco' && s.includes('trabajado'))) {
-      return 'badge-modalidad-franco-ofic-trabajado';
+  }, [modalidadCalculoActual, lugarHabitualActual, conteosLiquidacion, diasEnMesCalendario]);
+
+  const hayModoManual = (
+    diasOficinaManual !== '' ||
+    diasCampoManual !== '' ||
+    diasFrancoObraManual !== '' ||
+    diasFrancoOficManual !== '' ||
+    diasFeriadoManual !== ''
+  );
+
+  const cantDiasOficina = (diasOficinaManual !== '' && !isNaN(parseFloat(diasOficinaManual)))
+    ? Math.max(0, parseFloat(diasOficinaManual))
+    : Math.max(0, conteosLiquidacion.diasOficina + (hayModoManual ? 0 : ajusteBase30.deltaOfi));
+
+  const cantDiasObra = (diasCampoManual !== '' && !isNaN(parseFloat(diasCampoManual)))
+    ? Math.max(0, parseFloat(diasCampoManual))
+    : Math.max(0, conteosLiquidacion.diasObra + (hayModoManual ? 0 : ajusteBase30.deltaObra));
+
+  const cantDiasFrancoObra = (diasFrancoObraManual !== '' && !isNaN(parseFloat(diasFrancoObraManual)))
+    ? Math.max(0, parseFloat(diasFrancoObraManual))
+    : conteosLiquidacion.diasFrancoObraTrabajado;
+
+  const cantDiasFrancoOfic = (diasFrancoOficManual !== '' && !isNaN(parseFloat(diasFrancoOficManual)))
+    ? Math.max(0, parseFloat(diasFrancoOficManual))
+    : conteosLiquidacion.diasFrancoOficTrabajado;
+
+  const cantDiasFeriadoTrabajado = (diasFeriadoManual !== '' && !isNaN(parseFloat(diasFeriadoManual)))
+    ? Math.max(0, parseFloat(diasFeriadoManual))
+    : conteosLiquidacion.diasFeriadoTrabajado;
+
+  // [FN-06.06] Suma de importes basada en costo_dia agrupado por (fecha, categoría)
+  const sumasCostoDiaPorCategoria = useMemo(() => {
+    const mapaFechaCat = new Map();
+
+    registrosParaLiquidar.forEach(r => {
+      if (!r.fecha) return;
+      const f = r.fecha.trim();
+      const cat = categorizarRegistroLiquidacion(r);
+      const clave = `${f}__${cat}`;
+      const c = Number(r.costo_dia) || 0;
+
+      if (!mapaFechaCat.has(clave)) {
+        mapaFechaCat.set(clave, { cat, fecha: f, costo_dia: c });
+      } else {
+        const actual = mapaFechaCat.get(clave);
+        if (c > actual.costo_dia) {
+          actual.costo_dia = c;
+        }
+      }
+    });
+
+    let sumOficina = 0;
+    let sumObra = 0;
+    let sumFrancoObra = 0;
+    let sumFrancoOfic = 0;
+    let sumFeriado = 0;
+    let totalDirecto = 0;
+
+    mapaFechaCat.forEach(({ cat, costo_dia }) => {
+      totalDirecto += costo_dia;
+      if (cat === 'oficina') sumOficina += costo_dia;
+      else if (cat === 'obra') sumObra += costo_dia;
+      else if (cat === 'franco_obra_trab') sumFrancoObra += costo_dia;
+      else if (cat === 'franco_ofic_trab') sumFrancoOfic += costo_dia;
+      else if (cat === 'feriado_trab') sumFeriado += costo_dia;
+      else sumOficina += costo_dia;
+    });
+
+    return {
+      oficina: Math.round(sumOficina * 100) / 100,
+      obra: Math.round(sumObra * 100) / 100,
+      francoObra: Math.round(sumFrancoObra * 100) / 100,
+      francoOfic: Math.round(sumFrancoOfic * 100) / 100,
+      feriado: Math.round(sumFeriado * 100) / 100,
+      totalDirecto: Math.round(totalDirecto * 100) / 100
+    };
+  }, [registrosParaLiquidar]);
+
+  const subtotalOficina = (diasOficinaManual !== '')
+    ? Math.round(cantDiasOficina * (tarifas.precioOficina || 0) * 100) / 100
+    : Math.round(Math.max(0, sumasCostoDiaPorCategoria.oficina + ((hayModoManual ? 0 : ajusteBase30.deltaOfi) * (tarifas.precioOficina || 0))) * 100) / 100;
+
+  const subtotalObra = (diasCampoManual !== '')
+    ? Math.round(cantDiasObra * (tarifas.precioObra || 0) * 100) / 100
+    : Math.round(Math.max(0, sumasCostoDiaPorCategoria.obra + ((hayModoManual ? 0 : ajusteBase30.deltaObra) * (tarifas.precioObra || 0))) * 100) / 100;
+
+  const subtotalFrancoObra = (diasFrancoObraManual !== '')
+    ? Math.round(cantDiasFrancoObra * (tarifas.precioFrancoObraTrabajado || 0) * 100) / 100
+    : sumasCostoDiaPorCategoria.francoObra;
+
+  const subtotalFrancoOfic = (diasFrancoOficManual !== '')
+    ? Math.round(cantDiasFrancoOfic * (tarifas.precioFrancoOficTrabajado || 0) * 100) / 100
+    : sumasCostoDiaPorCategoria.francoOfic;
+
+  const subtotalFeriado = (diasFeriadoManual !== '')
+    ? Math.round(cantDiasFeriadoTrabajado * (tarifas.precioFeriadoTrabajado || 0) * 100) / 100
+    : sumasCostoDiaPorCategoria.feriado;
+
+  const totalLiquidar = Math.round((subtotalOficina + subtotalObra + subtotalFrancoObra + subtotalFrancoOfic + subtotalFeriado) * 100) / 100;
+  const totalDiasComputados = cantDiasOficina + cantDiasObra + cantDiasFrancoObra + cantDiasFrancoOfic + cantDiasFeriadoTrabajado;
+
+  // [FN-06.05] Exportación oficial de informe de liquidación a Excel
+  const handleDescargarInformeLiquidacion = async () => {
+    if (!empleadoAuditar) return;
+    setExportandoInforme(true);
+    try {
+      const anio = fechaCalendario.getFullYear();
+      const mesStr = String(fechaCalendario.getMonth() + 1).padStart(2, '0');
+      const prefijoMes = `${anio}-${mesStr}`;
+
+      const registrosMes = registrosParaLiquidar
+        .filter(r => r.fecha && r.fecha.startsWith(prefijoMes))
+        .sort((a, b) => (a.fecha || '').localeCompare(b.fecha || ''));
+
+      const getTarifaEfectiva = (cat) => {
+        if (cat === 'oficina') return cantDiasOficina > 0 ? subtotalOficina / cantDiasOficina : (tarifas.precioOficina || 0);
+        if (cat === 'obra') return cantDiasObra > 0 ? subtotalObra / cantDiasObra : (tarifas.precioObra || 0);
+        if (cat === 'franco_obra_trab') return cantDiasFrancoObra > 0 ? subtotalFrancoObra / cantDiasFrancoObra : (tarifas.precioFrancoObraTrabajado || 0);
+        if (cat === 'franco_ofic_trab') return cantDiasFrancoOfic > 0 ? subtotalFrancoOfic / cantDiasFrancoOfic : (tarifas.precioFrancoOficTrabajado || 0);
+        if (cat === 'feriado_trab') return cantDiasFeriadoTrabajado > 0 ? subtotalFeriado / cantDiasFeriadoTrabajado : (tarifas.precioFeriadoTrabajado || 0);
+        return 0;
+      };
+
+      const mapaPorFecha = new Map();
+      registrosMes.forEach(r => {
+        const f = r.fecha || '';
+        if (!mapaPorFecha.has(f)) mapaPorFecha.set(f, []);
+        mapaPorFecha.get(f).push(r);
+      });
+
+      const mapaProyectos = new Map();
+      const registrosDetalle = [];
+
+      mapaPorFecha.forEach((regsDia, fechaStr) => {
+        const regsPorCat = new Map();
+        regsDia.forEach(r => {
+          const cat = categorizarRegistroLiquidacion(r);
+          if (!regsPorCat.has(cat)) regsPorCat.set(cat, []);
+          regsPorCat.get(cat).push(r);
+        });
+
+        regsPorCat.forEach((regsCat, cat) => {
+          const tarifaCat = getTarifaEfectiva(cat);
+          const costoDiaCat = Math.round(tarifaCat * 100) / 100;
+          const totHrsCat = regsCat.reduce((sum, r) => sum + (Number(r.horas) || 0), 0);
+
+          const regRepresentativo = [...regsCat].sort((a, b) => (Number(b.horas) || 0) - (Number(a.horas) || 0))[0];
+
+          const srv = (regRepresentativo.servicio || 'Sin servicio').trim();
+          if (!mapaProyectos.has(srv)) {
+            mapaProyectos.set(srv, { proyecto: srv, diasSet: new Set(), horas: 0, monto: 0 });
+          }
+          const itemP = mapaProyectos.get(srv);
+          itemP.diasSet.add(fechaStr);
+          itemP.horas += totHrsCat;
+          itemP.monto += costoDiaCat;
+
+          registrosDetalle.push({
+            fecha: regRepresentativo.fecha || fechaStr,
+            dia_semana: regRepresentativo.dia_semana || '',
+            tipo_ocf: obtenerEtiquetaModalidad(regRepresentativo),
+            servicio: srv,
+            horas: totHrsCat,
+            tipo_costo: regRepresentativo.tipo_costo || (cat === 'obra' || cat === 'franco_obra_trab' ? 'Campo' : 'Oficina'),
+            costo_dia: costoDiaCat
+          });
+        });
+      });
+
+      const proyectosImputados = Array.from(mapaProyectos.values()).map(p => ({
+        proyecto: p.proyecto,
+        dias: p.diasSet.size,
+        horas: Math.round(p.horas * 10) / 10,
+        monto: Math.round(p.monto * 100) / 100
+      })).sort((a, b) => b.horas - a.horas);
+
+      const resumenCategorias = [
+        {
+          concepto: 'Día de oficina',
+          dias: cantDiasOficina,
+          tarifa_diaria: tarifas.precioOficina || 0,
+          subtotal: subtotalOficina
+        },
+        {
+          concepto: 'Día de obra',
+          dias: cantDiasObra,
+          tarifa_diaria: tarifas.precioObra || 0,
+          subtotal: subtotalObra
+        },
+        {
+          concepto: 'Franco de obra trabajado',
+          dias: cantDiasFrancoObra,
+          tarifa_diaria: tarifas.precioFrancoObraTrabajado || 0,
+          subtotal: subtotalFrancoObra
+        },
+        {
+          concepto: 'Franco de oficina trabajado',
+          dias: cantDiasFrancoOfic,
+          tarifa_diaria: tarifas.precioFrancoOficTrabajado || 0,
+          subtotal: subtotalFrancoOfic
+        },
+        {
+          concepto: 'Feriado trabajado',
+          dias: cantDiasFeriadoTrabajado,
+          tarifa_diaria: tarifas.precioFeriadoTrabajado || 0,
+          subtotal: subtotalFeriado
+        }
+      ].filter(c => c.dias > 0 || c.subtotal > 0 || c.tarifa_diaria > 0);
+
+      const datosInforme = {
+        empleado: empActual?.nombre || empleadoAuditar,
+        dni: empActual?.dni || '',
+        email: empActual?.mail || empActual?.email || '',
+        area: empActual?.area || '',
+        nombre_mes: NOMBRES_MESES[fechaCalendario.getMonth()],
+        mes: fechaCalendario.getMonth() + 1,
+        anio: fechaCalendario.getFullYear(),
+        ciclo_cobro: prefijoMes,
+        total_liquidar: totalLiquidar,
+        resumen_categorias: resumenCategorias,
+        proyectos_imputados: proyectosImputados,
+        registros_detalle: registrosDetalle
+      };
+
+      const res = await api.exportarInformeLiquidacion(datosInforme);
+      if (res && res.exito) {
+        alert(`Informe de liquidación generado con éxito:\n${res.ruta || 'Archivo guardado'}`);
+      } else if (res && res.cancelado) {
+        // Cancelado por el usuario
+      } else {
+        alert(`No se pudo exportar el informe: ${res?.error || 'Error desconocido'}`);
+      }
+    } catch (err) {
+      console.error('Error al exportar informe de liquidación:', err);
+      alert('Error inesperado al generar el informe de liquidación.');
+    } finally {
+      setExportandoInforme(false);
     }
-    if (l === 'feriado trabajado' || l.includes('feriado')) {
-      return 'badge-modalidad-feriado-trabajado';
-    }
-    if (l.includes('oficina')) return 'badge-modalidad-oficina';
-    if (l.includes('campo') || l.includes('campaña') || l.includes('roster') || l.includes('obra')) return 'badge-modalidad-campo';
-    if (l.includes('franco')) return 'badge-modalidad-franco';
-    if (l.includes('vacaciones')) return 'badge-modalidad-vacaciones';
-    if (l.includes('licencia')) return 'badge-modalidad-licencia';
-    return 'badge-modalidad-oficina';
   };
 
-  const getIniciales = (nombre) => {
-    if (!nombre) return 'EM';
-    const partes = nombre.trim().split(' ');
-    if (partes.length === 1) return partes[0].substring(0, 2).toUpperCase();
-    return (partes[0][0] + partes[partes.length - 1][0]).toUpperCase();
+  const handleEnfocarDiaCalendario = (item) => {
+    if (item.empleado && item.empleado !== empleadoAuditar) {
+      setEmpleadoAuditar(item.empleado);
+      setFiltroEmpleadoLista(item.empleado);
+    }
+    if (item.fecha) {
+      const partes = String(item.fecha).split('-');
+      if (partes.length === 3) {
+        setFechaCalendario(new Date(parseInt(partes[0], 10), parseInt(partes[1], 10) - 1, 1));
+      }
+      setDiaDestacado(item.fecha);
+    }
+  };
+
+  const handleConfirmarCrearRoster = async (bloquesSeleccionados) => {
+    if (!Array.isArray(bloquesSeleccionados) || bloquesSeleccionados.length === 0) return;
+    setCreandoRoster(true);
+    try {
+      const payload = bloquesSeleccionados.map((b) => ({
+        empleado: b.empleado || empleadoAuditar,
+        proyecto: b.proyecto,
+        tipo: b.tipo,
+        fecha_inicio: b.fecha_inicio,
+        fecha_fin: b.fecha_fin
+      }));
+      const res = await api.crearRostersDesdeAsistencias(payload);
+      if (res && res.exito) {
+        setModalCrearRosterAbierto(false);
+        setSeleccionados(new Set());
+        setDiasSeleccionadosCalendario(new Set());
+        setMensajeSync({
+          tipo: 'exito',
+          texto: `Se crearon ${res.guardados || payload.length} turno(s) de Roster (${res.absorbidos || 0} asistencias vinculadas).`
+        });
+        await cargarDatos();
+        if (empleadoAuditar) {
+          await cargarAuditoriaEmpleado(empleadoAuditar, fechaCalendario);
+        }
+      }
+    } catch (err) {
+      console.error('Error al crear Roster desde asistencias:', err);
+    } finally {
+      setCreandoRoster(false);
+    }
   };
 
   const pendientesCount = registros.filter(r => r.sincronizado === 0).length;
 
-  return (
-    <div className={`view-content other-history-container ${isRpg ? 'rpg-board-viewport' : ''}`}>
-      {/* Barra superior de navegación */}
-      <div className="view-header-bar other-history-header">
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          {onVolver && (
-            <button type="button" className="btn-back" onClick={onVolver}>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                <polyline points="15 18 9 12 15 6" />
-              </svg>
-              <span>Inicio</span>
-            </button>
-          )}
-
-          {onVerMiHistorial && (
-            <button type="button" className="btn-action-ghost" onClick={onVerMiHistorial}>
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                <circle cx="12" cy="12" r="10" />
-                <polyline points="12 6 12 12 14 14" />
-              </svg>
-              <span>Mi Historial</span>
-            </button>
-          )}
-
-          <div className="other-history-title-block">
-            <span className="other-history-title">Panel de Control de Empleados (RRHH)</span>
-            <span className="other-history-subtitle">
-              Auditoría integral de asistencia • Registros de RRHH • Calculadora de Liquidación
-            </span>
-          </div>
-        </div>
-
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          {pendientesCount > 0 && (
-            <button
-              type="button"
-              className="btn-sync"
-              onClick={ejecutarSincronizacion}
-              disabled={sincronizando}
-              title="Sincronizar cambios pendientes con Google Sheets"
-            >
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M3 12a9 9 0 0 1 15-6.7L21 8" />
-                <path d="M3 22v-6h6" />
-                <path d="M21 12a9 9 0 0 1-15 6.7L3 16" />
-              </svg>
-              <span>{sincronizando ? 'Enviando...' : `Subir (${pendientesCount})`}</span>
-            </button>
-          )}
-
-          <button
-            type="button"
-            className="btn-refresh"
-            onClick={async () => {
-              setCargando(true);
-              try {
-                await api.refrescarCatalogos();
-              } catch (e) {
-                console.error('Error al refrescar catálogos:', e);
-              }
-              await cargarDatos();
-              if (empleadoAuditar) {
-                await cargarAuditoriaEmpleado(empleadoAuditar, fechaCalendario);
-              }
-              setCargando(false);
-            }}
-            disabled={cargando || sincronizando}
-            title="Actualizar registros desde Google Sheets y base local"
-          >
-            <svg
-              width="12"
-              height="12"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              className={cargando ? 'spinner' : ''}
-            >
-              <polyline points="23 4 23 10 17 10" />
-              <polyline points="1 20 1 14 7 14" />
-              <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
-            </svg>
-            Refrescar
-          </button>
-        </div>
+  if (!puedeVerHistorialOtros(usuario)) {
+    return (
+      <div className="view-content" style={{ padding: '32px', textAlign: 'center' }}>
+        <p style={{ fontSize: '15px', color: 'var(--text-secondary)', marginBottom: '16px' }}>
+          No tienes permisos para visualizar el historial de otros colaboradores.
+        </p>
+        <button type="button" className="btn-back" onClick={onVolver}>
+          Volver al Inicio
+        </button>
       </div>
+    );
+  }
 
-      {mensajeSync && (
-        <div className={`alert-banner ${mensajeSync.tipo === 'exito' ? 'alert-success' : 'alert-error'}`}>
-          <span>{mensajeSync.texto}</span>
-          <button type="button" onClick={() => setMensajeSync(null)}>✕</button>
-        </div>
-      )}
+  const contenidoPrincipal = (
+    <>
+      {/* Barra superior de navegación y sincronización */}
+      <HistoryTopBar
+        isRpg={isRpg}
+        onVolver={onVolver}
+        onVerMiHistorial={onVerMiHistorial}
+        puedeVerLiquidacion={puedeVerLiquidacion}
+        pendientesCount={pendientesCount}
+        sincronizando={sincronizando}
+        cargando={cargando}
+        limpiando={limpiando}
+        mensajeSync={mensajeSync}
+        setMensajeSync={setMensajeSync}
+        ejecutarSincronizacion={ejecutarSincronizacion}
+        onRefrescar={async () => {
+          setCargando(true);
+          try {
+            await api.refrescarCatalogos();
+          } catch (e) {
+            console.error('Error al refrescar catálogos:', e);
+          }
+          await cargarDatos();
+          if (empleadoAuditar) {
+            await cargarAuditoriaEmpleado(empleadoAuditar, fechaCalendario);
+          }
+          setCargando(false);
+        }}
+        handleLimpiarLocalYDescargar={handleLimpiarLocalYDescargar}
+      />
 
-      {/* CONTENEDOR DIVIDIDO: IZQUIERDA REGISTROS RRHH, DERECHA AUDITORÍA Y LIQUIDACIÓN */}
+      {/* Contenedor dividido: Lista de registros a la izquierda, Auditoría y Liquidación a la derecha */}
       <div className="other-history-split-grid">
+        <HistoryRecordsList
+          isRpg={isRpg}
+          registrosFiltrados={registrosFiltrados}
+          filtroTexto={filtroTexto}
+          setFiltroTexto={setFiltroTexto}
+          filtroEmpleadoLista={filtroEmpleadoLista}
+          setFiltroEmpleadoLista={setFiltroEmpleadoLista}
+          setEmpleadoAuditar={setEmpleadoAuditar}
+          empleados={empleados}
+          filtroSoloMes={filtroSoloMes}
+          setFiltroSoloMes={setFiltroSoloMes}
+          nombresMeses={NOMBRES_MESES}
+          fechaCalendario={fechaCalendario}
+          puedeEditarCosto={puedeEditarCosto}
+          seleccionados={seleccionados}
+          handleToggleSelectAll={handleToggleSelectAll}
+          handleToggleSelect={handleToggleSelect}
+          handleAplicarTipoCostoLote={handleAplicarTipoCostoLote}
+          aplicandoCosto={aplicandoCosto}
+          setSeleccionados={setSeleccionados}
+          cargando={cargando}
+          registrosTotalCount={registros.length}
+          onEnfocarDiaCalendario={handleEnfocarDiaCalendario}
+          puedeVerModif={puedeVerModif}
+          abrirComparativa={abrirComparativa}
+          marcandoRevisadoId={marcandoRevisadoId}
+          handleMarcarRevisado={handleMarcarRevisado}
+          handleAbrirModalCostoDia={handleAbrirModalCostoDia}
+          esSoloLecturaNucleo={esSoloLecturaNucleo}
+          puedeModificarRegistro={puedeModificarRegistro}
+          usuario={usuario}
+          setRegistroEditando={setRegistroEditando}
+          setRegistroEliminando={setRegistroEliminando}
+          onAbrirModalCrearRoster={() => setModalCrearRosterAbierto(true)}
+        />
 
-        {/* =========================================================================
-            PANEL IZQUIERDO: Registros cargados por RRHH para otros empleados
-            ========================================================================= */}
-        <div className="other-left-panel">
-          <div className="other-panel-header">
-            <div className="other-panel-title-row">
-              <span className="other-panel-title">Cargados por RRHH</span>
-              <span className="other-count-badge">{registrosFiltrados.length}</span>
-            </div>
-
-            <div className="other-left-filters">
-              <div className="search-input-wrapper">
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                  <circle cx="11" cy="11" r="8" />
-                  <line x1="21" y1="21" x2="16.65" y2="16.65" />
-                </svg>
-                <input
-                  type="text"
-                  placeholder="Buscar por empleado, proyecto o fecha..."
-                  className="form-input form-input-sm search-field"
-                  value={filtroTexto}
-                  onChange={(e) => setFiltroTexto(e.target.value)}
-                />
-                {filtroTexto && (
-                  <button type="button" className="clear-search-btn" onClick={() => setFiltroTexto('')}>✕</button>
-                )}
-              </div>
-            </div>
-          </div>
-
-          <div className="other-cards-scroll">
-            {cargando && registros.length === 0 ? (
-              <div className="empty-state">
-                <div className="spinner" style={{ width: '28px', height: '28px' }} />
-                <span className="empty-text">Cargando registros cargados para otros empleados...</span>
-              </div>
-            ) : registrosFiltrados.length === 0 ? (
-              <div className="empty-state">
-                <svg className="empty-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
-                  <circle cx="9" cy="7" r="4" />
-                  <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
-                  <path d="M16 3.13a4 4 0 0 1 0 7.75" />
-                </svg>
-                <span className="empty-text">
-                  {registros.length === 0
-                    ? 'No hay registros cargados por RRHH para otros empleados.'
-                    : 'No se encontraron registros con la búsqueda.'}
-                </span>
-              </div>
-            ) : (
-              <div className="other-cards-col">
-                {registrosFiltrados.map((item) => {
-                  const lugarDisplay = item.tipo_ocf || item.lugar || 'Oficina';
-                  const badgeClass = getBadgeClassLugar(lugarDisplay, item.servicio);
-                  const horasDisplay = item.horas > 0 ? `${item.horas} hs` : (item.jornada || '0 hs');
-                  const estaSincronizado = item.sincronizado === 1;
-
-                  return (
-                    <div key={item.id} className="other-record-card">
-                      <div className="other-card-header">
-                        <div className="other-card-user">
-                          <div className="other-user-avatar">
-                            {getIniciales(item.empleado)}
-                          </div>
-                          <div className="other-user-meta">
-                            <span className="other-user-name">{item.empleado || 'Sin empleado'}</span>
-                            {item.cargado_por && (
-                              <span className="other-user-sub">
-                                Cargado por: <strong>{item.cargado_por}</strong>
-                              </span>
-                            )}
-                          </div>
-                        </div>
-
-                        <div className="other-card-badges">
-                          <span className={`status-badge ${estaSincronizado ? 'status-synced' : 'status-pending'}`}>
-                            {estaSincronizado ? 'Sincronizado' : 'Pendiente'}
-                          </span>
-                        </div>
-                      </div>
-
-                      <div className="other-card-content">
-                        <div className="other-meta-row">
-                          <span className="other-meta-date">
-                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                              <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
-                              <line x1="16" y1="2" x2="16" y2="6" />
-                              <line x1="8" y1="2" x2="8" y2="6" />
-                              <line x1="3" y1="10" x2="21" y2="10" />
-                            </svg>
-                            {item.fecha} {item.dia_semana ? `(${item.dia_semana})` : ''}
-                          </span>
-                          {item.feriado === 'SI' && (
-                            <span className="chip-feriado">Feriado</span>
-                          )}
-                          <span className={`modalidad-pill ${badgeClass}`}>
-                            {item.servicio === 'Franco Trabajado' ? 'Franco Trabajado' : lugarDisplay}
-                          </span>
-                        </div>
-
-                        <div className="other-project-row">
-                          <span className="other-project-label">Proyecto / Detalle:</span>
-                          <span className="other-project-name" title={item.servicio}>
-                            {item.servicio || 'Tiempo dedicado al área'}
-                          </span>
-                        </div>
-
-                        <div className="other-hours-row">
-                          <span className="other-hours-label">Jornada:</span>
-                          <span className="other-hours-value">{horasDisplay}</span>
-                        </div>
-                      </div>
-
-                      <div className="other-card-actions">
-                        <button
-                          type="button"
-                          className="btn-card-action btn-card-edit"
-                          onClick={() => setRegistroEditando({ ...item })}
-                          title="Modificar reporte"
-                        >
-                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
-                            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
-                          </svg>
-                          Modificar
-                        </button>
-
-                        <button
-                          type="button"
-                          className="btn-card-action btn-card-delete"
-                          onClick={() => setRegistroEliminando(item)}
-                          title="Eliminar este reporte localmente y de Google Sheets"
-                        >
-                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                            <polyline points="3 6 5 6 21 6" />
-                            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-                          </svg>
-                          Eliminar
-                        </button>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* =========================================================================
-            PANEL DERECHO: Calendario de Auditoría y Calculadora de Liquidación
-            ========================================================================= */}
         <div className="other-right-panel">
-          {/* Header de Auditoría: Selector de empleado y mes */}
-          <div className="audit-panel-header">
-            <div className="audit-employee-select-box">
-              <label className="audit-select-label">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
-                  <circle cx="12" cy="7" r="4" />
-                </svg>
-                <span>Auditar empleado:</span>
-              </label>
-              <select
-                className="form-select form-select-clean audit-select-field"
-                value={empleadoAuditar}
-                onChange={(e) => setEmpleadoAuditar(e.target.value)}
-              >
-                {empleados.map(u => (
-                  <option key={u.dni || u.nombre} value={u.nombre}>
-                    {u.nombre} ({u.area || 'Sin área'})
-                  </option>
-                ))}
-              </select>
-            </div>
+          <HistoryAuditCalendar
+            isRpg={isRpg}
+            empleadoAuditar={empleadoAuditar}
+            setEmpleadoAuditar={setEmpleadoAuditar}
+            setFiltroEmpleadoLista={setFiltroEmpleadoLista}
+            empleados={empleados}
+            fechaCalendario={fechaCalendario}
+            navegarMes={navegarMes}
+            irAHoy={irAHoy}
+            puedeEditarCosto={puedeEditarCosto}
+            diasSeleccionadosCalendario={diasSeleccionadosCalendario}
+            setDiasSeleccionadosCalendario={setDiasSeleccionadosCalendario}
+            handleAplicarTipoCostoDiasCalendario={handleAplicarTipoCostoDiasCalendario}
+            aplicandoCosto={aplicandoCosto}
+            diasMesCalendario={diasMesCalendario}
+            diaDestacado={diaDestacado}
+            setDiaSeleccionadoAuditoria={setDiaSeleccionadoAuditoria}
+            handleAbrirModalCostoDia={handleAbrirModalCostoDia}
+            onAbrirModalCrearRoster={() => setModalCrearRosterAbierto(true)}
+          />
 
-            <div className="calendar-month-controls">
-              <button
-                type="button"
-                className="calendar-nav-btn"
-                onClick={() => navegarMes(-1)}
-                title="Mes anterior"
-              >
-                ◀
-              </button>
-              <span className="calendar-month-title">
-                {nombresMeses[fechaCalendario.getMonth()]} {fechaCalendario.getFullYear()}
-              </span>
-              <button
-                type="button"
-                className="calendar-nav-btn"
-                onClick={() => navegarMes(1)}
-                title="Mes siguiente"
-              >
-                ▶
-              </button>
-              <button
-                type="button"
-                className="calendar-today-btn"
-                onClick={irAHoy}
-              >
-                Hoy
-              </button>
-            </div>
-          </div>
-
-          {/* Grilla del Calendario Mensual Interactivo */}
-          <div className="audit-calendar-wrapper">
-            <div className="calendar-weekdays-row">
-              <span>Lun</span>
-              <span>Mar</span>
-              <span>Mié</span>
-              <span>Jue</span>
-              <span>Vie</span>
-              <span>Sáb</span>
-              <span>Dom</span>
-            </div>
-
-            <div className="calendar-grid audit-calendar-grid">
-              {diasMesCalendario.map((celda) => {
-                if (celda.esVacio) {
-                  return <div key={celda.id} className="calendar-cell cell-empty" />;
-                }
-
-                const tieneRegistros = celda.registros.length > 0;
-
-                return (
-                  <div
-                    key={celda.id}
-                    className={`calendar-cell ${celda.esHoy ? 'cell-today' : ''} ${tieneRegistros ? 'cell-has-data' : ''}`}
-                    onClick={() => {
-                      if (!tieneRegistros) return;
-                      if (celda.registros.length === 1) {
-                        setRegistroEditando({ ...celda.registros[0] });
-                      } else {
-                        setDiaSeleccionadoAuditoria(celda);
-                      }
-                    }}
-                    style={{ cursor: tieneRegistros ? 'pointer' : 'default' }}
-                    title={tieneRegistros ? `${celda.registros.length} registro(s) el ${celda.fechaIso} (Toca para editar/eliminar)` : celda.fechaIso}
-                  >
-                    <div className="cell-top-bar">
-                      <span className="cell-day-number">{celda.diaNumero}</span>
-                      {celda.esHoy && <span className="cell-today-dot" title="Hoy" />}
-                    </div>
-
-                    <div className="cell-events-container">
-                      {celda.registros.slice(0, 3).map((r, idx) => {
-                        const lug = r.tipo_ocf || r.lugar || 'Oficina';
-                        const badgeClass = getBadgeClassLugar(lug, r.servicio);
-                        let labelText = lug;
-                        if (lug === 'Franco Obra' || r.servicio?.toLowerCase().includes('franco de obra')) {
-                          labelText = 'F. Obra';
-                        } else if (lug === 'Franco Obra Trabajado') {
-                          labelText = 'F. Obra Trab.';
-                        } else if (lug === 'Franco Ofic Trabajado' || r.servicio === 'Franco Trabajado') {
-                          labelText = 'F. Ofic. Trab.';
-                        } else if (lug === 'Feriado Trabajado') {
-                          labelText = 'Feriado Trab.';
-                        } else if (lug === 'Campaña / Campo' || lug === 'Campo') {
-                          labelText = 'Campo';
-                        }
-                        return (
-                          <div
-                            key={r.id || idx}
-                            className={`cell-event-pill ${badgeClass}`}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setRegistroEditando({ ...r });
-                            }}
-                            title={`${lug} - ${r.servicio} (${r.horas} hs) • Clic para editar o eliminar`}
-                          >
-                            <span className="cell-event-label">{labelText}</span>
-                          </div>
-                        );
-                      })}
-                      {celda.registros.length > 3 && (
-                        <span className="cell-more-badge">+{celda.registros.length - 3}</span>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-
-            {/* Referencias cromáticas */}
-            <div className="calendar-legend-bar">
-              <span className="legend-title">Referencias:</span>
-              <div className="legend-items">
-                <span className="legend-item"><span className="legend-color-box badge-modalidad-oficina" /> Oficina</span>
-                <span className="legend-item"><span className="legend-color-box badge-modalidad-campo" /> Obra / Campo</span>
-                <span className="legend-item"><span className="legend-color-box badge-modalidad-franco-obra" /> Franco Obra</span>
-                <span className="legend-item"><span className="legend-color-box badge-modalidad-franco" /> Franco Normal</span>
-                <span className="legend-item"><span className="legend-color-box badge-modalidad-franco-ofic-trabajado" /> Franco Ofic. Trab.</span>
-                <span className="legend-item"><span className="legend-color-box badge-modalidad-franco-obra-trabajado" /> Franco Obra Trab.</span>
-                <span className="legend-item"><span className="legend-color-box badge-modalidad-feriado-trabajado" /> Feriado Trab.</span>
-                <span className="legend-item"><span className="legend-color-box badge-modalidad-vacaciones" /> Vacaciones</span>
-                <span className="legend-item"><span className="legend-color-box badge-modalidad-licencia" /> Licencia</span>
-              </div>
-            </div>
-          </div>
-
-          {/* =========================================================================
-              CALCULADORA DE LIQUIDACIÓN DEBAJO DEL CALENDARIO
-              ========================================================================= */}
-          <div className="liquidation-card">
-            <div className="liquidation-card-header">
-              <div className="liquidation-card-title">
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                  <rect x="2" y="4" width="20" height="16" rx="2" />
-                  <line x1="2" y1="10" x2="22" y2="10" />
-                </svg>
-                <span>Calculadora de Liquidación • {empleadoAuditar || 'Empleado'} ({nombresMeses[fechaCalendario.getMonth()]} {fechaCalendario.getFullYear()})</span>
-              </div>
-              <span className="liquidation-help">
-                Francos normales computan como oficina y francos de obra computan como obra. Asigna tarifas y francos trabajados:
-              </span>
-            </div>
-
-            <div className="liquidation-grid">
-              {/* Tarjeta 1: Oficina */}
-              <div className="liquidation-item">
-                <div className="liq-item-top">
-                  <span className="liq-label">Día de Oficina</span>
-                  <span className="liq-count-badge" title="Incluye oficina y francos normales">{conteosLiquidacion.diasOficina} días</span>
-                </div>
-                <div className="liq-input-row">
-                  <span className="liq-currency-symbol">$</span>
-                  <input
-                    type="number"
-                    min="0"
-                    step="100"
-                    placeholder="Precio día"
-                    className="form-input form-input-sm liq-input"
-                    value={tarifas.precioOficina || ''}
-                    onChange={(e) => handleTarifaChange('precioOficina', e.target.value)}
-                  />
-                </div>
-                <div className="liq-subtotal-row">
-                  <span>Subtotal:</span>
-                  <strong>{formatMoneda(subtotalOficina)}</strong>
-                </div>
-              </div>
-
-              {/* Tarjeta 2: Obra */}
-              <div className="liquidation-item">
-                <div className="liq-item-top">
-                  <span className="liq-label">Día de Obra / Campo</span>
-                  <span className="liq-count-badge" title="Incluye campo/obra y francos de obra">{conteosLiquidacion.diasObra} días</span>
-                </div>
-                <div className="liq-input-row">
-                  <span className="liq-currency-symbol">$</span>
-                  <input
-                    type="number"
-                    min="0"
-                    step="100"
-                    placeholder="Precio día"
-                    className="form-input form-input-sm liq-input"
-                    value={tarifas.precioObra || ''}
-                    onChange={(e) => handleTarifaChange('precioObra', e.target.value)}
-                  />
-                </div>
-                <div className="liq-subtotal-row">
-                  <span>Subtotal:</span>
-                  <strong>{formatMoneda(subtotalObra)}</strong>
-                </div>
-              </div>
-
-              {/* Tarjeta 3: Franco Trabajado (con asignación manual o automática) */}
-              <div className="liquidation-item">
-                <div className="liq-item-top">
-                  <span className="liq-label">Franco Trabajado</span>
-                  <span className="liq-count-badge" title="Conteo detectado por calendario">{conteosLiquidacion.diasFrancoTrabajado} detectado(s)</span>
-                </div>
-
-                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '2px' }}>
-                  <label style={{ fontSize: '11px', color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>
-                    Cant. días:
-                  </label>
-                  <input
-                    type="number"
-                    min="0"
-                    step="1"
-                    className="form-input form-input-sm"
-                    style={{ width: '65px', height: '28px', padding: '2px 6px', fontWeight: 700 }}
-                    value={diasFrancoManual !== '' ? diasFrancoManual : conteosLiquidacion.diasFrancoTrabajado}
-                    onChange={(e) => setDiasFrancoManual(e.target.value)}
-                    title="Cantidad de francos trabajados (editable manualmente)"
-                  />
-                  {diasFrancoManual !== '' && (
-                    <button
-                      type="button"
-                      className="btn-action-ghost"
-                      style={{ padding: '2px 5px', fontSize: '10px' }}
-                      onClick={() => setDiasFrancoManual('')}
-                      title="Restablecer al conteo automático del calendario"
-                    >
-                      ↺ Auto
-                    </button>
-                  )}
-                </div>
-
-                <div className="liq-input-row">
-                  <span className="liq-currency-symbol">$</span>
-                  <input
-                    type="number"
-                    min="0"
-                    step="100"
-                    placeholder="Precio franco trab."
-                    className="form-input form-input-sm liq-input"
-                    value={tarifas.precioFrancoTrabajado || ''}
-                    onChange={(e) => handleTarifaChange('precioFrancoTrabajado', e.target.value)}
-                  />
-                </div>
-                <div className="liq-subtotal-row">
-                  <span>Subtotal ({cantDiasFrancoTrabajado} d):</span>
-                  <strong>{formatMoneda(subtotalFranco)}</strong>
-                </div>
-              </div>
-
-              {/* Tarjeta 4: Feriado Trabajado */}
-              <div className="liquidation-item">
-                <div className="liq-item-top">
-                  <span className="liq-label">Feriado Trabajado</span>
-                  <span className="liq-count-badge">{conteosLiquidacion.diasFeriadoTrabajado} días</span>
-                </div>
-                <div className="liq-input-row">
-                  <span className="liq-currency-symbol">$</span>
-                  <input
-                    type="number"
-                    min="0"
-                    step="100"
-                    placeholder="Precio feriado trab."
-                    className="form-input form-input-sm liq-input"
-                    value={tarifas.precioFeriadoTrabajado || ''}
-                    onChange={(e) => handleTarifaChange('precioFeriadoTrabajado', e.target.value)}
-                  />
-                </div>
-                <div className="liq-subtotal-row">
-                  <span>Subtotal:</span>
-                  <strong>{formatMoneda(subtotalFeriado)}</strong>
-                </div>
-              </div>
-            </div>
-
-            {/* Total Liquidación Banner */}
-            <div className="liquidation-total-banner">
-              <div className="liq-total-info">
-                <span className="liq-total-subtitle">Liquidación total correspondiente a {empleadoAuditar || 'empleado'}:</span>
-                <span className="liq-total-period">{nombresMeses[fechaCalendario.getMonth()]} {fechaCalendario.getFullYear()}</span>
-              </div>
-              <div className="liq-total-amount-box">
-                <span className="liq-total-amount-label">TOTAL A LIQUIDAR</span>
-                <span className="liq-total-amount-value">{formatMoneda(totalLiquidar)}</span>
-              </div>
-            </div>
-          </div>
+          {puedeVerLiquidacion && (
+            <HistoryLiquidationCard
+              isRpg={isRpg}
+              empleadoAuditar={empleadoAuditar}
+              fechaCalendario={fechaCalendario}
+              hayModoManual={hayModoManual}
+              totalDiasComputados={totalDiasComputados}
+              conteosLiquidacion={conteosLiquidacion}
+              diasOficinaManual={diasOficinaManual}
+              setDiasOficinaManual={setDiasOficinaManual}
+              diasCampoManual={diasCampoManual}
+              setDiasCampoManual={setDiasCampoManual}
+              diasFrancoObraManual={diasFrancoObraManual}
+              setDiasFrancoObraManual={setDiasFrancoObraManual}
+              diasFrancoOficManual={diasFrancoOficManual}
+              setDiasFrancoOficManual={setDiasFrancoOficManual}
+              diasFeriadoManual={diasFeriadoManual}
+              setDiasFeriadoManual={setDiasFeriadoManual}
+              exportandoInforme={exportandoInforme}
+              handleDescargarInformeLiquidacion={handleDescargarInformeLiquidacion}
+              tarifas={tarifas}
+              handleTarifaChange={handleTarifaChange}
+              cantDiasOficina={cantDiasOficina}
+              subtotalOficina={subtotalOficina}
+              cantDiasObra={cantDiasObra}
+              subtotalObra={subtotalObra}
+              cantDiasFrancoObra={cantDiasFrancoObra}
+              subtotalFrancoObra={subtotalFrancoObra}
+              cantDiasFrancoOfic={cantDiasFrancoOfic}
+              subtotalFrancoOfic={subtotalFrancoOfic}
+              cantDiasFeriadoTrabajado={cantDiasFeriadoTrabajado}
+              subtotalFeriado={subtotalFeriado}
+              totalLiquidar={totalLiquidar}
+              diasSeleccionadosCalendario={diasSeleccionadosCalendario}
+              seleccionados={seleccionados}
+              modalidadCalculo={modalidadCalculoActual}
+              lugarHabitual={lugarHabitualActual}
+              onCambiarConfiguracionSueldo={handleCambiarConfiguracionSueldo}
+              puedeModificarConfigSueldo={puedeEditarCosto}
+              guardandoConfigSueldo={guardandoConfigSueldo}
+            />
+          )}
         </div>
       </div>
 
-      {/* Modal de Múltiples Registros del Día */}
-      {diaSeleccionadoAuditoria && (
-        <div className="modal-backdrop">
-          <div className="modal-box" style={{ maxWidth: '440px' }}>
-            <div className="modal-header">
-              <span className="modal-title">
-                Registros del {diaSeleccionadoAuditoria.fechaIso}
+      {/* Modales */}
+      <HistoryDayRecordsModal
+        diaSeleccionadoAuditoria={diaSeleccionadoAuditoria}
+        onClose={() => setDiaSeleccionadoAuditoria(null)}
+        empleadoAuditar={empleadoAuditar}
+        puedeVerModif={puedeVerModif}
+        abrirComparativa={abrirComparativa}
+        marcandoRevisadoId={marcandoRevisadoId}
+        handleMarcarRevisado={handleMarcarRevisado}
+        puedeEditarCosto={puedeEditarCosto}
+        handleAbrirModalCostoDia={handleAbrirModalCostoDia}
+        esSoloLecturaNucleo={esSoloLecturaNucleo}
+        puedeModificarRegistro={puedeModificarRegistro}
+        usuario={usuario}
+        setRegistroEditando={setRegistroEditando}
+        setRegistroEliminando={setRegistroEliminando}
+      />
+
+      <HistoryEditRecordModal
+        registroEditando={registroEditando}
+        setRegistroEditando={setRegistroEditando}
+        empleados={empleados}
+        serviciosDisponibles={serviciosDisponibles}
+        puedeEditarCosto={puedeEditarCosto}
+        guardandoEdicion={guardandoEdicion}
+        handleGuardarModificacion={handleGuardarModificacion}
+        onSolicitarEliminar={(reg) => {
+          setRegistroEditando(null);
+          setRegistroEliminando(reg);
+        }}
+        onClose={() => setRegistroEditando(null)}
+      />
+
+      <HistoryDeleteRecordModal
+        registroEliminando={registroEliminando}
+        onClose={() => setRegistroEliminando(null)}
+        eliminando={eliminando}
+        handleConfirmarEliminacion={handleConfirmarEliminacion}
+      />
+
+      <HistoryDiffModal
+        comparativaModificacion={comparativaModificacion}
+        onClose={() => setComparativaModificacion(null)}
+        handleCambiarModificacionActiva={handleCambiarModificacionActiva}
+        marcandoRevisadoId={marcandoRevisadoId}
+        handleMarcarRevisadoDesdeComparativa={handleMarcarRevisadoDesdeComparativa}
+        puedeModificarRegistro={puedeModificarRegistro}
+        usuario={usuario}
+        onEditarRegistro={(reg) => {
+          setComparativaModificacion(null);
+          setRegistroEditando(reg);
+        }}
+      />
+
+      <HistoryCostDayModal
+        modalCostoDia={modalCostoDia}
+        setModalCostoDia={setModalCostoDia}
+        guardandoCostoDia={guardandoCostoDia}
+        handleGuardarCostoDia={handleGuardarCostoDia}
+        handleSeleccionarRegistroModalCostoDia={handleSeleccionarRegistroModalCostoDia}
+        empActual={empActual}
+        onClose={() => setModalCostoDia(null)}
+      />
+
+      <HistoryCreateRosterModal
+        abierto={modalCrearRosterAbierto}
+        onClose={() => setModalCrearRosterAbierto(false)}
+        empleadoAuditar={empleadoAuditar}
+        fechaCalendario={fechaCalendario}
+        registros={registros}
+        serviciosDisponibles={serviciosDisponibles}
+        diasSeleccionadosCalendario={diasSeleccionadosCalendario}
+        seleccionados={seleccionados}
+        creandoRoster={creandoRoster}
+        onConfirmarCreacion={handleConfirmarCrearRoster}
+      />
+    </>
+  );
+
+  // En modo RPG: envuelto dentro del Tablón de Madera de la Taberna
+  if (isRpg) {
+    return (
+      <div className="rpg-board-viewport rpg-other-history-viewport">
+        <div className="rpg-notice-board">
+          <div className="rpg-iron-bracket top-left" />
+          <div className="rpg-iron-bracket top-right" />
+          <div className="rpg-iron-bracket bottom-left" />
+          <div className="rpg-iron-bracket bottom-right" />
+
+          <div className="rpg-curved-banner">
+            <div className="rpg-banner-scroll-roll left" />
+            <div className="rpg-banner-body">
+              <div className="rpg-banner-heading-wrap">
+                <div className="rpg-illuminated-box">A</div>
+                <h1 className="rpg-banner-main-title">CRÓNICAS DE AVENTUREROS • GREMIO INGEAP</h1>
+              </div>
+              <span className="rpg-banner-subtitle">
+                LIBRO DE COMPAÑÍA • AUDITORÍA DE MISIONES Y RECOMPENSAS
               </span>
-              <button
-                type="button"
-                className="modal-close"
-                onClick={() => setDiaSeleccionadoAuditoria(null)}
-              >
-                ✕
-              </button>
             </div>
-            <div style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: '10px', maxHeight: '360px', overflowY: 'auto' }}>
-              <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
-                Empleado: <strong>{empleadoAuditar}</strong> • Selecciona un registro para modificarlo o eliminarlo:
-              </span>
-              {diaSeleccionadoAuditoria.registros.map((item) => {
-                const lug = item.tipo_ocf || item.lugar || 'Oficina';
-                const badge = getBadgeClassLugar(lug, item.servicio);
-                return (
-                  <div
-                    key={item.id}
-                    style={{
-                      background: 'var(--bg-surface)',
-                      border: '1px solid var(--border-subtle)',
-                      borderRadius: '8px',
-                      padding: '10px',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      gap: '8px'
-                    }}
-                  >
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '3px', overflow: 'hidden' }}>
-                      <span className={`modalidad-pill ${badge}`} style={{ width: 'fit-content' }}>{lug}</span>
-                      <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                        {item.servicio}
-                      </span>
-                      <span style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>
-                        {item.horas > 0 ? `${item.horas} hs` : '0 hs'}
-                      </span>
-                    </div>
-                    <div style={{ display: 'flex', gap: '4px', flexShrink: 0 }}>
-                      <button
-                        type="button"
-                        className="btn-card-action btn-card-edit"
-                        onClick={() => {
-                          setDiaSeleccionadoAuditoria(null);
-                          setRegistroEditando({ ...item });
-                        }}
-                        title="Modificar este registro"
-                      >
-                        Modificar
-                      </button>
-                      <button
-                        type="button"
-                        className="btn-card-action btn-card-delete"
-                        onClick={() => {
-                          setDiaSeleccionadoAuditoria(null);
-                          setRegistroEliminando(item);
-                        }}
-                        title="Eliminar este registro"
-                      >
-                        Eliminar
-                      </button>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-            <div className="modal-actions" style={{ padding: '12px 16px' }}>
-              <button
-                type="button"
-                className="modal-btn-cancel"
-                onClick={() => setDiaSeleccionadoAuditoria(null)}
-              >
-                Cerrar
-              </button>
-            </div>
+            <div className="rpg-banner-scroll-roll right" />
+          </div>
+
+          <div className="view-content other-history-container rpg-other-history-content">
+            {contenidoPrincipal}
           </div>
         </div>
-      )}
+      </div>
+    );
+  }
 
-      {/* Modal de Modificación (con botón para Eliminar directamente) */}
-      {registroEditando && (
-        <div className="modal-backdrop">
-          <div className="modal-box">
-            <div className="modal-header">
-              <span className="modal-title">Modificar Registro de Asistencia</span>
-              <button
-                type="button"
-                className="modal-close"
-                onClick={() => setRegistroEditando(null)}
-              >
-                ✕
-              </button>
-            </div>
-
-            <form onSubmit={handleGuardarModificacion} className="modal-form">
-              <div className="form-group-clean">
-                <label className="form-label-clean">Empleado:</label>
-                <select
-                  className="form-select form-select-clean"
-                  value={registroEditando.empleado}
-                  onChange={(e) => setRegistroEditando({ ...registroEditando, empleado: e.target.value })}
-                  required
-                >
-                  {empleados.map(u => (
-                    <option key={u.dni || u.nombre} value={u.nombre}>
-                      {u.nombre} ({u.area || 'Sin área'})
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="form-group-clean">
-                <label className="form-label-clean">Fecha:</label>
-                <input
-                  type="date"
-                  className="form-input form-input-clean"
-                  value={registroEditando.fecha}
-                  onChange={(e) => setRegistroEditando({ ...registroEditando, fecha: e.target.value })}
-                  required
-                />
-              </div>
-
-              <div className="form-group-clean">
-                <label className="form-label-clean">Modalidad / Lugar:</label>
-                <select
-                  className="form-select form-select-clean"
-                  value={registroEditando.tipo_ocf || registroEditando.lugar || 'Oficina'}
-                  onChange={(e) => {
-                    const nuevoLugar = e.target.value;
-                    let nuevoServicio = registroEditando.servicio;
-                    let nuevasHoras = registroEditando.horas;
-
-                    if (nuevoLugar === 'Franco' || nuevoLugar === 'Franco de Oficina' || nuevoLugar === 'Franco Obra' || nuevoLugar === 'Franco de Obra' || nuevoLugar === 'Vacaciones') {
-                      nuevasHoras = 0;
-                      if (nuevoLugar === 'Vacaciones') nuevoServicio = 'Vacaciones';
-                      if (nuevoLugar === 'Franco Obra' || nuevoLugar === 'Franco de Obra') nuevoServicio = '';
-                      if (nuevoLugar === 'Franco') nuevoServicio = registroEditando.servicio || 'Área';
-                    } else if (nuevoLugar === 'Franco Ofic Trabajado' || nuevoLugar === 'Franco Trabajado') {
-                      nuevoServicio = 'Tiempo dedicado al Área';
-                      nuevasHoras = 8;
-                    } else if (nuevoLugar === 'Franco Obra Trabajado' || nuevoLugar === 'Feriado Trabajado') {
-                      nuevoServicio = '';
-                      nuevasHoras = 8;
-                    } else if (nuevoLugar === 'Licencia') {
-                      nuevoServicio = 'Licencia Médica';
-                      nuevasHoras = 0;
-                    } else if (nuevasHoras === 0) {
-                      nuevasHoras = 8;
-                    }
-
-                    setRegistroEditando({
-                      ...registroEditando,
-                      tipo_ocf: nuevoLugar,
-                      lugar: nuevoLugar,
-                      servicio: nuevoServicio,
-                      horas: nuevasHoras
-                    });
-                  }}
-                  required
-                >
-                  {LUGARES_OPCIONES.map(op => (
-                    <option key={op} value={op}>{op}</option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Si es Licencia, detalle del tipo de licencia */}
-              {(registroEditando.tipo_ocf === 'Licencia' || registroEditando.lugar === 'Licencia') ? (
-                <div className="form-group-clean">
-                  <label className="form-label-clean">Tipo de Licencia:</label>
-                  <input
-                    type="text"
-                    className="form-input form-input-clean"
-                    value={registroEditando.servicio}
-                    onChange={(e) => setRegistroEditando({ ...registroEditando, servicio: e.target.value })}
-                    placeholder="Ej: Licencia Médica, Licencia Especial, Examen..."
-                    required
-                  />
-                </div>
-              ) : (['Franco Obra', 'Franco de Obra', 'Franco Obra Trabajado', 'Feriado Trabajado', 'Campo', 'Campaña / Campo', 'Roster'].includes(registroEditando.tipo_ocf || registroEditando.lugar)) ? (
-                <div className="form-group-clean">
-                  <label className="form-label-clean">Proyecto Asignado:</label>
-                  <select
-                    className="form-select form-select-clean"
-                    value={registroEditando.servicio || ''}
-                    onChange={(e) => {
-                      setRegistroEditando({
-                        ...registroEditando,
-                        servicio: e.target.value
-                      });
-                    }}
-                    required
-                  >
-                    <option value="">-- Seleccionar proyecto asignado --</option>
-                    {serviciosDisponibles.map((srv, idx) => (
-                      <option key={idx} value={srv}>{srv}</option>
-                    ))}
-                  </select>
-                </div>
-              ) : (registroEditando.tipo_ocf === 'Franco' || registroEditando.lugar === 'Franco') ? (
-                <div className="form-group-clean">
-                  <label className="form-label-clean">Área / Asignación (Franco):</label>
-                  <input
-                    type="text"
-                    className="form-input form-input-clean"
-                    value={registroEditando.servicio || ''}
-                    onChange={(e) => setRegistroEditando({ ...registroEditando, servicio: e.target.value })}
-                    placeholder="Área del empleado (o proyecto si roster)"
-                    required
-                  />
-                </div>
-              ) : (registroEditando.tipo_ocf === 'Vacaciones' || registroEditando.lugar === 'Vacaciones') ? (
-                <div className="form-group-clean">
-                  <label className="form-label-clean">Detalle:</label>
-                  <input
-                    type="text"
-                    className="form-input form-input-clean"
-                    value={registroEditando.servicio || 'Vacaciones'}
-                    disabled
-                  />
-                </div>
-              ) : (
-                <div className="form-group-clean">
-                  <label className="form-label-clean">Proyecto / Tarea:</label>
-                  <select
-                    className="form-select form-select-clean"
-                    value={registroEditando.servicio}
-                    onChange={(e) => setRegistroEditando({ ...registroEditando, servicio: e.target.value })}
-                    required
-                  >
-                    <option value="Tiempo dedicado al Área">Tiempo dedicado al Área</option>
-                    {serviciosDisponibles.map((srv, idx) => (
-                      <option key={idx} value={srv}>{srv}</option>
-                    ))}
-                  </select>
-                </div>
-              )}
-
-              <div className="form-group-clean">
-                <label className="form-label-clean">Horas Registradas:</label>
-                <input
-                  type="number"
-                  step="0.5"
-                  min="0"
-                  max="24"
-                  className="form-input form-input-clean"
-                  value={registroEditando.horas}
-                  onChange={(e) => setRegistroEditando({ ...registroEditando, horas: e.target.value })}
-                  disabled={['Franco', 'Franco de Oficina', 'Franco Obra', 'Franco de Obra', 'Vacaciones', 'Licencia'].includes(registroEditando.tipo_ocf || registroEditando.lugar)}
-                  required
-                />
-              </div>
-
-              <div className="modal-actions" style={{ justifyContent: 'space-between' }}>
-                <button
-                  type="button"
-                  className="btn-card-action btn-card-delete"
-                  style={{ color: '#dc2626', borderColor: '#fca5a5' }}
-                  onClick={() => {
-                    const reg = { ...registroEditando };
-                    setRegistroEditando(null);
-                    setRegistroEliminando(reg);
-                  }}
-                  title="Eliminar este registro"
-                >
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                    <polyline points="3 6 5 6 21 6" />
-                    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-                  </svg>
-                  Eliminar Registro
-                </button>
-
-                <div style={{ display: 'flex', gap: '8px' }}>
-                  <button
-                    type="button"
-                    className="modal-btn-cancel"
-                    onClick={() => setRegistroEditando(null)}
-                    disabled={guardandoEdicion}
-                  >
-                    Cancelar
-                  </button>
-                  <button
-                    type="submit"
-                    className="modal-btn-confirm"
-                    disabled={guardandoEdicion}
-                  >
-                    {guardandoEdicion ? 'Guardando...' : 'Guardar Cambios'}
-                  </button>
-                </div>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* Modal de Confirmación de Eliminación */}
-      {registroEliminando && (
-        <div className="modal-backdrop">
-          <div className="modal-box modal-danger">
-            <div className="modal-header">
-              <span className="modal-title" style={{ color: 'var(--primary)' }}>
-                ⚠️ Confirmar Eliminación
-              </span>
-              <button
-                type="button"
-                className="modal-close"
-                onClick={() => setRegistroEliminando(null)}
-              >
-                ✕
-              </button>
-            </div>
-
-            <div className="modal-body-text" style={{ padding: '18px' }}>
-              <p>
-                ¿Estás seguro de que deseas eliminar este registro de <strong>{registroEliminando.empleado}</strong>?
-              </p>
-              <div className="delete-details-card" style={{ background: 'var(--bg-surface)', padding: '12px', borderRadius: '8px', fontSize: '13px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                <div><strong>Fecha:</strong> {registroEliminando.fecha}</div>
-                <div><strong>Modalidad:</strong> {registroEliminando.tipo_ocf || registroEliminando.lugar}</div>
-                <div><strong>Proyecto:</strong> {registroEliminando.servicio}</div>
-                <div><strong>Horas:</strong> {registroEliminando.horas} hs</div>
-              </div>
-              <p style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '10px' }}>
-                Esta acción eliminará el registro de la base local y también borrará la fila correspondiente en la hoja de Google Sheets en segundo plano.
-              </p>
-            </div>
-
-            <div className="modal-actions" style={{ padding: '0 18px 18px 18px' }}>
-              <button
-                type="button"
-                className="modal-btn-cancel"
-                onClick={() => setRegistroEliminando(null)}
-                disabled={eliminando}
-              >
-                Cancelar
-              </button>
-              <button
-                type="button"
-                className="modal-btn-delete"
-                onClick={handleConfirmarEliminacion}
-                disabled={eliminando}
-              >
-                {eliminando ? 'Eliminando...' : 'Sí, Eliminar Registro'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+  // En modo Normal / Corporativo
+  return (
+    <div className="view-content other-history-container">
+      {contenidoPrincipal}
     </div>
   );
 }

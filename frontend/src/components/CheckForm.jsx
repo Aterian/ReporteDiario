@@ -1,9 +1,17 @@
 import { useState, useEffect } from 'react';
 import { api } from '../services/apiBridge';
+import {
+  puedeCargarCampo,
+  puedeUsarRangoFechas,
+  puedeGestionarSubtiposFranco,
+  puedeCargarParaOtro,
+  esAdmin,
+  esSubAdmin
+} from '../utils/permissions';
 
 const LUGARES_BASE = [
   { id: 'Oficina', label: 'Oficina', labelRpg: '🏰 Ciudadela (Oficina)', icon: 'M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z' },
-  { id: 'Campaña / Campo', label: 'Campaña', labelRpg: '🌲 Expedición (Campaña)', icon: 'M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z' },
+  { id: 'Campo', label: 'Campo', labelRpg: '🌲 Expedición (Campo)', icon: 'M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z' },
   { id: 'Franco', label: 'Franco', labelRpg: '🍺 Taberna & Descanso', icon: 'M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z' }
 ];
 
@@ -20,7 +28,8 @@ const MAPA_AREAS = {
   'M': 'Mensura',
   'S': 'SIG',
   'RRHH': 'RRHH',
-  'VYM': 'Ventas y Marketing'
+  'VYM': 'Ventas y Marketing',
+  'D': 'Dirección'
 };
 
 const LISTADO_AREAS_CORPORATIVAS = [
@@ -35,7 +44,8 @@ const LISTADO_AREAS_CORPORATIVAS = [
   'Inventario',
   'I+D',
   'Ventas',
-  'CD'
+  'CD',
+  'Dirección'
 ];
 
 export default function CheckForm({ onRegistroGuardado, onVolver, tema }) {
@@ -49,18 +59,37 @@ export default function CheckForm({ onRegistroGuardado, onVolver, tema }) {
     return `${anio}-${mes}-${dia}`;
   };
 
+
   const [fecha, setFecha] = useState(getFechaHoy());
   const [fechaFin, setFechaFin] = useState(getFechaHoy());
   const [usarRangoFechas, setUsarRangoFechas] = useState(false);
   const [lugar, setLugar] = useState('Oficina');
+  const [horaInicio, setHoraInicio] = useState('08:00');
+  const [horaFin, setHoraFin] = useState('17:00');
   const [tipoFranco, setTipoFranco] = useState('Franco de Oficina');
   const [proyectoFrancoObra, setProyectoFrancoObra] = useState('');
   const [proyectoFrancoOfic, setProyectoFrancoOfic] = useState('');
   const [proyectoFeriado, setProyectoFeriado] = useState('');
   const [horasFrancoTrabajado, setHorasFrancoTrabajado] = useState(8);
   const [horasFeriado, setHorasFeriado] = useState(8);
-  const [tipoLicencia, setTipoLicencia] = useState('Médica');
-  const [detalleLicencia, setDetalleLicencia] = useState('');
+  const [modalidadAusencia, setModalidadAusencia] = useState('oficina');
+  const [costoManualAusencia, setCostoManualAusencia] = useState(false);
+  const [costoAusencia, setCostoAusencia] = useState('');
+
+  const calcularHorasDecimales = (inicio, fin) => {
+    if (!inicio || !fin) return 0;
+    const [hIni, mIni] = String(inicio).split(':').map(Number);
+    const [hFin, mFin] = String(fin).split(':').map(Number);
+    if (isNaN(hIni) || isNaN(mIni) || isNaN(hFin) || isNaN(mFin)) return 0;
+    let minTotales = (hFin * 60 + mFin) - (hIni * 60 + mIni);
+    if (minTotales < 0) {
+      minTotales += 24 * 60;
+    }
+    const dec = minTotales / 60;
+    return Number(dec.toFixed(2));
+  };
+
+  const horasCampoCalculadas = calcularHorasDecimales(horaInicio, horaFin);
 
   // Sesión y permisos
   const [sesionUsuario, setSesionUsuario] = useState(null);
@@ -89,7 +118,14 @@ export default function CheckForm({ onRegistroGuardado, onVolver, tema }) {
   // =========================================================================
   // VARIABLES DERIVADAS (Declaradas aquí para evitar errores TDZ antes de los hooks)
   // =========================================================================
-  const esRRHH = (sesionUsuario?.area || '').toUpperCase() === 'RRHH';
+  const esAdminUser = esAdmin(sesionUsuario);
+  const esSubAdminUser = esSubAdmin(sesionUsuario);
+  const esAdminOSubAdmin = esAdminUser || esSubAdminUser;
+  const puedeDelegarCarga = puedeCargarParaOtro(sesionUsuario);
+  const permitirRango = puedeUsarRangoFechas(sesionUsuario);
+  const puedeSubtiposFranco = puedeGestionarSubtiposFranco(sesionUsuario);
+  const esFrancoDirecto = !puedeSubtiposFranco;
+
   const empleadoActivoNombre = ((cargarParaOtro && usuarioSeleccionado)
     ? (usuarioSeleccionado.nombre || '')
     : (sesionUsuario?.nombre || '')).trim();
@@ -97,16 +133,13 @@ export default function CheckForm({ onRegistroGuardado, onVolver, tema }) {
     ? (usuarioSeleccionado.area || '')
     : (sesionUsuario?.area || '')).trim().toUpperCase();
 
-  // Empleados exclusivos de oficina: Todo Mensura (M) y Camila Llovio (Ingeniería)
-  // NOTA: La limitación NO aplica si el registro lo carga RRHH (RRHH tiene permisos completos)
-  const esSoloOficina = !esRRHH && (
-    areaActiva === 'M' ||
-    areaActiva === 'MENSURA' ||
-    empleadoActivoNombre.toLowerCase().includes('camila llovio') ||
-    empleadoActivoNombre.toLowerCase().includes('llovio')
-  );
+  // [RBAC] Reglas de Campo:
+  // - core, user_1, sub_admin y admin pueden registrar Campo
+  // - user_2 no puede registrar Campo por sí mismo
+  // - admin y sub_admin pueden registrar días de Campo para user_2 en carga delegada
+  const habilitadoCampo = puedeCargarCampo(sesionUsuario, cargarParaOtro ? usuarioSeleccionado : null);
 
-  const esUsuarioAreaEspecial = ['N', 'RRHH', 'A'].includes(areaActiva);
+  const esUsuarioAreaEspecial = ['N', 'RRHH', 'A', 'S'].includes(areaActiva);
   const areaNombreFinal = (esUsuarioAreaEspecial && areaElegida)
     ? areaElegida
     : (MAPA_AREAS[areaActiva] || areaActiva || 'General');
@@ -116,7 +149,6 @@ export default function CheckForm({ onRegistroGuardado, onVolver, tema }) {
   const esVacaciones = lugar === 'Vacaciones';
   const esLicencia = lugar === 'Licencia';
   const esSinProyectos = esFranco || esVacaciones || esLicencia || esFeriadoTrabajado;
-  const permitirRango = esSoloOficina ? false : (esCampañaOCampo || esRRHH);
 
   // 1. Cargar sesión de usuario
   useEffect(() => {
@@ -125,8 +157,7 @@ export default function CheckForm({ onRegistroGuardado, onVolver, tema }) {
         const estado = await api.obtenerEstadoSesion();
         if (estado && estado.usuario) {
           setSesionUsuario(estado.usuario);
-          const rolRRHH = (estado.usuario.area || '').toUpperCase() === 'RRHH';
-          if (rolRRHH) {
+          if (puedeCargarParaOtro(estado.usuario)) {
             const listaU = await api.obtenerTodosUsuarios();
             if (Array.isArray(listaU)) {
               setTodosUsuarios(listaU);
@@ -140,31 +171,46 @@ export default function CheckForm({ onRegistroGuardado, onVolver, tema }) {
     cargarSesion();
   }, []);
 
-  // Mantener consistencia para empleados de Mensura y Camila Llovio (solo Oficina y Franco de Oficina)
+  // Mantener consistencia de rol: forzar modalidades válidas si cambian los permisos
   useEffect(() => {
-    if (esSoloOficina) {
-      if (lugar !== 'Oficina' && lugar !== 'Franco') {
-        setLugar('Oficina');
-      }
-      if (tipoFranco !== 'Franco de Oficina') {
-        setTipoFranco('Franco de Oficina');
-      }
-      if (usarRangoFechas) {
-        setUsarRangoFechas(false);
-      }
+    if (!habilitadoCampo && (lugar === 'Campo' || lugar === 'Campaña / Campo')) {
+      setLugar('Oficina');
     }
-  }, [esSoloOficina, lugar, tipoFranco, usarRangoFechas]);
+    if (!permitirRango && usarRangoFechas) {
+      setUsarRangoFechas(false);
+    }
+    if (!puedeSubtiposFranco && tipoFranco !== 'Franco de Oficina') {
+      setTipoFranco('Franco de Oficina');
+    }
+  }, [habilitadoCampo, permitirRango, puedeSubtiposFranco, lugar, tipoFranco, usarRangoFechas]);
 
-  // Si RRHH activa la opción de cargar para otro, refrescar lista fresca de empleados
+  // Sincronizar sub-área elegida inicial según el área activa del usuario
   useEffect(() => {
-    if (cargarParaOtro && esRRHH) {
+    if (areaActiva === 'S' || areaActiva === 'SIG') {
+      setAreaElegida('SIG');
+    } else if (areaActiva === 'A') {
+      setAreaElegida('Aplicaciones');
+    } else if (areaActiva === 'I') {
+      setAreaElegida('Ingeniería');
+    } else if (areaActiva === 'M') {
+      setAreaElegida('Mensura');
+    } else if (areaActiva === 'VyM') {
+      setAreaElegida('Ventas y Marketing');
+    } else if (areaActiva === 'D') {
+      setAreaElegida('Dirección');
+    }
+  }, [areaActiva]);
+
+  // Si admin/sub_admin activa la opción de cargar para otro, refrescar lista fresca de empleados
+  useEffect(() => {
+    if (cargarParaOtro && puedeDelegarCarga) {
       api.obtenerTodosUsuarios().then((listaU) => {
         if (Array.isArray(listaU) && listaU.length > 0) {
           setTodosUsuarios(listaU);
         }
-      }).catch(err => console.error('Error al actualizar usuarios para RRHH:', err));
+      }).catch(err => console.error('Error al actualizar usuarios para delegación:', err));
     }
-  }, [cargarParaOtro, esRRHH]);
+  }, [cargarParaOtro, puedeDelegarCarga]);
 
   // 2. Cargar lista de proyectos disponibles desde el backend
   useEffect(() => {
@@ -254,14 +300,22 @@ export default function CheckForm({ onRegistroGuardado, onVolver, tema }) {
 
   // Cálculo de horas
   const getHorasEquitativas = () => {
-    if (proyectosSeleccionados.length === 0) return 8;
-    return Number((8 / proyectosSeleccionados.length).toFixed(1));
+    const base = esCampañaOCampo ? horasCampoCalculadas : 8;
+    if (proyectosSeleccionados.length === 0) return base;
+    return Number((base / proyectosSeleccionados.length).toFixed(1));
   };
 
   const getTotalHoras = () => {
-    if (proyectosSeleccionados.length === 0) return Math.max(0, horasArea);
-    if (modoDivision === 'equitativo') return 8;
-    const total = proyectosSeleccionados.reduce((acc, p) => acc + (Number(horasPorProyecto[p]) || 0), 0);
+    if (proyectosSeleccionados.length === 0) {
+      return esCampañaOCampo ? horasCampoCalculadas : Math.max(0, horasArea);
+    }
+    if (modoDivision === 'equitativo') {
+      return esCampañaOCampo ? horasCampoCalculadas : 8;
+    }
+    const total = proyectosSeleccionados.reduce((acc, p) => {
+      const val = horasPorProyecto[p] !== undefined ? Number(horasPorProyecto[p]) : getHorasEquitativas();
+      return acc + (isNaN(val) ? 0 : val);
+    }, 0);
     return Math.round(total * 10) / 10;
   };
 
@@ -321,13 +375,32 @@ export default function CheckForm({ onRegistroGuardado, onVolver, tema }) {
       }
     }
 
+    if (esCampañaOCampo) {
+      if (!horaInicio || !horaFin) {
+        setMensajeError('Por favor ingresa la hora de inicio y fin para la jornada de campo.');
+        return;
+      }
+      if (horasCampoCalculadas <= 0) {
+        setMensajeError('La jornada de campo calculada debe ser mayor a 0 horas.');
+        return;
+      }
+    }
+
+
     setEnviando(true);
 
     try {
       let payload = {
         fecha,
-        lugar
+        lugar: esCampañaOCampo ? 'Campo' : lugar,
+        tipo_ocf: esCampañaOCampo ? 'Campo' : lugar
       };
+
+      if (esCampañaOCampo) {
+        payload.hora_inicio = horaInicio;
+        payload.hora_fin = horaFin;
+        payload.horas = horasCampoCalculadas;
+      }
 
       if (cargarParaOtro && usuarioSeleccionado) {
         payload.empleado = usuarioSeleccionado.nombre;
@@ -363,10 +436,11 @@ export default function CheckForm({ onRegistroGuardado, onVolver, tema }) {
           payload.horas = Number(horasFrancoTrabajado || 8);
         } else {
           // Franco de oficina / normal (0 hs, servicio = area)
+          const areaFranco = esFrancoDirecto ? (MAPA_AREAS[areaActiva] || areaNombreFinal || 'General') : areaNombreFinal;
           payload.lugar = 'Franco';
           payload.tipo_ocf = 'Franco';
-          payload.servicio = areaNombreFinal;
-          payload.area = areaNombreFinal;
+          payload.servicio = areaFranco;
+          payload.area = areaFranco;
           payload.horas = 0.0;
         }
       } else if (esFeriadoTrabajado) {
@@ -381,52 +455,78 @@ export default function CheckForm({ onRegistroGuardado, onVolver, tema }) {
         payload.servicio = 'Vacaciones';
         payload.horas = 0.0;
       } else if (esLicencia) {
-        const descLic = tipoLicencia === 'Otra' ? (detalleLicencia.trim() || 'Especial') : tipoLicencia;
         payload.lugar = 'Licencia';
-        payload.tipo_licencia = descLic;
-        payload.servicio = `Licencia - ${descLic}`;
+        payload.servicio = 'Licencia';
         payload.horas = 0.0;
       } else if (proyectosSeleccionados.length === 0) {
-        // Sin proyectos específicos: Tiempo dedicado al área
-        const h = modoDivision === 'equitativo' ? 8 : horasArea;
-        const nombreServicio = esUsuarioAreaEspecial
-          ? `Dedicado al área - ${areaElegida}`
-          : 'Dedicado al área';
+        // Sin proyectos específicos: Tiempo dedicado al área o Campo general
+        const h = esCampañaOCampo ? horasCampoCalculadas : (modoDivision === 'equitativo' ? 8 : horasArea);
+        const nombreServicio = esCampañaOCampo
+          ? (esUsuarioAreaEspecial ? `Campo - ${areaElegida}` : 'Campo')
+          : (esUsuarioAreaEspecial ? `Dedicado al área - ${areaElegida}` : 'Dedicado al área');
 
         payload.proyectos = [{ servicio: nombreServicio, horas: h }];
         payload.servicio = nombreServicio;
         payload.horas = h;
       } else {
-        if (modoDivision === 'equitativo') {
-          const h = getHorasEquitativas();
-          payload.proyectos = proyectosSeleccionados.map(p => ({
-            servicio: p,
-            horas: h
-          }));
+        if (esCampañaOCampo) {
+          if (modoDivision === 'equitativo') {
+            const h = Number((horasCampoCalculadas / proyectosSeleccionados.length).toFixed(2));
+            payload.proyectos = proyectosSeleccionados.map(p => ({
+              servicio: p,
+              horas: h
+            }));
+            payload.horas = horasCampoCalculadas;
+          } else {
+            payload.proyectos = proyectosSeleccionados.map(p => ({
+              servicio: p,
+              horas: horasPorProyecto[p] !== undefined ? Number(horasPorProyecto[p]) : Number((horasCampoCalculadas / proyectosSeleccionados.length).toFixed(2))
+            }));
+            payload.horas = getTotalHoras();
+          }
         } else {
-          payload.proyectos = proyectosSeleccionados.map(p => ({
-            servicio: p,
-            horas: Number(horasPorProyecto[p]) || 0
-          }));
+          if (modoDivision === 'equitativo') {
+            const h = getHorasEquitativas();
+            payload.proyectos = proyectosSeleccionados.map(p => ({
+              servicio: p,
+              horas: h
+            }));
+            payload.horas = h * proyectosSeleccionados.length;
+          } else {
+            payload.proyectos = proyectosSeleccionados.map(p => ({
+              servicio: p,
+              horas: horasPorProyecto[p] !== undefined ? Number(horasPorProyecto[p]) : getHorasEquitativas()
+            }));
+            payload.horas = getTotalHoras();
+          }
+        }
+        if (proyectosSeleccionados.length === 1) {
+          payload.servicio = proyectosSeleccionados[0];
+          payload.proyecto = proyectosSeleccionados[0];
         }
       }
 
+      if (esVacaciones || esLicencia) {
+        payload.modalidad = modalidadAusencia;
+        payload.costo_manual = costoManualAusencia;
+        if (costoManualAusencia) {
+          if (costoAusencia.trim() === '' || !Number.isFinite(Number(costoAusencia)) || Number(costoAusencia) < 0) {
+            setMensajeError('Indique un costo diario válido, mayor o igual a cero.');
+            return;
+          }
+          payload.costo_dia = costoAusencia;
+        }
+      }
       const res = await api.guardarCheckDiario(payload);
 
       if (res.exito) {
-        const msg = isRpg 
-          ? '🏆 ¡Misión sellada con honores! EXP acumulada en el Gremio Ingeap.' 
+        const msg = isRpg
+          ? '🏆 ¡Misión sellada con honores! EXP acumulada en el Gremio Ingeap.'
           : (res.mensaje || '¡Check diario guardado con éxito!');
         setMensajeExito(msg);
         if (onRegistroGuardado) {
           onRegistroGuardado();
         }
-        setTimeout(() => {
-          setMensajeExito('');
-          if (onVolver) {
-            onVolver();
-          }
-        }, 1300);
       } else {
         setMensajeError(res.error || 'No se pudo registrar el reporte.');
       }
@@ -475,11 +575,38 @@ export default function CheckForm({ onRegistroGuardado, onVolver, tema }) {
           </>
         )}
         {mensajeExito && (
-          <div className="alert alert-success">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M20 6L9 17l-5-5" />
-            </svg>
-            <span>{mensajeExito}</span>
+          <div className="alert alert-success sync-progress-alert">
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', width: '100%' }}>
+              <div className="sync-pulse-spinner" />
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '3px', flex: 1 }}>
+                <strong style={{ fontSize: '13px', color: '#065f46' }}>{mensajeExito}</strong>
+                <span style={{ fontSize: '12px', color: '#047857', display: 'flex', alignItems: 'center', gap: '4px', flexWrap: 'wrap' }}>
+                  Guardado confirmado en PostgreSQL.
+                </span>
+              </div>
+              <button
+                type="button"
+                className="btn-sync-dismiss"
+                onClick={() => {
+                  setMensajeExito('');
+                  if (onVolver) onVolver();
+                }}
+                style={{
+                  background: 'rgba(6, 95, 70, 0.1)',
+                  border: '1px solid rgba(6, 95, 70, 0.25)',
+                  color: '#065f46',
+                  borderRadius: '4px',
+                  padding: '3px 8px',
+                  fontSize: '11px',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  whiteSpace: 'nowrap'
+                }}
+                title="Volver al inicio de inmediato"
+              >
+                Continuar ➔
+              </button>
+            </div>
           </div>
         )}
 
@@ -496,8 +623,8 @@ export default function CheckForm({ onRegistroGuardado, onVolver, tema }) {
 
         <form onSubmit={handleSubmit} className="clean-form">
 
-          {/* GESTIÓN RRHH: Acordeón discreto */}
-          {esRRHH && (
+          {/* GESTIÓN ADMIN / SUB-ADMIN: Acordeón discreto para carga delegada */}
+          {puedeDelegarCarga && (
             <div className={`rrhh-card ${cargarParaOtro ? 'active' : ''}`}>
               <div className="rrhh-header" onClick={() => setCargarParaOtro(!cargarParaOtro)}>
                 <div className="rrhh-title">
@@ -507,7 +634,7 @@ export default function CheckForm({ onRegistroGuardado, onVolver, tema }) {
                     <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
                     <path d="M16 3.13a4 4 0 0 1 0 7.75" />
                   </svg>
-                  <span>Cargar reporte para otro empleado (RRHH)</span>
+                  <span>{isRpg ? '📜 Cargar Decreto para otro Compañero' : 'Cargar reporte para otro colaborador (Admin / Sub Admin)'}</span>
                 </div>
                 <input
                   type="checkbox"
@@ -628,9 +755,9 @@ export default function CheckForm({ onRegistroGuardado, onVolver, tema }) {
               </label>
 
               <div className="segmented-modalidad-grid">
-                {(esSoloOficina
-                  ? LUGARES_BASE.filter((i) => i.id === 'Oficina' || i.id === 'Franco')
-                  : (esRRHH ? [...LUGARES_BASE, ...LUGARES_RRHH] : LUGARES_BASE)
+                {(esAdminOSubAdmin
+                  ? (habilitadoCampo ? [...LUGARES_BASE, ...LUGARES_RRHH] : [...LUGARES_BASE.filter((i) => i.id !== 'Campo'), ...LUGARES_RRHH])
+                  : (habilitadoCampo ? LUGARES_BASE : LUGARES_BASE.filter((i) => i.id !== 'Campo'))
                 ).map((item) => {
                   const isSelected = lugar === item.id;
                   const isFrancoItem = item.id === 'Franco';
@@ -642,14 +769,13 @@ export default function CheckForm({ onRegistroGuardado, onVolver, tema }) {
                     <button
                       type="button"
                       key={item.id}
-                      className={`seg-btn ${
-                        isSelected 
-                          ? (isFrancoItem ? 'seg-franco' : isVacacionesItem ? 'seg-vacaciones' : isLicenciaItem ? 'seg-licencia' : isFeriadoItem ? 'seg-feriado' : 'seg-active') 
-                          : ''
-                      }`}
+                      className={`seg-btn ${isSelected
+                        ? (isFrancoItem ? 'seg-franco' : isVacacionesItem ? 'seg-vacaciones' : isLicenciaItem ? 'seg-licencia' : isFeriadoItem ? 'seg-feriado' : 'seg-active')
+                        : ''
+                        }`}
                       onClick={() => {
                         setLugar(item.id);
-                        if (!esRRHH && item.id !== 'Campo' && item.id !== 'Campaña / Campo') {
+                        if (!permitirRango && item.id !== 'Campo' && item.id !== 'Campaña / Campo') {
                           setUsarRangoFechas(false);
                         }
                       }}
@@ -663,6 +789,64 @@ export default function CheckForm({ onRegistroGuardado, onVolver, tema }) {
                 })}
               </div>
             </div>
+
+            {/* Si la modalidad es Campo: Selector dinámico de Hora Inicio y Hora Fin con cálculo automático */}
+            {esCampañaOCampo && (
+              <div className="campo-horarios-card">
+                <div className="campo-horarios-header">
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#cc3333" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round">
+                      <circle cx="12" cy="12" r="10" />
+                      <polyline points="12 6 12 12 16 14" />
+                    </svg>
+                    <span className="campo-horarios-title">
+                      {isRpg ? '⏱️ Horario de Expedición en Campo' : 'Horario de Jornada en Campo'}
+                    </span>
+                  </div>
+                  <span className="campo-horas-badge" title="Cálculo automático: Hora Fin - Hora Inicio">
+                    {horasCampoCalculadas} hs calculadas
+                  </span>
+                </div>
+
+                <div className="campo-horarios-grid">
+                  <div className="campo-time-field">
+                    <label className="form-label-clean" htmlFor="horaInicio">
+                      Hora Inicio <strong className="required">*</strong>
+                    </label>
+                    <input
+                      id="horaInicio"
+                      type="time"
+                      className="form-input form-input-clean campo-time-input"
+                      value={horaInicio}
+                      onChange={(e) => setHoraInicio(e.target.value)}
+                      disabled={enviando}
+                      required
+                    />
+                  </div>
+
+                  <div className="campo-time-field">
+                    <label className="form-label-clean" htmlFor="horaFin">
+                      Hora Fin <strong className="required">*</strong>
+                    </label>
+                    <input
+                      id="horaFin"
+                      type="time"
+                      className="form-input form-input-clean campo-time-input"
+                      value={horaFin}
+                      onChange={(e) => setHoraFin(e.target.value)}
+                      disabled={enviando}
+                      required
+                    />
+                  </div>
+                </div>
+
+                <div className="campo-horarios-calc-info">
+                  <span>
+                    De {horaInicio || '--:--'} a {horaFin || '--:--'} hs • Total calculado: <strong>{horasCampoCalculadas} horas decimales</strong>
+                  </span>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* SI ES FRANCO, FERIADO TRABAJADO, VACACIONES O LICENCIA */}
@@ -672,38 +856,38 @@ export default function CheckForm({ onRegistroGuardado, onVolver, tema }) {
               <div className="franco-serene-body" style={{ width: '100%' }}>
                 <h4>{isRpg ? 'Campamento en la Taberna del Reino' : 'Día de Descanso / Franco'}</h4>
                 <p>
-                  {esSoloOficina
-                    ? (isRpg ? 'Descanso de la Orden en la Ciudadela (0 hs imputadas al área).' : 'Franco de oficina (0 hs imputadas al área de adscripción).')
+                  {!puedeSubtiposFranco || esFrancoDirecto
+                    ? (isRpg ? 'Descanso de la Orden en la Ciudadela (0 hs imputadas al área de adscripción).' : 'Franco de oficina (0 hs imputadas al área de adscripción).')
                     : (isRpg ? 'Define la modalidad del franco a registrar:' : 'Selecciona la categoría de franco a registrar:')
                   }
                 </p>
 
-                {/* Sub-selector de Franco (Oculto para empleados exclusivos de oficina: Mensura y Camila Llovio) */}
-                {!esSoloOficina && (
+                {/* Sub-selector de Franco (Solo accesible para admin y sub_admin; no disponible para user_1, user_2 ni empleados con franco directo) */}
+                {puedeSubtiposFranco && !esFrancoDirecto && (
                   <div className="franco-subtypes-grid">
-                  {[
-                    { id: 'Franco de Oficina', label: 'Franco de oficina', desc: '0 hs • Imputa al área' },
-                    { id: 'Franco de Obra', label: 'Franco de obra', desc: '0 hs • Imputa al proyecto' },
-                    { id: 'Franco Ofic Trabajado', label: 'Franco ofic. trabajado', desc: 'Computa hs • Oficina / Área' },
-                    { id: 'Franco Obra Trabajado', label: 'Franco obra trabajado', desc: 'Computa hs • Imputa a obra' }
-                  ].map((sub) => (
-                    <button
-                      key={sub.id}
-                      type="button"
-                      className={`franco-sub-btn ${tipoFranco === sub.id ? 'active' : ''}`}
-                      onClick={() => setTipoFranco(sub.id)}
-                    >
-                      <span className="franco-sub-title">{sub.label}</span>
-                      <span className="franco-sub-desc">{sub.desc}</span>
-                    </button>
-                  ))}
+                    {[
+                      { id: 'Franco de Oficina', label: 'Franco de oficina', desc: '0 hs • Imputa al área' },
+                      { id: 'Franco de Obra', label: 'Franco de obra', desc: '0 hs • Imputa al proyecto' },
+                      { id: 'Franco Ofic Trabajado', label: 'Franco ofic. trabajado', desc: 'Computa hs • Oficina / Área' },
+                      { id: 'Franco Obra Trabajado', label: 'Franco obra trabajado', desc: 'Computa hs • Imputa a obra' }
+                    ].map((sub) => (
+                      <button
+                        key={sub.id}
+                        type="button"
+                        className={`franco-sub-btn ${tipoFranco === sub.id ? 'active' : ''}`}
+                        onClick={() => setTipoFranco(sub.id)}
+                      >
+                        <span className="franco-sub-title">{sub.label}</span>
+                        <span className="franco-sub-desc">{sub.desc}</span>
+                      </button>
+                    ))}
                   </div>
                 )}
 
                 {tipoFranco === 'Franco de Oficina' && (
                   <div className="franco-hours-box" style={{ background: 'var(--bg-surface)', padding: '10px 14px', borderRadius: '8px', border: '1px solid var(--border-subtle)', marginTop: '8px' }}>
                     <span style={{ fontSize: '12.5px', color: 'var(--text-secondary)' }}>
-                      Asignación: Se registrará en la columna de servicio el área <strong>{areaNombreFinal}</strong> con 0 hs computadas.
+                      Asignación: Se registrará en la columna de servicio el área <strong>{esFrancoDirecto ? (MAPA_AREAS[areaActiva] || areaNombreFinal || 'General') : areaNombreFinal}</strong> con 0 hs computadas.
                     </span>
                   </div>
                 )}
@@ -840,45 +1024,7 @@ export default function CheckForm({ onRegistroGuardado, onVolver, tema }) {
               </div>
             </div>
           ) : esLicencia ? (
-            <div className="licencia-card">
-              <div className="licencia-header">
-                <span className="licencia-icon">📋</span>
-                <div>
-                  <h4 style={{ margin: 0, fontSize: '14px', fontWeight: 600 }}>Registro de Licencia</h4>
-                  <p style={{ margin: '2px 0 0 0', fontSize: '12px', color: 'var(--text-secondary)' }}>Indica el tipo o motivo de la licencia otorgada:</p>
-                </div>
-              </div>
-              <div className="licencia-body" style={{ marginTop: '12px' }}>
-                <div className="form-group-clean">
-                  <label className="form-label-clean">Tipo de Licencia:</label>
-                  <select
-                    className="form-select form-select-clean"
-                    value={tipoLicencia}
-                    onChange={(e) => setTipoLicencia(e.target.value)}
-                  >
-                    <option value="Médica">Médica / Salud</option>
-                    <option value="Especial">Especial</option>
-                    <option value="Estudio / Examen">Estudio / Examen</option>
-                    <option value="Maternidad / Paternidad">Maternidad / Paternidad</option>
-                    <option value="Duelo">Duelo familiar</option>
-                    <option value="Gremial">Gremial</option>
-                    <option value="Otra">Otra (especificar detalle)...</option>
-                  </select>
-                </div>
-                {tipoLicencia === 'Otra' && (
-                  <div className="form-group-clean" style={{ marginTop: '8px' }}>
-                    <label className="form-label-clean">Detalle / Motivo:</label>
-                    <input
-                      type="text"
-                      className="form-input form-input-clean"
-                      placeholder="Ej: Licencia sin goce de sueldo, etc."
-                      value={detalleLicencia}
-                      onChange={(e) => setDetalleLicencia(e.target.value)}
-                    />
-                  </div>
-                )}
-              </div>
-            </div>
+            <div className="licencia-card"><h4>Registro de Licencia</h4><p>Se registrarán las fechas seleccionadas con estado Licencia y cero horas.</p></div>
           ) : (
             /* SECCIÓN 2: ACTIVIDAD Y PROYECTOS / HAZAÑAS */
             <div className="form-section-card">
@@ -905,7 +1051,7 @@ export default function CheckForm({ onRegistroGuardado, onVolver, tema }) {
                     </span>
                   </span>
 
-                  {esRRHH && (
+                  {esAdminOSubAdmin && (
                     <label className="range-toggle-label">
                       <input
                         type="checkbox"
@@ -927,8 +1073,8 @@ export default function CheckForm({ onRegistroGuardado, onVolver, tema }) {
                     {cargandoServicios
                       ? 'Cargando opciones...'
                       : isRpg
-                      ? '+ Seleccionar misión o gremio aliado...'
-                      : '+ Seleccionar de la lista...'}
+                        ? '+ Seleccionar misión o gremio aliado...'
+                        : '+ Seleccionar de la lista...'}
                   </option>
 
                   {/* Si es A, N o RRHH: Permite elegir libremente entre todas las áreas corporativas */}
@@ -946,7 +1092,7 @@ export default function CheckForm({ onRegistroGuardado, onVolver, tema }) {
                     </option>
                   )}
 
-                  <optgroup label="📁 Proyectos Activos">
+                  <optgroup label={(areaActiva === 'I' || areaActiva === 'M' || areaActiva === 'INGENIERIA' || areaActiva === 'MENSURA') ? "📁 Proyectos Activos (Ingeniería y Mensura)" : "📁 Proyectos Activos"}>
                     {serviciosDisponibles.map((srv) => (
                       <option key={srv} value={srv}>
                         {srv}
@@ -1027,22 +1173,28 @@ export default function CheckForm({ onRegistroGuardado, onVolver, tema }) {
               ) : (
                 /* CASO B: Proyectos o Múltiples Áreas seleccionadas */
                 <div className="projects-active-wrapper">
-                  {/* Selector de modo si son 2 o más ítems */}
-                  {proyectosSeleccionados.length >= 2 && (
+                  {/* Selector de modo para 1 o más proyectos/áreas */}
+                  {proyectosSeleccionados.length >= 1 && (
                     <div className="division-toggle-bar">
                       <button
                         type="button"
                         className={`division-toggle-btn ${modoDivision === 'equitativo' ? 'active' : ''}`}
                         onClick={() => setModoDivision('equitativo')}
                       >
-                        {isRpg ? '⚖️ Reparto de Botín (8 hs)' : '⚖️ Dividir equitativo (8 hs)'}
+                        {proyectosSeleccionados.length === 1
+                          ? (isRpg ? '⚖️ Jornada Estándar (8 hs)' : `⚖️ Jornada estándar (${esCampañaOCampo ? horasCampoCalculadas : 8} hs)`)
+                          : (isRpg ? '⚖️ Reparto de Botín (8 hs)' : '⚖️ Dividir equitativo (8 hs)')
+                        }
                       </button>
                       <button
                         type="button"
                         className={`division-toggle-btn ${modoDivision === 'personalizado' ? 'active' : ''}`}
                         onClick={() => setModoDivision('personalizado')}
                       >
-                        {isRpg ? '🗡️ Puntos de Esfuerzo' : '✏️ Ajustar por ítem'}
+                        {proyectosSeleccionados.length === 1
+                          ? (isRpg ? '🗡️ Horas Manuales' : '✏️ Asignar horas manuales')
+                          : (isRpg ? '🗡️ Puntos de Esfuerzo' : '✏️ Ajustar por ítem')
+                        }
                       </button>
                     </div>
                   )}
@@ -1126,6 +1278,17 @@ export default function CheckForm({ onRegistroGuardado, onVolver, tema }) {
           )}
 
           {/* BOTÓN DE CONFIRMACIÓN */}
+          {(esVacaciones || esLicencia) && (
+            <fieldset className="pg-absence-controls">
+              <legend>Modalidad de liquidación</legend>
+              <label htmlFor="modalidad-ausencia">Modalidad</label>
+              <select id="modalidad-ausencia" className="form-select form-select-clean" value={modalidadAusencia} onChange={e => setModalidadAusencia(e.target.value)}>
+                <option value="oficina">Oficina</option><option value="obra">Obra</option>
+              </select>
+              <label className="pg-checkbox-label"><input type="checkbox" checked={costoManualAusencia} onChange={e => setCostoManualAusencia(e.target.checked)} />Costo diario manual</label>
+              {costoManualAusencia && <><label htmlFor="costo-ausencia">Costo diario (ARS)</label><input id="costo-ausencia" className="form-input form-input-clean" type="number" min="0" step="0.01" required value={costoAusencia} onChange={e => setCostoAusencia(e.target.value)} /></>}
+            </fieldset>
+          )}
           <button type="submit" className="btn-submit btn-submit-spacious" disabled={enviando}>
             {enviando ? (
               <>
@@ -1143,14 +1306,14 @@ export default function CheckForm({ onRegistroGuardado, onVolver, tema }) {
                   {esFranco
                     ? (isRpg ? '🍺 Descansar en la Posada' : 'Registrar Franco (Descanso)')
                     : esVacaciones
-                    ? (usarRangoFechas ? 'Registrar Período de Vacaciones' : 'Registrar Vacaciones')
-                    : esLicencia
-                    ? (usarRangoFechas ? 'Registrar Período de Licencia' : 'Registrar Licencia')
-                    : usarRangoFechas && esCampañaOCampo
-                    ? (isRpg ? '🌲 Registrar Gran Expedición' : 'Registrar Rango Campo')
-                    : usarRangoFechas
-                    ? `Registrar Rango (${lugar})`
-                    : (isRpg ? `⚡ ¡Sellar Misión Diaria! (+${Math.round(totalHs * 100)} EXP)` : 'Registrar Check Diario')}
+                      ? (usarRangoFechas ? 'Registrar Período de Vacaciones' : 'Registrar Vacaciones')
+                      : esLicencia
+                        ? (usarRangoFechas ? 'Registrar Período de Licencia' : 'Registrar Licencia')
+                        : usarRangoFechas && esCampañaOCampo
+                          ? (isRpg ? '🌲 Registrar Gran Expedición' : 'Registrar Rango Campo')
+                          : usarRangoFechas
+                            ? `Registrar Rango (${lugar})`
+                            : (isRpg ? `⚡ ¡Sellar Misión Diaria! (+${Math.round(totalHs * 100)} EXP)` : 'Registrar Check Diario')}
                 </span>
               </>
             )}

@@ -1,5 +1,5 @@
 # =========================================================
-# Ingeap - Instalador de Acceso Directo y Auto-Inicio
+# Ingeap - Instalador de Acceso Directo y Auto-Inicio (v1.16.0)
 # Check Diario de Asistencia y Proyectos
 # =========================================================
 
