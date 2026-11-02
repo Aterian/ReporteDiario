@@ -17,6 +17,18 @@ def respuesta_segura(funcion):
         try:
             return funcion(*args, **kwargs)
         except AppBaseException as exc:
+            if getattr(exc, "codigo_error", "") in ("ERROR_BASE_DATOS", "ERROR_CONCURRENCIA"):
+                try:
+                    sesion = db.obtener_sesion_activa()
+                    db.registrar_error_remoto({
+                        "origen": "backend",
+                        "accion_metodo": funcion.__name__,
+                        "codigo_error": exc.codigo_error,
+                        "mensaje_error": exc.mensaje,
+                        "detalle_tecnico": f"{type(exc).__name__}: {str(exc)}"
+                    }, sesion=sesion)
+                except Exception:
+                    pass
             return {"exito":False,"error":exc.mensaje,"codigo_error":exc.codigo_error}
         except ValidationError as exc:
             mensaje = "; ".join(".".join(str(p) for p in e["loc"])+": "+e["msg"] for e in exc.errors())
@@ -25,6 +37,17 @@ def respuesta_segura(funcion):
             return {"exito":False,"error":"Datos incompletos o inválidos.","codigo_error":"VALIDACION_ERROR"}
         except Exception as exc:
             logger.error("[API] {}: {}",funcion.__name__,type(exc).__name__)
+            try:
+                sesion = db.obtener_sesion_activa()
+                db.registrar_error_remoto({
+                    "origen": "backend",
+                    "accion_metodo": funcion.__name__,
+                    "codigo_error": "ERROR_INTERNO",
+                    "mensaje_error": str(exc),
+                    "detalle_tecnico": f"{type(exc).__name__}: {str(exc)}"
+                }, sesion=sesion)
+            except Exception:
+                pass
             return {"exito":False,"error":"No se pudo completar la operación.","codigo_error":"ERROR_INTERNO"}
     return ejecutar
 
@@ -231,7 +254,13 @@ class ApiPuente:
 
     def verificar_registro_hoy(self):
         sesion = self._sesion()
-        return {"registrado":db.usuario_registro_hoy(sesion["id_usuario"])}
+        uid = sesion["id_usuario"]
+        registrado = db.usuario_registro_hoy(uid)
+        info_faltantes = db.obtener_dias_faltantes_mes(uid)
+        return {
+            "registrado": registrado,
+            **info_faltantes
+        }
 
     def verificar_actualizacion(self):
         from main import verificar_actualizacion_github
@@ -424,3 +453,50 @@ class ApiPuente:
 for _nombre,_metodo in list(vars(ApiPuente).items()):
     if not _nombre.startswith("_") and callable(_metodo):
         setattr(ApiPuente,_nombre,respuesta_segura(_metodo))
+    # [FN-07.21] Telemetría y captura de errores remotos
+    @respuesta_segura
+    def reportar_error_cliente(self, datos: dict):
+        sesion = db.obtener_sesion_activa()
+        return db.registrar_error_remoto(datos, sesion=sesion)
+
+    @respuesta_segura
+    def obtener_errores_remotos(self, solo_pendientes: bool = True, limite: int = 50):
+        self._sesion(admin=True)
+        return db.obtener_errores_remotos(solo_pendientes=solo_pendientes, limite=limite)
+
+    @respuesta_segura
+    def marcar_error_remoto_resuelto(self, id_error: str | None = None, todos: bool = False):
+        sesion = self._sesion(admin=True)
+        res = db.marcar_error_remoto_resuelto(id_error=id_error, todos=todos, id_operador=sesion.get("id_usuario"))
+        self._notificar_cambios()
+        return res
+
+    # [FN-04.14] Alta de nuevo usuario y sueldo base
+    @respuesta_segura
+    def crear_usuario_y_sueldo(self, datos: dict):
+        sesion = self._sesion()
+        if sesion.get("rol_app") not in ("admin", "sub_admin"):
+            raise PermisoDenegadoError("Solo usuarios admin o sub_admin pueden dar de alta empleados.")
+        res = db.crear_usuario_y_sueldo(datos, operador_sesion=sesion)
+        self._notificar_cambios()
+        return res
+
+    # [FN-07.22] Gestión integral de proyectos por administradores
+    @respuesta_segura
+    def obtener_proyectos_admin(self, incluir_inactivos: bool = True):
+        self._sesion(admin=True)
+        return db.obtener_proyectos_gestion(incluir_inactivos=incluir_inactivos)
+
+    @respuesta_segura
+    def crear_proyecto(self, datos: dict):
+        self._sesion(admin=True)
+        res = db.crear_proyecto(datos)
+        self._notificar_cambios()
+        return res
+
+    @respuesta_segura
+    def actualizar_proyecto(self, datos: dict):
+        self._sesion(admin=True)
+        res = db.actualizar_proyecto(datos)
+        self._notificar_cambios()
+        return res

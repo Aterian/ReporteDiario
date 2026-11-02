@@ -238,5 +238,11 @@ export const puedeEditarUsuarios = (usuario) => {
   const rol = getRolUsuario(usuario);
   return rol === 'admin' || rol === 'sub_admin';
 };
-
-
+/**
+ * 9. Gestión Integral de Proyectos:
+ * - Exclusivo para rol admin
+ */
+export const puedeGestionarProyectos = (usuario) => {
+  const rol = getRolUsuario(usuario);
+  return rol === 'admin';
+};

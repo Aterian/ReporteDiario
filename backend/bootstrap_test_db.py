@@ -90,6 +90,9 @@ def main():
             modalidad = ROOT/"backend"/"sql"/"004_modalidad_calculo_sueldo.sql"
             if modalidad.exists():
                 cur.execute(modalidad.read_text(encoding="utf-8"))
+            errores_y_proy = ROOT/"backend"/"sql"/"005_errores_remotos_y_gestion_proyectos.sql"
+            if errores_y_proy.exists():
+                cur.execute(errores_y_proy.read_text(encoding="utf-8"))
     fixture = ROOT/"backend"/"tests"/"fixtures"/"postgres_schema.sql"
     fixture.parent.mkdir(parents=True,exist_ok=True)
     fixture.write_text("-- [FN-07.10] Estructura introspectada para pruebas aisladas; no contiene datos\n"+estructura.replace("\r\n","\n"),encoding="utf-8",newline="\n")

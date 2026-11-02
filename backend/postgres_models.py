@@ -171,3 +171,56 @@ class ConfiguracionSueldoUpdate(BaseModel):
     id_usuario: UUID
     modalidad_calculo: Literal["por_dia", "base_30"]
     lugar_habitual: Literal["oficina", "obra"]
+
+# [FN-04.14] Creación administrativa de nuevo usuario y sueldo base
+class UsuarioSueldoCreate(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    primer_nombre: str = Field(min_length=1, max_length=100)
+    apellido: str = Field(default="", max_length=100)
+    dni: str = Field(min_length=6, max_length=20)
+    email: str = Field(min_length=3, max_length=150)
+    area: str = Field(min_length=1, max_length=50)
+    rol_app: str = Field(default="user_1", pattern="^(admin|sub_admin|core|user_1|user_2)$")
+    activo: bool = True
+    sueldo_oficina: Decimal = Field(default=Decimal("0"), ge=0, allow_inf_nan=False)
+    sueldo_obra: Decimal = Field(default=Decimal("0"), ge=0, allow_inf_nan=False)
+    lugar_habitual: Literal["oficina", "obra"] = "oficina"
+    modalidad_calculo: Literal["por_dia", "base_30"] = "base_30"
+
+
+# [FN-07.21] Registro y captura de errores remotos
+class ErrorRemotoCreate(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id_usuario: UUID | None = None
+    nombre_usuario: str = Field(default="Sesión no iniciada", max_length=150)
+    rol_usuario: str | None = None
+    origen: str = Field(default="backend", max_length=40)
+    accion_metodo: str | None = None
+    codigo_error: str = Field(default="ERROR_INTERNO", max_length=60)
+    mensaje_error: str = Field(min_length=1)
+    detalle_tecnico: str | None = None
+    equipo_info: str | None = None
+
+
+# [FN-07.22] Creación y actualización de proyectos
+class ProyectoCreate(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id_proyecto: UUID
+    codificacion_serv: str = Field(min_length=1, max_length=150)
+    n_serv: Decimal | int | None = None
+    responsable_des: str | None = Field(default=None, max_length=100)
+    area: str | None = Field(default=None, max_length=20)
+    url_des: str | None = Field(default=None, max_length=200)
+    activo: bool = True
+
+
+class ProyectoUpdate(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id_servicio: UUID
+    id_proyecto: UUID
+    codificacion_serv: str = Field(min_length=1, max_length=150)
+    n_serv: Decimal | int | None = None
+    responsable_des: str | None = Field(default=None, max_length=100)
+    area: str | None = Field(default=None, max_length=20)
+    url_des: str | None = Field(default=None, max_length=200)
+    activo: bool = True

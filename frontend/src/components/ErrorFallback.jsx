@@ -1,8 +1,21 @@
 // [FN-00.03] ErrorFallback Component for react-error-boundary
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { api } from '../services/apiBridge';
 
 export default function ErrorFallback({ error, resetErrorBoundary }) {
   const [mostrarDetalles, setMostrarDetalles] = useState(false);
+
+  useEffect(() => {
+    if (error) {
+      api.reportarErrorCliente({
+        origen: 'frontend',
+        accion_metodo: 'React ErrorBoundary',
+        codigo_error: 'REACT_RENDER_ERROR',
+        mensaje_error: error?.message || 'Error de renderizado en React',
+        detalle_tecnico: error?.stack || String(error)
+      }).catch(() => {});
+    }
+  }, [error]);
 
   const handleRecargar = () => {
     window.location.reload();

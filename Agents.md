@@ -50,7 +50,7 @@ El sistema **Check Diario (Ingeap)** gestiona el registro diario de asistencias,
 
 ### 3.1 Esquema `app_proyectos`
 * **`app_proyectos.b_1_proyectos_servicios`**:
-  * Columnas: `id_proyecto` (UUID PK/UNIQUE), `denominacion` (VARCHAR), `area` (VARCHAR), `activo` (BOOLEAN).
+  * Columnas: `id_servicio` (UUID PK `DEFAULT gen_random_uuid()`), `id_proyecto` (UUID UNIQUE ingresado por el Administrador), `codificacion_serv` (VARCHAR), `n_serv` (NUMERIC), `responsable_des` (VARCHAR), `url_des` (VARCHAR), `area` (VARCHAR), `activo` (BOOLEAN).
 
 ### 3.2 Esquema `app_rrhh` — Tipos ENUM
 * `app_rrhh.tipo_lugar_habitual`: `'oficina'`, `'obra'`
@@ -101,6 +101,10 @@ El sistema **Check Diario (Ingeap)** gestiona el registro diario de asistencias,
 
 7. **`b_1_modificaciones_realizadas`**:
    * **Trigger `trg_auditar_modificaciones_asistencia`:** Registra automáticamente toda `MODIFICACION` (`UPDATE`) o `ELIMINACION` (`DELETE`) sobre `b_1_asistencias`, guardando el resumen en `detalle_cambio` y el respaldo completo en `valores_anteriores` y `valores_nuevos` (`JSONB`).
+
+8. **`b_1_errores_remotos`**:
+   * Columnas: `id_error` (UUID PK `DEFAULT gen_random_uuid()`), `id_usuario` (UUID FK Nullable), `nombre_usuario` (VARCHAR), `rol_usuario` (VARCHAR), `origen` (VARCHAR), `accion_metodo` (VARCHAR), `codigo_error` (VARCHAR), `mensaje_error` (TEXT), `detalle_tecnico` (TEXT), `equipo_info` (VARCHAR), `resuelto` (BOOLEAN), `resuelto_por` (UUID FK), `fecha_hora` (TIMESTAMPTZ UTC).
+   * Almacena fallos no controlados y excepciones críticas del backend y del cliente para diagnóstico centralizado por parte de usuarios con rol `admin`.
 
 ---
 

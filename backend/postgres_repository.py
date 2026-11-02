@@ -11,6 +11,7 @@ from uuid import UUID
 from error_handler import PermisoDenegadoError, RegistroNoEncontradoError, ValidacionError
 from postgres_db import obtener_cursor_pg
 from postgres_models import (
+    UsuarioSueldoCreate, ErrorRemotoCreate, ProyectoCreate, ProyectoUpdate,
     AsistenciaCreate, RosterCreate, RosterUpdate, RosterResponse,
     LiquidacionResponse, TarifaRosterCreate, UsuarioSueldoUpdate, ConfiguracionSueldoUpdate
 )
@@ -1079,3 +1080,270 @@ def actualizar_configuracion_sueldo_usuario(datos, ciclo_cobro=None):
             cur.execute("SELECT app_rrhh.fn_recalcular_liquidacion_mes(%s, %s)", (str(uid), c))
     invalidar_caches_repositorio(('usuarios', False), ('usuarios', True))
     return {"exito": True, **serializar(fila)}
+
+# [FN-07.21] Registrar error remoto de forma segura sin propagar excepciones
+def registrar_error_remoto(datos, sesion=None):
+    try:
+        import socket
+        if not isinstance(datos, dict):
+            datos = {"mensaje_error": str(datos)}
+        
+        id_u = None
+        nom_u = "Sesión no iniciada"
+        rol_u = None
+        if sesion and isinstance(sesion, dict):
+            id_u = sesion.get("id_usuario")
+            nom_u = sesion.get("nombre") or sesion.get("nombre_completo") or "Usuario en sesión"
+            rol_u = sesion.get("rol_app")
+        elif datos.get("id_usuario"):
+            id_u = datos.get("id_usuario")
+            nom_u = datos.get("nombre_usuario") or nom_u
+            rol_u = datos.get("rol_usuario")
+        
+        if id_u:
+            try:
+                id_u = str(uuid_valido(id_u))
+            except Exception:
+                id_u = None
+        
+        hostname = None
+        try:
+            hostname = socket.gethostname()
+        except Exception:
+            hostname = None
+
+        equipo = datos.get("equipo_info") or hostname
+
+        modelo = ErrorRemotoCreate(
+            id_usuario=id_u,
+            nombre_usuario=str(nom_u)[:150],
+            rol_usuario=str(rol_u)[:30] if rol_u else None,
+            origen=str(datos.get("origen") or "backend")[:40],
+            accion_metodo=str(datos.get("accion_metodo") or "")[:120] if datos.get("accion_metodo") else None,
+            codigo_error=str(datos.get("codigo_error") or "ERROR_INTERNO")[:60],
+            mensaje_error=str(datos.get("mensaje_error") or "Error sin mensaje específico"),
+            detalle_tecnico=str(datos.get("detalle_tecnico") or "") if datos.get("detalle_tecnico") else None,
+            equipo_info=str(equipo)[:150] if equipo else None
+        )
+
+        with obtener_cursor_pg(commit=True) as cur:
+            cur.execute("""INSERT INTO app_rrhh.b_1_errores_remotos
+                (id_usuario, nombre_usuario, rol_usuario, origen, accion_metodo, codigo_error, mensaje_error, detalle_tecnico, equipo_info)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                RETURNING id_error, fecha_hora""",
+                (str(modelo.id_usuario) if modelo.id_usuario else None, modelo.nombre_usuario, modelo.rol_usuario,
+                 modelo.origen, modelo.accion_metodo, modelo.codigo_error, modelo.mensaje_error, modelo.detalle_tecnico, modelo.equipo_info))
+            res = cur.fetchone()
+            return {"exito": True, **serializar(res)}
+    except Exception as err:
+        logger.warning(f"[Telemetría] No se pudo persistir error remoto: {err}")
+        return {"exito": False, "error": str(err)}
+
+
+# [FN-07.21] Consultar historial de errores remotos para administradores
+def obtener_errores_remotos(solo_pendientes=True, limite=50):
+    filtro_pendientes = "WHERE e.resuelto IS FALSE" if solo_pendientes else ""
+    lim = max(1, min(int(limite or 50), 200))
+    with obtener_cursor_pg() as cur:
+        cur.execute(f"""SELECT e.*,
+            u.dni AS usuario_dni,
+            COALESCE(e.nombre_usuario, 'Sesión no iniciada') AS usuario_nombre,
+            rp.dni AS resuelto_por_dni
+            FROM app_rrhh.b_1_errores_remotos e
+            LEFT JOIN app_rrhh.a_1_usuarios u ON u.id_usuario = e.id_usuario
+            LEFT JOIN app_rrhh.a_1_usuarios rp ON rp.id_usuario = e.resuelto_por
+            {filtro_pendientes}
+            ORDER BY e.fecha_hora DESC
+            LIMIT %s""", (lim,))
+        return serializar(cur.fetchall())
+
+
+# [FN-07.21] Marcar errores remotos como resueltos
+def marcar_error_remoto_resuelto(id_error=None, todos=False, id_operador=None):
+    op_id = None
+    if id_operador:
+        try:
+            op_id = str(uuid_valido(id_operador))
+        except Exception:
+            op_id = None
+
+    with obtener_cursor_pg(commit=True) as cur:
+        if todos:
+            cur.execute("""UPDATE app_rrhh.b_1_errores_remotos
+                SET resuelto = TRUE, resuelto_por = %s
+                WHERE resuelto IS FALSE""", (op_id,))
+            afectados = cur.rowcount
+        else:
+            if not id_error:
+                raise ValidacionError("Especifique el id_error a resolver.")
+            eid = str(uuid_valido(id_error))
+            cur.execute("""UPDATE app_rrhh.b_1_errores_remotos
+                SET resuelto = TRUE, resuelto_por = %s
+                WHERE id_error = %s""", (op_id, eid))
+            afectados = cur.rowcount
+    return {"exito": True, "afectados": afectados}
+
+
+# [FN-04.14] Alta de nuevo usuario y sueldo base desde Empleados
+def crear_usuario_y_sueldo(datos, operador_sesion=None):
+    if not isinstance(datos, dict):
+        raise ValidacionError("Datos inválidos.")
+    rol_operador = operador_sesion.get("rol_app") if operador_sesion else None
+    if rol_operador not in ("admin", "sub_admin"):
+        raise PermisoDenegadoError("Solo usuarios admin o sub_admin pueden dar de alta nuevos empleados.")
+
+    modelo = UsuarioSueldoCreate(**datos)
+    if rol_operador != "admin" and modelo.rol_app == "admin":
+        raise PermisoDenegadoError("Solo un administrador puede crear usuarios con rol admin.")
+
+    p = perfil_esquema()
+    dni_limpio = str(modelo.dni).strip()
+
+    with obtener_cursor_pg(commit=True) as cur:
+        # 1. Comprobar que no exista otro usuario con el mismo DNI
+        cur.execute("SELECT id_usuario FROM app_rrhh.a_1_usuarios WHERE dni=%s", (dni_limpio,))
+        if cur.fetchone():
+            raise ValidacionError(f"Ya existe un usuario registrado con el DNI {dni_limpio}.")
+
+        # 2. Insertar usuario según esquema verificado
+        if "apellido" in p["apellido"]:
+            cur.execute("""INSERT INTO app_rrhh.a_1_usuarios
+                (nombre, apellido, dni, correo, area, rol_app, activo)
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
+                RETURNING id_usuario, nombre, apellido, dni, correo, area, rol_app, activo, creado_en""",
+                (modelo.primer_nombre, modelo.apellido, dni_limpio, modelo.email, modelo.area, modelo.rol_app, modelo.activo))
+        else:
+            nombre_completo = f"{modelo.primer_nombre} {modelo.apellido}".strip()
+            cur.execute("""INSERT INTO app_rrhh.a_1_usuarios
+                (nombre_completo, dni, email, area, rol_app, activo)
+                VALUES (%s, %s, %s, %s, %s, %s)
+                RETURNING id_usuario, nombre_completo, dni, email, area, rol_app, activo, creado_en""",
+                (nombre_completo, dni_limpio, modelo.email, modelo.area, modelo.rol_app, modelo.activo))
+        
+        nuevo_u = cur.fetchone()
+        id_nuevo = str(nuevo_u["id_usuario"])
+
+        # 3. Insertar sueldo base vinculado
+        cur.execute("""INSERT INTO app_rrhh.a_1_sueldos_base
+            (id_usuario, sueldo_oficina, sueldo_obra, lugar_habitual, modalidad_calculo, vigente_desde)
+            VALUES (%s, %s, %s, %s, %s, CURRENT_DATE)
+            RETURNING id_sueldo, dia_oficina, dia_obra, lugar_habitual, modalidad_calculo, vigente_desde""",
+            (id_nuevo, modelo.sueldo_oficina, modelo.sueldo_obra, modelo.lugar_habitual, modelo.modalidad_calculo))
+        nuevo_s = cur.fetchone()
+
+    invalidar_caches_repositorio(('usuarios', False), ('usuarios', True))
+    return {
+        "exito": True,
+        "id_usuario": id_nuevo,
+        **serializar(nuevo_u),
+        **serializar(nuevo_s)
+    }
+
+
+# [FN-07.22] Consultar catálogo completo de proyectos para vista de gestión administrativa
+def obtener_proyectos_gestion(incluir_inactivos=True):
+    filtro_activo = "" if incluir_inactivos else "WHERE COALESCE(p.activo, TRUE) IS TRUE"
+    with obtener_cursor_pg() as cur:
+        cur.execute(f"""SELECT p.id_servicio, p.id_proyecto,
+            COALESCE(p.codificacion_serv, p.id_proyecto::text) AS denominacion,
+            p.codificacion_serv, p.n_serv, p.responsable_des, p.area, p.url_des,
+            COALESCE(p.activo, TRUE) AS activo
+            FROM app_proyectos.b_1_proyectos_servicios p
+            {filtro_activo}
+            ORDER BY p.n_serv DESC NULLS LAST, p.codificacion_serv ASC""")
+        return serializar(cur.fetchall())
+
+
+# [FN-07.22] Creación de nuevo proyecto por administrador
+def crear_proyecto(datos):
+    if not isinstance(datos, dict):
+        raise ValidacionError("Datos de proyecto inválidos.")
+    modelo = ProyectoCreate(**datos)
+    id_proy_str = str(uuid_valido(modelo.id_proyecto))
+    n_serv_val = Decimal(str(modelo.n_serv)) if modelo.n_serv is not None else None
+
+    with obtener_cursor_pg(commit=True) as cur:
+        cur.execute("SELECT id_proyecto FROM app_proyectos.b_1_proyectos_servicios WHERE id_proyecto=%s", (id_proy_str,))
+        if cur.fetchone():
+            raise ValidacionError(f"Ya existe un proyecto registrado con el id_proyecto {id_proy_str}.")
+
+        cur.execute("""INSERT INTO app_proyectos.b_1_proyectos_servicios
+            (id_proyecto, codificacion_serv, n_serv, responsable_des, area, url_des, activo)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
+            RETURNING id_servicio, id_proyecto, codificacion_serv, n_serv, responsable_des, area, url_des, activo""",
+            (id_proy_str, modelo.codificacion_serv.strip(), n_serv_val,
+             modelo.responsable_des.strip() if modelo.responsable_des else None,
+             modelo.area.strip() if modelo.area else None,
+             modelo.url_des.strip() if modelo.url_des else None,
+             modelo.activo))
+        creado = cur.fetchone()
+
+    invalidar_caches_repositorio(('proyectos',), ('tarifas_roster',))
+    return {"exito": True, **serializar(creado)}
+
+
+# [FN-07.22] Edición de proyecto existente por administrador
+def actualizar_proyecto(datos):
+    if not isinstance(datos, dict):
+        raise ValidacionError("Datos de proyecto inválidos.")
+    modelo = ProyectoUpdate(**datos)
+    id_serv_str = str(uuid_valido(modelo.id_servicio))
+    id_proy_str = str(uuid_valido(modelo.id_proyecto))
+    n_serv_val = Decimal(str(modelo.n_serv)) if modelo.n_serv is not None else None
+
+    with obtener_cursor_pg(commit=True) as cur:
+        cur.execute("SELECT id_servicio FROM app_proyectos.b_1_proyectos_servicios WHERE id_servicio=%s FOR UPDATE", (id_serv_str,))
+        if not cur.fetchone():
+            raise RegistroNoEncontradoError("Proyecto no encontrado.")
+
+        cur.execute("""SELECT id_servicio FROM app_proyectos.b_1_proyectos_servicios
+            WHERE id_proyecto=%s AND id_servicio<>%s""", (id_proy_str, id_serv_str))
+        if cur.fetchone():
+            raise ValidacionError(f"El id_proyecto {id_proy_str} ya se encuentra asignado a otro proyecto.")
+
+        cur.execute("""UPDATE app_proyectos.b_1_proyectos_servicios
+            SET id_proyecto=%s, codificacion_serv=%s, n_serv=%s, responsable_des=%s, area=%s, url_des=%s, activo=%s
+            WHERE id_servicio=%s
+            RETURNING id_servicio, id_proyecto, codificacion_serv, n_serv, responsable_des, area, url_des, activo""",
+            (id_proy_str, modelo.codificacion_serv.strip(), n_serv_val,
+             modelo.responsable_des.strip() if modelo.responsable_des else None,
+             modelo.area.strip() if modelo.area else None,
+             modelo.url_des.strip() if modelo.url_des else None,
+             modelo.activo, id_serv_str))
+        actualizado = cur.fetchone()
+
+    invalidar_caches_repositorio(('proyectos',), ('tarifas_roster',))
+    return {"exito": True, **serializar(actualizado)}
+
+
+# [FN-07.23] Detección de días pendientes de registro en el último día del mes
+def obtener_dias_faltantes_mes(id_usuario, fecha_ref=None):
+    if not id_usuario:
+        raise ValidacionError("Usuario inválido.")
+    uid = str(uuid_valido(id_usuario))
+    
+    fecha_base = date.fromisoformat(str(fecha_ref)) if fecha_ref else date.today()
+    ultimo_dia = calendar.monthrange(fecha_base.year, fecha_base.month)[1]
+    es_ultimo_dia = (fecha_base.day == ultimo_dia)
+
+    inicio_mes = fecha_base.replace(day=1)
+    fin_mes = fecha_base.replace(day=ultimo_dia)
+    mes_anio = fecha_base.strftime("%Y-%m")
+
+    with obtener_cursor_pg() as cur:
+        cur.execute("""SELECT DISTINCT EXTRACT(DAY FROM fecha)::int AS dia
+            FROM app_rrhh.b_1_asistencias
+            WHERE id_usuario = %s AND fecha >= %s AND fecha <= %s
+            ORDER BY dia ASC""", (uid, inicio_mes, fin_mes))
+        dias_cargados = {r["dia"] for r in cur.fetchall()}
+
+    dias_faltantes = [d for d in range(1, ultimo_dia + 1) if d not in dias_cargados]
+    return {
+        "es_ultimo_dia_mes": es_ultimo_dia,
+        "dia_hoy": fecha_base.day,
+        "ultimo_dia_mes": ultimo_dia,
+        "mes_anio": mes_anio,
+        "dias_faltantes": dias_faltantes,
+        "cantidad_faltantes": len(dias_faltantes),
+        "dias_registrados": len(dias_cargados)
+    }

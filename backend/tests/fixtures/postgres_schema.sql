@@ -1152,3 +1152,23 @@ CREATE TRIGGER trg_recalcular_liquidacion_config_sueldo
     AFTER INSERT OR UPDATE OF modalidad_calculo, lugar_habitual, sueldo_oficina, sueldo_obra
     ON app_rrhh.a_1_sueldos_base
     FOR EACH ROW EXECUTE FUNCTION app_rrhh.fn_trigger_recalcular_por_config_sueldo();
+
+CREATE TABLE "app_rrhh"."b_1_errores_remotos" (
+"id_error" uuid DEFAULT gen_random_uuid() NOT NULL,
+"id_usuario" uuid,
+"nombre_usuario" character varying(150) DEFAULT 'Sesión no iniciada' NOT NULL,
+"rol_usuario" character varying(30),
+"origen" character varying(40) DEFAULT 'backend' NOT NULL,
+"accion_metodo" character varying(120),
+"codigo_error" character varying(60) DEFAULT 'ERROR_INTERNO' NOT NULL,
+"mensaje_error" text NOT NULL,
+"detalle_tecnico" text,
+"equipo_info" character varying(150),
+"resuelto" boolean DEFAULT false NOT NULL,
+"resuelto_por" uuid,
+"fecha_hora" timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL);
+
+ALTER TABLE "app_rrhh"."b_1_errores_remotos" ADD CONSTRAINT "b_1_errores_remotos_pkey" PRIMARY KEY ("id_error");
+ALTER TABLE "app_rrhh"."b_1_errores_remotos" ADD CONSTRAINT "b_1_errores_remotos_id_usuario_fkey" FOREIGN KEY ("id_usuario") REFERENCES "app_rrhh"."a_1_usuarios"("id_usuario") ON DELETE SET NULL;
+ALTER TABLE "app_rrhh"."b_1_errores_remotos" ADD CONSTRAINT "b_1_errores_remotos_resuelto_por_fkey" FOREIGN KEY ("resuelto_por") REFERENCES "app_rrhh"."a_1_usuarios"("id_usuario") ON DELETE SET NULL;
+CREATE INDEX "idx_errores_remotos_pendientes" ON "app_rrhh"."b_1_errores_remotos" ("fecha_hora" DESC) WHERE ("resuelto" IS FALSE);

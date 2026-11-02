@@ -379,6 +379,19 @@ def demonio_recordatorios(ventana, tray_icon):
         nom = sesion.get("nombre", "") if sesion else ""
         mail = sesion.get("mail", "") if sesion else ""
 
+        if sesion:
+            try:
+                from postgres_repository import obtener_dias_faltantes_mes
+                info_f = obtener_dias_faltantes_mes(sesion.get("id_usuario"))
+                if info_f.get("es_ultimo_dia_mes") and info_f.get("cantidad_faltantes", 0) > 0:
+                    if tray_icon and hasattr(tray_icon, "notify"):
+                        tray_icon.notify(
+                            f"¡Atención! Hoy es fin de mes y tenés {info_f['cantidad_faltantes']} día(s) sin cargar.",
+                            "Check Diario - Ingeap"
+                        )
+            except Exception as e_f:
+                print(f"[Recordatorios] Error en chequeo fin de mes: {e_f}")
+
         if not usuario_registro_hoy(nom, mail):
             if tray_icon and hasattr(tray_icon, "notify"):
                 try:

@@ -579,6 +579,69 @@ const apiBase = {
       return await bridge.guardar_costo_dia(datos);
     }
     return await this.actualizarCostoDiaManual(datos);
+  },
+
+  // [FN-07.21] Telemetría y captura de errores remotos
+  async reportarErrorCliente(datos) {
+    try {
+      const bridge = await getApi();
+      if (bridge.reportar_error_cliente) {
+        return await bridge.reportar_error_cliente(datos);
+      }
+    } catch {
+      // Silencioso para evitar bucles
+    }
+    return { exito: false };
+  },
+
+  async obtenerErroresRemotos(soloPendientes = true, limite = 50) {
+    const bridge = await getApi();
+    if (bridge.obtener_errores_remotos) {
+      return await bridge.obtener_errores_remotos(soloPendientes, limite);
+    }
+    return [];
+  },
+
+  async marcarErrorRemotoResuelto(idError = null, todos = false) {
+    const bridge = await getApi();
+    if (bridge.marcar_error_remoto_resuelto) {
+      return await bridge.marcar_error_remoto_resuelto(idError, todos);
+    }
+    return { exito: false, error: 'Función no disponible en el puente.' };
+  },
+
+  // [FN-04.14] Alta de nuevo empleado y sueldo base
+  async crearUsuarioYSueldo(datos) {
+    const bridge = await getApi();
+    if (bridge.crear_usuario_y_sueldo) {
+      return await bridge.crear_usuario_y_sueldo(datos);
+    }
+    return { exito: false, error: 'Función no disponible en el puente.' };
+  },
+
+  // [FN-07.22] Gestión integral de proyectos para administradores
+  async obtenerProyectosAdmin(incluirInactivos = true) {
+    const bridge = await getApi();
+    if (bridge.obtener_proyectos_admin) {
+      return await bridge.obtener_proyectos_admin(incluirInactivos);
+    }
+    return [];
+  },
+
+  async crearProyecto(datos) {
+    const bridge = await getApi();
+    if (bridge.crear_proyecto) {
+      return await bridge.crear_proyecto(datos);
+    }
+    return { exito: false, error: 'Función no disponible en el puente.' };
+  },
+
+  async actualizarProyecto(datos) {
+    const bridge = await getApi();
+    if (bridge.actualizar_proyecto) {
+      return await bridge.actualizar_proyecto(datos);
+    }
+    return { exito: false, error: 'Función no disponible en el puente.' };
   }
 };
 
@@ -594,7 +657,7 @@ function envolverLlamadaApi(nombreMetodo, fn) {
 
       if (res && typeof res === 'object') {
         // Métodos de verificación o polling en segundo plano no deben molestar con toasts de error
-        const metodosSilenciosos = ['verificarRegistroHoy', 'verificarActualizacion', 'obtenerEstadoSesion', 'obtenerServicios'];
+        const metodosSilenciosos = ['verificarRegistroHoy', 'verificarActualizacion', 'obtenerEstadoSesion', 'obtenerServicios', 'reportarErrorCliente', 'obtenerErroresRemotos'];
 
         if (res.exito === false && res.error && !metodosSilenciosos.includes(nombreMetodo)) {
           toast.error(res.error, {

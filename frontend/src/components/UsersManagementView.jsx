@@ -43,8 +43,9 @@ export default function UsersManagementView({ usuario, onVolver, tema }) {
   const [filtroArea, setFiltroArea] = useState('TODAS');
   const [filtroEstado, setFiltroEstado] = useState('TODOS'); // 'TODOS' | 'ACTIVOS' | 'INACTIVOS'
 
-  // Modal de edición
+  // Modal de creación / edición
   const [usuarioEditando, setUsuarioEditando] = useState(null);
+  const [modoCreacion, setModoCreacion] = useState(false);
   const [formDatos, setFormDatos] = useState({
     id_usuario: '',
     primer_nombre: '',
@@ -115,7 +116,28 @@ export default function UsersManagementView({ usuario, onVolver, tema }) {
     });
   }, [usuarios, busqueda, filtroArea, filtroEstado]);
 
+  const abrirCreacion = () => {
+    setModoCreacion(true);
+    setUsuarioEditando(true);
+    setFormDatos({
+      id_usuario: '',
+      primer_nombre: '',
+      apellido: '',
+      dni: '',
+      email: '',
+      area: 'I',
+      rol_app: 'user_1',
+      activo: true,
+      sueldo_oficina: '',
+      sueldo_obra: '',
+      lugar_habitual: 'oficina',
+      modalidad_calculo: 'base_30'
+    });
+    setMensajeFeedback(null);
+  };
+
   const abrirEdicion = (u) => {
+    setModoCreacion(false);
     setUsuarioEditando(u);
     const areaVal = getAreaInfo(u.area).codigo;
     setFormDatos({
@@ -157,21 +179,27 @@ export default function UsersManagementView({ usuario, onVolver, tema }) {
         modalidad_calculo: formDatos.modalidad_calculo || 'base_30'
       };
 
-      const res = await api.actualizarUsuarioYSueldo(payload);
+      const res = modoCreacion
+        ? await api.crearUsuarioYSueldo(payload)
+        : await api.actualizarUsuarioYSueldo(payload);
+
       if (res && res.exito) {
         setMensajeFeedback({
           tipo: 'exito',
-          texto: `Usuario ${payload.primer_nombre} ${payload.apellido} actualizado correctamente.`
+          texto: modoCreacion
+            ? `Empleado ${payload.primer_nombre} ${payload.apellido} creado exitosamente.`
+            : `Usuario ${payload.primer_nombre} ${payload.apellido} actualizado correctamente.`
         });
         await cargarUsuarios();
         window.dispatchEvent(new CustomEvent('catalogos-actualizados'));
         setTimeout(() => {
           setUsuarioEditando(null);
+          setModoCreacion(false);
         }, 1200);
       } else {
         setMensajeFeedback({
           tipo: 'error',
-          texto: res?.error || 'No se pudo guardar la información del usuario.'
+          texto: res?.error || (modoCreacion ? 'No se pudo crear el empleado.' : 'No se pudo guardar la información del usuario.')
         });
       }
     } catch (err) {
@@ -266,10 +294,36 @@ export default function UsersManagementView({ usuario, onVolver, tema }) {
           </p>
         </div>
 
-        <button
-          type="button"
-          onClick={cargarUsuarios}
-          disabled={cargando}
+        <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+          {puedeEditar && (
+            <button
+              type="button"
+              onClick={abrirCreacion}
+              data-testid="btn-nuevo-empleado"
+              style={{
+                minHeight: '44px',
+                padding: '0 18px',
+                borderRadius: '8px',
+                border: 'none',
+                background: '#cc3333',
+                color: '#ffffff',
+                fontWeight: 700,
+                cursor: 'pointer',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '8px',
+                boxShadow: '0 2px 4px rgba(204,51,51,0.2)'
+              }}
+            >
+              <span>➕</span>
+              {isRpg ? 'Nuevo Aventurero' : 'Nuevo Empleado'}
+            </button>
+          )}
+
+          <button
+            type="button"
+            onClick={cargarUsuarios}
+            disabled={cargando}
           style={{
             minHeight: '44px',
             padding: '0 16px',
@@ -286,7 +340,8 @@ export default function UsersManagementView({ usuario, onVolver, tema }) {
         >
           <span className={cargando ? 'spinner' : ''}>🔄</span>
           {cargando ? 'Actualizando...' : 'Refrescar'}
-        </button>
+          </button>
+        </div>
       </div>
 
       {/* Controles y filtros */}
@@ -891,7 +946,7 @@ export default function UsersManagementView({ usuario, onVolver, tema }) {
                   gap: '8px'
                 }}
               >
-                {guardando ? 'Guardando cambios...' : 'Guardar Cambios'}
+                {guardando ? (modoCreacion ? 'Creando empleado...' : 'Guardando cambios...') : (modoCreacion ? 'Crear Empleado' : 'Guardar Cambios')}
               </button>
             ) : null}
           </div>
