@@ -12,7 +12,7 @@ from error_handler import PermisoDenegadoError, RegistroNoEncontradoError, Valid
 from postgres_db import obtener_cursor_pg
 from postgres_models import (
     AsistenciaCreate, RosterCreate, RosterUpdate, RosterResponse,
-    LiquidacionResponse, TarifaRosterCreate, UsuarioSueldoUpdate
+    LiquidacionResponse, TarifaRosterCreate, UsuarioSueldoUpdate, ConfiguracionSueldoUpdate
 )
 
 _sesion = None
@@ -115,7 +115,8 @@ def perfil_esquema():
             "apellido": "u.apellido" if "apellido" in usuarios else "split_part(u.nombre_completo, ' ', 2)",
             "proyecto": proyecto, "proyecto_activo": "p.activo IS TRUE" if "activo" in proyectos else "TRUE",
             "proyecto_area": "p.area" if "area" in proyectos else "NULL::text", "roles_disponibles": "rol_app" in usuarios, "nombre_cargador": nombre_cargador,
-            "nombre_modificador": nombre_modificador, "tiene_auditoria": tiene_auditoria}
+            "nombre_modificador": nombre_modificador, "tiene_auditoria": tiene_auditoria,
+            "modalidad_calculo": "s.modalidad_calculo::text" if "modalidad_calculo" in tablas.get(("app_rrhh", "a_1_sueldos_base"), set()) else "'base_30'"}
 
 
 # [FN-07.01] Comprobar conexión sin crear tablas
@@ -133,6 +134,7 @@ def obtener_usuarios_cache(incluir_inactivos=False):
                 {p['correo']} AS mail, {p['correo']} AS email, u.area, COALESCE({p['rol']}, 'user_1') AS rol_app,
                 u.activo, s.sueldo_oficina, s.sueldo_obra,
                 s.dia_oficina AS costo_dia_ofi, s.dia_obra AS costo_dia_obra, COALESCE(s.lugar_habitual, 'oficina') AS lugar_habitual,
+                COALESCE(s.modalidad_calculo::text, 'base_30') AS modalidad_calculo,
                 ult.fecha AS ultima_asistencia_fecha, ult.lugar AS ultima_asistencia_lugar,
                 ult.activo_franco AS ultima_asistencia_estado, ult.denominacion AS ultima_asistencia_proyecto
                 FROM app_rrhh.a_1_usuarios u
@@ -591,7 +593,10 @@ def obtener_liquidacion(empleado, ciclo_cobro, forzar_recalculo=False):
     usuario = resolver_usuario(empleado)
     uid = usuario["id_usuario"]
 
-    consulta_sql = """SELECT c.*, COALESCE((
+    consulta_sql = """SELECT c.*,
+        COALESCE(s.modalidad_calculo::text, 'base_30') AS modalidad_calculo,
+        COALESCE(s.lugar_habitual::text, 'oficina') AS lugar_habitual,
+        COALESCE((
         SELECT jsonb_agg(jsonb_build_object(
             'id_adicional', d.id_adicional,
             'fecha', d.fecha,
@@ -602,6 +607,7 @@ def obtener_liquidacion(empleado, ciclo_cobro, forzar_recalculo=False):
         WHERE d.id_calculo_sueldo = c.id_calculo_sueldo
     ), '[]'::jsonb) AS adicionales
     FROM app_rrhh.a_1_calculo_sueldo c
+    LEFT JOIN app_rrhh.a_1_sueldos_base s ON s.id_usuario = c.id_usuario
     WHERE c.id_usuario = %s AND c.ciclo_cobro = %s"""
 
     # 1. Si no se fuerza recálculo, lectura limpia sin bloqueo FOR UPDATE
@@ -898,7 +904,7 @@ def actualizar_usuario_y_sueldo(datos, operador_sesion=None):
         if not cur.fetchone():
             raise RegistroNoEncontradoError("Usuario no encontrado.")
 
-        cur.execute("""SELECT id_sueldo, sueldo_oficina, sueldo_obra, lugar_habitual, dia_oficina, dia_obra, vigente_desde
+        cur.execute("""SELECT id_sueldo, sueldo_oficina, sueldo_obra, lugar_habitual, modalidad_calculo, dia_oficina, dia_obra, vigente_desde
             FROM app_rrhh.a_1_sueldos_base WHERE id_usuario = %s""", (str(modelo.id_usuario),))
         sueldo_actual = cur.fetchone()
 
@@ -909,27 +915,31 @@ def actualizar_usuario_y_sueldo(datos, operador_sesion=None):
             s_ofi_act = Decimal(str(sueldo_actual.get("sueldo_oficina") or 0))
             s_obra_act = Decimal(str(sueldo_actual.get("sueldo_obra") or 0))
             lugar_act = str(sueldo_actual.get("lugar_habitual") or "oficina")
+            mod_act = str(sueldo_actual.get("modalidad_calculo") or "base_30")
 
             s_ofi_nuevo = Decimal(str(modelo.sueldo_oficina or 0))
             s_obra_nuevo = Decimal(str(modelo.sueldo_obra or 0))
             lugar_nuevo = str(modelo.lugar_habitual or "oficina")
+            mod_nuevo = str(getattr(modelo, "modalidad_calculo", "base_30") or "base_30")
 
-            if s_ofi_act != s_ofi_nuevo or s_obra_act != s_obra_nuevo or lugar_act != lugar_nuevo:
+            if s_ofi_act != s_ofi_nuevo or s_obra_act != s_obra_nuevo or lugar_act != lugar_nuevo or mod_act != mod_nuevo:
                 sueldo_cambio = True
 
         if sueldo_cambio:
             vigente_desde = getattr(modelo, "vigente_desde", None) or datos.get("vigente_desde") or date.today()
+            mod_final = getattr(modelo, "modalidad_calculo", "base_30") or "base_30"
             cur.execute("""INSERT INTO app_rrhh.a_1_sueldos_base
-                (id_usuario, sueldo_oficina, sueldo_obra, lugar_habitual, vigente_desde)
-                VALUES (%s, %s, %s, %s, %s)
+                (id_usuario, sueldo_oficina, sueldo_obra, lugar_habitual, modalidad_calculo, vigente_desde)
+                VALUES (%s, %s, %s, %s, %s, %s)
                 ON CONFLICT (id_usuario) DO UPDATE
                 SET sueldo_oficina=EXCLUDED.sueldo_oficina,
                     sueldo_obra=EXCLUDED.sueldo_obra,
                     lugar_habitual=EXCLUDED.lugar_habitual,
+                    modalidad_calculo=EXCLUDED.modalidad_calculo,
                     vigente_desde=EXCLUDED.vigente_desde,
                     actualizado_en=CURRENT_TIMESTAMP
-                RETURNING id_sueldo, dia_oficina, dia_obra, vigente_desde""",
-                (str(modelo.id_usuario), modelo.sueldo_oficina, modelo.sueldo_obra, modelo.lugar_habitual, vigente_desde))
+                RETURNING id_sueldo, dia_oficina, dia_obra, lugar_habitual, modalidad_calculo, vigente_desde""",
+                (str(modelo.id_usuario), modelo.sueldo_oficina, modelo.sueldo_obra, modelo.lugar_habitual, mod_final, vigente_desde))
             res_sueldo = cur.fetchone()
 
             ciclo_actual = date.today().strftime("%Y-%m")
@@ -1026,3 +1036,46 @@ def crear_rosters_desde_asistencias(lista_datos, operador):
             resultados.append(creado)
     invalidar_caches_repositorio(('usuarios', False), ('usuarios', True))
     return {"resultados": resultados, "guardados": len(resultados), "absorbidos": absorbidos}
+
+# [FN-04.13] Actualizar modalidad de cálculo y lugar habitual de un colaborador
+def actualizar_configuracion_sueldo_usuario(datos, ciclo_cobro=None):
+    if not isinstance(datos, dict):
+        raise ValidacionError("Datos de configuración salarial inválidos.")
+    u_ref = datos.get("id_usuario") or datos.get("empleado")
+    if not u_ref:
+        raise ValidacionError("Identificador de empleado requerido.")
+    usuario = resolver_usuario(u_ref)
+    uid = usuario["id_usuario"]
+    mod_calc = str(datos.get("modalidad_calculo") or "").strip().lower()
+    lug_hab = str(datos.get("lugar_habitual") or "").strip().lower()
+    if mod_calc not in ("por_dia", "base_30"):
+        raise ValidacionError("Modalidad de cálculo inválida. Opciones: 'por_dia' o 'base_30'.")
+    if lug_hab not in ("oficina", "obra"):
+        raise ValidacionError("Lugar habitual inválido. Opciones: 'oficina' u 'obra'.")
+    modelo = ConfiguracionSueldoUpdate(
+        id_usuario=uid,
+        modalidad_calculo=mod_calc,
+        lugar_habitual=lug_hab
+    )
+    with obtener_cursor_pg(commit=True) as cur:
+        cur.execute("SELECT id_usuario FROM app_rrhh.a_1_usuarios WHERE id_usuario=%s FOR UPDATE", (str(uid),))
+        if not cur.fetchone():
+            raise RegistroNoEncontradoError("Usuario no encontrado.")
+        cur.execute("""INSERT INTO app_rrhh.a_1_sueldos_base
+            (id_usuario, modalidad_calculo, lugar_habitual)
+            VALUES (%s, %s, %s)
+            ON CONFLICT (id_usuario) DO UPDATE
+            SET modalidad_calculo = EXCLUDED.modalidad_calculo,
+                lugar_habitual = EXCLUDED.lugar_habitual,
+                actualizado_en = CURRENT_TIMESTAMP
+            RETURNING id_sueldo, id_usuario, modalidad_calculo, lugar_habitual, dia_oficina, dia_obra""",
+            (str(uid), modelo.modalidad_calculo, modelo.lugar_habitual))
+        fila = cur.fetchone()
+        ciclos_a_recalcular = set()
+        if ciclo_cobro and re.fullmatch(r"\d{4}-(0[1-9]|1[0-2])", str(ciclo_cobro)):
+            ciclos_a_recalcular.add(str(ciclo_cobro))
+        ciclos_a_recalcular.add(date.today().strftime("%Y-%m"))
+        for c in ciclos_a_recalcular:
+            cur.execute("SELECT app_rrhh.fn_recalcular_liquidacion_mes(%s, %s)", (str(uid), c))
+    invalidar_caches_repositorio(('usuarios', False), ('usuarios', True))
+    return {"exito": True, **serializar(fila)}

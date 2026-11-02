@@ -553,6 +553,14 @@ const apiBase = {
     return { exito: false, error: 'Función no disponible en este entorno.' };
   },
 
+  async actualizarConfiguracionSueldoUsuario(datos) {
+    const bridge = await getApi();
+    if (bridge.actualizar_configuracion_sueldo_usuario) {
+      return await bridge.actualizar_configuracion_sueldo_usuario(datos);
+    }
+    return { exito: false, error: 'Función no disponible en este entorno.' };
+  },
+
   async actualizarCostoDiaManual(datos) {
     const bridge = await getApi();
     if (bridge.actualizar_costo_dia_manual) {

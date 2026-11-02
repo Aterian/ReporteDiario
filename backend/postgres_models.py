@@ -121,6 +121,8 @@ class LiquidacionResponse(BaseModel):
     total_adicionales: Decimal
     sueldo_total: Decimal | None
     cerrado: bool
+    modalidad_calculo: Literal["por_dia", "base_30"] = "base_30"
+    lugar_habitual: Literal["oficina", "obra"] = "oficina"
     adicionales: list[AdicionalResponse]
 
 
@@ -149,6 +151,7 @@ class UsuarioSueldoUpdate(BaseModel):
     sueldo_oficina: Decimal = Field(default=Decimal("0"), ge=0, allow_inf_nan=False)
     sueldo_obra: Decimal = Field(default=Decimal("0"), ge=0, allow_inf_nan=False)
     lugar_habitual: Literal["oficina", "obra"] = "oficina"
+    modalidad_calculo: Literal["por_dia", "base_30"] = "base_30"
     cumpleanos: str | None = None
     vigente_desde: date | str | None = None
 
@@ -162,3 +165,9 @@ class UsuarioSueldoUpdate(BaseModel):
                 data["nombre"] = data["primer_nombre"]
         return data
 
+# [FN-04.13] Actualización administrativa de modalidad de cálculo y lugar habitual
+class ConfiguracionSueldoUpdate(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id_usuario: UUID
+    modalidad_calculo: Literal["por_dia", "base_30"]
+    lugar_habitual: Literal["oficina", "obra"]

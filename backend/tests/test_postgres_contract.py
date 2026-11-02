@@ -768,4 +768,70 @@ def test_compatibilidad_esquema_nombre_apellido_en_consultas_auditoria(monkeypat
     assert "um.nombre_completo" not in sql_notif
     assert "NULLIF(concat_ws(' ', um.nombre, um.apellido), '')" in sql_notif
 
+# [FN-04.13] Validación de contratos para modalidad de cálculo salarial
+def test_actualizar_configuracion_sueldo_usuario_contrato(monkeypatch):
+    cursor = MagicMock()
+    cursor.fetchone.side_effect = [
+        {"id_usuario": "11111111-1111-1111-1111-111111111111"},
+        {
+            "id_sueldo": "22222222-2222-2222-2222-222222222222",
+            "id_usuario": "11111111-1111-1111-1111-111111111111",
+            "modalidad_calculo": "base_30",
+            "lugar_habitual": "oficina",
+            "dia_oficina": Decimal("10000.00"),
+            "dia_obra": Decimal("20000.00")
+        }
+    ]
 
+    @contextmanager
+    def conexion(commit=False):
+        yield cursor
+
+    monkeypatch.setattr(db, "obtener_cursor_pg", conexion)
+    monkeypatch.setattr(db, "resolver_usuario", lambda r: {"id_usuario": "11111111-1111-1111-1111-111111111111"})
+
+    res = db.actualizar_configuracion_sueldo_usuario({
+        "id_usuario": "11111111-1111-1111-1111-111111111111",
+        "modalidad_calculo": "base_30",
+        "lugar_habitual": "oficina"
+    })
+
+    assert res["exito"] is True
+    assert res["modalidad_calculo"] == "base_30"
+    assert res["lugar_habitual"] == "oficina"
+
+
+# [FN-04.13] Validación de rechazo ante modalidad de cálculo inválida
+def test_actualizar_configuracion_sueldo_usuario_rechaza_valores_invalidos(monkeypatch):
+    monkeypatch.setattr(db, "resolver_usuario", lambda r: {"id_usuario": "11111111-1111-1111-1111-111111111111"})
+
+    with pytest.raises(ValidacionError, match="Modalidad de cálculo inválida"):
+        db.actualizar_configuracion_sueldo_usuario({
+            "id_usuario": "11111111-1111-1111-1111-111111111111",
+            "modalidad_calculo": "invalido",
+            "lugar_habitual": "oficina"
+        })
+
+    with pytest.raises(ValidacionError, match="Lugar habitual inválido"):
+        db.actualizar_configuracion_sueldo_usuario({
+            "id_usuario": "11111111-1111-1111-1111-111111111111",
+            "modalidad_calculo": "por_dia",
+            "lugar_habitual": "remoto"
+        })
+
+
+# [FN-04.13] Restricción RBAC en ApiPuente para actualizar_configuracion_sueldo_usuario
+def test_puente_actualizar_configuracion_sueldo_rbac(monkeypatch):
+    from postgres_bridge import ApiPuente
+
+    puente = ApiPuente()
+    monkeypatch.setattr(db, "obtener_sesion_activa", lambda: {"id_usuario": "1111", "rol_app": "user_1"})
+
+    res = puente.actualizar_configuracion_sueldo_usuario({
+        "id_usuario": "2222",
+        "modalidad_calculo": "base_30",
+        "lugar_habitual": "oficina"
+    })
+
+    assert res["exito"] is False
+    assert res["codigo_error"] == "ACCESO_DENEGADO"

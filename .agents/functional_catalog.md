@@ -639,8 +639,12 @@
   2. `obtener_cursor_pg()` descarta automáticamente conexiones caídas (`close=True`) en `ThreadedConnectionPool` y registra el código SQLSTATE antes de elevar `DatabaseTransactionError`.
   3. El candado pre-commit exige 100% de aprobación en `pytest` (contrato + integración con auditoría activa), `vitest`, `eslint` (`rules-of-hooks: error`) y `tsc --noEmit`.
 
-
-
-
-
-
+## [FN-07.20] Modalidad Dual de Cálculo Salarial ('base_30' vs 'por_dia')
+- **Módulo**: [MOD-07] Persistencia Relacional PostgreSQL y Auditoría RRHH
+- **Flujo Operativo**: Permite a RRHH configurar la liquidación mensual de cada colaborador bajo dos modalidades: 'base_30' (sueldo fijo mensual con ajuste proporcional de días mixtos) o 'por_dia' (liquidación por días reales de calendario), recalculando en tiempo real mediante triggers y funciones de PostgreSQL.
+- **Tablas afectadas**: `app_rrhh.a_1_sueldos_base`, `app_rrhh.a_1_calculo_sueldo`, `app_rrhh.b_1_asistencias`.
+- **Reglas de negocio e invariantes**:
+  1. En modalidad 'base_30', el ajuste delta (30 - total_dias_reales) se aplica exclusivamente sobre el contador correspondiente a `lugar_habitual` ('oficina' u 'obra'), preservando intactos los días computados en la otra modalidad.
+  2. La compensación automática a 30 días SOLO se activa si la suma total de días registrados en el mes es mayor o igual a los días calendario del mes (28, 29, 30 o 31) o superior a 30. En meses incompletos (ingreso a mitad de mes o ausencias), se liquidan únicamente los días reales registrados sin ajuste.
+  3. Los montos adicionales por `feriado_trabajado`, `franco_trabajado` y `a_1_adicionales_sueldo` se preservan intactos sin verse reducidos por el ajuste a 30 días.
+  4. Al modificar `modalidad_calculo` o `lugar_habitual` en `a_1_sueldos_base`, el trigger `trg_recalcular_liquidacion_config_sueldo` dispara automáticamente `fn_recalcular_liquidacion_mes` para todos los ciclos de cobro abiertos del usuario.

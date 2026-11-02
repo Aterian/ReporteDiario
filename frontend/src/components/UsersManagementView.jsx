@@ -56,7 +56,8 @@ export default function UsersManagementView({ usuario, onVolver, tema }) {
     activo: true,
     sueldo_oficina: '',
     sueldo_obra: '',
-    lugar_habitual: 'oficina'
+    lugar_habitual: 'oficina',
+    modalidad_calculo: 'base_30'
   });
   const [guardando, setGuardando] = useState(false);
   const [mensajeFeedback, setMensajeFeedback] = useState(null);
@@ -128,7 +129,8 @@ export default function UsersManagementView({ usuario, onVolver, tema }) {
       activo: u.activo !== false && u.activo !== 0,
       sueldo_oficina: u.sueldo_oficina !== undefined && u.sueldo_oficina !== null ? String(u.sueldo_oficina) : '',
       sueldo_obra: u.sueldo_obra !== undefined && u.sueldo_obra !== null ? String(u.sueldo_obra) : '',
-      lugar_habitual: u.lugar_habitual || 'oficina'
+      lugar_habitual: u.lugar_habitual || 'oficina',
+      modalidad_calculo: u.modalidad_calculo || 'base_30'
     });
     setMensajeFeedback(null);
   };
@@ -151,7 +153,8 @@ export default function UsersManagementView({ usuario, onVolver, tema }) {
         activo: Boolean(formDatos.activo),
         sueldo_oficina: formDatos.sueldo_oficina !== '' ? parseFloat(formDatos.sueldo_oficina) : null,
         sueldo_obra: formDatos.sueldo_obra !== '' ? parseFloat(formDatos.sueldo_obra) : null,
-        lugar_habitual: formDatos.lugar_habitual
+        lugar_habitual: formDatos.lugar_habitual,
+        modalidad_calculo: formDatos.modalidad_calculo || 'base_30'
       };
 
       const res = await api.actualizarUsuarioYSueldo(payload);
@@ -806,6 +809,24 @@ export default function UsersManagementView({ usuario, onVolver, tema }) {
                 />
                 <div style={{ fontSize: '11px', color: 'var(--text-secondary, #64748b)', marginTop: '4px' }}>
                   Valor día est.: <strong>{formatMoneda(estimacionDiaObra)}</strong>
+                </div>
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, marginBottom: '4px' }}>
+                  Modalidad de Liquidación
+                </label>
+                <select
+                  className="users-modal-select"
+                  value={formDatos.modalidad_calculo || 'base_30'}
+                  onChange={(e) => setFormDatos(prev => ({ ...prev, modalidad_calculo: e.target.value }))}
+                  disabled={guardando || !puedeEditar || (soySubAdmin && usuarioEditando?.rol_app === "admin")}
+                >
+                  <option value="base_30">Base 30 días (Sueldo mensual fijo)</option>
+                  <option value="por_dia">Por día individual (Calendario real)</option>
+                </select>
+                <div style={{ fontSize: '11px', color: 'var(--text-secondary, #64748b)', marginTop: '4px' }}>
+                  Cálculo mensual
                 </div>
               </div>
 

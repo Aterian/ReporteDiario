@@ -275,4 +275,96 @@ def test_auditoria_real_y_consultas_modificaciones(pg_repository):
     assert res_rev["exito"] is True
     assert res_rev["afectados"] >= 1
 
+# [FN-07.20] Validar liquidación dual 'base_30' vs 'por_dia', ajuste de días mixtos y meses incompletos
+def test_modalidad_calculo_sueldo_base_30_vs_por_dia(pg_repository, pg_connection):
+    db, ids = pg_repository
+    u_id = ids["usuario"]
 
+    # 1. Configurar inicialmente en base_30 con lugar_habitual oficina
+    db.actualizar_configuracion_sueldo_usuario({
+        "id_usuario": u_id,
+        "modalidad_calculo": "base_30",
+        "lugar_habitual": "oficina"
+    })
+
+    # 2. Escenario Mes Incompleto (15 días en 2026-10): No debe aplicar ajuste a 30
+    asistencias_15 = [
+        AsistenciaCreate(
+            id_usuario=u_id,
+            fecha=f"2026-10-{d:02d}",
+            activo_franco="activo",
+            lugar="oficina",
+            tipo_dia="dia_normal",
+            dedicado_a="areas",
+            horas_dedicadas=8.0
+        )
+        for d in range(1, 16)
+    ]
+    db.guardar_asistencias_atomicas(asistencias_15, u_id)
+    liq_15 = db.obtener_liquidacion(u_id, "2026-10")
+    assert liq_15["modalidad_calculo"] == "base_30"
+    assert liq_15["cant_dias_ofi"] == 15
+    assert Decimal(liq_15["total_real"]) == Decimal("150000.00")
+
+    # 3. Escenario Mes Completo de 31 días (2026-10) con 1 feriado trabajado
+    asistencias_resto = [
+        AsistenciaCreate(
+            id_usuario=u_id,
+            fecha=f"2026-10-{d:02d}",
+            activo_franco="activo",
+            lugar="oficina",
+            tipo_dia="feriado_trabajado" if d == 20 else "dia_normal",
+            dedicado_a="areas",
+            horas_dedicadas=8.0
+        )
+        for d in range(16, 32)
+    ]
+    db.guardar_asistencias_atomicas(asistencias_resto, u_id)
+
+    liq_31 = db.obtener_liquidacion(u_id, "2026-10")
+    # Base 30 en mes de 31: total 31 >= 31 -> ajuste delta = -1 día sobre lugar_habitual (oficina)
+    assert liq_31["modalidad_calculo"] == "base_30"
+    assert liq_31["cant_dias_ofi"] == 30
+    # Costo base 30 días a 10000 + 10000 recargo feriado = 310000
+    assert Decimal(liq_31["total_real"]) == Decimal("310000.00")
+
+    # 4. Escenario Mes Completo de 28 días (Febrero 2026): Ajuste +2 días
+    asistencias_feb = [
+        AsistenciaCreate(
+            id_usuario=u_id,
+            fecha=f"2026-02-{d:02d}",
+            activo_franco="activo",
+            lugar="oficina",
+            tipo_dia="dia_normal",
+            dedicado_a="areas",
+            horas_dedicadas=8.0
+        )
+        for d in range(1, 29)
+    ]
+    db.guardar_asistencias_atomicas(asistencias_feb, u_id)
+
+    liq_feb = db.obtener_liquidacion(u_id, "2026-02")
+    # Base 30 en febrero 28 días: delta = +2 días sobre lugar_habitual (oficina)
+    assert liq_feb["modalidad_calculo"] == "base_30"
+    assert liq_feb["cant_dias_ofi"] == 30
+    assert Decimal(liq_feb["total_real"]) == Decimal("300000.00")
+
+    # 5. Cambiar a modalidad 'por_dia': Se deben liquidar días reales calendario exactos
+    res_cambio = db.actualizar_configuracion_sueldo_usuario({
+        "id_usuario": u_id,
+        "modalidad_calculo": "por_dia",
+        "lugar_habitual": "oficina"
+    })
+    assert res_cambio["exito"] is True
+
+    # Octubre (31 días reales): cant_dias_ofi = 31, costo = 31 * 10000 + 10000 feriado = 320000
+    liq_31_pordia = db.obtener_liquidacion(u_id, "2026-10")
+    assert liq_31_pordia["modalidad_calculo"] == "por_dia"
+    assert liq_31_pordia["cant_dias_ofi"] == 31
+    assert Decimal(liq_31_pordia["total_real"]) == Decimal("320000.00")
+
+    # Febrero (28 días reales): cant_dias_ofi = 28, costo = 28 * 10000 = 280000
+    liq_feb_pordia = db.obtener_liquidacion(u_id, "2026-02")
+    assert liq_feb_pordia["modalidad_calculo"] == "por_dia"
+    assert liq_feb_pordia["cant_dias_ofi"] == 28
+    assert Decimal(liq_feb_pordia["total_real"]) == Decimal("280000.00")

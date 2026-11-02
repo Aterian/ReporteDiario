@@ -23,6 +23,8 @@ export interface LiquidacionResponse {
   total_adicionales: Importe;
   sueldo_total: Importe | null;
   cerrado: boolean;
+  modalidad_calculo?: 'por_dia' | 'base_30';
+  lugar_habitual?: 'oficina' | 'obra';
   adicionales: AdicionalResponse[];
 }
 

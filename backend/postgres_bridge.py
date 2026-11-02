@@ -397,6 +397,12 @@ class ApiPuente:
         self._notificar_cambios()
         return resultado
 
+    def actualizar_configuracion_sueldo_usuario(self, datos: dict):
+        self._sesion(admin=True)
+        resultado = db.actualizar_configuracion_sueldo_usuario(datos)
+        self._notificar_cambios()
+        return {"exito": True, "datos": resultado, **resultado}
+
     def actualizar_costo_dia_manual(self, datos: dict):
         sesion = self._sesion(admin=True)
         resultado = db.actualizar_costo_dia_manual(datos.get("id") or datos.get("id_registro") or datos.get("id_asistencia"),

@@ -54,6 +54,7 @@ El sistema **Check Diario (Ingeap)** gestiona el registro diario de asistencias,
 
 ### 3.2 Esquema `app_rrhh` — Tipos ENUM
 * `app_rrhh.tipo_lugar_habitual`: `'oficina'`, `'obra'`
+* `app_rrhh.tipo_modalidad_calculo`: `'por_dia'`, `'base_30'`
 * `app_rrhh.estado_asistencia`: `'activo'`, `'franco'`, `'vacaciones'`, `'licencia'`
 * `app_rrhh.modalidad_lugar`: `'oficina'`, `'obra'`, `'roster'`
 * `app_rrhh.clasificacion_dia`: `'dia_normal'`, `'franco_trabajado'`, `'feriado_trabajado'`
@@ -67,7 +68,9 @@ El sistema **Check Diario (Ingeap)** gestiona el registro diario de asistencias,
 
 2. **`a_1_sueldos_base`** y **`a_1_historial_sueldos`**:
    * En `a_1_sueldos_base`, las columnas `dia_oficina` y `dia_obra` son **GENERADAS** automáticamente ($\text{sueldo} \div 30$). **Nunca** incluirlas en sentencias `INSERT` o `UPDATE`.
+   * En `a_1_sueldos_base`, la columna `modalidad_calculo` (`'por_dia'`, `'base_30'`) define el algoritmo de liquidación mensual (por defecto `'base_30'`).
    * **Trigger `trg_guardar_historial_sueldo`:** Al actualizar `sueldo_oficina` o `sueldo_obra`, archiva automáticamente el registro anterior en `a_1_historial_sueldos`.
+   * **Trigger `trg_recalcular_liquidacion_config_sueldo`:** Al modificar `modalidad_calculo`, `lugar_habitual`, `sueldo_oficina` o `sueldo_obra`, dispara automáticamente el recálculo en `a_1_calculo_sueldo` mediante `fn_recalcular_liquidacion_mes` para todos los ciclos abiertos y asistencias existentes del empleado.
 
 3. **`b_1_tarifas_roster`**:
    * Columnas: `id_tarifa` (UUID PK), `id_proyecto` (UUID FK), `dia_normal`, `dia_domingo`, `subida`, `bajada`, `adicional_turno`, `es_activa` (BOOLEAN).
@@ -89,7 +92,11 @@ El sistema **Check Diario (Ingeap)** gestiona el registro diario de asistencias,
 
 6. **`a_1_calculo_sueldo`** y **`a_1_adicionales_sueldo`**:
    * En `a_1_calculo_sueldo`, las columnas `subtotal_estimado` (`subtotal_ofi + subtotal_obra`) y `sueldo_total` (`total_real + total_adicionales`) son **GENERADAS**.
-   * **Trigger `trg_sincronizar_liquidacion_mensual`:** Recalcula automáticamente `cant_dias_ofi`, `cant_dias_obra`, `subtotal_ofi`, `subtotal_obra` y `total_real` ante cualquier cambio en `b_1_asistencias` (sin bloquear por la columna `cerrado`). Si un día tiene registros de oficina y de obra, suma `1` en `cant_dias_ofi` y `0` en `cant_dias_obra`.
+   * **Trigger `trg_sincronizar_liquidacion_mensual` y `fn_recalcular_liquidacion_mes`:**
+     * Recalcula automáticamente `cant_dias_ofi`, `cant_dias_obra`, `subtotal_ofi`, `subtotal_obra` y `total_real` ante cambios en `b_1_asistencias` o configuración salarial. Si un día tiene registros de oficina y de obra, prevalece oficina.
+     * **Regla de Días Mixtos en `base_30`:** El ajuste para completar 30 días ($-1$ en meses de 31 días, $+2$ en febrero de 28 días) se imputa exclusivamente sobre el contador de `lugar_habitual` (`cant_dias_ofi` si es oficina, o `cant_dias_obra` si es obra), sin alterar los días trabajados en la otra modalidad.
+     * **Regla de Meses Incompletos en `base_30`:** La compensación automática a 30 días SOLO se activa si la suma total de días computados es $\ge$ a los días calendario reales del mes ($28, 29, 30$ o $31$) o si supera 30 días. Si registró menos días (ingreso tardío o ausencias), se liquidan únicamente los días reales trabajados.
+     * **Preservación de Recargos:** Los pluses por `feriado_trabajado` ($\times 2.0$), `franco_trabajado` ($\times 1.5$), costos manuales y adicionales en `a_1_adicionales_sueldo` se preservan intactos sin verse reducidos por el ajuste a 30 días.
    * **Trigger `trg_actualizar_total_adicionales`:** Suma los montos de `a_1_adicionales_sueldo` (que incluyen `fecha` y `descripcion`) y actualiza `total_adicionales`.
 
 7. **`b_1_modificaciones_realizadas`**:

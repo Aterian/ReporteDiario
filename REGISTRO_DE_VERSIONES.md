@@ -2,6 +2,29 @@
 
 Historial cronológico de cambios, nuevas características y mejoras aplicadas al sistema **Check Diario Ingeap**.
 
+## [2.9.0] - 2026-11-02
+
+### ⚖️ Modalidad Dual de Cálculo Salarial ('base_30' vs 'por_dia') y Ajuste de Días Mixtos (`[FN-07.20]`)
+- **Persistencia y Triggers en PostgreSQL (`[FN-07.20]`)**:
+  - Creado el tipo ENUM `app_rrhh.tipo_modalidad_calculo` (`'por_dia'`, `'base_30'`) e incorporada la columna `modalidad_calculo` en `app_rrhh.a_1_sueldos_base` con valor por defecto `'base_30'`.
+  - Actualizada la función `app_rrhh.fn_recalcular_liquidacion_mes`:
+    - En `'base_30'`, calcula el ajuste delta (30 - total_dias_reales) aplicando el ajuste exclusivamente sobre el contador correspondiente al `lugar_habitual` del empleado (`cant_dias_ofi` si es `'oficina'` o `cant_dias_obra` si es `'obra'`), sin modificar los días de la otra modalidad.
+    - Regla de meses incompletos: la compensación automática a 30 días SOLO se activa si total_dias_reales >= dias_mes (28, 29, 30 o 31) o si supera 30. En meses incompletos (ingreso a mitad de mes o ausencias), se liquidan únicamente los días reales registrados sin sumar ni restar días de ajuste.
+    - Preservación de recargos: los montos adicionales por feriado trabajado, franco trabajado y adicionales de sueldo permanecen intactos.
+    - En `'por_dia'`, liquida exactamente la cantidad real de días registrados en cada modalidad sin aplicar ajustes a 30.
+  - Creado el trigger `trg_recalcular_liquidacion_config_sueldo` en `app_rrhh.a_1_sueldos_base` para disparar el recálculo mensual automático de todos los periodos abiertos cuando se actualiza `modalidad_calculo` o `lugar_habitual`.
+- **Backend y Puente de Escritorio (`[FN-07.02]` / `[FN-07.20]`)**:
+  - Incorporado en `postgres_bridge.py` el método `actualizar_configuracion_sueldo_usuario(datos)`, con control de acceso estricto RBAC (restringido a `admin` y `sub_admin`) y emisión del evento `catalogos-actualizados` hacia la interfaz.
+  - Actualizadas las consultas de lectura en `postgres_repository.py` (`obtener_liquidacion`, `obtener_usuarios_cache`, `perfil_esquema`) para exponer siempre `modalidad_calculo` y `lugar_habitual`.
+- **Frontend y Experiencia de Usuario (`[FN-06.04]` / `[FN-07.20]`)**:
+  - En `OtherEmployeesHistoryView.jsx`, incorporado selector reactivo para `modalidad_calculo` ('base_30' / 'por_dia') y `lugar_habitual` ('oficina' / 'obra') para usuarios `admin` y `sub_admin`.
+  - En `HistoryLiquidationCard.jsx`, incorporado distintivo visual `data-testid="badge-modalidad-calculo"` indicando en tiempo real si el mes se liquidó bajo "Base 30 días" o "Por día individual".
+  - En `UsersManagementView.jsx`, incorporado el campo de selección de modalidad en el modal de edición de usuarios.
+- **Calidad y Cobertura de Pruebas**:
+  - Añadidos tests de contrato en `backend/tests/test_postgres_contract.py` (42/42 superados).
+  - Añadida prueba de integración en `backend/tests/test_postgres_integration.py` validando meses de 31 días, 28 días (febrero) e incompletos de 15 días con recargos de feriado intactos.
+  - Añadida suite unitaria en `frontend/src/tests/modalidadCalculo.test.js` (34/34 tests superados en vitest).
+
 ## [2.8.1] - 2026-10-30
 
 ### 🔌 Resiliencia del Pool PostgreSQL, Paridad de Esquema en Auditoría y Sincronización de Triggers (`[FN-07.01]` / `[FN-07.16]`)

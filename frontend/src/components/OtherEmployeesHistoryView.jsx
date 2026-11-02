@@ -1,6 +1,6 @@
 // [FN-02.03] Orquestador de Historial de Otros Empleados, Auditoría y Liquidación
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { api } from '../services/apiBridge';
+import { api, toast } from '../services/apiBridge';
 import {
   puedeVerHistorialOtros,
   puedeModificarRegistro,
@@ -119,6 +119,8 @@ export default function OtherEmployeesHistoryView({
   const [diasFrancoOficManual, setDiasFrancoOficManual] = useState('');
   const [diasFeriadoManual, setDiasFeriadoManual] = useState('');
   const [exportandoInforme, setExportandoInforme] = useState(false);
+  const [liquidacionPg, setLiquidacionPg] = useState(null);
+  const [guardandoConfigSueldo, setGuardandoConfigSueldo] = useState(false);
 
   // [FN-06.07] Modal exclusivo e independiente para edición manual de costo_dia
   const [modalCostoDia, setModalCostoDia] = useState(null);
@@ -221,9 +223,19 @@ export default function OtherEmployeesHistoryView({
       const anio = fechaCal.getFullYear();
       const mesStr = String(fechaCal.getMonth() + 1).padStart(2, '0');
       const mesAnio = `${anio}-${mesStr}`;
-      const data = await api.obtenerTodosRegistrosEmpleado(emp, mesAnio);
-      if (reqSeq === requestSeqRef.current && Array.isArray(data)) {
-        setRegistrosEmpleadoAuditar(data);
+      const [data, resLiq] = await Promise.all([
+        api.obtenerTodosRegistrosEmpleado(emp, mesAnio),
+        puedeVerLiquidacion ? api.obtenerLiquidacion(emp, mesAnio) : Promise.resolve(null)
+      ]);
+      if (reqSeq === requestSeqRef.current) {
+        if (Array.isArray(data)) {
+          setRegistrosEmpleadoAuditar(data);
+        }
+        if (resLiq && resLiq.exito && resLiq.liquidacion) {
+          setLiquidacionPg(resLiq.liquidacion);
+        } else if (resLiq && !resLiq.liquidacion) {
+          setLiquidacionPg(null);
+        }
       }
     } catch (err) {
       if (reqSeq === requestSeqRef.current) {
@@ -871,6 +883,68 @@ export default function OtherEmployeesHistoryView({
     };
   }, [registrosParaLiquidar]);
 
+  const modalidadCalculoActual = liquidacionPg?.modalidad_calculo || empActual?.modalidad_calculo || 'base_30';
+  const lugarHabitualActual = liquidacionPg?.lugar_habitual || empActual?.lugar_habitual || 'oficina';
+
+  const handleCambiarConfiguracionSueldo = async (nuevaModalidad, nuevoLugar) => {
+    if (!empActual || !empActual.id_usuario) return;
+    setGuardandoConfigSueldo(true);
+    try {
+      const anio = fechaCalendario.getFullYear();
+      const mesStr = String(fechaCalendario.getMonth() + 1).padStart(2, '0');
+      const cicloCobro = `${anio}-${mesStr}`;
+      const payload = {
+        id_usuario: empActual.id_usuario,
+        empleado: empActual.nombre,
+        modalidad_calculo: nuevaModalidad,
+        lugar_habitual: nuevoLugar,
+        ciclo_cobro: cicloCobro
+      };
+      const res = await api.actualizarConfiguracionSueldoUsuario(payload);
+      if (res && res.exito) {
+        toast.success(`Modalidad actualizada a "${nuevaModalidad === 'base_30' ? 'Base 30 días' : 'Por día individual'}" (${nuevoLugar === 'obra' ? 'Obra' : 'Oficina'}).`);
+        const resLiq = await api.obtenerLiquidacion(empActual.nombre, cicloCobro, true);
+        if (resLiq && resLiq.exito && resLiq.liquidacion) {
+          setLiquidacionPg(resLiq.liquidacion);
+        }
+        await cargarDatos();
+      } else {
+        toast.error(res?.error || 'No se pudo actualizar la configuración salarial.');
+      }
+    } catch (err) {
+      console.error('Error al actualizar configuración salarial:', err);
+      toast.error('Error al comunicar la nueva configuración salarial.');
+    } finally {
+      setGuardandoConfigSueldo(false);
+    }
+  };
+
+  const diasEnMesCalendario = useMemo(() => {
+    return new Date(fechaCalendario.getFullYear(), fechaCalendario.getMonth() + 1, 0).getDate();
+  }, [fechaCalendario]);
+
+  const ajusteBase30 = useMemo(() => {
+    if (modalidadCalculoActual !== 'base_30') return { deltaOfi: 0, deltaObra: 0, activo: false };
+    const totalReales = conteosLiquidacion.diasOficina + conteosLiquidacion.diasObra;
+    if (totalReales < diasEnMesCalendario && totalReales <= 30) {
+      return { deltaOfi: 0, deltaObra: 0, activo: false };
+    }
+    const deltaTotal = 30 - totalReales;
+    if (lugarHabitualActual === 'oficina') {
+      const ofiFinal = conteosLiquidacion.diasOficina + deltaTotal;
+      if (ofiFinal >= 0) {
+        return { deltaOfi: deltaTotal, deltaObra: 0, activo: true };
+      }
+      return { deltaOfi: -conteosLiquidacion.diasOficina, deltaObra: Math.max(0, conteosLiquidacion.diasObra + ofiFinal), activo: true };
+    } else {
+      const obraFinal = conteosLiquidacion.diasObra + deltaTotal;
+      if (obraFinal >= 0) {
+        return { deltaOfi: 0, deltaObra: deltaTotal, activo: true };
+      }
+      return { deltaOfi: Math.max(0, conteosLiquidacion.diasOficina + obraFinal), deltaObra: -conteosLiquidacion.diasObra, activo: true };
+    }
+  }, [modalidadCalculoActual, lugarHabitualActual, conteosLiquidacion, diasEnMesCalendario]);
+
   const hayModoManual = (
     diasOficinaManual !== '' ||
     diasCampoManual !== '' ||
@@ -881,11 +955,11 @@ export default function OtherEmployeesHistoryView({
 
   const cantDiasOficina = (diasOficinaManual !== '' && !isNaN(parseFloat(diasOficinaManual)))
     ? Math.max(0, parseFloat(diasOficinaManual))
-    : conteosLiquidacion.diasOficina;
+    : Math.max(0, conteosLiquidacion.diasOficina + (hayModoManual ? 0 : ajusteBase30.deltaOfi));
 
   const cantDiasObra = (diasCampoManual !== '' && !isNaN(parseFloat(diasCampoManual)))
     ? Math.max(0, parseFloat(diasCampoManual))
-    : conteosLiquidacion.diasObra;
+    : Math.max(0, conteosLiquidacion.diasObra + (hayModoManual ? 0 : ajusteBase30.deltaObra));
 
   const cantDiasFrancoObra = (diasFrancoObraManual !== '' && !isNaN(parseFloat(diasFrancoObraManual)))
     ? Math.max(0, parseFloat(diasFrancoObraManual))
@@ -949,11 +1023,11 @@ export default function OtherEmployeesHistoryView({
 
   const subtotalOficina = (diasOficinaManual !== '')
     ? Math.round(cantDiasOficina * (tarifas.precioOficina || 0) * 100) / 100
-    : sumasCostoDiaPorCategoria.oficina;
+    : Math.round(Math.max(0, sumasCostoDiaPorCategoria.oficina + ((hayModoManual ? 0 : ajusteBase30.deltaOfi) * (tarifas.precioOficina || 0))) * 100) / 100;
 
   const subtotalObra = (diasCampoManual !== '')
     ? Math.round(cantDiasObra * (tarifas.precioObra || 0) * 100) / 100
-    : sumasCostoDiaPorCategoria.obra;
+    : Math.round(Math.max(0, sumasCostoDiaPorCategoria.obra + ((hayModoManual ? 0 : ajusteBase30.deltaObra) * (tarifas.precioObra || 0))) * 100) / 100;
 
   const subtotalFrancoObra = (diasFrancoObraManual !== '')
     ? Math.round(cantDiasFrancoObra * (tarifas.precioFrancoObraTrabajado || 0) * 100) / 100
@@ -1296,6 +1370,11 @@ export default function OtherEmployeesHistoryView({
               totalLiquidar={totalLiquidar}
               diasSeleccionadosCalendario={diasSeleccionadosCalendario}
               seleccionados={seleccionados}
+              modalidadCalculo={modalidadCalculoActual}
+              lugarHabitual={lugarHabitualActual}
+              onCambiarConfiguracionSueldo={handleCambiarConfiguracionSueldo}
+              puedeModificarConfigSueldo={puedeEditarCosto}
+              guardandoConfigSueldo={guardandoConfigSueldo}
             />
           )}
         </div>

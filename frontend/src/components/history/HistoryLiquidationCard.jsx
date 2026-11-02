@@ -35,7 +35,12 @@ export default function HistoryLiquidationCard({
   subtotalFeriado,
   totalLiquidar,
   diasSeleccionadosCalendario,
-  seleccionados
+  seleccionados,
+  modalidadCalculo = 'base_30',
+  lugarHabitual = 'oficina',
+  onCambiarConfiguracionSueldo,
+  puedeModificarConfigSueldo = false,
+  guardandoConfigSueldo = false
 }) {
   return (
     <div className={`liquidation-card ${isRpg ? 'rpg-liquidation-card' : ''}`}>
@@ -101,6 +106,69 @@ export default function HistoryLiquidationCard({
             {exportandoInforme ? 'Generando Excel...' : 'Descargar Informe'}
           </button>
         </div>
+      </div>
+
+      {/* Controles de Configuración Salarial (Admin y SubAdmin) */}
+      <div className="liquidation-config-strip" style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        flexWrap: 'wrap',
+        gap: '12px',
+        padding: '8px 12px',
+        margin: '6px 0 14px 0',
+        background: isRpg ? 'rgba(0,0,0,0.35)' : 'var(--bg-tertiary, #f8fafc)',
+        border: '1px solid var(--border-subtle, #e2e8f0)',
+        borderRadius: '8px'
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+          <span style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-secondary, #64748b)', textTransform: 'uppercase', letterSpacing: '0.5px', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+            ⚙️ Modalidad:
+          </span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <label htmlFor="select-modalidad-calculo" style={{ fontSize: '11px', color: 'var(--text-primary)', fontWeight: 600 }}>
+              Cálculo:
+            </label>
+            <select
+              id="select-modalidad-calculo"
+              aria-label="Modalidad de Liquidación"
+              className="form-input form-input-sm"
+              style={{ minHeight: '32px', fontSize: '12px', fontWeight: 600, padding: '2px 8px', borderRadius: '6px' }}
+              value={modalidadCalculo || 'base_30'}
+              disabled={!puedeModificarConfigSueldo || guardandoConfigSueldo}
+              onChange={(e) => onCambiarConfiguracionSueldo && onCambiarConfiguracionSueldo(e.target.value, lugarHabitual || 'oficina')}
+              title="Selecciona la modalidad de liquidación mensual para este empleado"
+            >
+              <option value="base_30">Base 30 días (Sueldo mensual fijo)</option>
+              <option value="por_dia">Por día individual (Calendario real)</option>
+            </select>
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <label htmlFor="select-lugar-habitual" style={{ fontSize: '11px', color: 'var(--text-primary)', fontWeight: 600 }}>
+              Lugar Habitual:
+            </label>
+            <select
+              id="select-lugar-habitual"
+              aria-label="Lugar Habitual"
+              className="form-input form-input-sm"
+              style={{ minHeight: '32px', fontSize: '12px', fontWeight: 600, padding: '2px 8px', borderRadius: '6px' }}
+              value={lugarHabitual || 'oficina'}
+              disabled={!puedeModificarConfigSueldo || guardandoConfigSueldo}
+              onChange={(e) => onCambiarConfiguracionSueldo && onCambiarConfiguracionSueldo(modalidadCalculo || 'base_30', e.target.value)}
+              title="Lugar habitual donde se aplica el ajuste a 30 días"
+            >
+              <option value="oficina">Oficina</option>
+              <option value="obra">Obra / Campo</option>
+            </select>
+          </div>
+        </div>
+
+        {guardandoConfigSueldo && (
+          <span style={{ fontSize: '11px', color: 'var(--color-primary, #cc3333)', fontWeight: 600 }}>
+            Actualizando en PostgreSQL…
+          </span>
+        )}
       </div>
 
       <div className="liquidation-grid">
@@ -383,6 +451,31 @@ export default function HistoryLiquidationCard({
         <div className="liq-total-amount-box">
           <span className="liq-total-amount-label">{isRpg ? 'TESORO TOTAL A LIQUIDAR' : 'TOTAL A LIQUIDAR'}</span>
           <span className="liq-total-amount-value">{formatMoneda(totalLiquidar)}</span>
+          <div style={{ marginTop: '6px', display: 'flex', justifyContent: 'flex-end' }}>
+            <span
+              className="liq-modalidad-badge"
+              data-testid="badge-modalidad-calculo"
+              style={{
+                fontSize: '10px',
+                padding: '3px 8px',
+                borderRadius: '10px',
+                fontWeight: 700,
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '4px',
+                background: modalidadCalculo === 'base_30' ? '#e0f2fe' : '#f3e8ff',
+                color: modalidadCalculo === 'base_30' ? '#0369a1' : '#7e22ce',
+                border: `1px solid ${modalidadCalculo === 'base_30' ? '#bae6fd' : '#e9d5ff'}`
+              }}
+            >
+              {modalidadCalculo === 'base_30' ? '⚖️ Base 30 días' : '📅 Por día individual'}
+              {modalidadCalculo === 'base_30' && (
+                <span style={{ opacity: 0.85, fontWeight: 500 }}>
+                  ({lugarHabitual === 'obra' ? 'Obra' : 'Oficina'})
+                </span>
+              )}
+            </span>
+          </div>
         </div>
       </div>
     </div>
