@@ -7,6 +7,7 @@ from pathlib import Path
 from threading import BoundedSemaphore, Lock
 
 import psycopg2
+import psycopg2.errors
 from dotenv import load_dotenv
 from psycopg2.extras import RealDictCursor
 from psycopg2.pool import ThreadedConnectionPool

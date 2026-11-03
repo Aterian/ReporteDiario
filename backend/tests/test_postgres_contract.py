@@ -1051,3 +1051,12 @@ def test_exportar_errores_remotos_rbac(monkeypatch):
     res_ok = api.exportar_errores_remotos()
     assert res_ok["exito"] is True
     assert res_ok["total"] == 1
+
+# [FN-07.01] Verificar manejo de excepciones de psycopg2.errors sin AttributeError
+def test_psycopg2_errors_disponibles():
+    import psycopg2.errors
+    assert hasattr(psycopg2, 'errors')
+    assert issubclass(psycopg2.errors.UniqueViolation, psycopg2.Error)
+    assert issubclass(psycopg2.errors.NotNullViolation, psycopg2.Error)
+    assert issubclass(psycopg2.errors.CheckViolation, psycopg2.Error)
+

@@ -2,6 +2,23 @@
 
 Historial cronológico de cambios, nuevas características y mejoras aplicadas al sistema **Check Diario Ingeap**.
 
+## [2.11.1] - 2026-11-03
+
+### 🐛 Correcciones de Persistencia y Estabilidad ([FN-07.01], [FN-07.20])
+- **Restricción NOT NULL de id_sueldo en Recálculo Salarial**:
+  - Desplegada la migración 007_corregir_id_sueldo_recalcular_liquidacion.sql en Railway.
+  - Se corrigió la función app_rrhh.fn_recalcular_liquidacion_mes para incluir id_sueldo en el INSERT y en la cláusula ON CONFLICT DO UPDATE de app_rrhh.a_1_calculo_sueldo.
+  - Resuelto de forma definitiva el error PostgreSQL 23502 / VALIDACION_ERROR que bloqueaba la modificación y eliminación de asistencias en Historial de otros empleados.
+- **Submódulo psycopg2.errors**:
+  - Incorporada la importación explícita import psycopg2.errors en backend/postgres_db.py.
+  - Evitada la excepción AttributeError al traducir violaciones de restricciones en el pool de conexiones.
+
+### 🤖 Infraestructura de Subagentes Especializados
+- **Configuración Persistente en .agents/agents/**:
+  - db-connection-auditor: Monitoreo del pool de conexiones, control de bloqueos, estado idle in transaction y ejecución de migraciones DDL.
+  - qa-regression-tester: Automatización de suites de prueba backend (pytest), frontend (vitest) y empaquetado de producción (npm run build).
+  - error-investigator: Telemetría, trazabilidad de logs en app_rrhh.b_1_errores_remotos y reproducción de fallos aislados.
+
 ## [2.11.0] - 2026-11-03
 
 ### 🛠️ Corrección Crítica en Edición de Registros (`[FN-07.03]`)

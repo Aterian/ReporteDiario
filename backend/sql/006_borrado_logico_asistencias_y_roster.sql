@@ -117,14 +117,15 @@ BEGIN
     v_total_real := GREATEST(0.00, v_suma_costo_dia + (v_delta_ofi * v_dia_ofi) + (v_delta_obra * v_dia_obra));
 
     INSERT INTO app_rrhh.a_1_calculo_sueldo (
-        id_usuario, ciclo_cobro, cant_dias_ofi, cant_dias_obra,
+        id_sueldo, id_usuario, ciclo_cobro, cant_dias_ofi, cant_dias_obra,
         subtotal_ofi, subtotal_obra, total_real, total_adicionales, actualizado_en
     ) VALUES (
-        p_id_usuario, p_ciclo_cobro, v_cant_ofi_final, v_cant_obra_final,
+        v_id_sueldo, p_id_usuario, p_ciclo_cobro, v_cant_ofi_final, v_cant_obra_final,
         ROUND(v_cant_ofi_final * v_dia_ofi, 2), ROUND(v_cant_obra_final * v_dia_obra, 2),
         v_total_real, 0.00, CURRENT_TIMESTAMP
     )
     ON CONFLICT (id_usuario, ciclo_cobro) DO UPDATE SET
+        id_sueldo = EXCLUDED.id_sueldo,
         cant_dias_ofi = EXCLUDED.cant_dias_ofi,
         cant_dias_obra = EXCLUDED.cant_dias_obra,
         subtotal_ofi = EXCLUDED.subtotal_ofi,
