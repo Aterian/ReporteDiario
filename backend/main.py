@@ -15,7 +15,7 @@ from postgres_repository import inicializar_bd, obtener_sesion_activa, usuario_r
 from postgres_bridge import ApiPuente
 from postgres_db import cerrar_pool
 
-APP_VERSION = "2.10.0"
+APP_VERSION = "2.11.1"
 
 
 def recurso_path(ruta_relativa: str) -> str:
@@ -148,10 +148,11 @@ def verificar_actualizacion_github():
             version_remota = tag_name.lstrip("v").strip()
             assets = data.get("assets", [])
 
-            # Buscar binario ejecutable (.exe)
+            # Buscar binario ejecutable (.exe) de la aplicacion
             exe_asset = next(
-                (a for a in assets if "checkdiarioingeap" in a.get("name", "").lower() and a.get("name", "").lower().endswith(".exe")),
-                next((a for a in assets if a.get("name", "").lower().endswith(".exe")), None)
+                (a for a in assets if a.get("name", "").strip().lower() == "checkdiarioingeap.exe"),
+                next((a for a in assets if a.get("name", "").lower().endswith(".exe") and not a.get("name", "").lower().startswith("instalador")),
+                     next((a for a in assets if a.get("name", "").lower().endswith(".exe")), None))
             )
             url_descarga = exe_asset.get("browser_download_url", "") if exe_asset else ""
 
