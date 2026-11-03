@@ -754,3 +754,4 @@ export default function RemoteErrorsView({ usuario, onVolver, tema }) {
     </div>
   );
 }
+

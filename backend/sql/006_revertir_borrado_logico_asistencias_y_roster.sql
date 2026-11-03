@@ -11,3 +11,4 @@ ALTER TABLE app_rrhh.b_1_asistencias
 ALTER TABLE app_rrhh.b_1_roster
     DROP COLUMN IF EXISTS eliminado_en,
     DROP COLUMN IF EXISTS eliminado_por;
+
