@@ -164,11 +164,27 @@ class ApiPuente:
         if datos.get("empleado") and datos["empleado"] != anterior["empleado"] and not datos.get("id_empleado"):
             combinado["id_empleado"] = usuario["id_usuario"]
         if "servicio" in datos and datos["servicio"] != anterior["servicio"]:
-            combinado["id_proyecto"] = None
-        if "modalidad" not in datos and ("lugar" in datos or "tipo_ocf" in datos):
-            combinado.pop("modalidad",None)
-        if "costo_manual" not in datos:
-            combinado["costo_manual"] = anterior["costo_manual"]
+            combinado["id_proyecto"] = datos.get("id_proyecto") or None
+            combinado.pop("dedicado_a", None)
+        elif not datos.get("id_proyecto"):
+            combinado["id_proyecto"] = anterior.get("id_proyecto")
+        # Preservar o inferir modalidad coherentemente
+        if not datos.get("modalidad"):
+            nuevo_lugar = str(datos.get("tipo_ocf") or datos.get("lugar") or "").strip()
+            if nuevo_lugar in ("Campo", "Campaña / Campo", "Roster", "Franco Obra", "Franco de Obra", "Franco Obra Trabajado"):
+                combinado["modalidad"] = "obra"
+            elif nuevo_lugar in ("Oficina", "Franco", "Franco Ofic Trabajado"):
+                combinado["modalidad"] = "oficina"
+            elif anterior.get("modalidad"):
+                combinado["modalidad"] = anterior["modalidad"]
+        if "costo_manual" in datos:
+            combinado["costo_manual"] = bool(datos["costo_manual"]) if admin else False
+            if combinado["costo_manual"]:
+                combinado["costo_dia"] = datos.get("costo_dia")
+            else:
+                combinado["costo_dia"] = None
+        else:
+            combinado["costo_manual"] = anterior.get("costo_manual", False) if admin else False
         modelos = db.preparar_asistencias(combinado,usuario["id_usuario"],permitir_costo_manual=admin)
         if len(modelos)!=1:
             raise ValidacionError("La edición debe corresponder a una asistencia.")
@@ -234,8 +250,20 @@ class ApiPuente:
         return db.obtener_actividad_dia_anterior()
 
     def eliminar_registro_asistencia(self, id_registro: int | str):
-        self._sesion()
-        return db.eliminar_registro_asistencia(id_registro)
+        sesion = self._sesion()
+        admin = sesion.get("rol_app") in ("admin", "sub_admin")
+        res = db.eliminar_registro_asistencia(id_registro, operador=sesion["id_usuario"], administrador=admin)
+        self._notificar_cambios()
+        return res
+
+    def eliminar_roster(self, id_roster: int | str):
+        sesion = self._sesion()
+        admin = sesion.get("rol_app") in ("admin", "sub_admin")
+        if not admin:
+            raise PermisoDenegadoError("Solo usuarios con rol admin o sub_admin pueden eliminar turnos de Roster.")
+        res = db.eliminar_registro_roster(id_roster, operador=sesion["id_usuario"], administrador=True)
+        self._notificar_cambios()
+        return res
 
     def obtener_todos_usuarios(self, area: str | None = None, incluir_inactivos: bool = False):
         sesion = self._sesion()
@@ -500,6 +528,14 @@ class ApiPuente:
         self._notificar_cambios()
         return res
 
+
+
+    def exportar_errores_remotos(self, solo_pendientes: bool = False):
+        sesion = self._sesion()
+        if sesion.get("rol_app") != "admin":
+            raise PermisoDenegadoError("Solo los administradores pueden exportar errores remotos.")
+        lista = db.obtener_errores_remotos(solo_pendientes=solo_pendientes, limite=500)
+        return {"exito": True, "total": len(lista), "datos": lista}
 
 for _nombre,_metodo in list(vars(ApiPuente).items()):
     if not _nombre.startswith("_") and callable(_metodo):

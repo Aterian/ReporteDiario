@@ -2,6 +2,38 @@
 
 Historial cronológico de cambios, nuevas características y mejoras aplicadas al sistema **Check Diario Ingeap**.
 
+## [2.11.0] - 2026-11-03
+
+### 🛠️ Corrección Crítica en Edición de Registros (`[FN-07.03]`)
+- **Preservación de Modalidad y Estado**:
+  - Resuelto el fallo donde la edición de asistencias purgaba la clave `modalidad`, provocando excepciones `ValidacionError` silenciosas al editar `Vacaciones` o `Licencia`.
+  - En `HistoryView.jsx`, incorporado selector de modalidad de liquidación (`Oficina` u `Obra`) para ausencias y sincronización automática de `id_proyecto` al reasignar servicios.
+  - En `OtherEmployeesHistoryView.jsx`, asegurado el envío del payload salarial completo (`modalidad`, `costo_manual`, `costo_dia` e `id_proyecto`) al invocar `api.modificarRegistro(...)`.
+  - En `postgres_repository.py:preparar_asistencias`, corregida la condición de `es_area` para evitar que la imputación a proyectos activos fuera anulada por el valor histórico de `dedicado_a = 'areas'`.
+
+### 🗑️ Borrado Lógico en PostgreSQL (Soft-Delete) (`[FN-07.17]`)
+- **Esquema e Integridad Relacional**:
+  - Incorporadas las columnas `eliminado_en TIMESTAMP WITH TIME ZONE DEFAULT NULL` y `eliminado_por UUID REFERENCES app_rrhh.a_1_usuarios(id_usuario)` en `app_rrhh.b_1_asistencias` y `app_rrhh.b_1_roster`.
+  - Creados índices parciales `idx_asistencias_activas_usuario_fecha`, `idx_asistencias_activas_roster` e `idx_roster_activos_usuario_fechas` con condición `WHERE eliminado_en IS NULL`.
+  - Implementada la migración `backend/sql/006_borrado_logico_asistencias_y_roster.sql` y su reversión limpia.
+- **Triggers de Liquidación y Auditoría**:
+  - Actualizada `fn_recalcular_liquidacion_mes` para filtrar estrictamente `AND eliminado_en IS NULL` en el cómputo de días y suma de costos diarios.
+  - Actualizado `fn_trigger_sincronizar_liquidacion` para disparar el recálculo salarial ante transiciones en `eliminado_en`.
+  - Actualizada `fn_registrar_modificacion_asistencia` para auditar la eliminación lógica como evento `ELIMINACION` en `app_rrhh.b_1_modificaciones_realizadas`.
+  - Actualizada `fn_sincronizar_asistencias_desde_roster` para propagar en cascada el borrado lógico de un turno de Roster hacia sus asistencias hijas generadas.
+- **Frontend y Control de Usuario**:
+  - En `HistoryView.jsx`, incorporado botón `Eliminar` en cada registro propio con modal de confirmación asistido.
+  - En `OtherEmployeesHistoryView.jsx`, habilitada la eliminación con confirmación llamando a `api.eliminarRegistroAsistencia(id)`.
+  - En `RosterView.jsx`, habilitada la eliminación de turnos llamando a `api.eliminarRoster(id)`.
+
+### 📊 Módulo Panorámico de Errores Remotos (`[FN-07.18]`)
+- **Vista Exclusiva para Administradores (`RemoteErrorsView.jsx`)**:
+  - Dashboard de métricas y KPIs en tiempo real: Total de incidentes, Pendientes, Resueltos y Tasa de Resolución %.
+  - Filtros avanzados por Estado (`Pendientes`, `Resueltos`, `Todos`), Origen (`Frontend`, `Backend`), Código de Error y buscador en vivo.
+  - Tabla responsiva con badges semánticos, fecha formateada local y modal de inspección técnica con stack trace monoespaciado y botón de copiado al portapapeles.
+  - Acciones administrativas: resolución individual (`✓ Resolver`), resolución masiva (`✓ Resolver Todos`) con confirmación y **exportación descargable a archivo JSON (`⬇ Exportar JSON`)**.
+  - Acceso directo integrado en `HomeView`, `RpgTavernBoard` y enrutamiento en `App.jsx`.
+
 ## [2.10.0] - 2026-11-02
 
 ### ✨ Nuevas Características

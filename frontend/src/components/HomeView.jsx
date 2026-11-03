@@ -44,6 +44,7 @@ export default function HomeView({
         onHistorialRoster={onHistorialRoster}
         onGestionUsuarios={onGestionUsuarios}
         onGestionProyectos={onGestionProyectos}
+        onVerErroresRemotos={onVerErroresRemotos}
       />
     );
   }
@@ -394,6 +395,34 @@ export default function HomeView({
                     <span className="action-card-title">Proyectos</span>
                     <span className="action-card-desc">
                       Catálogo integral de obras, codificación de servicios, áreas y estados operativos
+                    </span>
+                  </div>
+                  <div className="action-card-arrow">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                      <polyline points="9 18 15 12 9 6" />
+                    </svg>
+                  </div>
+                </button>
+              )}
+              {/* [FN-07.18] Botón: Módulo de Errores Remotos (Exclusivo Administrador) */}
+              {esAdmin(usuario) && (
+                <button 
+                  type="button" 
+                  className="home-action-card card-errors-mgmt" 
+                  onClick={onVerErroresRemotos}
+                  style={{ borderLeft: '4px solid #ef4444' }}
+                >
+                  <div className="action-card-icon-box" style={{ background: '#fee2e2', color: '#ef4444' }}>
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+                      <line x1="12" y1="9" x2="12" y2="13" />
+                      <line x1="12" y1="17" x2="12.01" y2="17" />
+                    </svg>
+                  </div>
+                  <div className="action-card-content">
+                    <span className="action-card-title">Errores Remotos</span>
+                    <span className="action-card-desc">
+                      Supervisión de excepciones no controladas, auditoría y exportación técnica
                     </span>
                   </div>
                   <div className="action-card-arrow">

@@ -10,6 +10,7 @@ import RosterView from './components/RosterView';
 import RosterHistoryView from './components/RosterHistoryView';
 import UsersManagementView from './components/UsersManagementView';
 import ProjectsManagementView from './components/ProjectsManagementView';
+import RemoteErrorsView from './components/RemoteErrorsView';
 import RemoteErrorsModal from './components/RemoteErrorsModal';
 import { ErrorBoundary } from 'react-error-boundary';
 import ErrorFallback from './components/ErrorFallback';
@@ -788,7 +789,7 @@ export default function App() {
             onGestionUsuarios={() => setVistaActiva('usuarios')}
             onGestionProyectos={() => setVistaActiva('proyectos')}
             erroresRemotos={erroresRemotos}
-            onVerErroresRemotos={() => setModalErroresAbierto(true)}
+            onVerErroresRemotos={() => setVistaActiva('errores-remotos')}
             onAvatarClick={handleTriggerAvatar}
             notificacionesModificaciones={notificacionesModificaciones}
             onIrACalendarioModificacion={handleIrACalendarioModificacion}
@@ -856,6 +857,14 @@ export default function App() {
 
         {vistaActiva === 'proyectos' && puedeGestionarProyectos(usuario) && (
           <ProjectsManagementView
+            usuario={usuario}
+            tema={tema}
+            onVolver={() => setVistaActiva('home')}
+          />
+        )}
+
+        {vistaActiva === 'errores-remotos' && esAdmin(usuario) && (
+          <RemoteErrorsView
             usuario={usuario}
             tema={tema}
             onVolver={() => setVistaActiva('home')}

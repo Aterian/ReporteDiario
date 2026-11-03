@@ -396,10 +396,17 @@ export default function OtherEmployeesHistoryView({
       const idEmp = registroEditando.id_empleado || (empData ? (empData.id_origen || empData.id_usuario || empData.dni || '') : '');
       const mailEmp = registroEditando.usuario_mail || (empData ? (empData.email || empData.mail || '') : '');
 
+      const modalidadInferida = ['Campo', 'Campaña / Campo', 'Roster', 'Franco Obra', 'Franco de Obra', 'Franco Obra Trabajado', 'Feriado Trabajado'].includes(registroEditando.tipo_ocf || registroEditando.lugar)
+        ? 'obra'
+        : (registroEditando.modalidad || 'oficina');
+
       const res = await api.modificarRegistro({
         id: registroEditando.id,
         fecha: registroEditando.fecha,
         lugar: registroEditando.tipo_ocf || registroEditando.lugar || 'Oficina',
+        modalidad: modalidadInferida,
+        costo_manual: Boolean(registroEditando.costo_manual),
+        costo_dia: registroEditando.costo_dia,
         servicio: registroEditando.servicio,
         horas: Number(registroEditando.horas) || 0,
         hora_inicio: registroEditando.hora_inicio || '',

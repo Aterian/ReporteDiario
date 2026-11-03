@@ -58,7 +58,8 @@ export default function RpgTavernBoard({
   onNuevoRoster,
   onHistorialRoster,
   onGestionUsuarios,
-  onGestionProyectos
+  onGestionProyectos,
+  onVerErroresRemotos
 }) {
   const puedeOtros = puedeVerHistorialOtros(usuario);
   const puedeRoster = puedeAccederRoster(usuario);
@@ -308,6 +309,17 @@ export default function RpgTavernBoard({
                 title="Catálogo maestro de fortalezas y proyectos del gremio"
               >
                 🏰 Catálogo de Fortalezas (Proyectos)
+              </button>
+            )}
+            {puedeGestionarProyectos(usuario) && onVerErroresRemotos && (
+              <button 
+                type="button" 
+                className="rpg-parchment-btn-sec"
+                style={{ marginTop: '6px', borderColor: '#ef4444', color: '#ef4444', fontWeight: 700 }}
+                onClick={onVerErroresRemotos}
+                title="Pergamino de anomalías del reino y excepciones técnicas"
+              >
+                📜 Registro de Anomalías (Errores)
               </button>
             )}
 

@@ -642,6 +642,14 @@ const apiBase = {
       return await bridge.actualizar_proyecto(datos);
     }
     return { exito: false, error: 'Función no disponible en el puente.' };
+  },
+
+  async exportarErroresRemotos(soloPendientes = false) {
+    const bridge = await getApi();
+    if (bridge.exportar_errores_remotos) {
+      return await bridge.exportar_errores_remotos(soloPendientes);
+    }
+    return { exito: false, error: 'Función no disponible en el puente.' };
   }
 };
 

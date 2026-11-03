@@ -311,20 +311,54 @@ def obtener_rosters(fecha_desde=None, fecha_hasta=None):
             FROM app_rrhh.b_1_roster r JOIN app_rrhh.a_1_usuarios u ON u.id_usuario=r.id_usuario
             JOIN app_proyectos.b_1_proyectos_servicios p ON p.id_proyecto=r.id_proyecto
             LEFT JOIN app_rrhh.b_1_tarifas_roster t ON t.id_tarifa=r.id_tarifa
-            WHERE (%s::date IS NULL OR r.fecha_fin>=%s::date) AND (%s::date IS NULL OR r.fecha_inicio<=%s::date)
+            WHERE (%s::date IS NULL OR r.fecha_fin>=%s::date) AND (%s::date IS NULL OR r.fecha_inicio<=%s::date) AND (r.eliminado_en IS NULL)
             ORDER BY empleado,r.fecha_inicio,r.id_roster""",(desde,desde,hasta,hasta))
         filas = serializar(cur.fetchall())
     return [serializar(RosterResponse.model_validate({**f,"tipo":ETIQUETAS_ROSTER[f["tipo_turno"]]}).model_dump()) for f in filas]
 
 
-# [FN-07.05] Bloquear borrado hasta contar con deleted_at
-def eliminar_registro_roster(id_roster):
-    return {"exito":False,"error":"La eliminación está bloqueada hasta implementar borrado lógico en PostgreSQL.","codigo_error":"BORRADO_LOGICO_PENDIENTE"}
+# [FN-07.05] Borrado lógico de turno de Roster con cascada a asistencias
+def eliminar_registro_roster(id_roster, operador="", administrador=False):
+    uid_roster = uuid_valido(id_roster)
+    operador_uid = uuid_valido(operador) if operador else None
+    with obtener_cursor_pg(commit=True) as cur:
+        cur.execute("SELECT id_usuario FROM app_rrhh.b_1_roster WHERE id_roster=%s AND (eliminado_en IS NULL) FOR UPDATE", (uid_roster,))
+        fila = cur.fetchone()
+        if not fila:
+            raise RegistroNoEncontradoError("No se encontró el turno de Roster o ya fue eliminado.")
+        if not administrador:
+            raise PermisoDenegadoError("Solo usuarios con rol de RRHH o Administración pueden eliminar turnos de Roster.")
+        cur.execute("SELECT pg_advisory_xact_lock(hashtext(%s))", (f"checkdiario.roster.{fila['id_usuario']}",))
+        cur.execute("""UPDATE app_rrhh.b_1_roster
+            SET eliminado_en = TIMEZONE('utc', NOW()), eliminado_por = %s
+            WHERE id_roster = %s AND (eliminado_en IS NULL)
+            RETURNING id_roster AS id""", (operador_uid, uid_roster))
+        res = serializar(cur.fetchone())
+    invalidar_caches_repositorio(('usuarios', True))
+    return {"exito": True, "mensaje": "Turno de Roster eliminado correctamente.", **res}
 
 
-# [FN-07.05] Bloquear eliminación de asistencias
-def eliminar_registro_asistencia(id_registro):
-    return eliminar_registro_roster(id_registro)
+# [FN-07.05] Borrado lógico de registro de asistencia individual
+def eliminar_registro_asistencia(id_registro, operador="", administrador=False):
+    uid_asist = uuid_valido(id_registro)
+    operador_uid = uuid_valido(operador) if operador else None
+    with obtener_cursor_pg(commit=True) as cur:
+        cur.execute("SELECT id_usuario, id_roster, fecha FROM app_rrhh.b_1_asistencias WHERE id_asistencia=%s AND (eliminado_en IS NULL) FOR UPDATE", (uid_asist,))
+        fila = cur.fetchone()
+        if not fila:
+            raise RegistroNoEncontradoError("No se encontró la asistencia o ya fue eliminada.")
+        if fila["id_roster"] is not None:
+            raise ValidacionError("Esta asistencia pertenece a un turno de Roster. Debe eliminar el turno desde el módulo de Roster.")
+        if not administrador and str(fila["id_usuario"]) != str(operador_uid):
+            raise PermisoDenegadoError("Solo puede eliminar sus propios registros de asistencia.")
+        cur.execute("SELECT id_usuario FROM app_rrhh.a_1_usuarios WHERE id_usuario=%s FOR UPDATE", (str(fila["id_usuario"]),))
+        cur.execute("""UPDATE app_rrhh.b_1_asistencias
+            SET eliminado_en = TIMEZONE('utc', NOW()), eliminado_por = %s
+            WHERE id_asistencia = %s AND (eliminado_en IS NULL)
+            RETURNING id_asistencia AS id, fecha, id_usuario""", (operador_uid, uid_asist))
+        res = serializar(cur.fetchone())
+    invalidar_caches_repositorio(('usuarios', True))
+    return {"exito": True, "mensaje": "Registro de asistencia eliminado correctamente.", **res}
 
 
 # [FN-07.03] Traducir estado y modalidad sin calcular salarios
@@ -378,8 +412,10 @@ def preparar_asistencias(datos, usuario, permitir_costo_manual=False):
         for detalle in datos.get("proyectos") or [datos]:
             d = {**datos,**detalle}
             servicio = normalizar_texto(d.get("servicio"))
+            tiene_proyecto = bool(d.get("id_proyecto") or any(normalizar_texto(p["denominacion"]) == servicio for p in proyectos))
             es_area = (estado in ("vacaciones","licencia") or servicio.startswith("dedicado al") or
-                       servicio in ("","campo","oficina","franco") or servicio.startswith("tiempo dedicado al") or d.get("dedicado_a") == "areas")
+                       servicio in ("","campo","oficina","franco") or servicio.startswith("tiempo dedicado al") or
+                       (not tiene_proyecto and d.get("dedicado_a") == "areas"))
             if not es_area and not d.get("proyecto") and not d.get("id_proyecto"):
                 es_area = not any(normalizar_texto(p["denominacion"]) == servicio for p in proyectos)
                 if es_area and estado == "activo" and "area" not in d:
@@ -530,6 +566,7 @@ def consultar_asistencias(empleado="",mes_anio="",id_asistencia=None,limite=None
             WHERE (%s='' OR {p['nombre']}=%s OR a.id_usuario::text=%s)
             AND (%s::date IS NULL OR a.fecha>=%s::date) AND (%s::date IS NULL OR a.fecha<%s::date)
             AND (%s::uuid IS NULL OR a.id_asistencia=%s::uuid)
+            AND (a.eliminado_en IS NULL)
             ORDER BY a.fecha DESC,a.fecha_hora_carga DESC,a.id_asistencia{limite_sql}""",
             (empleado,empleado,empleado,inicio,inicio,fin,fin,id_asistencia,id_asistencia, *parametros_limite))
         filas = serializar(cur.fetchall())
@@ -818,7 +855,7 @@ def obtener_estado_diario_empleados(fecha=""):
             string_agg(DISTINCT CASE WHEN activo_franco='vacaciones' THEN 'Vacaciones'
                 WHEN activo_franco='licencia' THEN 'Licencia' WHEN activo_franco='franco' THEN 'Franco'
                 WHEN lugar='oficina' THEN 'Oficina' ELSE 'Campo' END, ' / ') AS modalidad
-            FROM app_rrhh.b_1_asistencias WHERE fecha=%s GROUP BY id_usuario""",(dia,))
+            FROM app_rrhh.b_1_asistencias WHERE fecha=%s AND (eliminado_en IS NULL) GROUP BY id_usuario""",(dia,))
         presentes = {str(f["id_usuario"]):f for f in cur.fetchall()}
     lista = [{"id_usuario":u["id_usuario"],"nombre":u["nombre"],"dni":u["dni"],"area":u["area"],
               "registrado":u["id_usuario"] in presentes,"enviado":u["id_usuario"] in presentes,
@@ -839,7 +876,7 @@ def obtener_actividad_dia_anterior():
 def usuario_registro_hoy(empleado="",usuario_mail=""):
     usuario = resolver_usuario(empleado)
     with obtener_cursor_pg() as cur:
-        cur.execute("SELECT EXISTS(SELECT 1 FROM app_rrhh.b_1_asistencias WHERE id_usuario=%s AND fecha=CURRENT_DATE) AS registrado",(usuario["id_usuario"],))
+        cur.execute("SELECT EXISTS(SELECT 1 FROM app_rrhh.b_1_asistencias WHERE id_usuario=%s AND fecha=CURRENT_DATE AND (eliminado_en IS NULL)) AS registrado",(usuario["id_usuario"],))
         return cur.fetchone()["registrado"]
 
 
@@ -1333,7 +1370,7 @@ def obtener_dias_faltantes_mes(id_usuario, fecha_ref=None):
     with obtener_cursor_pg() as cur:
         cur.execute("""SELECT DISTINCT EXTRACT(DAY FROM fecha)::int AS dia
             FROM app_rrhh.b_1_asistencias
-            WHERE id_usuario = %s AND fecha >= %s AND fecha <= %s
+            WHERE id_usuario = %s AND fecha >= %s AND fecha <= %s AND (eliminado_en IS NULL)
             ORDER BY dia ASC""", (uid, inicio_mes, fin_mes))
         dias_cargados = {r["dia"] for r in cur.fetchall()}
 
@@ -1348,3 +1385,14 @@ def obtener_dias_faltantes_mes(id_usuario, fecha_ref=None):
         "cantidad_faltantes": len(dias_faltantes),
         "dias_registrados": len(dias_cargados)
     }
+
+# [FN-07.19] Marcar todos los errores remotos como resueltos
+def marcar_todos_errores_remotos_resueltos(id_admin):
+    admin_uuid = uuid_valido(id_admin)
+    with obtener_cursor_pg(commit=True) as cur:
+        cur.execute("""UPDATE app_rrhh.b_1_errores_remotos
+            SET resuelto = TRUE, resuelto_por = %s
+            WHERE resuelto = FALSE
+            RETURNING id_error""", (admin_uuid,))
+        afectados = len(cur.fetchall())
+    return {"exito": True, "resueltos": afectados, "mensaje": f"{afectados} error(es) marcados como resueltos."}

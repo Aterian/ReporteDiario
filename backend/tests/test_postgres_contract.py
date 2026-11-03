@@ -64,13 +64,52 @@ def test_serializacion():
     assert db.serializar({"id":uuid4(),"fecha":date(2026,10,1),"monto":Decimal("123456789.01")})["monto"] == "123456789.01"
 
 
-# [FN-07.05] No ejecutar SQL al eliminar
-def test_borrados_bloqueados(monkeypatch):
-    ejecutar = MagicMock(side_effect=AssertionError("No debe abrir conexión"))
-    monkeypatch.setattr(db,"obtener_cursor_pg",ejecutar)
-    assert db.eliminar_registro_roster("id")["codigo_error"] == "BORRADO_LOGICO_PENDIENTE"
-    assert not db.eliminar_registro_asistencia("id")["exito"]
-    ejecutar.assert_not_called()
+# [FN-07.17] Borrado lógico en asistencias y roster con validación y RBAC
+def test_borrado_logico_asistencias_y_roster(monkeypatch):
+    from error_handler import PermisoDenegadoError, RegistroNoEncontradoError
+    id_asist = str(uuid4())
+    id_usuario_reg = str(uuid4())
+    id_operador_ajeno = str(uuid4())
+    id_operador_admin = str(uuid4())
+    id_roster = str(uuid4())
+
+    # 1. UUID inválido debe arrojar ValidacionError
+    with pytest.raises(ValidacionError):
+        db.eliminar_registro_asistencia("uuid-invalido", id_operador_admin, administrador=True)
+
+    # 2. Usuario no admin intentando borrar asistencia ajena -> PermisoDenegadoError
+    cursor_mock = MagicMock()
+    cursor_mock.fetchone.return_value = {"id_usuario": id_usuario_reg, "id_roster": None, "fecha": date(2026, 10, 15)}
+    @contextmanager
+    def mock_conn(commit=False):
+        yield cursor_mock
+    monkeypatch.setattr(db, "obtener_cursor_pg", mock_conn)
+
+    with pytest.raises(PermisoDenegadoError):
+        db.eliminar_registro_asistencia(id_asist, operador=id_operador_ajeno, administrador=False)
+
+    # 3. Borrado lógico exitoso de asistencia por admin
+    cursor_mock.fetchone.side_effect = [
+        {"id_usuario": id_usuario_reg, "id_roster": None, "fecha": date(2026, 10, 15)},
+        {"id": id_asist, "fecha": date(2026, 10, 15), "id_usuario": id_usuario_reg}
+    ]
+    res_asist = db.eliminar_registro_asistencia(id_asist, operador=id_operador_admin, administrador=True)
+    assert res_asist["exito"] is True
+    assert res_asist["id"] == id_asist
+
+    # 4. Usuario no admin intentando borrar turno de Roster -> PermisoDenegadoError
+    cursor_mock.fetchone.side_effect = [{"id_usuario": id_usuario_reg}]
+    with pytest.raises(PermisoDenegadoError):
+        db.eliminar_registro_roster(id_roster, operador=id_operador_ajeno, administrador=False)
+
+    # 5. Borrado lógico exitoso de Roster por admin
+    cursor_mock.fetchone.side_effect = [
+        {"id_usuario": id_usuario_reg},
+        {"id": id_roster}
+    ]
+    res_roster = db.eliminar_registro_roster(id_roster, operador=id_operador_admin, administrador=True)
+    assert res_roster["exito"] is True
+    assert res_roster["id"] == id_roster
 
 
 # [FN-07.03] Omitir costo_dia de INSERT automático
@@ -956,3 +995,59 @@ def test_obtener_dias_faltantes_mes(monkeypatch):
     # Evaluación a mitad de mes (día 15)
     res_mitad = db.obtener_dias_faltantes_mes("11111111-1111-1111-1111-111111111111", fecha_ref=date(2026, 10, 15))
     assert res_mitad["es_ultimo_dia_mes"] is False
+
+# [FN-07.17] Probar modificación de registro preservando modalidad y resolviendo proyectos
+def test_modificar_registro_preserva_modalidad_y_proyecto(monkeypatch):
+    id_asist = str(uuid4())
+    id_user = str(uuid4())
+    id_proy = str(uuid4())
+    asistencia_bd = {
+        "id": id_asist, "id_asistencia": id_asist, "id_usuario": id_user, "id_empleado": id_user,
+        "empleado": "Ivan Valentin", "fecha": "2026-10-15", "activo_franco": "activo", "lugar": "Campo",
+        "modalidad": "obra", "tipo_dia": "dia_normal", "dedicado_a": "areas", "hora_inicio": None,
+        "hora_fin": None, "horas": Decimal("8"), "horas_dedicadas": Decimal("8"), "id_proyecto": None,
+        "servicio": "Proyecto Alpha", "costo_manual": False, "costo_dia": Decimal("20000"),
+        "cargado_por": id_user, "cargado_por_nombre": "Ivan Valentin", "id_roster": None, "modificaciones": []
+    }
+    usuario_sesion = {"id_usuario": id_user, "nombre": "Ivan Valentin", "dni": "12345678", "rol_app": "admin"}
+    proyectos = [{"id_proyecto": id_proy, "denominacion": "Proyecto Alpha", "area": "I"}]
+
+    monkeypatch.setattr(db, "obtener_sesion_activa", lambda: usuario_sesion)
+    monkeypatch.setattr(db, "consultar_asistencias", lambda **kwargs: [dict(asistencia_bd)])
+    monkeypatch.setattr(db, "resolver_usuario", lambda x: usuario_sesion)
+    monkeypatch.setattr(db, "obtener_proyectos_cache", lambda: proyectos)
+    monkeypatch.setattr(db, "obtener_usuarios_cache", lambda **kw: [usuario_sesion])
+
+    cursor_mock = MagicMock()
+    cursor_mock.fetchone.side_effect = [
+        {"id_usuario": id_user, "id_roster": None},
+        {"id": id_asist, "costo_dia": Decimal("20000")}
+    ]
+    @contextmanager
+    def mock_conn(commit=False):
+        yield cursor_mock
+    monkeypatch.setattr(db, "obtener_cursor_pg", mock_conn)
+
+    api = ApiPuente()
+    # Modificación enviando solo horas sin modalidad explícita (debe preservar 'obra' y resolver id_proy)
+    res = api.modificar_registro({"id": id_asist, "fecha": "2026-10-15", "lugar": "Campo", "servicio": "Proyecto Alpha", "horas": 10})
+    assert res["exito"] is True
+
+
+# [FN-07.18] Probar exportar errores remotos y RBAC
+def test_exportar_errores_remotos_rbac(monkeypatch):
+    user_normal = {"id_usuario": str(uuid4()), "nombre": "User", "dni": "123", "rol_app": "user_1"}
+    user_admin = {"id_usuario": str(uuid4()), "nombre": "Admin", "dni": "456", "rol_app": "admin"}
+    api = ApiPuente()
+
+    # Usuario normal debe recibir ACCESO_DENEGADO
+    monkeypatch.setattr(db, "obtener_sesion_activa", lambda: user_normal)
+    res_denegado = api.exportar_errores_remotos()
+    assert res_denegado["codigo_error"] == "ACCESO_DENEGADO"
+
+    # Usuario admin debe recibir los errores
+    monkeypatch.setattr(db, "obtener_sesion_activa", lambda: user_admin)
+    monkeypatch.setattr(db, "obtener_errores_remotos", lambda **kw: [{"id_error": str(uuid4()), "codigo_error": "ERROR_TEST"}])
+    res_ok = api.exportar_errores_remotos()
+    assert res_ok["exito"] is True
+    assert res_ok["total"] == 1

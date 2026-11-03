@@ -681,3 +681,23 @@
 - **Módulo**: [MOD-01] / [MOD-06] Interfaz de Usuario y Experiencia Colaborativa
 - **Flujo Operativo**: Botón interactivo en la pantalla principal para todos los usuarios. Al ser accionado, despliega la notificación toast "Próximamente." indicando que el canal participativo se encuentra en etapa de diseño.
 - **Tablas afectadas**: Ninguna (canal en fase de planificación).
+
+## [FN-07.24] Borrado Lógico en PostgreSQL (Soft-Delete Asistencias y Roster)
+- **Módulo**: [MOD-07] Persistencia Relacional PostgreSQL y Auditoría RRHH
+- **Flujo Operativo**: Permite eliminar asistencias y turnos de Roster marcando `eliminado_en = TIMEZONE('utc', NOW())` y `eliminado_por`, ocultando los registros de la interfaz y recalculando automáticamente la liquidación mensual mediante triggers sin destruir datos históricos.
+- **Tablas afectadas**: `app_rrhh.b_1_asistencias`, `app_rrhh.b_1_roster`, `app_rrhh.a_1_calculo_sueldo`, `app_rrhh.b_1_modificaciones_realizadas`.
+- **Reglas de negocio e invariantes**:
+  1. Índices parciales con `WHERE eliminado_en IS NULL` sobre `b_1_asistencias` y `b_1_roster` para optimizar consultas de registros activos.
+  2. `fn_recalcular_liquidacion_mes` computa días y salarios únicamente para registros con `eliminado_en IS NULL`.
+  3. `fn_trigger_sincronizar_liquidacion` se activa ante mutaciones de `eliminado_en` para recalcular el mes afectado.
+  4. La eliminación de un turno de Roster marca en cascada como eliminadas sus asistencias diarias asociadas (`id_roster = NEW.id_roster`).
+  5. `fn_registrar_modificacion_asistencia` audita la eliminación lógica registrando un evento `tipo_operacion = 'ELIMINACION'` en `b_1_modificaciones_realizadas`.
+
+## [FN-07.25] Módulo Panorámico y Exportación de Errores Remotos
+- **Módulo**: [MOD-00] / [MOD-07] Supervisión Técnica y Resiliencia
+- **Flujo Operativo**: Vista exclusiva `RemoteErrorsView` para administradores con dashboard de KPIs en tiempo real (total, pendientes, resueltos, tasa de éxito), filtros por estado, origen y código, modal de detalle técnico con stack trace monoespaciado y botón de copiado, resolución individual y masiva, y exportación descargable a archivo JSON.
+- **Tablas afectadas**: `app_rrhh.b_1_errores_remotos`.
+- **Reglas de negocio e invariantes**:
+  1. Acceso restringido exclusivamente a usuarios con `rol_app = 'admin'`.
+  2. La exportación a archivo JSON se genera en el navegador del cliente mediante Blob descargable sin sobrecargar el backend.
+  3. La resolución masiva (`marcar_todos_errores_remotos_resueltos`) actualiza atómicamente todos los registros pendientes asignando `resuelto = TRUE` y `resuelto_por = id_admin`.

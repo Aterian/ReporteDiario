@@ -239,6 +239,8 @@ export default function HistoryView({ onVolver, tema, onNuevoReporte, usuario, o
 
   // Estado para la edición de registros
   const [registroEditando, setRegistroEditando] = useState(null);
+  const [registroEliminando, setRegistroEliminando] = useState(null);
+  const [eliminando, setEliminando] = useState(false);
   const [guardandoEdicion, setGuardandoEdicion] = useState(false);
   const [serviciosDisponibles, setServiciosDisponibles] = useState([]);
 
@@ -309,10 +311,17 @@ export default function HistoryView({ onVolver, tema, onNuevoReporte, usuario, o
 
     setGuardandoEdicion(true);
     try {
+      const modalidadInferida = ['Campo', 'Campaña / Campo', 'Roster', 'Franco Obra', 'Franco de Obra', 'Franco Obra Trabajado', 'Feriado Trabajado'].includes(registroEditando.tipo_ocf || registroEditando.lugar)
+        ? 'obra'
+        : (registroEditando.modalidad || 'oficina');
+
       const res = await api.modificarRegistro({
         id: registroEditando.id,
         fecha: registroEditando.fecha,
         lugar: registroEditando.tipo_ocf || registroEditando.lugar || 'Oficina',
+        modalidad: modalidadInferida,
+        costo_manual: Boolean(registroEditando.costo_manual),
+        costo_dia: registroEditando.costo_dia,
         servicio: registroEditando.servicio,
         horas: Number(registroEditando.horas) || 0,
         empleado: registroEditando.empleado || '',
@@ -335,6 +344,26 @@ export default function HistoryView({ onVolver, tema, onNuevoReporte, usuario, o
       setMensajeSync({ tipo: 'error', texto: 'Error al conectar con la aplicación.' });
     } finally {
       setGuardandoEdicion(false);
+    }
+  };
+
+  const handleConfirmarEliminacion = async () => {
+    if (!registroEliminando) return;
+    setEliminando(true);
+    try {
+      const res = await api.eliminarRegistroAsistencia(registroEliminando.id);
+      if (res && res.exito) {
+        setMensajeSync({ tipo: 'exito', texto: 'Registro eliminado correctamente.' });
+        setRegistroEliminando(null);
+        await cargarHistorial();
+      } else {
+        setMensajeSync({ tipo: 'error', texto: res?.error || 'No se pudo eliminar el registro.' });
+      }
+    } catch (err) {
+      console.error(err);
+      setMensajeSync({ tipo: 'error', texto: 'Error al conectar con la aplicación.' });
+    } finally {
+      setEliminando(false);
     }
   };
 
@@ -748,17 +777,32 @@ export default function HistoryView({ onVolver, tema, onNuevoReporte, usuario, o
 
                       <div className="item-card-footer">
                         {puedeModificarRegistro(usuario, item) ? (
-                          <button
-                            type="button"
-                            className="btn-edit-record"
-                            onClick={() => setRegistroEditando({ ...item })}
-                          >
-                            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                              <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
-                              <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
-                            </svg>
-                            Modificar
-                          </button>
+                          <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                            <button
+                              type="button"
+                              className="btn-edit-record"
+                              onClick={() => setRegistroEditando({ ...item })}
+                            >
+                              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                              </svg>
+                              Modificar
+                            </button>
+                            <button
+                              type="button"
+                              className="btn-edit-record"
+                              onClick={() => setRegistroEliminando(item)}
+                              title="Eliminar este registro"
+                              style={{ borderColor: 'rgba(239, 68, 68, 0.4)', color: '#ef4444' }}
+                            >
+                              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                                <polyline points="3 6 5 6 21 6" />
+                                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                              </svg>
+                              Eliminar
+                            </button>
+                          </div>
                         ) : (
                           <span className="badge-solo-lectura" title="Solo Justina Bertolozzi e Iván Valentin pueden modificar registros de otros empleados">
                             🔒 Solo lectura
@@ -1084,6 +1128,22 @@ export default function HistoryView({ onVolver, tema, onNuevoReporte, usuario, o
                 })()}
               </div>
 
+              {/* Selector de Modalidad para Vacaciones o Licencia */}
+              {['Vacaciones', 'Licencia'].includes(registroEditando.tipo_ocf || registroEditando.lugar) && (
+                <div className="form-group-clean">
+                  <label className="form-label-clean">Modalidad de Liquidación:</label>
+                  <select
+                    className="form-select form-select-clean"
+                    value={registroEditando.modalidad || 'oficina'}
+                    onChange={(e) => setRegistroEditando({ ...registroEditando, modalidad: e.target.value })}
+                    required
+                  >
+                    <option value="oficina">Oficina</option>
+                    <option value="obra">Obra</option>
+                  </select>
+                </div>
+              )}
+
               {/* Si es Licencia: enum de tipos de licencia */}
               {(registroEditando.tipo_ocf === 'Licencia' || registroEditando.lugar === 'Licencia') ? (
                 <div className="form-group-clean">
@@ -1331,6 +1391,61 @@ export default function HistoryView({ onVolver, tema, onNuevoReporte, usuario, o
   return (
     <div className="view-content history-split-viewport">
       {contenidoPrincipal}
+
+      {/* Modal de Confirmación de Eliminación */}
+      {registroEliminando && (
+        <div className="modal-backdrop">
+          <div className={`modal-box ${isRpg ? 'rpg-modal-box' : ''}`} style={{ maxWidth: '440px' }}>
+            <div className="modal-header">
+              <span className="modal-title" style={{ color: '#ef4444' }}>
+                ⚠️ Confirmar Eliminación
+              </span>
+              <button
+                type="button"
+                className="modal-close"
+                onClick={() => !eliminando && setRegistroEliminando(null)}
+                disabled={eliminando}
+              >
+                ✕
+              </button>
+            </div>
+            <div style={{ padding: '12px 0 16px 0', fontSize: '13px', lineHeight: 1.6 }}>
+              <p style={{ margin: '0 0 8px 0', color: 'var(--text-primary)' }}>
+                ¿Estás seguro de que deseas eliminar este registro de asistencia?
+              </p>
+              <div style={{ background: 'rgba(239, 68, 68, 0.08)', border: '1px solid rgba(239, 68, 68, 0.25)', borderRadius: '6px', padding: '10px 12px', marginBottom: '12px' }}>
+                <div><strong>Fecha:</strong> {registroEliminando.fecha}</div>
+                <div><strong>Modalidad / Lugar:</strong> {registroEliminando.tipo_ocf || registroEliminando.lugar}</div>
+                <div><strong>Imputación:</strong> {registroEliminando.servicio || 'Área'}</div>
+                <div><strong>Horas:</strong> {registroEliminando.horas} hs</div>
+              </div>
+              <p style={{ margin: 0, fontSize: '12px', color: 'var(--text-secondary)' }}>
+                El registro quedará oculto en la interfaz y se recalculará automáticamente la liquidación mensual.
+              </p>
+            </div>
+            <div className="modal-actions">
+              <button
+                type="button"
+                className="btn-cancel"
+                onClick={() => setRegistroEliminando(null)}
+                disabled={eliminando}
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                className="btn-confirm"
+                onClick={handleConfirmarEliminacion}
+                disabled={eliminando}
+                style={{ backgroundColor: '#ef4444', borderColor: '#ef4444', color: '#fff' }}
+              >
+                {eliminando ? 'Eliminando...' : 'Sí, Eliminar Registro'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }

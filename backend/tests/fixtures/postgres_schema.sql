@@ -29,7 +29,9 @@ CREATE TABLE "app_rrhh"."a_1_adicionales_sueldo" ("id_adicional" uuid DEFAULT ge
 "fecha" date DEFAULT CURRENT_DATE NOT NULL,
 "cantidad_adicional" numeric(12,2) DEFAULT 0.00 NOT NULL,
 "descripcion" character varying(255) NOT NULL,
-"creado_en" timestamp with time zone DEFAULT CURRENT_TIMESTAMP);
+"creado_en" timestamp with time zone DEFAULT CURRENT_TIMESTAMP,
+"eliminado_en" timestamp with time zone DEFAULT NULL,
+"eliminado_por" uuid);
 
 CREATE TABLE "app_rrhh"."a_1_calculo_sueldo" ("id_calculo_sueldo" uuid DEFAULT gen_random_uuid() NOT NULL,
 "id_sueldo" uuid NOT NULL,
@@ -94,7 +96,9 @@ CREATE TABLE "app_rrhh"."b_1_asistencias" ("id_asistencia" uuid DEFAULT gen_rand
 "costo_dia" numeric(12,2) DEFAULT 0.00 NOT NULL,
 "costo_manual" boolean DEFAULT false NOT NULL,
 "cargado_por" uuid,
-"fecha_hora_carga" timestamp with time zone DEFAULT CURRENT_TIMESTAMP);
+"fecha_hora_carga" timestamp with time zone DEFAULT CURRENT_TIMESTAMP,
+"eliminado_en" timestamp with time zone DEFAULT NULL,
+"eliminado_por" uuid);
 
 CREATE TABLE "app_rrhh"."b_1_roster" ("id_roster" uuid DEFAULT gen_random_uuid() NOT NULL,
 "id_proyecto" uuid NOT NULL,
@@ -105,7 +109,9 @@ CREATE TABLE "app_rrhh"."b_1_roster" ("id_roster" uuid DEFAULT gen_random_uuid()
 "tipo_turno" app_rrhh.estado_asistencia DEFAULT 'activo'::app_rrhh.estado_asistencia NOT NULL,
 "total_viaticos" numeric(12,2) DEFAULT 0.00 NOT NULL,
 "cargado_por" uuid,
-"creado_en" timestamp with time zone DEFAULT CURRENT_TIMESTAMP);
+"creado_en" timestamp with time zone DEFAULT CURRENT_TIMESTAMP,
+"eliminado_en" timestamp with time zone DEFAULT NULL,
+"eliminado_por" uuid);
 
 CREATE TABLE "app_rrhh"."b_1_tarifas_roster" ("id_tarifa" uuid DEFAULT gen_random_uuid() NOT NULL,
 "id_proyecto" uuid NOT NULL,
@@ -115,7 +121,9 @@ CREATE TABLE "app_rrhh"."b_1_tarifas_roster" ("id_tarifa" uuid DEFAULT gen_rando
 "bajada" numeric(12,2) DEFAULT 0.00 NOT NULL,
 "adicional_turno" numeric(12,2) DEFAULT 0.00 NOT NULL,
 "es_activa" boolean DEFAULT true NOT NULL,
-"creado_en" timestamp with time zone DEFAULT CURRENT_TIMESTAMP);
+"creado_en" timestamp with time zone DEFAULT CURRENT_TIMESTAMP,
+"eliminado_en" timestamp with time zone DEFAULT NULL,
+"eliminado_por" uuid);
 
 CREATE TABLE "app_rrhh"."b_1_modificaciones_realizadas" ("id_modificacion" uuid DEFAULT gen_random_uuid() NOT NULL,
 "id_asistencia" uuid NOT NULL,
