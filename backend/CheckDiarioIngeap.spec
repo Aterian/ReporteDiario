@@ -30,6 +30,7 @@ hidden_imports = [
     "loguru",
     "pydantic",
     "psycopg2",
+    "psycopg2.errors",
     "psycopg2.extras",
     "psycopg2.pool",
     "dotenv",

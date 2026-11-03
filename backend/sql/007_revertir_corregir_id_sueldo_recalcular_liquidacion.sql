@@ -113,3 +113,4 @@ BEGIN
         actualizado_en = CURRENT_TIMESTAMP;
 END;
 $function$;
+
