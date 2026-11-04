@@ -17,7 +17,9 @@ def respuesta_segura(funcion):
         try:
             return funcion(*args, **kwargs)
         except AppBaseException as exc:
-            if getattr(exc, "codigo_error", "") in ("ERROR_BASE_DATOS", "ERROR_CONCURRENCIA"):
+            es_saturacion = getattr(exc, "es_saturacion_pool", False)
+            es_lectura_errores = funcion.__name__ == "obtener_errores_remotos"
+            if getattr(exc, "codigo_error", "") in ("ERROR_BASE_DATOS", "ERROR_CONCURRENCIA") and not es_saturacion and not es_lectura_errores:
                 try:
                     sesion = db.obtener_sesion_activa()
                     db.registrar_error_remoto({
@@ -29,6 +31,8 @@ def respuesta_segura(funcion):
                     }, sesion=sesion)
                 except Exception:
                     pass
+            elif es_saturacion:
+                logger.warning("[Pool Saturado] Se omite telemetría en BD para {}: {}", funcion.__name__, exc.mensaje)
             return {"exito":False,"error":exc.mensaje,"codigo_error":exc.codigo_error}
         except ValidationError as exc:
             mensaje = "; ".join(".".join(str(p) for p in e["loc"])+": "+e["msg"] for e in exc.errors())
@@ -107,8 +111,22 @@ class ApiPuente:
     def obtener_servicios(self, area: str | None = None):
         self._sesion()
         proyectos = db.obtener_proyectos_cache()
-        if area and area.upper() not in ("TODOS","N","RRHH"):
-            proyectos = [p for p in proyectos if not p["area"] or p["area"].upper() == area.upper()]
+        area_norm = (area or "").strip().upper()
+        if area_norm and area_norm not in ("TODOS", "N", "RRHH"):
+            areas_im = {"I", "M", "INGENIERIA", "INGENIERÍA", "MENSURA", "IM", "I+M"}
+            if area_norm in areas_im:
+                proyectos = [
+                    p for p in proyectos
+                    if not p.get("area")
+                    or str(p.get("area")).strip().upper() in areas_im
+                    or "-I-" in str(p.get("denominacion") or "").upper()
+                    or "-M-" in str(p.get("denominacion") or "").upper()
+                ]
+            else:
+                proyectos = [
+                    p for p in proyectos
+                    if not p.get("area") or str(p.get("area")).strip().upper() == area_norm
+                ]
         return [p["denominacion"] for p in proyectos]
 
     def refrescar_catalogos_sheets(self):

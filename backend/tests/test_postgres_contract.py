@@ -983,6 +983,7 @@ def test_obtener_dias_faltantes_mes(monkeypatch):
         yield cursor
 
     monkeypatch.setattr(db, "obtener_cursor_pg", conexion)
+    monkeypatch.setattr(db, "perfil_esquema", lambda: {"tiene_soft_delete_asistencias": True})
 
     # Evaluación el día 31 (último día de octubre)
     res = db.obtener_dias_faltantes_mes("11111111-1111-1111-1111-111111111111", fecha_ref=date(2026, 10, 31))
@@ -1059,4 +1060,77 @@ def test_psycopg2_errors_disponibles():
     assert issubclass(psycopg2.errors.UniqueViolation, psycopg2.Error)
     assert issubclass(psycopg2.errors.NotNullViolation, psycopg2.Error)
     assert issubclass(psycopg2.errors.CheckViolation, psycopg2.Error)
+
+
+# [FN-07.01] Verificar que SingleFlight en _obtener_de_cache ejecute el generador una sola vez bajo concurrencia
+def test_singleflight_cache_evita_stampede():
+    from concurrent.futures import ThreadPoolExecutor
+    import time
+
+    db.invalidar_caches_repositorio()
+    llamadas = 0
+
+    def generador_lento():
+        nonlocal llamadas
+        time.sleep(0.05)
+        llamadas += 1
+        return ["PROYECTO-1", "PROYECTO-2"]
+
+    with ThreadPoolExecutor(max_workers=8) as executor:
+        futuros = [
+            executor.submit(db._obtener_de_cache, ("test_singleflight",), 60, generador_lento)
+            for _ in range(8)
+        ]
+        resultados = [f.result() for f in futuros]
+
+    assert llamadas == 1
+    assert all(r == ["PROYECTO-1", "PROYECTO-2"] for r in resultados)
+    db.invalidar_caches_repositorio(("test_singleflight",))
+
+
+# [FN-07.21] Omitir telemetría en BD cuando el error proviene de saturación del pool
+def test_respuesta_segura_omite_telemetria_en_saturacion_pool(monkeypatch):
+    from postgres_bridge import respuesta_segura
+    from error_handler import DatabaseTransactionError
+
+    llamadas_telemetria = []
+    monkeypatch.setattr(db, "registrar_error_remoto", lambda datos, sesion=None: llamadas_telemetria.append(datos))
+
+    @respuesta_segura
+    def metodo_saturado():
+        err = DatabaseTransactionError("Todas las conexiones están ocupadas. Reintente en unos instantes.")
+        err.es_saturacion_pool = True
+        raise err
+
+    res = metodo_saturado()
+    assert res["exito"] is False
+    assert res["codigo_error"] == "ERROR_BASE_DATOS"
+    assert len(llamadas_telemetria) == 0
+
+
+# [FN-07.02] Empleados de Ingeniería (I) y Mensura (M) ven proyectos de ambas áreas (I y M)
+def test_obtener_servicios_unifica_ingenieria_y_mensura(monkeypatch):
+    from postgres_bridge import ApiPuente
+    puente = ApiPuente()
+    monkeypatch.setattr(db, "obtener_sesion_activa", lambda: {"id_usuario": USUARIO, "rol_app": "user_1"})
+    monkeypatch.setattr(db, "obtener_proyectos_cache", lambda: [
+        {"denominacion": "228-SF-I-626-SOLAR", "area": "I"},
+        {"denominacion": "148-M-821-MENSURA", "area": "M"},
+        {"denominacion": "300-A-100-APP", "area": "A"},
+        {"denominacion": "999-GENERAL", "area": ""},
+    ])
+
+    servicios_i = puente.obtener_servicios("I")
+    servicios_m = puente.obtener_servicios("M")
+    servicios_a = puente.obtener_servicios("A")
+
+    assert "228-SF-I-626-SOLAR" in servicios_i
+    assert "148-M-821-MENSURA" in servicios_i
+    assert "999-GENERAL" in servicios_i
+    assert "300-A-100-APP" not in servicios_i
+
+    assert servicios_m == servicios_i
+    assert "300-A-100-APP" in servicios_a
+    assert "228-SF-I-626-SOLAR" not in servicios_a
+
 

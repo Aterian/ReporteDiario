@@ -58,9 +58,11 @@ def obtener_pool():
 def obtener_cursor_pg(commit=False):
     pool = obtener_pool()
     slots = _slots
-    timeout_espera = float(os.getenv("PG_POOL_ACQUIRE_TIMEOUT", "15"))
+    timeout_espera = float(os.getenv("PG_POOL_ACQUIRE_TIMEOUT", "25"))
     if not slots.acquire(timeout=timeout_espera):
-        raise DatabaseTransactionError("Todas las conexiones están ocupadas. Reintente en unos instantes.")
+        exc_pool = DatabaseTransactionError("Todas las conexiones están ocupadas. Reintente en unos instantes.")
+        exc_pool.es_saturacion_pool = True
+        raise exc_pool
     conn = None
     descartar = False
     try:
@@ -91,9 +93,17 @@ def obtener_cursor_pg(commit=False):
                             psycopg2.errors.InvalidTextRepresentation, psycopg2.errors.NotNullViolation)):
             logger.warning("[DB] Restricción PostgreSQL ({}): {}", getattr(exc, "pgcode", type(exc).__name__), str(exc).strip())
             raise ValidacionError("Los datos no cumplen las restricciones de PostgreSQL.") from None
+        if isinstance(exc, (psycopg2.errors.UndefinedColumn, psycopg2.errors.UndefinedTable)):
+            logger.error("[DB] Esquema desactualizado ({}): {}", getattr(exc, "pgcode", type(exc).__name__), str(exc).strip())
+            raise DatabaseTransactionError("El esquema de PostgreSQL requiere actualización (columna o tabla faltante).") from None
         if isinstance(exc, psycopg2.Error):
             logger.error("[DB] Error PostgreSQL ({}): {}", getattr(exc, "pgcode", type(exc).__name__), str(exc).strip())
-            raise DatabaseTransactionError("PostgreSQL no pudo completar la operación; no se guardaron cambios.") from None
+            msg = (
+                "PostgreSQL no pudo completar la operación; no se guardaron cambios."
+                if commit
+                else "No se pudo completar la consulta en PostgreSQL."
+            )
+            raise DatabaseTransactionError(msg) from None
         raise
     finally:
         try:

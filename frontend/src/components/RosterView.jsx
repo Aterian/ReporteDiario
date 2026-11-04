@@ -337,11 +337,16 @@ export default function RosterView({ usuario, onVolver, tema }) {
   }, [anioGantt, mesGantt]);
 
   useEffect(() => {
+    let debounceTimer = null;
     const handleCatalogosActualizados = () => {
-      cargarRostersMes(anioGantt, mesGantt);
+      if (debounceTimer) clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(() => {
+        cargarRostersMes(anioGantt, mesGantt);
+      }, 200);
     };
     window.addEventListener('catalogos-actualizados', handleCatalogosActualizados);
     return () => {
+      if (debounceTimer) clearTimeout(debounceTimer);
       window.removeEventListener('catalogos-actualizados', handleCatalogosActualizados);
     };
   }, [anioGantt, mesGantt]);

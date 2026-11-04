@@ -110,11 +110,16 @@ export default function RosterHistoryView({ usuario, onVolver, onNuevoRoster, te
   // Escuchar evento de actualización de catálogos o sincronización
   useEffect(() => {
     if (!puedeAccederRoster(usuario)) return;
+    let debounceTimer = null;
     const handleCatalogosActualizados = () => {
-      cargarRegistrosMes(anioSeleccionado, mesSeleccionado);
+      if (debounceTimer) clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(() => {
+        cargarRegistrosMes(anioSeleccionado, mesSeleccionado);
+      }, 200);
     };
     window.addEventListener('catalogos-actualizados', handleCatalogosActualizados);
     return () => {
+      if (debounceTimer) clearTimeout(debounceTimer);
       window.removeEventListener('catalogos-actualizados', handleCatalogosActualizados);
     };
   }, [usuario, anioSeleccionado, mesSeleccionado]);

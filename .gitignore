@@ -79,3 +79,7 @@ output/
 backend/BBDD_asist_roster.xlsx
 
 scratch/
+
+# --- TEAMWORK Y CONTEXTO TEMPORAL ---
+.agents/teamwork/
+contexto_agente.md

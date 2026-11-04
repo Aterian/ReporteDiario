@@ -2,6 +2,25 @@
 
 Historial cronológico de cambios, nuevas características y mejoras aplicadas al sistema **Check Diario Ingeap**.
 
+## [2.11.2] - 2026-11-04
+
+### 🚀 Resiliencia de Conexiones PostgreSQL y SingleFlight ([FN-07.24])
+- **Patrón SingleFlight con Double-Checked Locking**:
+  - Implementado bloqueo por clave en `_obtener_de_cache` (`backend/postgres_repository.py`) para erradicar el *Cache Stampede* (*Thundering Herd*) sobre los catálogos de proyectos y usuarios.
+- **Optimización de Pool y Parámetros de Entorno**:
+  - Parámetros actualizados: `PG_POOL_MIN=2`, `PG_POOL_MAX=20` y `PG_POOL_ACQUIRE_TIMEOUT=25`.
+- **Desacoplamiento de Telemetría ante Saturación**:
+  - Ante agotamiento de conexiones en el pool (`es_saturacion_pool = True`), `respuesta_segura` registra el incidente en logs locales sin intentar una inserción recursiva en `b_1_errores_remotos`.
+- **Desanidamiento de Cursores y Esquema Seguro**:
+  - En `actualizar_costo_dia_manual`, se evalúa el esquema de auditoría antes de solicitar el cursor transaccional, evitando auto-bloqueos en el semáforo.
+  - Detección dinámica de `tiene_soft_delete_asistencias` para tolerar entornos con y sin la columna `eliminado_en`.
+- **Debounce en Frontend**:
+  - Retardo de 200 ms añadido a los listeners de `'catalogos-actualizados'` en `App.jsx`, `DailyStatusWidget.jsx`, `HistoryView.jsx`, `OtherEmployeesHistoryView.jsx`, `RosterView.jsx` y `RosterHistoryView.jsx`.
+
+### 📁 Proyectos Compartidos de Ingeniería y Mensura (I + M) ([FN-07.24])
+- **Catálogo Unificado en Registro Diario**:
+  - En `ApiPuente.obtener_servicios`, al consultar el área de Ingeniería (`I`) o Mensura (`M`), se retorna el catálogo de proyectos activos de ambas áreas simultáneamente.
+
 ## [2.11.1] - 2026-11-03
 
 ### 🐛 Correcciones de Persistencia y Estabilidad ([FN-07.01], [FN-07.20])

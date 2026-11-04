@@ -21,6 +21,7 @@ import time as _time
 _sesion_lock = Lock()
 _cache_mem = {}
 _cache_lock = Lock()
+_key_locks = {}
 
 def _obtener_de_cache(clave, ttl_segundos, generador):
     ahora = _time.time()
@@ -29,10 +30,19 @@ def _obtener_de_cache(clave, ttl_segundos, generador):
             expira, valor = _cache_mem[clave]
             if ahora < expira:
                 return valor
-    valor = generador()
-    with _cache_lock:
-        _cache_mem[clave] = (ahora + ttl_segundos, valor)
-    return valor
+        lock_clave = _key_locks.setdefault(clave, Lock())
+
+    with lock_clave:
+        ahora = _time.time()
+        with _cache_lock:
+            if clave in _cache_mem:
+                expira, valor = _cache_mem[clave]
+                if ahora < expira:
+                    return valor
+        valor = generador()
+        with _cache_lock:
+            _cache_mem[clave] = (_time.time() + ttl_segundos, valor)
+        return valor
 
 def invalidar_caches_repositorio(*claves):
     with _cache_lock:
@@ -111,12 +121,14 @@ def perfil_esquema():
     if any(not columnas <= tablas.get(tabla, set()) for tabla, columnas in requeridas.items()):
         raise ValidacionError("El esquema operativo de PostgreSQL está incompleto; revise tablas y columnas.")
     tiene_auditoria = ("app_rrhh", "b_1_modificaciones_realizadas") in tablas and {"id_modificacion", "id_asistencia", "detalle_cambio"} <= tablas.get(("app_rrhh", "b_1_modificaciones_realizadas"), set())
+    tiene_soft_delete_asistencias = "eliminado_en" in tablas.get(("app_rrhh", "b_1_asistencias"), set())
     return {"nombre": nombre, "correo": correo, "rol": "u.rol_app" if "rol_app" in usuarios else "NULL::text",
             "primer_nombre": "u.nombre" if "nombre" in usuarios else "split_part(u.nombre_completo, ' ', 1)",
             "apellido": "u.apellido" if "apellido" in usuarios else "split_part(u.nombre_completo, ' ', 2)",
             "proyecto": proyecto, "proyecto_activo": "p.activo IS TRUE" if "activo" in proyectos else "TRUE",
             "proyecto_area": "p.area" if "area" in proyectos else "NULL::text", "roles_disponibles": "rol_app" in usuarios, "nombre_cargador": nombre_cargador,
             "nombre_modificador": nombre_modificador, "tiene_auditoria": tiene_auditoria,
+            "tiene_soft_delete_asistencias": tiene_soft_delete_asistencias,
             "modalidad_calculo": "s.modalidad_calculo::text" if "modalidad_calculo" in tablas.get(("app_rrhh", "a_1_sueldos_base"), set()) else "'base_30'"}
 
 
@@ -532,6 +544,7 @@ def consultar_asistencias(empleado="",mes_anio="",id_asistencia=None,limite=None
     cargador_expr = p.get("nombre_cargador") or "uc.nombre_completo"
     modificador_expr = p.get("nombre_modificador") or "um.nombre_completo"
     tiene_auditoria = p.get("tiene_auditoria", False)
+    filtro_soft = "AND (a.eliminado_en IS NULL)" if p.get("tiene_soft_delete_asistencias") else ""
     subquery_audit = f"""COALESCE((
         SELECT jsonb_agg(jsonb_build_object(
             'id_modificacion', m.id_modificacion,
@@ -566,7 +579,7 @@ def consultar_asistencias(empleado="",mes_anio="",id_asistencia=None,limite=None
             WHERE (%s='' OR {p['nombre']}=%s OR a.id_usuario::text=%s)
             AND (%s::date IS NULL OR a.fecha>=%s::date) AND (%s::date IS NULL OR a.fecha<%s::date)
             AND (%s::uuid IS NULL OR a.id_asistencia=%s::uuid)
-            AND (a.eliminado_en IS NULL)
+            {filtro_soft}
             ORDER BY a.fecha DESC,a.fecha_hora_carga DESC,a.id_asistencia{limite_sql}""",
             (empleado,empleado,empleado,inicio,inicio,fin,fin,id_asistencia,id_asistencia, *parametros_limite))
         filas = serializar(cur.fetchall())
@@ -670,6 +683,7 @@ def actualizar_costo_dia_manual(id_registro,nuevo_costo,quien_modifica="",motivo
     valor = Decimal(str(nuevo_costo))
     if not valor.is_finite() or valor < 0:
         raise ValidacionError("El costo debe ser un número no negativo y finito.")
+    p = perfil_esquema() if (motivo and str(motivo).strip()) else {}
     with obtener_cursor_pg(commit=True) as cur:
         cur.execute("SELECT id_usuario FROM app_rrhh.a_1_usuarios WHERE id_usuario IN (SELECT id_usuario FROM app_rrhh.b_1_asistencias WHERE id_asistencia=%s) FOR UPDATE",(uuid_valido(id_registro),))
         operador_uuid = uuid_valido(quien_modifica) if quien_modifica else None
@@ -682,7 +696,6 @@ def actualizar_costo_dia_manual(id_registro,nuevo_costo,quien_modifica="",motivo
         if not fila:
             raise RegistroNoEncontradoError()
         if motivo and str(motivo).strip():
-            p = perfil_esquema()
             if p.get("tiene_auditoria"):
                 cur.execute("""UPDATE app_rrhh.b_1_modificaciones_realizadas
                     SET detalle_cambio = detalle_cambio || %s
@@ -850,12 +863,14 @@ def actualizar_tipo_costo_lote(ids_asistencia,tipo_costo):
 def obtener_estado_diario_empleados(fecha=""):
     dia = date.fromisoformat(fecha) if fecha else date.today()
     usuarios = obtener_usuarios_cache()
+    p = perfil_esquema()
+    filtro_soft = "AND (eliminado_en IS NULL)" if p.get("tiene_soft_delete_asistencias") else ""
     with obtener_cursor_pg() as cur:
-        cur.execute("""SELECT id_usuario,SUM(horas_dedicadas) AS horas,COUNT(*) AS registros,
+        cur.execute(f"""SELECT id_usuario,SUM(horas_dedicadas) AS horas,COUNT(*) AS registros,
             string_agg(DISTINCT CASE WHEN activo_franco='vacaciones' THEN 'Vacaciones'
                 WHEN activo_franco='licencia' THEN 'Licencia' WHEN activo_franco='franco' THEN 'Franco'
                 WHEN lugar='oficina' THEN 'Oficina' ELSE 'Campo' END, ' / ') AS modalidad
-            FROM app_rrhh.b_1_asistencias WHERE fecha=%s AND (eliminado_en IS NULL) GROUP BY id_usuario""",(dia,))
+            FROM app_rrhh.b_1_asistencias WHERE fecha=%s {filtro_soft} GROUP BY id_usuario""",(dia,))
         presentes = {str(f["id_usuario"]):f for f in cur.fetchall()}
     lista = [{"id_usuario":u["id_usuario"],"nombre":u["nombre"],"dni":u["dni"],"area":u["area"],
               "registrado":u["id_usuario"] in presentes,"enviado":u["id_usuario"] in presentes,
@@ -875,8 +890,10 @@ def obtener_actividad_dia_anterior():
 # [FN-07.07] Verificar la asistencia de hoy
 def usuario_registro_hoy(empleado="",usuario_mail=""):
     usuario = resolver_usuario(empleado)
+    p = perfil_esquema()
+    filtro_soft = "AND (eliminado_en IS NULL)" if p.get("tiene_soft_delete_asistencias") else ""
     with obtener_cursor_pg() as cur:
-        cur.execute("SELECT EXISTS(SELECT 1 FROM app_rrhh.b_1_asistencias WHERE id_usuario=%s AND fecha=CURRENT_DATE AND (eliminado_en IS NULL)) AS registrado",(usuario["id_usuario"],))
+        cur.execute(f"SELECT EXISTS(SELECT 1 FROM app_rrhh.b_1_asistencias WHERE id_usuario=%s AND fecha=CURRENT_DATE {filtro_soft}) AS registrado",(usuario["id_usuario"],))
         return cur.fetchone()["registrado"]
 
 
@@ -1367,10 +1384,12 @@ def obtener_dias_faltantes_mes(id_usuario, fecha_ref=None):
     fin_mes = fecha_base.replace(day=ultimo_dia)
     mes_anio = fecha_base.strftime("%Y-%m")
 
+    p = perfil_esquema()
+    filtro_soft = "AND (eliminado_en IS NULL)" if p.get("tiene_soft_delete_asistencias") else ""
     with obtener_cursor_pg() as cur:
-        cur.execute("""SELECT DISTINCT EXTRACT(DAY FROM fecha)::int AS dia
+        cur.execute(f"""SELECT DISTINCT EXTRACT(DAY FROM fecha)::int AS dia
             FROM app_rrhh.b_1_asistencias
-            WHERE id_usuario = %s AND fecha >= %s AND fecha <= %s AND (eliminado_en IS NULL)
+            WHERE id_usuario = %s AND fecha >= %s AND fecha <= %s {filtro_soft}
             ORDER BY dia ASC""", (uid, inicio_mes, fin_mes))
         dias_cargados = {r["dia"] for r in cur.fetchall()}
 

@@ -1,5 +1,11 @@
 # Catálogo Funcional del Sistema
 
+## [FN-07.24] Resiliencia de Pool PostgreSQL, SingleFlight y Proyectos Compartidos I+M
+- **Módulo**: [MOD-07] Persistencia y Conexiones PostgreSQL
+- **Flujo Operativo**: Mitiga saturación de conexiones elevando el pool a 20 slots y aplicando el patrón SingleFlight en caché para impedir ráfagas simultáneas ante eventos de actualización; desacopla telemetría de errores cuando el pool se satura; desanida cursores transaccionales y añade debounce de 200 ms en frontend; unifica catálogos activos de Ingeniería y Mensura para colaboradores de ambas áreas en registros diarios.
+- **Tablas afectadas**: app_rrhh.b_1_asistencias, app_rrhh.b_1_errores_remotos, app_proyectos.b_1_proyectos_servicios.
+- **Reglas de negocio e invariantes**: PG_POOL_MAX=20 con timeout de 25s; SingleFlight con double-checked locking ejecuta generadores una única vez por clave; ante es_saturacion_pool=True se suprime la escritura recursiva en b_1_errores_remotos; colaboradores con área I o M acceden al universo completo de proyectos activos de ambas áreas.
+
 ## [FN-07.19] Verificación Integral de Calidad, Blindaje de React Hooks y Testing Vitest
 - **Módulo**: [MOD-07] Pruebas Automatizadas y Calidad Frontend
 - **Flujo Operativo**: Ejecuta suites automatizadas unitarias en frontend con Vitest para validar reglas RBAC y liquidación canónica; expande TypeScript a todo el árbol de fuentes; y refuerza ESLint con error estricto en reglas de hooks, eliminando retornos condicionales antes de hooks en vistas principales.

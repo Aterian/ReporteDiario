@@ -289,12 +289,17 @@ export default function HistoryView({ onVolver, tema, onNuevoReporte, usuario, o
     }
     cargarServicios();
 
+    let debounceTimer = null;
     const handleCatalogos = () => {
-      cargarHistorial();
-      cargarServicios();
+      if (debounceTimer) clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(() => {
+        cargarHistorial();
+        cargarServicios();
+      }, 200);
     };
     window.addEventListener('catalogos-actualizados', handleCatalogos);
     return () => {
+      if (debounceTimer) clearTimeout(debounceTimer);
       window.removeEventListener('catalogos-actualizados', handleCatalogos);
     };
   }, []);

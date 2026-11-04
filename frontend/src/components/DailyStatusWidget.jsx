@@ -55,14 +55,19 @@ export default function DailyStatusWidget({ usuario }) {
       cargarResumenModificaciones();
     }
 
+    let debounceTimer = null;
     const handleCatalogos = () => {
-      cargarActividad();
-      if (puedeVerModif) {
-        cargarResumenModificaciones();
-      }
+      if (debounceTimer) clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(() => {
+        cargarActividad();
+        if (puedeVerModif) {
+          cargarResumenModificaciones();
+        }
+      }, 200);
     };
     window.addEventListener('catalogos-actualizados', handleCatalogos);
     return () => {
+      if (debounceTimer) clearTimeout(debounceTimer);
       window.removeEventListener('catalogos-actualizados', handleCatalogos);
     };
   }, [puedeVerModif]);

@@ -252,14 +252,19 @@ export default function OtherEmployeesHistoryView({
     if (!puedeVerHistorialOtros(usuario)) return;
     cargarDatos();
 
+    let debounceTimer = null;
     const handleCatalogos = () => {
-      cargarDatos();
-      if (empleadoAuditarRef.current) {
-        cargarAuditoriaEmpleado(empleadoAuditarRef.current, fechaCalendarioRef.current);
-      }
+      if (debounceTimer) clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(() => {
+        cargarDatos();
+        if (empleadoAuditarRef.current) {
+          cargarAuditoriaEmpleado(empleadoAuditarRef.current, fechaCalendarioRef.current);
+        }
+      }, 200);
     };
     window.addEventListener('catalogos-actualizados', handleCatalogos);
     return () => {
+      if (debounceTimer) clearTimeout(debounceTimer);
       window.removeEventListener('catalogos-actualizados', handleCatalogos);
     };
   }, [usuario]);

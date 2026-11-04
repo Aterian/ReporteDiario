@@ -251,14 +251,19 @@ export default function App() {
       cargarNotifs();
     }, 60000);
 
+    let debounceTimer = null;
     const handleCatalogos = () => {
-      cargarNotifs();
+      if (debounceTimer) clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(() => {
+        cargarNotifs();
+      }, 200);
     };
     window.addEventListener('catalogos-actualizados', handleCatalogos);
 
     return () => {
       activo = false;
       clearInterval(intervalo);
+      if (debounceTimer) clearTimeout(debounceTimer);
       window.removeEventListener('catalogos-actualizados', handleCatalogos);
     };
   }, [usuario]);
