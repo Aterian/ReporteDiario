@@ -23,13 +23,60 @@ if getattr(sys, "frozen", False) and hasattr(sys, "_MEIPASS"):
 _pool = None
 _slots = None
 _lock = Lock()
+_ultimos_usos = {}
+_ultimos_usos_lock = Lock()
+
+
+def _registrar_uso_conexion(conn, timestamp=None):
+    if conn is None:
+        return
+    ts = time.monotonic() if timestamp is None else timestamp
+    try:
+        key = id(conn)
+        with _ultimos_usos_lock:
+            _ultimos_usos[key] = ts
+    except Exception:
+        pass
+    try:
+        conn._ultimo_uso_monotonic = ts
+    except (AttributeError, TypeError):
+        pass
+
+
+def _obtener_ultimo_uso(conn):
+    if conn is None:
+        return None
+    try:
+        d = getattr(conn, "__dict__", None)
+        if isinstance(d, dict) and "_ultimo_uso_monotonic" in d:
+            val = d["_ultimo_uso_monotonic"]
+            if isinstance(val, (int, float)):
+                return val
+    except Exception:
+        pass
+    try:
+        key = id(conn)
+        with _ultimos_usos_lock:
+            return _ultimos_usos.get(key)
+    except Exception:
+        return None
+
+
+def _olvidar_conexion(conn):
+    if conn is not None:
+        try:
+            key = id(conn)
+            with _ultimos_usos_lock:
+                _ultimos_usos.pop(key, None)
+        except Exception:
+            pass
 
 
 # [FN-07.01] Pool resiliente con sellado de tiempo para prevención de sockets inactivos
 class ResilientThreadedConnectionPool(ThreadedConnectionPool):
     def _connect(self, key=None):
         conn = super()._connect(key=key)
-        conn._ultimo_uso_monotonic = time.monotonic()
+        _registrar_uso_conexion(conn)
         return conn
 
 
@@ -56,7 +103,7 @@ def obtener_pool():
                     options="-c statement_timeout=30000 -c lock_timeout=10000",
                 )
                 for c in getattr(_pool, "_pool", []):
-                    c._ultimo_uso_monotonic = time.monotonic()
+                    _registrar_uso_conexion(c)
             except psycopg2.Error as exc:
                 logger.error("[DB] Fallo al inicializar ThreadedConnectionPool: {}", str(exc).strip())
                 exc_db = DatabaseTransactionError("No se pudo conectar a PostgreSQL. Revise la configuración y la red.")
@@ -82,7 +129,7 @@ def _es_conexion_saludable(conn):
         except Exception:
             return False
     ahora = time.monotonic()
-    ultimo = getattr(conn, "__dict__", {}).get("_ultimo_uso_monotonic")
+    ultimo = _obtener_ultimo_uso(conn)
     if ultimo is not None and isinstance(ultimo, (int, float)) and ahora - ultimo < 15.0:
         return True
     prev_autocommit = getattr(conn, "autocommit", False)
@@ -91,7 +138,7 @@ def _es_conexion_saludable(conn):
             conn.autocommit = True
         with conn.cursor() as cur:
             cur.execute("SELECT 1")
-        conn._ultimo_uso_monotonic = time.monotonic()
+        _registrar_uso_conexion(conn)
         return True
     except (psycopg2.OperationalError, psycopg2.InterfaceError, psycopg2.Error):
         return False
@@ -159,7 +206,7 @@ def obtener_cursor_pg(commit=False):
             conn.commit()
         else:
             conn.rollback()
-        conn._ultimo_uso_monotonic = time.monotonic()
+        _registrar_uso_conexion(conn)
     except BaseException as exc:
         es_fallo_red = isinstance(exc, (psycopg2.OperationalError, psycopg2.InterfaceError))
         if es_fallo_red:
@@ -193,8 +240,10 @@ def obtener_cursor_pg(commit=False):
     finally:
         try:
             if conn is not None:
-                if not descartar and not bool(getattr(conn, "closed", 0)):
-                    conn._ultimo_uso_monotonic = time.monotonic()
+                if descartar or bool(getattr(conn, "closed", 0)):
+                    _olvidar_conexion(conn)
+                else:
+                    _registrar_uso_conexion(conn)
                 pool.putconn(conn, close=descartar or bool(getattr(conn, "closed", 0)))
         finally:
             slots.release()
@@ -208,6 +257,8 @@ def cerrar_pool():
             _pool.closeall()
             _pool = None
             _slots = None
+    with _ultimos_usos_lock:
+        _ultimos_usos.clear()
 
 
 atexit.register(cerrar_pool)

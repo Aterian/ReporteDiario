@@ -1474,3 +1474,24 @@ def test_puente_marcar_modificaciones_lote_rbac(monkeypatch):
     assert res_ok["exito"] is True
     assert res_ok["afectados"] == 2
 
+
+# [FN-07.01] Instancias nativas de psycopg2.extensions.connection (sin __dict__) no lanzan AttributeError
+def test_conexion_c_sin_dict_registra_ultimo_uso():
+    import psycopg2.extensions
+    import postgres_db as pg
+
+    # Crear una instancia C nativa de psycopg2.extensions.connection (no tiene __dict__)
+    conn_c = psycopg2.extensions.connection.__new__(psycopg2.extensions.connection)
+    assert not hasattr(conn_c, "__dict__")
+
+    # Debe registrar y obtener el timestamp sin arrojar AttributeError
+    pg._registrar_uso_conexion(conn_c)
+    ts = pg._obtener_ultimo_uso(conn_c)
+    assert ts is not None
+    assert isinstance(ts, float)
+
+    # Limpieza
+    pg._olvidar_conexion(conn_c)
+    assert pg._obtener_ultimo_uso(conn_c) is None
+
+

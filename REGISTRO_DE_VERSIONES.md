@@ -4,6 +4,10 @@ Historial cronológico de cambios, nuevas características y mejoras aplicadas a
 
 ## [2.12.0] - 2026-11-05
 
+### 🐛 Corrección Crítica: Registro Seguro de Timestamps en Conexiones Nativas C ([FN-07.01])
+- **Resolución de `AttributeError` en `psycopg2.extensions.connection`**:
+  - Las instancias nativas de conexión en C no poseen `__dict__` dinámico. Se desacopló el seguimiento de inactividad a un registro thread-safe indexado por `id(conn)` (`_ultimos_usos`), erradicando la excepción `AttributeError: ... has no attribute '_ultimo_uso_monotonic' and no __dict__ for setting new attributes` que impedía el arranque de la aplicación e instalador.
+
 ### ✏️ Selección y Revisión Múltiple de Modificaciones en Calendario de Historial ([FN-07.26])
 - **Operación Atómica en Lote en PostgreSQL**:
   - Implementada función `marcar_modificaciones_por_asistencias_lote(ids_asistencia, id_operador)` en `backend/postgres_repository.py` que ejecuta una única sentencia `UPDATE` con `WHERE id_asistencia = ANY(%s::uuid[]) AND revisado IS NOT TRUE`, registrando el operador y timestamp UTC.
