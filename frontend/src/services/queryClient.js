@@ -2,5 +2,12 @@
 import { QueryClient } from '@tanstack/react-query';
 
 export const queryClient = new QueryClient({
-  defaultOptions: { queries: { retry: false, staleTime: 15000 } }
+  defaultOptions: {
+    queries: {
+      retry: 2,
+      retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 3000),
+      staleTime: 15000
+    }
+  }
 });
+

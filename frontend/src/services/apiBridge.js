@@ -106,6 +106,7 @@ const mockApi = {
   }),
   obtener_modificaciones_recientes: async (limite = 30) => [],
   marcar_modificacion_por_asistencia_revisada: async (idAsistencia) => ({ exito: true }),
+  marcar_modificaciones_por_asistencias_lote: async (ids) => ({ exito: true, afectados: (ids || []).length }),
   actualizar_tipo_costo_masivo: async (idsAsistencia = [], tipoCosto = '') => ({
     exito: true,
     actualizados: idsAsistencia.length
@@ -172,7 +173,14 @@ const apiBase = {
   },
   async obtenerEstadoSesion() {
     const bridge = await getApi();
-    return await bridge.obtener_estado_sesion();
+    if (bridge.obtener_estado_sesion) {
+      const res = await bridge.obtener_estado_sesion();
+      if (res && res.exito === false) {
+        return { logueado: false, usuario: null, error: res.error };
+      }
+      return res || { logueado: false, usuario: null };
+    }
+    return { logueado: false, usuario: null };
   },
 
   async iniciarSesion(nombre, dni) {
@@ -188,7 +196,15 @@ const apiBase = {
   async obtenerServicios(area = null) {
     const bridge = await getApi();
     if (bridge.obtener_servicios) {
-      return await bridge.obtener_servicios(area);
+      const res = await bridge.obtener_servicios(area);
+      if (res && res.exito === false) {
+        toast.error(res.error || 'No se pudieron consultar los servicios en PostgreSQL.', {
+          description: res.codigo_error ? `Código: ${res.codigo_error}` : undefined,
+          duration: 4500
+        });
+        return [];
+      }
+      return Array.isArray(res) ? res : [];
     }
     return [];
   },
@@ -200,7 +216,18 @@ const apiBase = {
 
   async obtenerHistorial() {
     const bridge = await getApi();
-    return await bridge.obtener_historial();
+    if (bridge.obtener_historial) {
+      const res = await bridge.obtener_historial();
+      if (res && res.exito === false) {
+        toast.error(res.error || 'No se pudo cargar el historial en PostgreSQL.', {
+          description: res.codigo_error ? `Código: ${res.codigo_error}` : undefined,
+          duration: 4500
+        });
+        return [];
+      }
+      return Array.isArray(res) ? res : [];
+    }
+    return [];
   },
 
   async minimizar() {
@@ -244,11 +271,16 @@ const apiBase = {
   },
 
   async verificarRegistroHoy() {
+    const fallback = { registrado: false, es_ultimo_dia_mes: false, cantidad_faltantes: 0 };
     const bridge = await getApi();
     if (bridge.verificar_registro_hoy) {
-      return await bridge.verificar_registro_hoy();
+      const res = await bridge.verificar_registro_hoy();
+      if (res && res.exito === false) {
+        return fallback;
+      }
+      return res || fallback;
     }
-    return { registrado: false };
+    return fallback;
   },
 
   async verificarActualizacion() {
@@ -278,7 +310,11 @@ const apiBase = {
   async obtenerNotificacionesModificaciones(soloNoRevisadas = true) {
     const bridge = await getApi();
     if (bridge.obtener_notificaciones_modificaciones) {
-      return await bridge.obtener_notificaciones_modificaciones(soloNoRevisadas);
+      const res = await bridge.obtener_notificaciones_modificaciones(soloNoRevisadas);
+      if (res && res.exito === false) {
+        return [];
+      }
+      return Array.isArray(res) ? res : [];
     }
     return [];
   },
@@ -297,6 +333,23 @@ const apiBase = {
       return await bridge.marcar_modificacion_por_asistencia_revisada(idAsistencia);
     }
     return { exito: true };
+  },
+
+  // [FN-07.16] Marcar modificaciones de múltiples asistencias como revisadas en lote
+  async marcarModificacionesPorAsistenciasLote(idsAsistencia) {
+    if (!idsAsistencia || idsAsistencia.length === 0) {
+      return { exito: true, afectados: 0 };
+    }
+    const bridge = await getApi();
+    if (bridge.marcar_modificaciones_por_asistencias_lote) {
+      return await bridge.marcar_modificaciones_por_asistencias_lote(idsAsistencia);
+    }
+    let afectados = 0;
+    for (const id of idsAsistencia) {
+      const r = await this.marcarModificacionPorAsistenciaRevisada(id);
+      if (r && r.exito) afectados += (r.afectados || 1);
+    }
+    return { exito: true, afectados };
   },
 
   async marcarTodasModificacionesRevisadas() {
@@ -318,7 +371,15 @@ const apiBase = {
   async obtenerTodosUsuarios(area = null, incluirInactivos = false) {
     const bridge = await getApi();
     if (bridge.obtener_todos_usuarios) {
-      return await bridge.obtener_todos_usuarios(area, incluirInactivos);
+      const res = await bridge.obtener_todos_usuarios(area, incluirInactivos);
+      if (res && res.exito === false) {
+        toast.error(res.error || 'No se pudo cargar la nómina de colaboradores en PostgreSQL.', {
+          description: res.codigo_error ? `Código: ${res.codigo_error}` : undefined,
+          duration: 4500
+        });
+        return [];
+      }
+      return Array.isArray(res) ? res : [];
     }
     return [];
   },
@@ -370,7 +431,15 @@ const apiBase = {
   async obtenerRosters(fechaDesde = null, fechaHasta = null) {
     const bridge = await getApi();
     if (bridge.obtener_rosters) {
-      return await bridge.obtener_rosters(fechaDesde, fechaHasta);
+      const res = await bridge.obtener_rosters(fechaDesde, fechaHasta);
+      if (res && res.exito === false) {
+        toast.error(res.error || 'No se pudieron consultar los turnos de roster en PostgreSQL.', {
+          description: res.codigo_error ? `Código: ${res.codigo_error}` : undefined,
+          duration: 4500
+        });
+        return [];
+      }
+      return Array.isArray(res) ? res : [];
     }
     return [];
   },
@@ -447,7 +516,15 @@ const apiBase = {
   async obtenerHistorialOtrosEmpleados(filtroEmpleado = '', mesAnio = '', limite = null, offset = 0) {
     const bridge = await getApi();
     if (bridge.obtener_historial_otros_empleados) {
-      return await bridge.obtener_historial_otros_empleados(filtroEmpleado, mesAnio, limite, offset);
+      const res = await bridge.obtener_historial_otros_empleados(filtroEmpleado, mesAnio, limite, offset);
+      if (res && res.exito === false) {
+        toast.error(res.error || 'No se pudo consultar el historial en PostgreSQL.', {
+          description: res.codigo_error ? `Código: ${res.codigo_error}` : undefined,
+          duration: 4500
+        });
+        return [];
+      }
+      return Array.isArray(res) ? res : [];
     }
     return [];
   },
@@ -463,7 +540,15 @@ const apiBase = {
   async obtenerTodosRegistrosEmpleado(empleado, mesAnio = '', limite = null, offset = 0) {
     const bridge = await getApi();
     if (bridge.obtener_todos_registros_empleado) {
-      return await bridge.obtener_todos_registros_empleado(empleado, mesAnio, limite, offset);
+      const res = await bridge.obtener_todos_registros_empleado(empleado, mesAnio, limite, offset);
+      if (res && res.exito === false) {
+        toast.error(res.error || 'No se pudieron consultar los registros del colaborador en PostgreSQL.', {
+          description: res.codigo_error ? `Código: ${res.codigo_error}` : undefined,
+          duration: 4500
+        });
+        return [];
+      }
+      return Array.isArray(res) ? res : [];
     }
     return [];
   },
@@ -485,17 +570,30 @@ const apiBase = {
   },
 
   async obtenerResumenModificaciones() {
+    const fallback = { total_modificaciones: 0, ultimas_24h: 0, no_sincronizadas: 0, ultima_modificacion: null };
     const bridge = await getApi();
     if (bridge.obtener_resumen_modificaciones) {
-      return await bridge.obtener_resumen_modificaciones();
+      const res = await bridge.obtener_resumen_modificaciones();
+      if (res && res.exito === false) {
+        return fallback;
+      }
+      return res || fallback;
     }
-    return { total_modificaciones: 0, ultimas_24h: 0, no_sincronizadas: 0, ultima_modificacion: null };
+    return fallback;
   },
 
   async obtenerModificacionesRecientes(limite = 30) {
     const bridge = await getApi();
     if (bridge.obtener_modificaciones_recientes) {
-      return await bridge.obtener_modificaciones_recientes(limite);
+      const res = await bridge.obtener_modificaciones_recientes(limite);
+      if (res && res.exito === false) {
+        toast.error(res.error || 'No se pudieron consultar las modificaciones en PostgreSQL.', {
+          description: res.codigo_error ? `Código: ${res.codigo_error}` : undefined,
+          duration: 4500
+        });
+        return [];
+      }
+      return Array.isArray(res) ? res : [];
     }
     return [];
   },
@@ -516,23 +614,36 @@ const apiBase = {
   },
 
   async obtenerActividadDiaAnterior() {
-    const bridge = await getApi();
-    if (bridge.obtener_actividad_dia_anterior) {
-      return await bridge.obtener_actividad_dia_anterior();
-    }
-    return {
+    const fallback = {
       fecha: new Date(Date.now() - 86400000).toISOString().slice(0, 10),
       total: 0,
       enviados: 0,
       pendientes: 0,
       usuarios: []
     };
+    const bridge = await getApi();
+    if (bridge.obtener_actividad_dia_anterior) {
+      const res = await bridge.obtener_actividad_dia_anterior();
+      if (res && res.exito === false) {
+        return fallback;
+      }
+      return res || fallback;
+    }
+    return fallback;
   },
 
   async obtenerTarifasRoster() {
     const bridge = await getApi();
     if (bridge.obtener_tarifas_roster) {
-      return await bridge.obtener_tarifas_roster();
+      const res = await bridge.obtener_tarifas_roster();
+      if (res && res.exito === false) {
+        toast.error(res.error || 'No se pudieron consultar las tarifas de roster en PostgreSQL.', {
+          description: res.codigo_error ? `Código: ${res.codigo_error}` : undefined,
+          duration: 4500
+        });
+        return [];
+      }
+      return Array.isArray(res) ? res : [];
     }
     return [];
   },
@@ -597,7 +708,11 @@ const apiBase = {
   async obtenerErroresRemotos(soloPendientes = true, limite = 50) {
     const bridge = await getApi();
     if (bridge.obtener_errores_remotos) {
-      return await bridge.obtener_errores_remotos(soloPendientes, limite);
+      const res = await bridge.obtener_errores_remotos(soloPendientes, limite);
+      if (res && res.exito === false) {
+        return [];
+      }
+      return Array.isArray(res) ? res : (res?.datos || []);
     }
     return [];
   },
@@ -623,7 +738,15 @@ const apiBase = {
   async obtenerProyectosAdmin(incluirInactivos = true) {
     const bridge = await getApi();
     if (bridge.obtener_proyectos_admin) {
-      return await bridge.obtener_proyectos_admin(incluirInactivos);
+      const res = await bridge.obtener_proyectos_admin(incluirInactivos);
+      if (res && res.exito === false) {
+        toast.error(res.error || 'No se pudieron consultar los proyectos en PostgreSQL.', {
+          description: res.codigo_error ? `Código: ${res.codigo_error}` : undefined,
+          duration: 4500
+        });
+        return [];
+      }
+      return Array.isArray(res) ? res : [];
     }
     return [];
   },

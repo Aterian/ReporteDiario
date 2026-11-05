@@ -181,8 +181,11 @@ def entorno_20_usuarios():
     dsn = os.getenv("TEST_DATABASE_URL")
     if not dsn:
         pytest.skip("TEST_DATABASE_URL no configurado; ejecute bootstrap_test_db.py")
-    with EntornoCarga20Usuarios(dsn) as env:
-        yield env
+    try:
+        with EntornoCarga20Usuarios(dsn) as env:
+            yield env
+    except psycopg2.OperationalError as exc:
+        pytest.skip(f"Base de pruebas no accesible ({exc}).")
 
 
 @pytest.fixture(autouse=True)

@@ -9,7 +9,9 @@ export default function HistoryDayRecordsModal({
   puedeVerModif,
   abrirComparativa,
   marcandoRevisadoId,
+  marcandoRevisadoLote,
   handleMarcarRevisado,
+  handleMarcarModificacionesLote,
   puedeEditarCosto,
   handleAbrirModalCostoDia,
   esSoloLecturaNucleo,
@@ -18,7 +20,18 @@ export default function HistoryDayRecordsModal({
   setRegistroEditando,
   setRegistroEliminando
 }) {
+  const [seleccionadosModif, setSeleccionadosModif] = React.useState(new Set());
+
+  React.useEffect(() => {
+    setSeleccionadosModif(new Set());
+  }, [diaSeleccionadoAuditoria?.fechaIso]);
+
   if (!diaSeleccionadoAuditoria) return null;
+
+  const registrosModificados = (diaSeleccionadoAuditoria?.registros || []).filter(
+    r => puedeVerModif && Boolean(r.fue_modificado || r.modificado) && (r.modificacion_pendiente === 1 || r.modificacion_revisada !== 1)
+  );
+  const idsModificados = registrosModificados.map(r => r.id_asistencia || r.id).filter(Boolean);
 
   return (
     <div className="modal-backdrop">
@@ -39,6 +52,81 @@ export default function HistoryDayRecordsModal({
           <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
             Empleado: <strong>{empleadoAuditar}</strong> • Selecciona un registro para modificarlo o eliminarlo:
           </span>
+          {puedeVerModif && idsModificados.length > 0 && handleMarcarModificacionesLote && (
+            <div style={{
+              background: '#f8fafc',
+              border: '1px solid #cbd5e1',
+              borderRadius: '8px',
+              padding: '8px 12px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: '8px',
+              flexWrap: 'wrap'
+            }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', fontWeight: 600, color: '#334155', cursor: 'pointer' }}>
+                <input
+                  type="checkbox"
+                  checked={idsModificados.length > 0 && idsModificados.every(id => seleccionadosModif.has(id))}
+                  onChange={(e) => {
+                    if (e.target.checked) {
+                      setSeleccionadosModif(new Set(idsModificados));
+                    } else {
+                      setSeleccionadosModif(new Set());
+                    }
+                  }}
+                />
+                <span>Seleccionar todos ({idsModificados.length})</span>
+              </label>
+              <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                {seleccionadosModif.size > 0 && (
+                  <button
+                    type="button"
+                    style={{
+                      background: '#10b981',
+                      color: '#ffffff',
+                      border: 'none',
+                      borderRadius: '5px',
+                      padding: '4px 10px',
+                      fontSize: '11px',
+                      fontWeight: 700,
+                      cursor: 'pointer'
+                    }}
+                    disabled={marcandoRevisadoLote}
+                    onClick={async () => {
+                      const arr = Array.from(seleccionadosModif);
+                      await handleMarcarModificacionesLote(arr);
+                      setSeleccionadosModif(new Set());
+                    }}
+                    title="Marcar como revisadas las modificaciones seleccionadas"
+                  >
+                    {marcandoRevisadoLote ? 'Guardando...' : `✓ Marcar (${seleccionadosModif.size})`}
+                  </button>
+                )}
+                <button
+                  type="button"
+                  style={{
+                    background: '#059669',
+                    color: '#ffffff',
+                    border: 'none',
+                    borderRadius: '5px',
+                    padding: '4px 10px',
+                    fontSize: '11px',
+                    fontWeight: 700,
+                    cursor: 'pointer'
+                  }}
+                  disabled={marcandoRevisadoLote}
+                  onClick={async () => {
+                    await handleMarcarModificacionesLote(idsModificados);
+                    setSeleccionadosModif(new Set());
+                  }}
+                  title="Marcar todas las modificaciones de este día como revisadas"
+                >
+                  {marcandoRevisadoLote ? 'Guardando...' : `✓ Marcar Todas (${idsModificados.length})`}
+                </button>
+              </div>
+            </div>
+          )}
           {diaSeleccionadoAuditoria.registros.map((item) => {
             const lug = item.tipo_ocf || item.lugar || 'Oficina';
             const badge = getBadgeClassLugar(lug, item.servicio);
@@ -102,9 +190,24 @@ export default function HistoryDayRecordsModal({
                     ) : (
                       <div style={{ marginTop: '6px', background: '#fffbeb', border: '1px solid #f59e0b', borderRadius: '6px', padding: '8px 10px' }}>
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', flexWrap: 'wrap' }}>
-                          <span style={{ fontSize: '11px', fontWeight: 700, color: '#b45309', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                            ✏️ MODIFICACIÓN PENDIENTE DE REVISIÓN
-                          </span>
+                          <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', margin: 0 }}>
+                            <input
+                              type="checkbox"
+                              checked={seleccionadosModif.has(item.id_asistencia || item.id)}
+                              onChange={(e) => {
+                                const idActual = item.id_asistencia || item.id;
+                                setSeleccionadosModif(prev => {
+                                  const next = new Set(prev);
+                                  if (e.target.checked) next.add(idActual);
+                                  else next.delete(idActual);
+                                  return next;
+                                });
+                              }}
+                            />
+                            <span style={{ fontSize: '11px', fontWeight: 700, color: '#b45309', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                              ✏️ MODIFICACIÓN PENDIENTE DE REVISIÓN
+                            </span>
+                          </label>
                           <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
                             <button
                               type="button"

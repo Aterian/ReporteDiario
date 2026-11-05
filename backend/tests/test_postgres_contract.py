@@ -3,8 +3,10 @@ from contextlib import contextmanager
 from datetime import date, datetime
 from decimal import Decimal
 from unittest.mock import MagicMock
+import time
 from uuid import uuid4
 
+import psycopg2
 import pytest
 from pydantic import ValidationError
 
@@ -1133,4 +1135,342 @@ def test_obtener_servicios_unifica_ingenieria_y_mensura(monkeypatch):
     assert "300-A-100-APP" in servicios_a
     assert "228-SF-I-626-SOLAR" not in servicios_a
 
+
+# [FN-07.01] Reciclaje de conexiones caídas o cerradas en el pool
+def test_reciclaje_conexiones_caidas_en_pool(monkeypatch):
+    import postgres_db as pg
+    from threading import BoundedSemaphore
+
+    conn_caida = MagicMock()
+    conn_caida.closed = True
+    conn_sana = MagicMock()
+    conn_sana.closed = False
+
+    pool_mock = MagicMock()
+    pool_mock.getconn.side_effect = [conn_caida, conn_sana]
+    monkeypatch.setattr(pg, "obtener_pool", lambda: pool_mock)
+    monkeypatch.setattr(pg, "_slots", BoundedSemaphore(1))
+
+    with pg.obtener_cursor_pg():
+        pass
+
+    pool_mock.putconn.assert_any_call(conn_caida, close=True)
+    pool_mock.putconn.assert_any_call(conn_sana, close=False)
+
+
+# [FN-07.02] Reintento transparente de consultas de lectura ante fallos de conexión transitorios
+def test_respuesta_segura_reintenta_lectura_transparente(monkeypatch):
+    from postgres_bridge import respuesta_segura
+    from error_handler import DatabaseTransactionError
+
+    intentos = 0
+
+    @respuesta_segura
+    def obtener_datos_prueba():
+        nonlocal intentos
+        intentos += 1
+        if intentos == 1:
+            err = DatabaseTransactionError("No se pudo completar la consulta en PostgreSQL.")
+            err.es_fallo_conexion = True
+            raise err
+        return ["dato_recuperado"]
+
+    res = obtener_datos_prueba()
+    assert res == ["dato_recuperado"]
+    assert intentos == 2
+
+
+# [FN-07.02] Las operaciones de escritura NO se reintentan automáticamente
+def test_respuesta_segura_no_reintenta_escrituras():
+    from postgres_bridge import respuesta_segura
+    from error_handler import DatabaseTransactionError
+
+    intentos = 0
+
+    @respuesta_segura
+    def guardar_datos_prueba():
+        nonlocal intentos
+        intentos += 1
+        err = DatabaseTransactionError("PostgreSQL no pudo completar la operación; no se guardaron cambios.")
+        err.es_fallo_conexion = True
+        raise err
+
+    res = guardar_datos_prueba()
+    assert res["exito"] is False
+    assert intentos == 1
+
+
+# [FN-07.01] Reciclaje de conexiones con socket roto (OperationalError en SELECT 1)
+def test_reciclaje_conexion_socket_muerto_en_pool(monkeypatch):
+    import postgres_db as pg
+    from threading import BoundedSemaphore
+
+    conn_socket_muerto = MagicMock()
+    conn_socket_muerto.closed = False
+    conn_socket_muerto._ultimo_uso_monotonic = 0
+    cur_fail = MagicMock()
+    cur_fail.__enter__.return_value.execute.side_effect = psycopg2.OperationalError("server closed the connection unexpectedly")
+    conn_socket_muerto.cursor.return_value = cur_fail
+
+    conn_sana = MagicMock()
+    conn_sana.closed = False
+    conn_sana._ultimo_uso_monotonic = time.monotonic()
+
+    pool_mock = MagicMock()
+    pool_mock.getconn.side_effect = [conn_socket_muerto, conn_sana]
+    monkeypatch.setattr(pg, "obtener_pool", lambda: pool_mock)
+    monkeypatch.setattr(pg, "_slots", BoundedSemaphore(1))
+
+    with pg.obtener_cursor_pg():
+        pass
+
+    pool_mock.putconn.assert_any_call(conn_socket_muerto, close=True)
+    pool_mock.putconn.assert_any_call(conn_sana, close=False)
+
+
+# [FN-07.01] Conexión en estado INTRANS (2) ejecuta rollback para quedar en IDLE
+def test_es_conexion_saludable_ejecuta_rollback_si_intrans():
+    import postgres_db as pg
+
+    conn = MagicMock()
+    conn.closed = False
+    conn.get_transaction_status.return_value = 2  # INTRANS
+    conn._ultimo_uso_monotonic = time.monotonic()
+
+    assert pg._es_conexion_saludable(conn) is True
+    conn.rollback.assert_called_once()
+
+
+# [FN-07.01] Fallo al inicializar pool marca es_fallo_conexion en DatabaseTransactionError
+def test_obtener_pool_falla_marca_fallo_conexion(monkeypatch):
+    import postgres_db as pg
+    from error_handler import DatabaseTransactionError
+
+    monkeypatch.setattr(pg, "_pool", None)
+    monkeypatch.setenv("DATABASE_URL", "postgresql://fake:fake@fake:5432/fake")
+
+    def mock_init(*args, **kwargs):
+        raise psycopg2.OperationalError("could not translate host name")
+
+    monkeypatch.setattr(pg, "ThreadedConnectionPool", mock_init)
+
+    with pytest.raises(DatabaseTransactionError) as exc_info:
+        pg.obtener_pool()
+
+    assert exc_info.value.es_fallo_conexion is True
+
+
+# [FN-07.02] Fallo de conexión omite telemetría remota en BD para evitar bloqueos
+def test_respuesta_segura_omite_telemetria_remota_en_fallo_conexion(monkeypatch):
+    from postgres_bridge import respuesta_segura
+    from error_handler import DatabaseTransactionError
+    import postgres_repository as db
+
+    telemetria_llamada = False
+
+    def mock_registrar(*args, **kwargs):
+        nonlocal telemetria_llamada
+        telemetria_llamada = True
+
+    monkeypatch.setattr(db, "registrar_error_remoto", mock_registrar)
+
+    @respuesta_segura
+    def operacion_falla_conexion():
+        err = DatabaseTransactionError("No se pudo completar la consulta en PostgreSQL.")
+        err.es_fallo_conexion = True
+        raise err
+
+    res = operacion_falla_conexion()
+    assert res["exito"] is False
+    assert telemetria_llamada is False
+
+
+# [FN-07.01] Conexión en estado ACTIVE (1) se rechaza
+def test_es_conexion_saludable_rechaza_estado_activo():
+    import postgres_db as pg
+
+    conn = MagicMock()
+    conn.closed = False
+    conn.get_transaction_status.return_value = 1  # ACTIVE
+
+    assert pg._es_conexion_saludable(conn) is False
+
+
+# [FN-07.01] ResilientThreadedConnectionPool estampa _ultimo_uso_monotonic al conectar
+def test_resilient_pool_estampa_ultimo_uso_al_conectar(monkeypatch):
+    import postgres_db as pg
+
+    conn_mock = MagicMock()
+    conn_mock.closed = False
+
+    def mock_connect(*args, **kwargs):
+        return conn_mock
+
+    monkeypatch.setattr(psycopg2, "connect", mock_connect)
+
+    pool = pg.ResilientThreadedConnectionPool(1, 2, dsn="postgresql://fake:5432/fake")
+    assert hasattr(conn_mock, "_ultimo_uso_monotonic")
+    assert isinstance(conn_mock._ultimo_uso_monotonic, float)
+    pool.closeall()
+
+
+# [FN-07.01] Sonda SELECT 1 utiliza autocommit y no invoca rollback en conexión sana
+def test_es_conexion_saludable_sonda_select1_usa_autocommit():
+    import postgres_db as pg
+
+    conn = MagicMock()
+    conn.closed = False
+    conn.get_transaction_status.return_value = 0  # IDLE
+    conn.autocommit = False
+    conn._ultimo_uso_monotonic = 0  # Forzar ejecución de SELECT 1
+
+    assert pg._es_conexion_saludable(conn) is True
+    assert conn.rollback.call_count == 0
+    assert conn.cursor.called
+
+
+# [FN-07.01] Sonda SELECT 1 se ejecuta si ultimo_uso_monotonic es None y detecta socket muerto
+def test_es_conexion_saludable_ejecuta_sonda_cuando_ultimo_uso_es_none():
+    import postgres_db as pg
+
+    conn = MagicMock()
+    conn.closed = False
+    conn.get_transaction_status.return_value = 0
+    if hasattr(conn, "_ultimo_uso_monotonic"):
+        delattr(conn, "_ultimo_uso_monotonic")
+
+    cur_mock = MagicMock()
+    cur_mock.__enter__.return_value.execute.side_effect = psycopg2.OperationalError("server closed the connection unexpectedly")
+    conn.cursor.return_value = cur_mock
+
+    # Al no tener timestamp, no debe asumir salud a ciegas; debe probar y retornar False
+    assert pg._es_conexion_saludable(conn) is False
+
+
+# [FN-07.01] obtener_pool re-inicializa el pool si la instancia anterior fue cerrada
+def test_obtener_pool_recrea_pool_si_estaba_cerrado(monkeypatch):
+    import postgres_db as pg
+
+    pool_cerrado = MagicMock()
+    pool_cerrado.closed = True
+    monkeypatch.setattr(pg, "_pool", pool_cerrado)
+    monkeypatch.setenv("DATABASE_URL", "postgresql://fake:5432/fake")
+
+    pool_nuevo = MagicMock()
+    pool_nuevo.closed = False
+
+    def mock_pool_init(*args, **kwargs):
+        return pool_nuevo
+
+    monkeypatch.setattr(pg, "ResilientThreadedConnectionPool", mock_pool_init)
+
+    resultado = pg.obtener_pool()
+    assert resultado is pool_nuevo
+    assert resultado is not pool_cerrado
+
+
+# [FN-07.01] obtener_cursor_pg falla limpiamente y libera cupo si reemplazos resultan insalubres
+def test_obtener_cursor_pg_falla_si_reemplazo_final_invalido(monkeypatch):
+    import postgres_db as pg
+    from error_handler import DatabaseTransactionError
+    from threading import BoundedSemaphore
+
+    conn_muerta = MagicMock()
+    conn_muerta.closed = False
+    conn_muerta._ultimo_uso_monotonic = 0
+    cur_fail = MagicMock()
+    cur_fail.__enter__.return_value.execute.side_effect = psycopg2.OperationalError("socket timeout")
+    conn_muerta.cursor.return_value = cur_fail
+
+    pool_mock = MagicMock()
+    pool_mock.maxconn = 2
+    pool_mock.getconn.return_value = conn_muerta
+    slots = BoundedSemaphore(1)
+
+    monkeypatch.setattr(pg, "obtener_pool", lambda: pool_mock)
+    monkeypatch.setattr(pg, "_slots", slots)
+
+    with pytest.raises(DatabaseTransactionError) as exc_info:
+        with pg.obtener_cursor_pg():
+            pass
+
+    assert exc_info.value.es_fallo_conexion is True
+    # El semáforo debe haber sido liberado
+    assert slots.acquire(blocking=False) is True
+    slots.release()
+
+
+# [FN-07.02] respuesta_segura reintenta ante PoolError en consultas de lectura
+def test_respuesta_segura_reintenta_lectura_ante_pool_error(monkeypatch):
+    import psycopg2.pool
+    from postgres_bridge import respuesta_segura
+    import postgres_repository as db
+
+    intentos = 0
+    telemetria_llamada = False
+
+    def mock_registrar(*args, **kwargs):
+        nonlocal telemetria_llamada
+        telemetria_llamada = True
+
+    monkeypatch.setattr(db, "registrar_error_remoto", mock_registrar)
+
+    @respuesta_segura
+    def obtener_datos_con_pool_error():
+        nonlocal intentos
+        intentos += 1
+        if intentos < 2:
+            raise psycopg2.pool.PoolError("connection pool exhausted")
+        return [{"id": 1, "nombre": "OK"}]
+
+    res = obtener_datos_con_pool_error()
+    assert res == [{"id": 1, "nombre": "OK"}]
+    assert intentos == 2
+    assert telemetria_llamada is False
+
+# [FN-07.16] Marcar modificaciones de asistencias en lote y control RBAC
+def test_marcar_modificaciones_por_asistencias_lote(monkeypatch):
+    id1 = str(uuid4())
+    id2 = str(uuid4())
+    id_op = USUARIO
+
+    cursor = MagicMock()
+    cursor.fetchall.return_value = [{"id_modificacion": str(uuid4())}, {"id_modificacion": str(uuid4())}]
+
+    @contextmanager
+    def conexion(commit=False):
+        yield cursor
+
+    monkeypatch.setattr(db, "obtener_cursor_pg", conexion)
+    monkeypatch.setattr(db, "perfil_esquema", lambda: {"tiene_auditoria": True})
+
+    res = db.marcar_modificaciones_por_asistencias_lote([id1, id2], id_operador=id_op)
+    assert res["exito"] is True
+    assert res["afectados"] == 2
+
+    # Consulta vacía retorna afectados 0 sin llamar a BD
+    res_vacio = db.marcar_modificaciones_por_asistencias_lote([], id_operador=id_op)
+    assert res_vacio["exito"] is True
+    assert res_vacio["afectados"] == 0
+
+
+def test_puente_marcar_modificaciones_lote_rbac(monkeypatch):
+    from postgres_bridge import ApiPuente
+    puente = ApiPuente()
+
+    id1 = str(uuid4())
+    id2 = str(uuid4())
+
+    # Usuario con rol user_1 es rechazado
+    monkeypatch.setattr(db, "obtener_sesion_activa", lambda: {"id_usuario": USUARIO, "rol_app": "user_1"})
+    res_rechazado = puente.marcar_modificaciones_por_asistencias_lote([id1, id2])
+    assert res_rechazado["exito"] is False
+    assert res_rechazado["codigo_error"] == "ACCESO_DENEGADO"
+
+    # Usuario admin es aceptado
+    monkeypatch.setattr(db, "obtener_sesion_activa", lambda: {"id_usuario": USUARIO, "rol_app": "admin"})
+    monkeypatch.setattr(db, "marcar_modificaciones_por_asistencias_lote", lambda ids, op: {"exito": True, "afectados": len(ids)})
+    res_ok = puente.marcar_modificaciones_por_asistencias_lote([id1, id2])
+    assert res_ok["exito"] is True
+    assert res_ok["afectados"] == 2
 

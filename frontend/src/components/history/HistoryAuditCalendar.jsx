@@ -14,6 +14,9 @@ export default function HistoryAuditCalendar({
   navegarMes,
   irAHoy,
   puedeEditarCosto,
+  puedeVerModif,
+  marcandoRevisadoLote,
+  handleMarcarModificacionesLote,
   diasSeleccionadosCalendario,
   setDiasSeleccionadosCalendario,
   handleAplicarTipoCostoDiasCalendario,
@@ -24,6 +27,18 @@ export default function HistoryAuditCalendar({
   handleAbrirModalCostoDia,
   onAbrirModalCrearRoster
 }) {
+  const diasConModificacionesPendientes = (diasMesCalendario || []).filter(celda =>
+    !celda.esVacio && celda.registros && celda.registros.some(r =>
+      r.modificacion_pendiente === 1 || (r.fue_modificado && r.modificacion_revisada !== 1)
+    )
+  );
+
+  const asistenciasModificadasSeleccionadas = (diasMesCalendario || [])
+    .filter(c => !c.esVacio && diasSeleccionadosCalendario.has(c.fechaIso) && c.registros)
+    .flatMap(c => c.registros)
+    .filter(r => r.modificacion_pendiente === 1 || (r.fue_modificado && r.modificacion_revisada !== 1))
+    .map(r => r.id_asistencia || r.id)
+    .filter(Boolean);
   return (
     <div className="audit-panel-section">
       {/* Header de Auditoría: Selector de empleado y mes */}
@@ -105,73 +120,112 @@ export default function HistoryAuditCalendar({
               📅 Crear Roster
             </button>
           )}
+          {puedeVerModif && diasConModificacionesPendientes.length > 0 && (
+            <button
+              type="button"
+              className={isRpg ? 'rpg-wood-btn' : 'calendar-today-btn'}
+              style={{
+                background: '#fef3c7',
+                color: '#b45309',
+                borderColor: '#f59e0b',
+                fontWeight: 600,
+                marginLeft: '4px'
+              }}
+              onClick={() => {
+                setDiasSeleccionadosCalendario(prev => {
+                  const next = new Set(prev);
+                  diasConModificacionesPendientes.forEach(c => next.add(c.fechaIso));
+                  return next;
+                });
+              }}
+              title="Seleccionar en el calendario todos los días con modificaciones pendientes de revisión"
+            >
+              ✏️ Modificados ({diasConModificacionesPendientes.length})
+            </button>
+          )}
         </div>
       </div>
 
       {/* Grilla del Calendario Mensual Interactivo */}
       <div className="audit-calendar-wrapper" style={{ position: 'relative' }}>
-        {/* Barra flotante para asignación masiva de costo a días seleccionados (Solo RRHH y Aplicaciones) */}
-        {puedeEditarCosto && diasSeleccionadosCalendario.size > 0 && (
+        {/* Barra flotante para acciones masivas (Costo y Modificaciones) sobre días seleccionados */}
+        {(puedeEditarCosto || puedeVerModif) && diasSeleccionadosCalendario.size > 0 && (
           <div className="calendar-floating-cost-toolbar">
             <div className="floating-cost-left">
               <span className="floating-cost-badge">{diasSeleccionadosCalendario.size}</span>
               <span className="floating-cost-text">día(s) seleccionado(s)</span>
             </div>
             <div className="floating-cost-actions">
-              <button
-                type="button"
-                className="btn-floating-cost btn-cost-oficina"
-                onClick={() => handleAplicarTipoCostoDiasCalendario('Oficina')}
-                disabled={aplicandoCosto}
-                title="Asignar Costo Oficina a los días seleccionados"
-              >
-                🏢 Costo Oficina
-              </button>
-              <button
-                type="button"
-                className="btn-floating-cost btn-cost-campo"
-                onClick={() => handleAplicarTipoCostoDiasCalendario('Campo')}
-                disabled={aplicandoCosto}
-                title="Asignar Costo Campo a los días seleccionados"
-              >
-                🏕️ Costo Campo
-              </button>
-              <button
-                type="button"
-                className="btn-floating-cost btn-cost-neutral"
-                onClick={() => handleAplicarTipoCostoDiasCalendario('')}
-                disabled={aplicandoCosto}
-                title="Quitar tipo de costo"
-              >
-                Sin Asignar
-              </button>
-              <button
-                type="button"
-                className="btn-floating-cost"
-                style={{ background: '#cc3333', color: '#ffffff', borderColor: '#cc3333', fontWeight: 600 }}
-                onClick={() => {
-                  const primerFecha = Array.from(diasSeleccionadosCalendario)[0];
-                  const celda = diasMesCalendario.find(c => c.fechaIso === primerFecha);
-                  if (celda && celda.registros && celda.registros.length > 0) {
-                    handleAbrirModalCostoDia(celda);
-                  }
-                }}
-                disabled={aplicandoCosto}
-                title="Editar manualmente costo_dia del día seleccionado"
-              >
-                💰 Costo ($) ✏️
-              </button>
-              {onAbrirModalCrearRoster && (
+              {puedeVerModif && asistenciasModificadasSeleccionadas.length > 0 && handleMarcarModificacionesLote && (
                 <button
                   type="button"
                   className="btn-floating-cost"
-                  style={{ background: '#0f766e', color: '#ffffff', borderColor: '#0f766e', fontWeight: 600 }}
-                  onClick={onAbrirModalCrearRoster}
-                  disabled={aplicandoCosto}
-                  title="Consolidar los días seleccionados en un turno de Roster"
+                  style={{ background: '#10b981', color: '#ffffff', borderColor: '#059669', fontWeight: 700 }}
+                  onClick={() => handleMarcarModificacionesLote(asistenciasModificadasSeleccionadas)}
+                  disabled={marcandoRevisadoLote || aplicandoCosto}
+                  title="Marcar como revisadas todas las modificaciones en los días seleccionados"
                 >
-                  📅 Crear Roster
+                  {marcandoRevisadoLote ? 'Guardando...' : `✓ Marcar Revisadas (${asistenciasModificadasSeleccionadas.length})`}
                 </button>
+              )}
+              {puedeEditarCosto && (
+                <>
+                  <button
+                    type="button"
+                    className="btn-floating-cost btn-cost-oficina"
+                    onClick={() => handleAplicarTipoCostoDiasCalendario('Oficina')}
+                    disabled={aplicandoCosto || marcandoRevisadoLote}
+                    title="Asignar Costo Oficina a los días seleccionados"
+                  >
+                    🏢 Costo Oficina
+                  </button>
+                  <button
+                    type="button"
+                    className="btn-floating-cost btn-cost-campo"
+                    onClick={() => handleAplicarTipoCostoDiasCalendario('Campo')}
+                    disabled={aplicandoCosto || marcandoRevisadoLote}
+                    title="Asignar Costo Campo a los días seleccionados"
+                  >
+                    🏕️ Costo Campo
+                  </button>
+                  <button
+                    type="button"
+                    className="btn-floating-cost btn-cost-neutral"
+                    onClick={() => handleAplicarTipoCostoDiasCalendario('')}
+                    disabled={aplicandoCosto || marcandoRevisadoLote}
+                    title="Quitar tipo de costo"
+                  >
+                    Sin Asignar
+                  </button>
+                  <button
+                    type="button"
+                    className="btn-floating-cost"
+                    style={{ background: '#cc3333', color: '#ffffff', borderColor: '#cc3333', fontWeight: 600 }}
+                    onClick={() => {
+                      const primerFecha = Array.from(diasSeleccionadosCalendario)[0];
+                      const celda = diasMesCalendario.find(c => c.fechaIso === primerFecha);
+                      if (celda && celda.registros && celda.registros.length > 0) {
+                        handleAbrirModalCostoDia(celda);
+                      }
+                    }}
+                    disabled={aplicandoCosto || marcandoRevisadoLote}
+                    title="Editar manualmente costo_dia del día seleccionado"
+                  >
+                    💰 Costo ($) ✏️
+                  </button>
+                  {onAbrirModalCrearRoster && (
+                    <button
+                      type="button"
+                      className="btn-floating-cost"
+                      style={{ background: '#0f766e', color: '#ffffff', borderColor: '#0f766e', fontWeight: 600 }}
+                      onClick={onAbrirModalCrearRoster}
+                      disabled={aplicandoCosto || marcandoRevisadoLote}
+                      title="Consolidar los días seleccionados en un turno de Roster"
+                    >
+                      📅 Crear Roster
+                    </button>
+                  )}
+                </>
               )}
               <button
                 type="button"
@@ -245,7 +299,7 @@ export default function HistoryAuditCalendar({
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
                     {celda.esHoy && <span className="cell-today-dot" title="Hoy" />}
-                    {puedeEditarCosto && tieneRegistros && (
+                    {(puedeEditarCosto || puedeVerModif) && tieneRegistros && (
                       <input
                         type="checkbox"
                         className="calendar-day-checkbox"

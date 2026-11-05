@@ -21,7 +21,10 @@ def pg_connection():
     dsn = os.getenv("TEST_DATABASE_URL")
     if not dsn:
         pytest.skip("Configure TEST_DATABASE_URL o ejecute backend/bootstrap_test_db.py.")
-    conn = psycopg2.connect(dsn,connect_timeout=8)
+    try:
+        conn = psycopg2.connect(dsn, connect_timeout=8)
+    except psycopg2.OperationalError as exc:
+        pytest.skip(f"Base de pruebas no accesible ({exc}).")
     if not conn.info.dbname.startswith("codex_check_diario_test_"):
         conn.close()
         pytest.fail("Las pruebas requieren una base cuyo nombre comience con codex_check_diario_test_.")

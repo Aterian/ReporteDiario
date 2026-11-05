@@ -1,58 +1,116 @@
 # [MOD-07] Puente de escritorio PostgreSQL
 import functools
+import time
 from datetime import date
 
 from loguru import logger
 from pydantic import ValidationError
+import psycopg2
+import psycopg2.pool
 
 import postgres_repository as db
 from error_handler import AppBaseException, PermisoDenegadoError, ValidacionError
 from postgres_models import AsistenciaUpdate
 
+# [FN-07.02] Identificar métodos de sólo lectura para reintento automático
+METODOS_LECTURA = {
+    "obtener_estado_sesion",
+    "obtener_servicios",
+    "obtener_historial",
+    "verificar_registro_hoy",
+    "obtener_todos_registros_empleado",
+    "obtener_todos_usuarios",
+    "obtener_tarifas_roster",
+    "obtener_rosters",
+    "obtener_liquidacion",
+    "obtener_estado_diario_empleados",
+    "obtener_resumen_modificaciones",
+    "obtener_modificaciones_recientes",
+    "obtener_actividad_dia_anterior",
+    "obtener_dias_faltantes_mes",
+    "obtener_proyectos_admin",
+    "obtener_errores_remotos",
+}
+
+
+def es_operacion_lectura(nombre: str) -> bool:
+    return nombre in METODOS_LECTURA or nombre.startswith(("obtener_", "verificar_", "consultar_", "exportar_"))
+
 
 # [FN-07.02] Mantener respuestas del puente y ocultar detalles internos
 def respuesta_segura(funcion):
+    es_lectura = es_operacion_lectura(funcion.__name__)
+
     @functools.wraps(funcion)
     def ejecutar(*args, **kwargs):
-        try:
-            return funcion(*args, **kwargs)
-        except AppBaseException as exc:
-            es_saturacion = getattr(exc, "es_saturacion_pool", False)
-            es_lectura_errores = funcion.__name__ == "obtener_errores_remotos"
-            if getattr(exc, "codigo_error", "") in ("ERROR_BASE_DATOS", "ERROR_CONCURRENCIA") and not es_saturacion and not es_lectura_errores:
-                try:
-                    sesion = db.obtener_sesion_activa()
-                    db.registrar_error_remoto({
-                        "origen": "backend",
-                        "accion_metodo": funcion.__name__,
-                        "codigo_error": exc.codigo_error,
-                        "mensaje_error": exc.mensaje,
-                        "detalle_tecnico": f"{type(exc).__name__}: {str(exc)}"
-                    }, sesion=sesion)
-                except Exception:
-                    pass
-            elif es_saturacion:
-                logger.warning("[Pool Saturado] Se omite telemetría en BD para {}: {}", funcion.__name__, exc.mensaje)
-            return {"exito":False,"error":exc.mensaje,"codigo_error":exc.codigo_error}
-        except ValidationError as exc:
-            mensaje = "; ".join(".".join(str(p) for p in e["loc"])+": "+e["msg"] for e in exc.errors())
-            return {"exito":False,"error":mensaje,"codigo_error":"VALIDACION_ERROR"}
-        except (ValueError, TypeError, KeyError):
-            return {"exito":False,"error":"Datos incompletos o inválidos.","codigo_error":"VALIDACION_ERROR"}
-        except Exception as exc:
-            logger.error("[API] {}: {}",funcion.__name__,type(exc).__name__)
+        max_reintentos = 2 if es_lectura else 0
+        intento = 0
+        while True:
             try:
-                sesion = db.obtener_sesion_activa()
-                db.registrar_error_remoto({
-                    "origen": "backend",
-                    "accion_metodo": funcion.__name__,
-                    "codigo_error": "ERROR_INTERNO",
-                    "mensaje_error": str(exc),
-                    "detalle_tecnico": f"{type(exc).__name__}: {str(exc)}"
-                }, sesion=sesion)
-            except Exception:
-                pass
-            return {"exito":False,"error":"No se pudo completar la operación.","codigo_error":"ERROR_INTERNO"}
+                return funcion(*args, **kwargs)
+            except AppBaseException as exc:
+                es_saturacion = getattr(exc, "es_saturacion_pool", False)
+                es_fallo_conn = (
+                    getattr(exc, "es_fallo_conexion", False)
+                    or "No se pudo completar la consulta" in str(exc)
+                    or "No se pudo conectar a PostgreSQL" in str(exc)
+                    or "conexiones están ocupadas" in str(exc)
+                )
+                if es_lectura and es_fallo_conn and intento < max_reintentos:
+                    intento += 1
+                    logger.warning("[API] Reintentando consulta de lectura '{}' (intento {}/{}) tras fallo transitorio: {}",
+                                   funcion.__name__, intento, max_reintentos, exc.mensaje)
+                    time.sleep(0.25 * intento)
+                    continue
+
+                es_lectura_errores = funcion.__name__ == "obtener_errores_remotos"
+                if (
+                    getattr(exc, "codigo_error", "") in ("ERROR_BASE_DATOS", "ERROR_CONCURRENCIA")
+                    and not es_saturacion
+                    and not es_fallo_conn
+                    and not es_lectura_errores
+                ):
+                    try:
+                        sesion = db.obtener_sesion_activa()
+                        db.registrar_error_remoto({
+                            "origen": "backend",
+                            "accion_metodo": funcion.__name__,
+                            "codigo_error": exc.codigo_error,
+                            "mensaje_error": exc.mensaje,
+                            "detalle_tecnico": f"{type(exc).__name__}: {str(exc)}"
+                        }, sesion=sesion)
+                    except Exception:
+                        pass
+                elif es_saturacion or es_fallo_conn:
+                    logger.warning("[DB Conexión/Saturación] Se omite telemetría remota en BD para {}: {}", funcion.__name__, exc.mensaje)
+                return {"exito":False,"error":exc.mensaje,"codigo_error":exc.codigo_error}
+            except ValidationError as exc:
+                mensaje = "; ".join(".".join(str(p) for p in e["loc"])+": "+e["msg"] for e in exc.errors())
+                return {"exito":False,"error":mensaje,"codigo_error":"VALIDACION_ERROR"}
+            except (ValueError, TypeError, KeyError):
+                return {"exito":False,"error":"Datos incompletos o inválidos.","codigo_error":"VALIDACION_ERROR"}
+            except Exception as exc:
+                logger.error("[API] {}: {}",funcion.__name__,type(exc).__name__)
+                es_err_conn = isinstance(exc, (psycopg2.OperationalError, psycopg2.InterfaceError, psycopg2.pool.PoolError))
+                if es_lectura and es_err_conn and intento < max_reintentos:
+                    intento += 1
+                    logger.warning("[API] Reintentando consulta de lectura '{}' (intento {}/{}) tras fallo transitorio no encapsulado: {}",
+                                   funcion.__name__, intento, max_reintentos, str(exc).strip())
+                    time.sleep(0.25 * intento)
+                    continue
+                if not es_err_conn:
+                    try:
+                        sesion = db.obtener_sesion_activa()
+                        db.registrar_error_remoto({
+                            "origen": "backend",
+                            "accion_metodo": funcion.__name__,
+                            "codigo_error": "ERROR_INTERNO",
+                            "mensaje_error": str(exc),
+                            "detalle_tecnico": f"{type(exc).__name__}: {str(exc)}"
+                        }, sesion=sesion)
+                    except Exception:
+                        pass
+                return {"exito":False,"error":"No se pudo completar la operación.","codigo_error":"ERROR_INTERNO"}
     return ejecutar
 
 
@@ -238,6 +296,15 @@ class ApiPuente:
     def marcar_modificacion_por_asistencia_revisada(self, id_asistencia: str):
         sesion = self._sesion(admin=True)
         return db.marcar_modificacion_por_asistencia_revisada(id_asistencia, sesion.get("id_usuario"))
+
+    def marcar_modificaciones_por_asistencias_lote(self, ids_asistencia: list):
+        sesion = self._sesion(admin=True)
+        if not isinstance(ids_asistencia, (list, tuple, set)):
+            raise ValidacionError("Debe suministrar una lista de identificadores de asistencia.")
+        res = db.marcar_modificaciones_por_asistencias_lote(ids_asistencia, sesion.get("id_usuario"))
+        if res.get("exito"):
+            self._notificar_cambios()
+        return res
 
     def marcar_todas_modificaciones_revisadas(self):
         sesion = self._sesion(admin=True)

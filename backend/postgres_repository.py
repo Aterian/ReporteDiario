@@ -825,6 +825,26 @@ def marcar_modificacion_por_asistencia_revisada(id_asistencia, id_operador=None)
         return {"exito": True, "afectados": len(filas)}
 
 
+# [FN-07.16] Marcar modificaciones de múltiples asistencias como revisadas en lote
+def marcar_modificaciones_por_asistencias_lote(ids_asistencia, id_operador=None):
+    p = perfil_esquema()
+    if not p.get("tiene_auditoria"):
+        return {"exito": False, "error": "La tabla de auditoría no está configurada.", "codigo_error": "TABLA_NO_ENCONTRADA"}
+    if not ids_asistencia:
+        return {"exito": True, "afectados": 0}
+    operador_uuid = uuid_valido(id_operador) if id_operador else None
+    uuids = [uuid_valido(i) for i in ids_asistencia]
+    with obtener_cursor_pg(commit=True) as cur:
+        cur.execute("""UPDATE app_rrhh.b_1_modificaciones_realizadas
+            SET revisado = TRUE,
+                revisado_por = %s,
+                fecha_hora_revision = CURRENT_TIMESTAMP
+            WHERE id_asistencia = ANY(%s::uuid[]) AND revisado IS NOT TRUE
+            RETURNING id_modificacion""", (operador_uuid, uuids))
+        filas = cur.fetchall()
+        return {"exito": True, "afectados": len(filas)}
+
+
 # [FN-07.16] Marcar todas las modificaciones pendientes como revisadas
 def marcar_todas_modificaciones_revisadas(id_operador=None):
     p = perfil_esquema()

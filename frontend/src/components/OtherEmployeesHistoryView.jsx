@@ -90,6 +90,7 @@ export default function OtherEmployeesHistoryView({
   const [filtroSoloMes, setFiltroSoloMes] = useState(false);
   const [diasSeleccionadosCalendario, setDiasSeleccionadosCalendario] = useState(new Set());
   const [marcandoRevisadoId, setMarcandoRevisadoId] = useState(null);
+  const [marcandoRevisadoLote, setMarcandoRevisadoLote] = useState(false);
   const [comparativaModificacion, setComparativaModificacion] = useState(null);
 
   // [FN-02.03] Control secuencial para prevención de carreras de peticiones (race conditions)
@@ -541,6 +542,53 @@ export default function OtherEmployeesHistoryView({
     }
   };
 
+
+  // [FN-07.16] Marcar modificaciones de múltiples registros como revisadas en lote
+  const handleMarcarModificacionesLote = async (idsAsistencia) => {
+    if (!idsAsistencia || idsAsistencia.length === 0) return;
+    const idsSet = new Set(idsAsistencia);
+    setMarcandoRevisadoLote(true);
+    try {
+      const res = await api.marcarModificacionesPorAsistenciasLote(Array.from(idsSet));
+      if (res && res.exito === false) {
+        setMensajeSync({ tipo: 'error', texto: res.error || 'No se pudieron marcar las modificaciones como revisadas.' });
+        return;
+      }
+
+      const marcarRegistro = (r) => {
+        const idActual = r.id_asistencia || r.id;
+        if (idsSet.has(idActual)) {
+          return { ...r, modificacion_pendiente: 0, modificacion_revisada: 1 };
+        }
+        return r;
+      };
+
+      setRegistros(prev => prev.map(marcarRegistro));
+      setRegistrosEmpleadoAuditar(prev => prev.map(marcarRegistro));
+
+      if (diaSeleccionadoAuditoria) {
+        setDiaSeleccionadoAuditoria(prev => {
+          if (!prev) return null;
+          return {
+            ...prev,
+            registros: prev.registros.map(marcarRegistro)
+          };
+        });
+      }
+
+      const cant = res?.afectados || idsSet.size;
+      setMensajeSync({
+        tipo: 'exito',
+        texto: `${cant} ${cant === 1 ? 'modificación marcada' : 'modificaciones marcadas'} como ${cant === 1 ? 'revisada' : 'revisadas'}. La alerta visual fue desactivada.`
+      });
+      window.dispatchEvent(new CustomEvent('catalogos-actualizados'));
+    } catch (err) {
+      console.error('Error al marcar modificaciones en lote:', err);
+      setMensajeSync({ tipo: 'error', texto: 'No se pudieron marcar las modificaciones como revisadas.' });
+    } finally {
+      setMarcandoRevisadoLote(false);
+    }
+  };
 
   const handleMarcarRevisadoDesdeComparativa = async () => {
     if (!comparativaModificacion?.registro) return;
@@ -1336,6 +1384,9 @@ export default function OtherEmployeesHistoryView({
             navegarMes={navegarMes}
             irAHoy={irAHoy}
             puedeEditarCosto={puedeEditarCosto}
+            puedeVerModif={puedeVerModif}
+            marcandoRevisadoLote={marcandoRevisadoLote}
+            handleMarcarModificacionesLote={handleMarcarModificacionesLote}
             diasSeleccionadosCalendario={diasSeleccionadosCalendario}
             setDiasSeleccionadosCalendario={setDiasSeleccionadosCalendario}
             handleAplicarTipoCostoDiasCalendario={handleAplicarTipoCostoDiasCalendario}
@@ -1400,7 +1451,9 @@ export default function OtherEmployeesHistoryView({
         puedeVerModif={puedeVerModif}
         abrirComparativa={abrirComparativa}
         marcandoRevisadoId={marcandoRevisadoId}
+        marcandoRevisadoLote={marcandoRevisadoLote}
         handleMarcarRevisado={handleMarcarRevisado}
+        handleMarcarModificacionesLote={handleMarcarModificacionesLote}
         puedeEditarCosto={puedeEditarCosto}
         handleAbrirModalCostoDia={handleAbrirModalCostoDia}
         esSoloLecturaNucleo={esSoloLecturaNucleo}

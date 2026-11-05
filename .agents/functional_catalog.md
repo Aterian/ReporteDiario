@@ -1,5 +1,17 @@
 # Catálogo Funcional del Sistema
 
+## [FN-07.26] Selección y Revisión Múltiple de Modificaciones en Calendario de Historial
+- **Módulo**: [MOD-07] Historial, Auditoría y Liquidación
+- **Flujo Operativo**: Permite a roles admin y sub_admin seleccionar múltiples días con modificaciones pendientes en el calendario mensual de auditoría mediante un botón de acceso rápido o checkboxes en cada celda, y marcarlas como revisadas en un solo lote atómico desde la barra flotante o desde el modal de registros diarios.
+- **Tablas afectadas**: app_rrhh.b_1_modificaciones_realizadas, app_rrhh.b_1_asistencias.
+- **Reglas de negocio e invariantes**: Restringido exclusivamente a roles `admin` y `sub_admin`; actualización en lote en una única transacción PostgreSQL mediante `UPDATE ... WHERE id_asistencia = ANY(%s::uuid[]) AND revisado IS NOT TRUE`; actualización optimista instantánea del estado en cliente y emisión de evento reactivo `catalogos-actualizados`.
+
+## [FN-07.25] Reciclaje de Conexiones Caídas, Reintento Transparente y Prevención de Pantallas en Blanco
+- **Módulo**: [MOD-07] Persistencia y Conexiones PostgreSQL
+- **Flujo Operativo**: Valida el estado de inactividad de las conexiones en el pool antes de cederlas y purga automáticamente sockets cerrados por el proxy/host; aplica reintento transparente con backoff en backend para consultas y exportaciones de lectura ante fallos de conexión, PoolError o saturación; detecta y recrea pools cerrados; y blinda el frontend con ErrorBoundary raíz en main.jsx y fallbacks defensivos en todas las colecciones para erradicar pantallas en blanco.
+- **Tablas afectadas**: Todas las tablas de app_rrhh y app_proyectos (Capa de persistencia relacional, puente y frontend).
+- **Reglas de negocio e invariantes**: Conexiones con timestamp nulo o inactividad >=15s ejecutan sonda `SELECT 1` bajo autocommit temporal sin abrir transacciones; reintentos confinados exclusivamente a consultas y exportaciones de lectura (`es_operacion_lectura`); las mutaciones fallan inmediatamente para preservar atomicidad; métodos de catálogo y verificación en apiBridge retornan arreglos y objetos seguros ante errores de base de datos.
+
 ## [FN-07.24] Resiliencia de Pool PostgreSQL, SingleFlight y Proyectos Compartidos I+M
 - **Módulo**: [MOD-07] Persistencia y Conexiones PostgreSQL
 - **Flujo Operativo**: Mitiga saturación de conexiones elevando el pool a 20 slots y aplicando el patrón SingleFlight en caché para impedir ráfagas simultáneas ante eventos de actualización; desacopla telemetría de errores cuando el pool se satura; desanida cursores transaccionales y añade debounce de 200 ms en frontend; unifica catálogos activos de Ingeniería y Mensura para colaboradores de ambas áreas en registros diarios.

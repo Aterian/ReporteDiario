@@ -2,6 +2,39 @@
 
 Historial cronológico de cambios, nuevas características y mejoras aplicadas al sistema **Check Diario Ingeap**.
 
+## [2.12.0] - 2026-11-05
+
+### ✏️ Selección y Revisión Múltiple de Modificaciones en Calendario de Historial ([FN-07.26])
+- **Operación Atómica en Lote en PostgreSQL**:
+  - Implementada función `marcar_modificaciones_por_asistencias_lote(ids_asistencia, id_operador)` en `backend/postgres_repository.py` que ejecuta una única sentencia `UPDATE` con `WHERE id_asistencia = ANY(%s::uuid[]) AND revisado IS NOT TRUE`, registrando el operador y timestamp UTC.
+  - Expuesto método en `ApiPuente` (`backend/postgres_bridge.py`) con control RBAC estricto para `admin` y `sub_admin`, decorado con `@manejar_errores_api` y emisión de evento reactivo `_notificar_cambios()`.
+- **Selección Rápida y Acciones Masivas en Calendario de Auditoría**:
+  - Agregado botón de selección rápida `✏️ Modificados (N)` en `frontend/src/components/history/HistoryAuditCalendar.jsx` que tilda automáticamente en el calendario todos los días con modificaciones pendientes del mes visible.
+  - Incorporado botón `✓ Marcar Revisadas (N)` en la barra flotante de herramientas (`.calendar-floating-cost-toolbar`) con estilo esmeralda para aplicar la revisión masiva en un solo clic sobre los días seleccionados.
+  - Habilitada la selección de celdas por checkbox tanto para `puedeEditarCosto` como para `puedeVerModif`.
+- **Selección Múltiple en Modal de Registros Diarios**:
+  - En `frontend/src/components/history/HistoryDayRecordsModal.jsx`, se agregó barra superior de acciones masivas con checkbox `Seleccionar todos`, botón `✓ Marcar (N)` y botón `✓ Marcar Todas (M)`.
+  - Checkboxes individuales integrados en la tarjeta de modificación pendiente de cada registro.
+- **Pruebas Automatizadas y Build**:
+  - Suite de pruebas de contrato en `backend/tests/test_postgres_contract.py` (`test_marcar_modificaciones_por_asistencias_lote` y `test_puente_marcar_modificaciones_lote_rbac`).
+  - Compilación de producción con Vite hacia `backend/dist/`.
+
+## [2.11.3] - 2026-11-04
+
+### 🛡️ Resiliencia de Conexiones PostgreSQL y Prevención de Pantallas en Blanco ([FN-07.25])
+- **Detección de Inactividad y Reciclaje Automático en el Pool**:
+  - Incorporada función `_es_conexion_saludable` en `backend/postgres_db.py` que comprueba el estado transaccional y realiza una verificación activa (`SELECT 1`) en conexiones inactivas por más de 15 segundos antes de cederlas al llamador.
+  - Sockets cerrados, caídos o con error son purgados de inmediato mediante `pool.putconn(conn, close=True)` y sustituidos por conexiones limpias, erradicando los cuellos de botella por timeouts TCP y desconexiones de Railway.
+- **Reintento Transparente en Consultas de Lectura**:
+  - En `respuesta_segura` (`backend/postgres_bridge.py`), las consultas idempotentes (`obtener_*`, `verificar_*`, `consultar_*`) reintentan automáticamente hasta 2 veces con backoff breve ante fallos de conexión o saturación transitoria.
+  - Las operaciones de mutación no se reintentan para proteger la integridad transaccional.
+- **Blindaje de Interfaz de Usuario y Prevención de Pantallas en Blanco**:
+  - Envuelta la raíz de React en `frontend/src/main.jsx` con `<ErrorBoundary FallbackComponent={ErrorFallback}>` para evitar desmontajes catastróficos que dejen `<div id="root">` en blanco.
+  - Habilitados 2 reintentos con backoff exponencial en `frontend/src/services/queryClient.js` para consultas de TanStack Query.
+  - Métodos de catálogo en `frontend/src/services/apiBridge.js` (`obtenerServicios`, `obtenerTodosUsuarios`, `obtenerHistorial`, `obtenerTarifasRoster`, `obtenerRosters`, `obtenerHistorialOtrosEmpleados`, `obtenerTodosRegistrosEmpleado`) retornan arrays seguros `[]` y emiten notificaciones Toast con mensajes legibles, evitando errores de renderizado en vistas hijas.
+- **Pruebas Automatizadas**:
+  - Agregadas pruebas en `backend/tests/test_postgres_contract.py` que validan el descarte de conexiones caídas en el pool, el reintento exitoso de lecturas y la no repetición de mutaciones.
+
 ## [2.11.2] - 2026-11-04
 
 ### 🚀 Resiliencia de Conexiones PostgreSQL y SingleFlight ([FN-07.24])

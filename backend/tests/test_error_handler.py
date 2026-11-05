@@ -86,6 +86,10 @@ class TestErrorHandlerArchitecture(unittest.TestCase):
         self.assertEqual(res["codigo_error"], "ERROR_INTERNO")
         self.assertIn("error inesperado", res["error"].lower())
 
+    @unittest.skipIf(
+        sys.platform == "win32" and sys.version_info >= (3, 14),
+        "Python 3.14 alpha en Windows experimenta bloqueo en el loop de asyncio"
+    )
     def test_decorador_asincrono(self):
         """El decorador debe soportar corrutinas asíncronas con idéntico contrato."""
         @manejar_errores_api

@@ -1,4 +1,5 @@
 # [MOD-07] Pruebas del pool PostgreSQL
+import time
 from threading import BoundedSemaphore
 from unittest.mock import MagicMock
 import pytest
@@ -12,6 +13,7 @@ from error_handler import DatabaseTransactionError, RegistroDuplicadoError
 def pool(monkeypatch):
     conn = MagicMock()
     conn.closed = False
+    conn._ultimo_uso_monotonic = time.monotonic()
     pool = MagicMock()
     pool.getconn.return_value = conn
     monkeypatch.setattr(pg,"obtener_pool",lambda:pool)
