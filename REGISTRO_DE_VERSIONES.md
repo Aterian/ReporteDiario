@@ -2,7 +2,7 @@
 
 Historial cronológico de cambios, nuevas características y mejoras aplicadas al sistema **Check Diario Ingeap**.
 
-## [2.12.0] - 2026-11-05
+## [2.12.1] - 2026-11-10
 
 ### 💾 Persistencia de Sesión Activa en Disco Local ([FN-07.27])
 - **Persistencia en LocalAppData**:
@@ -21,6 +21,8 @@ Historial cronológico de cambios, nuevas características y mejoras aplicadas a
   - Sustituido el spinner pulsante en el banner de confirmación por el componente `.sync-check-icon` con SVG checkmark en verde esmeralda y soporte para tema oscuro en `frontend/src/index.css`.
 - **Pruebas Unitarias Automatizadas**:
   - Creado `frontend/src/tests/checkFormGuardado.test.js` con 9 tests en Vitest validando cooldown y redirección por rol.
+
+## [2.12.0] - 2026-11-05
 
 ### 🐛 Corrección Crítica: Registro Seguro de Timestamps en Conexiones Nativas C ([FN-07.01])
 - **Resolución de `AttributeError` en `psycopg2.extensions.connection`**:
