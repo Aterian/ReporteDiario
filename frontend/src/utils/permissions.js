@@ -121,7 +121,7 @@ export const puedeCargarParaOtro = (usuario) => {
  */
 export const puedeVerHistorialOtros = (usuario) => {
   const rol = getRolUsuario(usuario);
-  return rol === 'admin' || rol === 'sub_admin';
+  return rol === 'admin' || rol === 'sub_admin' || rol === 'core';
 };
 
 /**

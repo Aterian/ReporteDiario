@@ -135,7 +135,9 @@ describe('RBAC - Control de Roles y Capacidades', () => {
     it('permite ver historial de otros empleados sólo a roles autorizados', () => {
       expect(puedeVerHistorialOtros(adminUser)).toBe(true);
       expect(puedeVerHistorialOtros(subAdminUser)).toBe(true);
+      expect(puedeVerHistorialOtros(coreUser)).toBe(true);
       expect(puedeVerHistorialOtros(user1)).toBe(false);
+      expect(puedeVerHistorialOtros(user2)).toBe(false);
     });
 
     it('permite modificar historial de otros exclusivamente a admin y sub_admin', () => {

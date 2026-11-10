@@ -4,6 +4,12 @@ Historial cronológico de cambios, nuevas características y mejoras aplicadas a
 
 ## [2.12.1] - 2026-11-10
 
+### 👁️ Acceso de Auditoría y Visualización de Otros Empleados para Rol Core ([FN-04.11])
+- **Permisos RBAC para Rol `core`**:
+  - Habilitada la visualización del módulo 'Historial de otros empleados' (`puedeVerHistorialOtros`) para usuarios con rol `core` en `frontend/src/utils/permissions.js`.
+  - Se mantiene el modo de **solo lectura** estricto (`esSoloLectura` / `puedeModificarHistorialOtros = false`), impidiendo la edición o eliminación de registros ajenos y restringiendo la calculadora de liquidación salarial a `admin` y `sub_admin`.
+  - Actualizada la suite de pruebas RBAC en `frontend/src/tests/permissions.test.js`.
+
 ### 💾 Persistencia de Sesión Activa en Disco Local ([FN-07.27])
 - **Persistencia en LocalAppData**:
   - Implementada escritura y lectura segura de `%LOCALAPPDATA%\Ingeap\CheckDiario\sesion_activa.json` en `backend/postgres_repository.py`.
