@@ -4,6 +4,24 @@ Historial cronológico de cambios, nuevas características y mejoras aplicadas a
 
 ## [2.12.0] - 2026-11-05
 
+### 💾 Persistencia de Sesión Activa en Disco Local ([FN-07.27])
+- **Persistencia en LocalAppData**:
+  - Implementada escritura y lectura segura de `%LOCALAPPDATA%\Ingeap\CheckDiario\sesion_activa.json` en `backend/postgres_repository.py`.
+  - La sesión sobrevive al cierre del ejecutable y al reinicio completo de Windows, revalidando la identidad contra PostgreSQL al arrancar.
+  - Tolerancia al arranque en frío de Windows: si la red hacia PostgreSQL aún no está disponible al iniciar la PC, se preserva la sesión local sin desloguear al usuario.
+  - Al cerrar sesión explícitamente (`borrar_sesion`), el archivo físico en disco es eliminado de forma segura.
+  - Aislamiento automático en pytest mediante omisión cuando `PYTEST_CURRENT_TEST` está activo o uso de `CHECK_DIARIO_SESSION_FILE`.
+
+### ⏱️ Bloqueo Anti-Duplicados, Redirección por Rol y Check de Confirmación ([FN-01.05])
+- **Bloqueo Síncrono y Cooldown de 30s**:
+  - Inclusión de cuenta regresiva de 30 segundos y candado síncrono con `bloqueoEnvioRef` en `frontend/src/components/CheckForm.jsx` que deshabilita el botón de submit mostrando `Guardado • Espera Ns para otro registro` para erradicar envíos duplicados por doble clic.
+- **Redirección Condicional por Rol**:
+  - Empleados no administradores (`user_1`, `user_2`, `core`, nulo) son redirigidos automáticamente al inicio tras 1200ms con notificación Toast de éxito. Los roles `admin` y `sub_admin` permanecen en el formulario.
+- **Confirmación Visual Específica**:
+  - Sustituido el spinner pulsante en el banner de confirmación por el componente `.sync-check-icon` con SVG checkmark en verde esmeralda y soporte para tema oscuro en `frontend/src/index.css`.
+- **Pruebas Unitarias Automatizadas**:
+  - Creado `frontend/src/tests/checkFormGuardado.test.js` con 9 tests en Vitest validando cooldown y redirección por rol.
+
 ### 🐛 Corrección Crítica: Registro Seguro de Timestamps en Conexiones Nativas C ([FN-07.01])
 - **Resolución de `AttributeError` en `psycopg2.extensions.connection`**:
   - Las instancias nativas de conexión en C no poseen `__dict__` dinámico. Se desacopló el seguimiento de inactividad a un registro thread-safe indexado por `id(conn)` (`_ultimos_usos`), erradicando la excepción `AttributeError: ... has no attribute '_ultimo_uso_monotonic' and no __dict__ for setting new attributes` que impedía el arranque de la aplicación e instalador.

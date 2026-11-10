@@ -1495,3 +1495,88 @@ def test_conexion_c_sin_dict_registra_ultimo_uso():
     assert pg._obtener_ultimo_uso(conn_c) is None
 
 
+# [FN-07.27] La sesión guardada en disco sobrevive al reinicio de la aplicación y proceso
+def test_persistencia_sesion_disco_sobrevive_reinicio(monkeypatch, tmp_path):
+    archivo_sesion = tmp_path / "sesion_activa.json"
+    monkeypatch.setenv("CHECK_DIARIO_SESSION_FILE", str(archivo_sesion))
+
+    usuario_mock = {
+        "id_usuario": str(uuid4()),
+        "dni": "30123456",
+        "nombre": "Agustín Operador",
+        "email": "agustin@ingeap.com",
+        "area": "Ingeniería",
+        "rol_app": "user_1"
+    }
+
+    # 1. Guardar sesión
+    db.guardar_sesion_activa(usuario_mock)
+    assert archivo_sesion.exists()
+
+    # 2. Simular reinicio del proceso (memoria destruida)
+    db._sesion = None
+
+    # 3. Al solicitar la sesión, debe leer del archivo y revalidar con catálogo
+    monkeypatch.setattr(db, "obtener_usuarios_cache", lambda: [usuario_mock])
+    sesion_restaurada = db.obtener_sesion_activa()
+    assert sesion_restaurada is not None
+    assert sesion_restaurada["id_usuario"] == usuario_mock["id_usuario"]
+    assert sesion_restaurada["rol_app"] == "user_1"
+    assert db._sesion is not None
+
+
+# [FN-07.27] Cerrar sesión elimina el archivo físico en disco
+def test_borrar_sesion_elimina_archivo_disco(monkeypatch, tmp_path):
+    archivo_sesion = tmp_path / "sesion_activa.json"
+    monkeypatch.setenv("CHECK_DIARIO_SESSION_FILE", str(archivo_sesion))
+
+    usuario_mock = {
+        "id_usuario": str(uuid4()),
+        "dni": "30999888",
+        "nombre": "Mariana Supervisora",
+        "rol_app": "core"
+    }
+
+    db.guardar_sesion_activa(usuario_mock)
+    assert archivo_sesion.exists()
+
+    db.borrar_sesion()
+    assert not archivo_sesion.exists()
+    assert db._sesion is None
+    assert db.obtener_sesion_activa() is None
+
+
+# [FN-07.27] Al iniciar Windows sin red inmediata, conserva la sesión local de disco
+def test_obtener_sesion_activa_conserva_sesion_ante_fallo_red_arranque(monkeypatch, tmp_path):
+    from error_handler import DatabaseTransactionError
+
+    archivo_sesion = tmp_path / "sesion_activa.json"
+    monkeypatch.setenv("CHECK_DIARIO_SESSION_FILE", str(archivo_sesion))
+
+    usuario_mock = {
+        "id_usuario": str(uuid4()),
+        "dni": "30555666",
+        "nombre": "Carlos Técnico",
+        "rol_app": "user_2"
+    }
+
+    db.guardar_sesion_activa(usuario_mock)
+    assert archivo_sesion.exists()
+
+    # Simular reinicio de PC
+    db._sesion = None
+
+    # Simular que al encender la PC la red a PostgreSQL falla transitoriamente
+    def mock_fallo_red():
+        raise DatabaseTransactionError("Conexión no disponible temporalmente.")
+
+    monkeypatch.setattr(db, "obtener_usuarios_cache", mock_fallo_red)
+
+    # Debe retornar la identidad local sin destruir el archivo en disco
+    sesion = db.obtener_sesion_activa()
+    assert sesion is not None
+    assert sesion["id_usuario"] == usuario_mock["id_usuario"]
+    assert archivo_sesion.exists()
+
+
+

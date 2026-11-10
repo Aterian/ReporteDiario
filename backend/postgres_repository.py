@@ -1,14 +1,17 @@
 # [MOD-07] Persistencia exclusiva en PostgreSQL
 import calendar
+import json
+import os
 import re
 import unicodedata
 from datetime import date, datetime, time, timedelta
 from decimal import Decimal
 from functools import lru_cache
+from pathlib import Path
 from threading import Lock
 from uuid import UUID
 
-from error_handler import PermisoDenegadoError, RegistroNoEncontradoError, ValidacionError
+from error_handler import DatabaseTransactionError, PermisoDenegadoError, RegistroNoEncontradoError, ValidacionError
 from postgres_db import obtener_cursor_pg
 from postgres_models import (
     UsuarioSueldoCreate, ErrorRemotoCreate, ProyectoCreate, ProyectoUpdate,
@@ -196,30 +199,90 @@ def resolver_usuario(referencia, usuarios=None):
     return candidatos[0]
 
 
-# [FN-07.02] Mantener sesión en memoria
+# [FN-07.27] Resolver ruta del archivo de sesión local con aislamiento para pytest
+def _obtener_ruta_sesion() -> Path | None:
+    ruta_custom = os.environ.get("CHECK_DIARIO_SESSION_FILE", "").strip()
+    if ruta_custom:
+        return Path(ruta_custom)
+    if os.environ.get("PYTEST_CURRENT_TEST"):
+        return None
+    local_app_data = os.environ.get("LOCALAPPDATA") or str(Path.home() / "AppData" / "Local")
+    return Path(local_app_data) / "Ingeap" / "CheckDiario" / "sesion_activa.json"
+
+
+def _guardar_sesion_disco(datos_usuario: dict) -> None:
+    ruta = _obtener_ruta_sesion()
+    if ruta is None:
+        return
+    try:
+        ruta.parent.mkdir(parents=True, exist_ok=True)
+        contenido = json.dumps(datos_usuario, ensure_ascii=False, default=str)
+        ruta.write_text(contenido, encoding="utf-8")
+    except OSError:
+        pass
+
+
+def _cargar_sesion_disco() -> dict | None:
+    ruta = _obtener_ruta_sesion()
+    if ruta is None or not ruta.exists():
+        return None
+    try:
+        datos = json.loads(ruta.read_text(encoding="utf-8"))
+        if isinstance(datos, dict) and datos.get("id_usuario"):
+            return datos
+    except (OSError, ValueError, TypeError):
+        pass
+    return None
+
+
+def _eliminar_sesion_disco() -> None:
+    ruta = _obtener_ruta_sesion()
+    if ruta is None:
+        return
+    try:
+        ruta.unlink(missing_ok=True)
+    except OSError:
+        pass
+
+
+# [FN-07.02] Mantener sesión en memoria y persistir en disco local
 def guardar_sesion_activa(usuario):
     global _sesion
     with _sesion_lock:
         _sesion = dict(usuario)
+        _guardar_sesion_disco(_sesion)
 
 
-# [FN-07.02] Revalidar estado y rol de la sesión
+# [FN-07.02] Revalidar estado y rol de la sesión (restaurando desde disco si reinició la PC)
 def obtener_sesion_activa():
+    global _sesion
     with _sesion_lock:
+        if _sesion is None:
+            _sesion = _cargar_sesion_disco()
         identidad = dict(_sesion) if _sesion else None
     if identidad is None:
         return None
-    actual = next((u for u in obtener_usuarios_cache() if u["id_usuario"] == identidad["id_usuario"]), None)
+    try:
+        usuarios = obtener_usuarios_cache()
+    except DatabaseTransactionError:
+        # Si al iniciar la PC aún no hay red hacia PostgreSQL, conservar la sesión local
+        return identidad
+    actual = next((u for u in usuarios if str(u.get("id_usuario")) == str(identidad.get("id_usuario"))), None)
     if actual is None:
         borrar_sesion()
+        return None
+    with _sesion_lock:
+        _sesion = dict(actual)
+        _guardar_sesion_disco(_sesion)
     return actual
 
 
-# [FN-07.02] Cerrar sesión
+# [FN-07.02] Cerrar sesión en memoria y eliminar archivo de disco
 def borrar_sesion():
     global _sesion
     with _sesion_lock:
         _sesion = None
+        _eliminar_sesion_disco()
     invalidar_caches_repositorio()
 
 

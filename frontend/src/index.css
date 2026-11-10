@@ -11045,6 +11045,23 @@ html, body {
   flex-shrink: 0;
 }
 
+.sync-check-icon {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: rgba(16, 185, 129, 0.18);
+  color: #059669;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+[data-theme="dark"] .sync-check-icon {
+  background: rgba(16, 185, 129, 0.25);
+  color: #34d399;
+}
+
 /* =========================================================================
    [FN-02.04] Panel Flotante Dividido Comparativo de Modificaciones (RRHH)
    ========================================================================= */

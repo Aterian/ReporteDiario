@@ -1,4 +1,5 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
+import { toast } from 'sonner';
 import { api } from '../services/apiBridge';
 import {
   puedeCargarCampo,
@@ -47,6 +48,10 @@ const LISTADO_AREAS_CORPORATIVAS = [
   'CD',
   'Dirección'
 ];
+
+// [FN-01.05] Parámetros de protección anti-duplicados y redirección
+const SEGUNDOS_BLOQUEO_GUARDADO = 30;
+const DELAY_REDIRECCION_NO_ADMIN_MS = 1200;
 
 export default function CheckForm({ onRegistroGuardado, onVolver, tema }) {
   const isRpg = tema === 'rpg';
@@ -115,6 +120,11 @@ export default function CheckForm({ onRegistroGuardado, onVolver, tema }) {
   const [mensajeExito, setMensajeExito] = useState('');
   const [mensajeError, setMensajeError] = useState('');
 
+  // [FN-01.05] Estados de cooldown anti-duplicados de 30s y temporizador de redirección
+  const [cooldownSegundos, setCooldownSegundos] = useState(0);
+  const bloqueoEnvioRef = useRef(false);
+  const timerRedireccionRef = useRef(null);
+
   // =========================================================================
   // VARIABLES DERIVADAS (Declaradas aquí para evitar errores TDZ antes de los hooks)
   // =========================================================================
@@ -149,6 +159,27 @@ export default function CheckForm({ onRegistroGuardado, onVolver, tema }) {
   const esVacaciones = lugar === 'Vacaciones';
   const esLicencia = lugar === 'Licencia';
   const esSinProyectos = esFranco || esVacaciones || esLicencia || esFeriadoTrabajado;
+
+  // [FN-01.05] Cuenta regresiva de bloqueo anti-duplicados de 30 segundos
+  useEffect(() => {
+    if (cooldownSegundos <= 0) {
+      bloqueoEnvioRef.current = false;
+      return;
+    }
+    const timer = setTimeout(() => {
+      setCooldownSegundos(prev => prev - 1);
+    }, 1000);
+    return () => clearTimeout(timer);
+  }, [cooldownSegundos]);
+
+  // [FN-01.05] Limpieza del timer de redirección al desmontar
+  useEffect(() => {
+    return () => {
+      if (timerRedireccionRef.current) {
+        clearTimeout(timerRedireccionRef.current);
+      }
+    };
+  }, []);
 
   // 1. Cargar sesión de usuario
   useEffect(() => {
@@ -341,9 +372,10 @@ export default function CheckForm({ onRegistroGuardado, onVolver, tema }) {
     setHorasArea(prev => Math.max(0.5, Math.round((prev + delta) * 10) / 10));
   };
 
-  // Envío del formulario
+  // [FN-01.05] Envío del formulario con protección anti-duplicados
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (enviando || cooldownSegundos > 0 || bloqueoEnvioRef.current) return;
     setMensajeExito('');
     setMensajeError('');
 
@@ -387,6 +419,8 @@ export default function CheckForm({ onRegistroGuardado, onVolver, tema }) {
     }
 
 
+    bloqueoEnvioRef.current = true;
+    setCooldownSegundos(SEGUNDOS_BLOQUEO_GUARDADO);
     setEnviando(true);
 
     try {
@@ -527,10 +561,24 @@ export default function CheckForm({ onRegistroGuardado, onVolver, tema }) {
         if (onRegistroGuardado) {
           onRegistroGuardado();
         }
+
+        // [FN-01.05] Redirección automática de 1200ms para empleados no-admin/sub_admin
+        if (!esAdminOSubAdmin) {
+          toast.success(msg);
+          if (onVolver) {
+            timerRedireccionRef.current = setTimeout(() => {
+              onVolver();
+            }, DELAY_REDIRECCION_NO_ADMIN_MS);
+          }
+        }
       } else {
+        bloqueoEnvioRef.current = false;
+        setCooldownSegundos(0);
         setMensajeError(res.error || 'No se pudo registrar el reporte.');
       }
     } catch (err) {
+      bloqueoEnvioRef.current = false;
+      setCooldownSegundos(0);
       console.error(err);
       setMensajeError('Error de conexión al guardar el registro.');
     } finally {
@@ -577,7 +625,11 @@ export default function CheckForm({ onRegistroGuardado, onVolver, tema }) {
         {mensajeExito && (
           <div className="alert alert-success sync-progress-alert">
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px', width: '100%' }}>
-              <div className="sync-pulse-spinner" />
+              <div className="sync-check-icon" aria-hidden="true">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="20 6 9 17 4 12" />
+                </svg>
+              </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '3px', flex: 1 }}>
                 <strong style={{ fontSize: '13px', color: '#065f46' }}>{mensajeExito}</strong>
                 <span style={{ fontSize: '12px', color: '#047857', display: 'flex', alignItems: 'center', gap: '4px', flexWrap: 'wrap' }}>
@@ -1289,11 +1341,24 @@ export default function CheckForm({ onRegistroGuardado, onVolver, tema }) {
               {costoManualAusencia && <><label htmlFor="costo-ausencia">Costo diario (ARS)</label><input id="costo-ausencia" className="form-input form-input-clean" type="number" min="0" step="0.01" required value={costoAusencia} onChange={e => setCostoAusencia(e.target.value)} /></>}
             </fieldset>
           )}
-          <button type="submit" className="btn-submit btn-submit-spacious" disabled={enviando}>
+          <button
+            type="submit"
+            className="btn-submit btn-submit-spacious"
+            disabled={enviando || cooldownSegundos > 0}
+          >
             {enviando ? (
               <>
                 <div className="spinner" />
                 <span>{isRpg ? 'Conjurando registro...' : 'Guardando...'}</span>
+              </>
+            ) : cooldownSegundos > 0 ? (
+              <>
+                <div className="sync-check-icon" style={{ width: '16px', height: '16px', color: 'inherit' }} aria-hidden="true">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="20 6 9 17 4 12" />
+                  </svg>
+                </div>
+                <span>Guardado • Espera {cooldownSegundos}s para otro registro</span>
               </>
             ) : (
               <>

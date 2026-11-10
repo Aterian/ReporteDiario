@@ -1,5 +1,17 @@
 # Catálogo Funcional del Sistema
 
+## [FN-07.27] Persistencia de Sesión Activa en Disco Local y Restauración Post-Reinicio
+- **Módulo**: [MOD-07] Sesión y Persistencia Local
+- **Flujo Operativo**: Almacena de forma segura la sesión del usuario en `%LOCALAPPDATA%\Ingeap\CheckDiario\sesion_activa.json` al iniciar sesión; al arrancar la aplicación tras un reinicio de la PC, restaura la identidad desde el archivo local y revalida su estado contra PostgreSQL; en caso de falta temporal de red al encender Windows, preserva la sesión local sin forzar deslogueo; y al cerrar sesión explícitamente elimina el archivo físico.
+- **Tablas afectadas**: app_rrhh.a_1_usuarios (lectura de revalidación en caché).
+- **Reglas de negocio e invariantes**: Exclusión estricta de disco en ejecución de tests automatizados (`PYTEST_CURRENT_TEST`); cerrojo thread-safe `_sesion_lock` en todas las lecturas y escrituras; si PostgreSQL confirma que el usuario fue dado de baja se purga la sesión de disco; si hay error transitorio de red al iniciar la PC se mantiene la sesión.
+
+## [FN-01.05] Bloqueo Anti-Duplicados de 30s, Redirección por Rol y Confirmación Visual
+- **Módulo**: [MOD-01] Registro Diario de Asistencia
+- **Flujo Operativo**: Protege el envío de reportes diarios deshabilitando el botón durante 30 segundos con cuenta regresiva reactiva y bloqueo síncrono con `useRef` para impedir dobles clics accidentales; redirige automáticamente al inicio a empleados no-administradores tras 1200ms con notificación Toast; y reemplaza el spinner pulsante del banner de confirmación por un ícono de verificación verde esmeralda.
+- **Tablas afectadas**: Ninguna (Capa de cliente React y experiencia de usuario en CheckForm).
+- **Reglas de negocio e invariantes**: Roles no-administradores (`user_1`, `user_2`, `core`, nulo) activan redirección automática a los 1.2s; administradores (`admin`, `sub_admin`) permanecen en el formulario; el bloqueo síncrono impide reenvíos en el mismo tick de eventos; si el guardado falla, el cooldown se resetea a 0 para permitir reintento inmediato.
+
 ## [FN-07.26] Selección y Revisión Múltiple de Modificaciones en Calendario de Historial
 - **Módulo**: [MOD-07] Historial, Auditoría y Liquidación
 - **Flujo Operativo**: Permite a roles admin y sub_admin seleccionar múltiples días con modificaciones pendientes en el calendario mensual de auditoría mediante un botón de acceso rápido o checkboxes en cada celda, y marcarlas como revisadas en un solo lote atómico desde la barra flotante o desde el modal de registros diarios.

@@ -21,6 +21,7 @@ backend/*.sqlite3
 # --- CONFIGURACIONES LOCALES ---
 # Descomentar si el config contiene IDs confidenciales que no deban compartirse
 # backend/config.json
+*sesion_activa.json
 
 # --- BINARIOS Y EJECUTABLES PESADOS ---
 # Superan límites de GitHub (50MB - 100MB) y deben subirse a GitHub Releases
