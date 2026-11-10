@@ -709,8 +709,9 @@
 
 ## [FN-06.10] Buzón de Sugerencias, Participación y Consulta
 - **Módulo**: [MOD-01] / [MOD-06] Interfaz de Usuario y Experiencia Colaborativa
-- **Flujo Operativo**: Botón interactivo en la pantalla principal para todos los usuarios. Al ser accionado, despliega la notificación toast "Próximamente." indicando que el canal participativo se encuentra en etapa de diseño.
-- **Tablas afectadas**: Ninguna (canal en fase de planificación).
+- **Flujo Operativo**: Los usuarios autenticados pueden enviar una sugerencia desde Inicio. Los roles `core`, `sub_admin` y `admin` acceden a la bandeja debajo de Empleados para consultar y actualizar estado, prioridad y respuesta.
+- **Tablas afectadas**: `app_rrhh.b_2_participacion_consulta`.
+- **Reglas de negocio e invariantes**: Nombre opcional, descripción obligatoria y categoría Aplicaciones disponible. PostgreSQL asigna el estado y la prioridad iniciales y mantiene la fecha de resolución. El puente valida el rol y rechaza actualizaciones sobre datos que ya cambiaron.
 
 ## [FN-07.24] Borrado Lógico en PostgreSQL (Soft-Delete Asistencias y Roster)
 - **Módulo**: [MOD-07] Persistencia Relacional PostgreSQL y Auditoría RRHH

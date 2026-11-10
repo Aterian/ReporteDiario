@@ -1180,3 +1180,51 @@ ALTER TABLE "app_rrhh"."b_1_errores_remotos" ADD CONSTRAINT "b_1_errores_remotos
 ALTER TABLE "app_rrhh"."b_1_errores_remotos" ADD CONSTRAINT "b_1_errores_remotos_id_usuario_fkey" FOREIGN KEY ("id_usuario") REFERENCES "app_rrhh"."a_1_usuarios"("id_usuario") ON DELETE SET NULL;
 ALTER TABLE "app_rrhh"."b_1_errores_remotos" ADD CONSTRAINT "b_1_errores_remotos_resuelto_por_fkey" FOREIGN KEY ("resuelto_por") REFERENCES "app_rrhh"."a_1_usuarios"("id_usuario") ON DELETE SET NULL;
 CREATE INDEX "idx_errores_remotos_pendientes" ON "app_rrhh"."b_1_errores_remotos" ("fecha_hora" DESC) WHERE ("resuelto" IS FALSE);
+
+-- [FN-06.10] Inicio de participación y consulta
+CREATE TYPE app_rrhh.estado_revision_participacion AS ENUM ('nueva', 'vista', 'para aplicar', 'resuelta');
+CREATE TYPE app_rrhh.nivel_urgencia_participacion AS ENUM ('urgente', 'con tiempo');
+
+CREATE TABLE app_rrhh.b_2_participacion_consulta (
+    id_participacion uuid DEFAULT gen_random_uuid() NOT NULL,
+    nombre character varying(150) DEFAULT 'Anonimo' NOT NULL,
+    tipo_sugerencia character varying(100) NOT NULL,
+    descripcion_sugerencia text NOT NULL,
+    fecha_hora_registro timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL,
+    estado_revision app_rrhh.estado_revision_participacion DEFAULT 'nueva' NOT NULL,
+    nivel_urgencia app_rrhh.nivel_urgencia_participacion DEFAULT 'con tiempo' NOT NULL,
+    respuesta text,
+    fecha_hora_resolucion timestamp with time zone,
+    CONSTRAINT b_2_participacion_consulta_pkey PRIMARY KEY (id_participacion),
+    CONSTRAINT b_2_participacion_consulta_descripcion_sugerencia_check
+        CHECK (length(TRIM(BOTH FROM descripcion_sugerencia)) > 0)
+);
+
+CREATE INDEX idx_participacion_fecha_registro
+    ON app_rrhh.b_2_participacion_consulta USING btree (fecha_hora_registro DESC);
+CREATE INDEX idx_participacion_estado_urgencia
+    ON app_rrhh.b_2_participacion_consulta USING btree (estado_revision, nivel_urgencia);
+
+CREATE OR REPLACE FUNCTION app_rrhh.fn_gestionar_registro_participacion()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $function$
+BEGIN
+    IF NEW.nombre IS NULL OR LENGTH(TRIM(NEW.nombre)) = 0 THEN
+        NEW.nombre := 'Anonimo';
+    END IF;
+
+    IF NEW.estado_revision = 'resuelta' AND (TG_OP = 'INSERT' OR OLD.estado_revision IS DISTINCT FROM 'resuelta') THEN
+        NEW.fecha_hora_resolucion := COALESCE(NEW.fecha_hora_resolucion, TIMEZONE('utc', NOW()));
+    ELSIF NEW.estado_revision <> 'resuelta' THEN
+        NEW.fecha_hora_resolucion := NULL;
+    END IF;
+
+    RETURN NEW;
+END;
+$function$;
+
+CREATE TRIGGER trg_gestionar_registro_participacion
+    BEFORE INSERT OR UPDATE ON app_rrhh.b_2_participacion_consulta
+    FOR EACH ROW EXECUTE FUNCTION app_rrhh.fn_gestionar_registro_participacion();
+-- [FN-06.10] Fin de participación y consulta

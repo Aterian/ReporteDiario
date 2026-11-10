@@ -2,6 +2,14 @@
 
 Historial cronológico de cambios, nuevas características y mejoras aplicadas al sistema **Check Diario Ingeap**.
 
+## [2.13.0] - 2026-11-10
+
+### Buzón de sugerencias y gestión ([FN-06.10])
+
+- Formulario para colaboradores autenticados, con envío anónimo o identificado, tipo **Aplicaciones** y confirmación con referencia.
+- Acceso **Gestionar sugerencias** debajo de **Empleados** para `core`, `sub_admin` y `admin`, con filtros, contadores y edición de estado, prioridad y respuesta.
+- Persistencia en `app_rrhh.b_2_participacion_consulta`. PostgreSQL administra la fecha de resolución al cerrar o reabrir una sugerencia.
+
 ## [2.12.1] - 2026-11-10
 
 ### 👁️ Acceso de Auditoría y Visualización de Otros Empleados para Rol Core ([FN-04.11])

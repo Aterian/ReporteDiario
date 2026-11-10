@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { api } from './services/apiBridge';
+import { queryClient } from './services/queryClient';
 import logoIngeap from './assets/Logo_Ingeap1.png';
 import LoginView from './components/LoginView';
 import HomeView from './components/HomeView';
@@ -10,12 +11,16 @@ import RosterView from './components/RosterView';
 import RosterHistoryView from './components/RosterHistoryView';
 import UsersManagementView from './components/UsersManagementView';
 import ProjectsManagementView from './components/ProjectsManagementView';
+import SuggestionForm from './components/SuggestionForm';
+import SuggestionsManagementView from './components/SuggestionsManagementView';
 import RemoteErrorsView from './components/RemoteErrorsView';
 import RemoteErrorsModal from './components/RemoteErrorsModal';
 import { ErrorBoundary } from 'react-error-boundary';
 import ErrorFallback from './components/ErrorFallback';
 import { Toaster, toast } from 'sonner';
-import { puedeAccederRoster, puedeVerHistorialOtros, puedeVerModificaciones, esAreaAplicaciones, puedeGestionarUsuarios, puedeGestionarProyectos, esAdmin } from './utils/permissions';
+import { puedeAccederRoster, puedeVerHistorialOtros, puedeVerModificaciones, esAreaAplicaciones, puedeGestionarUsuarios, puedeGestionarProyectos, puedeGestionarSugerencias, esAdmin } from './utils/permissions';
+import { SUGGESTIONS_QUERY_KEY } from './types/suggestions';
+import './components/suggestions.css';
 
 // [MOD-00] App Principal
 export default function App() {
@@ -340,6 +345,9 @@ export default function App() {
     if (vistaActiva === 'proyectos' && !puedeGestionarProyectos(usuario)) {
       setVistaActiva('home');
     }
+    if (vistaActiva === 'sugerencias-gestion' && !puedeGestionarSugerencias(usuario)) {
+      setVistaActiva('home');
+    }
   }, [vistaActiva, usuario]);
 
   // [FN-03.06] Comprobar si hay actualizaciones disponibles en segundo plano desde GitHub Releases
@@ -406,6 +414,7 @@ export default function App() {
   const handleCerrarSesion = async () => {
     try {
       await api.cerrarSesion();
+      queryClient.removeQueries({ queryKey: SUGGESTIONS_QUERY_KEY });
       setUsuario(null);
       setRecordatorioPendiente(null);
       setVistaActiva('home');
@@ -485,7 +494,7 @@ export default function App() {
   }
 
   return (
-    <div className={`app-container ${['roster', 'historial-roster', 'historial', 'historial-otros', 'usuarios', 'proyectos'].includes(vistaActiva) ? 'app-panoramic' : ''}`}>
+    <div className={`app-container ${['roster', 'historial-roster', 'historial', 'historial-otros', 'usuarios', 'proyectos', 'sugerencias-gestion'].includes(vistaActiva) ? 'app-panoramic' : ''}`}>
       {/* Input oculto para abrir el explorador de Windows al elegir avatar */}
       <input
         type="file"
@@ -792,6 +801,8 @@ export default function App() {
             onHistorialRoster={() => setVistaActiva('historial-roster')}
             onHistorialOtrosEmpleados={() => setVistaActiva('historial-otros')}
             onGestionUsuarios={() => setVistaActiva('usuarios')}
+            onNuevaSugerencia={() => setVistaActiva('sugerencia-nueva')}
+            onGestionSugerencias={() => setVistaActiva('sugerencias-gestion')}
             onGestionProyectos={() => setVistaActiva('proyectos')}
             erroresRemotos={erroresRemotos}
             onVerErroresRemotos={() => setVistaActiva('errores-remotos')}
@@ -864,6 +875,17 @@ export default function App() {
           <ProjectsManagementView
             usuario={usuario}
             tema={tema}
+            onVolver={() => setVistaActiva('home')}
+          />
+        )}
+
+        {vistaActiva === 'sugerencia-nueva' && (
+          <SuggestionForm onVolver={() => setVistaActiva('home')} />
+        )}
+
+        {vistaActiva === 'sugerencias-gestion' && puedeGestionarSugerencias(usuario) && (
+          <SuggestionsManagementView
+            sessionKey={`${usuario.id_usuario}:${usuario.rol_app}`}
             onVolver={() => setVistaActiva('home')}
           />
         )}

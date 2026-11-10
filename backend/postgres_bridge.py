@@ -9,7 +9,7 @@ import psycopg2
 import psycopg2.pool
 
 import postgres_repository as db
-from error_handler import AppBaseException, PermisoDenegadoError, ValidacionError
+from error_handler import AppBaseException, PermisoDenegadoError, ValidacionError, formatear_respuesta, manejar_errores_api
 from postgres_models import AsistenciaUpdate
 
 # [FN-07.02] Identificar métodos de sólo lectura para reintento automático
@@ -31,6 +31,7 @@ METODOS_LECTURA = {
     "obtener_proyectos_admin",
     "obtener_errores_remotos",
 }
+_METODOS_SUGERENCIAS = {"crear_sugerencia", "obtener_sugerencias", "actualizar_sugerencia"}
 
 
 def es_operacion_lectura(nombre: str) -> bool:
@@ -38,8 +39,13 @@ def es_operacion_lectura(nombre: str) -> bool:
 
 
 # [FN-07.02] Mantener respuestas del puente y ocultar detalles internos
-def respuesta_segura(funcion):
+def respuesta_segura(funcion, *, privado=False):
     es_lectura = es_operacion_lectura(funcion.__name__)
+
+    def error_seguro(mensaje, codigo):
+        if privado:
+            return formatear_respuesta(False, error=mensaje, codigo_error=codigo)
+        return {"exito": False, "error": mensaje, "codigo_error": codigo}
 
     @functools.wraps(funcion)
     def ejecutar(*args, **kwargs):
@@ -65,7 +71,8 @@ def respuesta_segura(funcion):
 
                 es_lectura_errores = funcion.__name__ == "obtener_errores_remotos"
                 if (
-                    getattr(exc, "codigo_error", "") in ("ERROR_BASE_DATOS", "ERROR_CONCURRENCIA")
+                    not privado
+                    and getattr(exc, "codigo_error", "") in ("ERROR_BASE_DATOS", "ERROR_CONCURRENCIA")
                     and not es_saturacion
                     and not es_fallo_conn
                     and not es_lectura_errores
@@ -83,22 +90,24 @@ def respuesta_segura(funcion):
                         pass
                 elif es_saturacion or es_fallo_conn:
                     logger.warning("[DB Conexión/Saturación] Se omite telemetría remota en BD para {}: {}", funcion.__name__, exc.mensaje)
-                return {"exito":False,"error":exc.mensaje,"codigo_error":exc.codigo_error}
+                return error_seguro(exc.mensaje, exc.codigo_error)
             except ValidationError as exc:
+                if privado:
+                    return error_seguro("Revisá los datos de la sugerencia.", "VALIDACION_ERROR")
                 mensaje = "; ".join(".".join(str(p) for p in e["loc"])+": "+e["msg"] for e in exc.errors())
-                return {"exito":False,"error":mensaje,"codigo_error":"VALIDACION_ERROR"}
+                return error_seguro(mensaje, "VALIDACION_ERROR")
             except (ValueError, TypeError, KeyError):
-                return {"exito":False,"error":"Datos incompletos o inválidos.","codigo_error":"VALIDACION_ERROR"}
+                return error_seguro("Datos incompletos o inválidos.", "VALIDACION_ERROR")
             except Exception as exc:
                 logger.error("[API] {}: {}",funcion.__name__,type(exc).__name__)
                 es_err_conn = isinstance(exc, (psycopg2.OperationalError, psycopg2.InterfaceError, psycopg2.pool.PoolError))
                 if es_lectura and es_err_conn and intento < max_reintentos:
                     intento += 1
                     logger.warning("[API] Reintentando consulta de lectura '{}' (intento {}/{}) tras fallo transitorio no encapsulado: {}",
-                                   funcion.__name__, intento, max_reintentos, str(exc).strip())
+                                   funcion.__name__, intento, max_reintentos, type(exc).__name__ if privado else str(exc).strip())
                     time.sleep(0.25 * intento)
                     continue
-                if not es_err_conn:
+                if not es_err_conn and not privado:
                     try:
                         sesion = db.obtener_sesion_activa()
                         db.registrar_error_remoto({
@@ -110,7 +119,7 @@ def respuesta_segura(funcion):
                         }, sesion=sesion)
                     except Exception:
                         pass
-                return {"exito":False,"error":"No se pudo completar la operación.","codigo_error":"ERROR_INTERNO"}
+                return error_seguro("No se pudo completar la operación.", "ERROR_INTERNO")
     return ejecutar
 
 
@@ -622,6 +631,24 @@ class ApiPuente:
         lista = db.obtener_errores_remotos(solo_pendientes=solo_pendientes, limite=500)
         return {"exito": True, "total": len(lista), "datos": lista}
 
+    # [FN-06.10] Enviar una sugerencia con una sesión activa
+    def crear_sugerencia(self, datos: dict):
+        self._sesion()
+        return db.crear_sugerencia(datos)
+
+    # [FN-06.10] Consultar la bandeja para core, sub_admin y admin
+    def obtener_sugerencias(self, filtros: dict | None = None):
+        self._sesion(auditor=True)
+        return db.obtener_sugerencias({} if filtros is None else filtros)
+
+    # [FN-06.10] Gestionar la sugerencia para core, sub_admin y admin
+    def actualizar_sugerencia(self, datos: dict):
+        self._sesion(auditor=True)
+        return db.actualizar_sugerencia(datos)
+
+
 for _nombre,_metodo in list(vars(ApiPuente).items()):
     if not _nombre.startswith("_") and callable(_metodo):
-        setattr(ApiPuente,_nombre,respuesta_segura(_metodo))
+        _privado = _nombre in _METODOS_SUGERENCIAS
+        _metodo_seguro = respuesta_segura(_metodo, privado=_privado)
+        setattr(ApiPuente, _nombre, manejar_errores_api(_metodo_seguro) if _privado else _metodo_seguro)

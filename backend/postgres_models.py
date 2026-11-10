@@ -1,11 +1,11 @@
 # [MOD-07] Contratos de entrada PostgreSQL
-from datetime import date, time
+from datetime import date, datetime, time
 from decimal import Decimal
 from enum import StrEnum
 from uuid import UUID
-from typing import Literal
+from typing import Annotated, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
 
 
 # [FN-07.02] Estados de asistencia y roster
@@ -224,3 +224,64 @@ class ProyectoUpdate(BaseModel):
     area: str | None = Field(default=None, max_length=20)
     url_des: str | None = Field(default=None, max_length=200)
     activo: bool = True
+
+
+TipoSugerencia = Literal[
+    "Peligros y riesgos de su trabajo",
+    "Controles y medidas de prevención",
+    "Capacitación necesaria",
+    "Incidentes e investigaciones",
+    "Cambios que afecten la seguridad",
+    "Aplicaciones",
+    "Otro",
+]
+EstadoRevisionSugerencia = Literal["nueva", "vista", "para aplicar", "resuelta"]
+UrgenciaSugerencia = Literal["urgente", "con tiempo"]
+
+
+# [FN-06.10] Datos de envío de una sugerencia
+class SugerenciaCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid", hide_input_in_errors=True)
+    nombre: Annotated[str, StringConstraints(strip_whitespace=True, max_length=150, pattern=r"^[^\x00]*$")] | None = None
+    tipo_sugerencia: TipoSugerencia = "Otro"
+    descripcion_sugerencia: Annotated[
+        str, StringConstraints(strip_whitespace=True, min_length=1, max_length=1000, pattern=r"^[^\x00]*$")
+    ]
+
+
+# [FN-06.10] Filtros y paginación de la bandeja
+class SugerenciaFiltros(BaseModel):
+    model_config = ConfigDict(extra="forbid", hide_input_in_errors=True)
+    busqueda: Annotated[str, StringConstraints(strip_whitespace=True, max_length=150, pattern=r"^[^\x00]*$")] = ""
+    estado_revision: EstadoRevisionSugerencia | None = None
+    nivel_urgencia: UrgenciaSugerencia | None = None
+    pagina: int = Field(default=1, ge=1, le=1_000_000, strict=True)
+    limite: int = Field(default=20, ge=1, le=100, strict=True)
+
+
+# [FN-06.10] Valores editables y comparación con la versión leída
+class SugerenciaRevision(BaseModel):
+    model_config = ConfigDict(extra="forbid", hide_input_in_errors=True)
+    estado_revision: EstadoRevisionSugerencia
+    nivel_urgencia: UrgenciaSugerencia
+    respuesta: Annotated[str, StringConstraints(pattern=r"^[^\x00]*$")] | None
+
+
+# [FN-06.10] Actualización de una sugerencia existente
+class SugerenciaUpdate(SugerenciaRevision):
+    id_participacion: UUID
+    original: SugerenciaRevision
+
+
+# [FN-06.10] Registro de sugerencia visible para los roles de gestión
+class SugerenciaResponse(BaseModel):
+    model_config = ConfigDict(hide_input_in_errors=True)
+    id_participacion: UUID
+    nombre: str
+    tipo_sugerencia: str
+    descripcion_sugerencia: str
+    fecha_hora_registro: datetime
+    estado_revision: EstadoRevisionSugerencia
+    nivel_urgencia: UrgenciaSugerencia
+    respuesta: str | None
+    fecha_hora_resolucion: datetime | None

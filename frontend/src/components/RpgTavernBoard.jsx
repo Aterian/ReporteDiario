@@ -1,8 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { getTituloRpg } from '../utils/rpgTitles';
 import { api } from '../services/apiBridge';
-import { puedeVerHistorialOtros, puedeAccederRoster, puedeGestionarUsuarios, puedeGestionarProyectos } from '../utils/permissions';
-import { toast } from 'sonner';
+import { puedeVerHistorialOtros, puedeAccederRoster, puedeGestionarUsuarios, puedeGestionarSugerencias, puedeGestionarProyectos } from '../utils/permissions';
 
 // Iconos vectoriales medievales para garantizar renderizado perfecto sin depender de compatibilidad de emojis
 const QuillIcon = ({ size = 16, color = "#6b4317" }) => (
@@ -58,6 +57,8 @@ export default function RpgTavernBoard({
   onNuevoRoster,
   onHistorialRoster,
   onGestionUsuarios,
+  onNuevaSugerencia,
+  onGestionSugerencias,
   onGestionProyectos,
   onVerErroresRemotos
 }) {
@@ -300,6 +301,17 @@ export default function RpgTavernBoard({
               </button>
             )}
 
+            {puedeGestionarSugerencias(usuario) && onGestionSugerencias && (
+              <button
+                type="button"
+                className="rpg-parchment-btn-sec"
+                style={{ marginTop: '6px', minHeight: '44px' }}
+                onClick={onGestionSugerencias}
+              >
+                Gestionar sugerencias
+              </button>
+            )}
+
             {puedeGestionarProyectos(usuario) && onGestionProyectos && (
               <button 
                 type="button" 
@@ -326,13 +338,8 @@ export default function RpgTavernBoard({
             <button 
               type="button" 
               className="rpg-parchment-btn-sec"
-              style={{ marginTop: '6px', borderColor: '#7c3aed', color: '#7c3aed', fontWeight: 600 }}
-              onClick={() => {
-                toast.info('Próximamente.', {
-                  description: 'El buzón de sugerencias del gremio se encuentra en etapa de planificación.',
-                  duration: 4000
-                });
-              }}
+              style={{ marginTop: '6px', minHeight: '44px', borderColor: '#7c3aed', color: '#7c3aed', fontWeight: 600 }}
+              onClick={onNuevaSugerencia}
               title="Envía tus propuestas o consultas a los maestres del gremio"
             >
               📬 Buzón de Sugerencias y Consultas

@@ -9,10 +9,10 @@ import {
   puedeVerActividadAyer, 
   getEtiquetaRol, 
   puedeGestionarUsuarios,
+  puedeGestionarSugerencias,
   puedeGestionarProyectos,
   esAdmin
 } from '../utils/permissions';
-import { toast } from 'sonner';
 
 // [MOD-01] HomeView
 export default function HomeView({
@@ -25,6 +25,8 @@ export default function HomeView({
   onHistorialRoster,
   onHistorialOtrosEmpleados,
   onGestionUsuarios,
+  onNuevaSugerencia,
+  onGestionSugerencias,
   onGestionProyectos,
   erroresRemotos = [],
   onVerErroresRemotos,
@@ -43,6 +45,8 @@ export default function HomeView({
         onNuevoRoster={onNuevoRoster}
         onHistorialRoster={onHistorialRoster}
         onGestionUsuarios={onGestionUsuarios}
+        onNuevaSugerencia={onNuevaSugerencia}
+        onGestionSugerencias={onGestionSugerencias}
         onGestionProyectos={onGestionProyectos}
         onVerErroresRemotos={onVerErroresRemotos}
       />
@@ -56,8 +60,9 @@ export default function HomeView({
   const puedeVerAyer = puedeVerActividadAyer(usuario);
   const puedeVerModif = puedeVerModificaciones(usuario);
   const puedeGestionar = puedeGestionarUsuarios(usuario);
+  const puedeGestionarBuzon = puedeGestionarSugerencias(usuario);
   const puedeProyectos = puedeGestionarProyectos(usuario);
-  const tieneModulosGestion = puedeRoster || puedeOtros || puedeVerAyer || puedeGestionar || puedeProyectos;
+  const tieneModulosGestion = puedeRoster || puedeOtros || puedeVerAyer || puedeGestionar || puedeGestionarBuzon || puedeProyectos;
 
   const getFechaFormateada = () => {
     const hoy = new Date();
@@ -228,12 +233,7 @@ export default function HomeView({
             <button 
               type="button" 
               className="home-action-card card-suggestions" 
-              onClick={() => {
-                toast.info('Próximamente.', {
-                  description: 'El módulo de Buzón de sugerencias / Participación y Consulta se encuentra en etapa de planificación.',
-                  duration: 4000
-                });
-              }}
+              onClick={onNuevaSugerencia}
               style={{ borderLeft: '4px solid #a855f7' }}
             >
               <div className="action-card-icon-box" style={{ background: '#f3e8ff', color: '#9333ea' }}>
@@ -371,6 +371,32 @@ export default function HomeView({
                   </div>
                   <div className="action-card-arrow">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                      <polyline points="9 18 15 12 9 6" />
+                    </svg>
+                  </div>
+                </button>
+              )}
+
+              {/* [FN-06.10] Gestión de sugerencias */}
+              {puedeGestionarBuzon && (
+                <button
+                  type="button"
+                  className="home-action-card"
+                  onClick={onGestionSugerencias}
+                  style={{ borderLeft: '4px solid var(--primary)' }}
+                >
+                  <div className="action-card-icon-box">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <rect x="4" y="4" width="16" height="16" rx="2" />
+                      <path d="M8 9h8m-8 4h8m-8 4h4" />
+                    </svg>
+                  </div>
+                  <div className="action-card-content">
+                    <span className="action-card-title">Gestionar sugerencias</span>
+                    <span className="action-card-desc">Revisá las sugerencias y registrá las acciones tomadas</span>
+                  </div>
+                  <div className="action-card-arrow">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                       <polyline points="9 18 15 12 9 6" />
                     </svg>
                   </div>

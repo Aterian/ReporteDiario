@@ -8,6 +8,7 @@ import {
   esUser1,
   esUser2,
   puedeGestionarUsuarios,
+  puedeGestionarSugerencias,
   puedeEditarUsuarios,
   puedeCargarCampo,
   puedeUsarRangoFechas,
@@ -75,6 +76,11 @@ describe('RBAC - Control de Roles y Capacidades', () => {
   });
 
   describe('Capacidades Operativas por Rol', () => {
+    it('reserva la gestión de sugerencias a admin, sub_admin y core', () => {
+      expect([adminUser, subAdminUser, coreUser].map(puedeGestionarSugerencias)).toEqual([true, true, true]);
+      expect([user1, user2, unknownUser, null].map(puedeGestionarSugerencias)).toEqual([false, false, false, false]);
+    });
+
     it('controla acceso a registro de Campo según el rol', () => {
       expect(puedeCargarCampo(adminUser)).toBe(true);
       expect(puedeCargarCampo(subAdminUser)).toBe(true);

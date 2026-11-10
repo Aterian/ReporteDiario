@@ -165,7 +165,45 @@ async function getApi() {
   });
 }
 
+// [FN-06.10] Invocar el puente de sugerencias
+async function invocarSugerencias(metodo, datos) {
+  const bridge = await getApi();
+  if (!bridge[metodo]) {
+    return {
+      exito: false,
+      datos: null,
+      error: 'El puente de escritorio no admite el buzón de sugerencias.',
+      codigo_error: 'PUENTE_NO_DISPONIBLE'
+    };
+  }
+  return await bridge[metodo](datos);
+}
+
 const apiBase = {
+  /**
+   * @param {import('../types/suggestions').SugerenciaCreate} datos
+   * @returns {Promise<import('../types/suggestions').RespuestaSugerencias<import('../types/suggestions').ComprobanteSugerencia>>}
+   */
+  async crearSugerencia(datos) {
+    return invocarSugerencias('crear_sugerencia', datos);
+  },
+
+  /**
+   * @param {import('../types/suggestions').FiltrosSugerencias} filtros
+   * @returns {Promise<import('../types/suggestions').RespuestaSugerencias<import('../types/suggestions').BandejaSugerencias>>}
+   */
+  async obtenerSugerencias(filtros) {
+    return invocarSugerencias('obtener_sugerencias', filtros);
+  },
+
+  /**
+   * @param {import('../types/suggestions').SugerenciaUpdate} datos
+   * @returns {Promise<import('../types/suggestions').RespuestaSugerencias<import('../types/suggestions').Sugerencia>>}
+   */
+  async actualizarSugerencia(datos) {
+    return invocarSugerencias('actualizar_sugerencia', datos);
+  },
+
   async obtenerLiquidacion(empleado, cicloCobro, forzarRecalculo = false) {
     const bridge = await getApi();
     if (!bridge.obtener_liquidacion) return { exito: false, error: 'El puente no admite consultas de liquidación.' };
@@ -788,7 +826,7 @@ function envolverLlamadaApi(nombreMetodo, fn) {
 
       if (res && typeof res === 'object') {
         // Métodos de verificación o polling en segundo plano no deben molestar con toasts de error
-        const metodosSilenciosos = ['verificarRegistroHoy', 'verificarActualizacion', 'obtenerEstadoSesion', 'obtenerServicios', 'reportarErrorCliente', 'obtenerErroresRemotos'];
+        const metodosSilenciosos = ['verificarRegistroHoy', 'verificarActualizacion', 'obtenerEstadoSesion', 'obtenerServicios', 'reportarErrorCliente', 'obtenerErroresRemotos', 'crearSugerencia', 'obtenerSugerencias', 'actualizarSugerencia'];
 
         if (res.exito === false && res.error && !metodosSilenciosos.includes(nombreMetodo)) {
           toast.error(res.error, {

@@ -4,6 +4,7 @@ import json
 import os
 import re
 import unicodedata
+from contextlib import contextmanager
 from datetime import date, datetime, time, timedelta
 from decimal import Decimal
 from functools import lru_cache
@@ -11,12 +12,15 @@ from pathlib import Path
 from threading import Lock
 from uuid import UUID
 
-from error_handler import DatabaseTransactionError, PermisoDenegadoError, RegistroNoEncontradoError, ValidacionError
+import psycopg2
+
+from error_handler import AppBaseException, DatabaseTransactionError, PermisoDenegadoError, RegistroNoEncontradoError, ValidacionError
 from postgres_db import obtener_cursor_pg
 from postgres_models import (
     UsuarioSueldoCreate, ErrorRemotoCreate, ProyectoCreate, ProyectoUpdate,
     AsistenciaCreate, RosterCreate, RosterUpdate, RosterResponse,
-    LiquidacionResponse, TarifaRosterCreate, UsuarioSueldoUpdate, ConfiguracionSueldoUpdate
+    LiquidacionResponse, TarifaRosterCreate, UsuarioSueldoUpdate, ConfiguracionSueldoUpdate,
+    SugerenciaCreate, SugerenciaFiltros, SugerenciaResponse, SugerenciaUpdate
 )
 
 _sesion = None
@@ -1498,3 +1502,125 @@ def marcar_todos_errores_remotos_resueltos(id_admin):
             RETURNING id_error""", (admin_uuid,))
         afectados = len(cur.fetchall())
     return {"exito": True, "resueltos": afectados, "mensaje": f"{afectados} error(es) marcados como resueltos."}
+
+
+_COLUMNAS_SUGERENCIAS = """
+    id_participacion, nombre, tipo_sugerencia, descripcion_sugerencia, fecha_hora_registro,
+    estado_revision, nivel_urgencia, respuesta, fecha_hora_resolucion
+"""
+
+
+# [FN-06.10] Usar el pool sin registrar detalles SQL con texto del buzón
+@contextmanager
+def _cursor_sugerencias(commit=False):
+    with obtener_cursor_pg(commit=commit) as cur:
+        try:
+            yield cur
+        except (psycopg2.OperationalError, psycopg2.InterfaceError):
+            raise
+        except psycopg2.Error:
+            raise DatabaseTransactionError("No se pudo completar la operación del buzón.") from None
+
+
+# [FN-06.10] Envío anónimo o identificado con valores iniciales de PostgreSQL
+def crear_sugerencia(datos):
+    modelo = SugerenciaCreate.model_validate(datos)
+    with _cursor_sugerencias(commit=True) as cur:
+        cur.execute("""
+            INSERT INTO app_rrhh.b_2_participacion_consulta
+                (nombre, tipo_sugerencia, descripcion_sugerencia)
+            VALUES (%s, %s, %s)
+            RETURNING id_participacion
+        """, (modelo.nombre, modelo.tipo_sugerencia, modelo.descripcion_sugerencia))
+        return {"id_participacion": str(cur.fetchone()["id_participacion"])}
+
+
+# [FN-06.10] Página filtrada y contadores globales de la bandeja
+def obtener_sugerencias(filtros):
+    modelo = SugerenciaFiltros.model_validate(filtros)
+    termino = modelo.busqueda.replace("!", "!!").replace("%", "!%").replace("_", "!_")
+    parametros = {
+        "patron": f"%{termino}%" if termino else None,
+        "estado": modelo.estado_revision,
+        "urgencia": modelo.nivel_urgencia,
+        "limite": modelo.limite,
+        "desplazamiento": (modelo.pagina - 1) * modelo.limite,
+    }
+    filtro = """
+        (%(estado)s::app_rrhh.estado_revision_participacion IS NULL OR estado_revision = %(estado)s)
+        AND (%(urgencia)s::app_rrhh.nivel_urgencia_participacion IS NULL OR nivel_urgencia = %(urgencia)s)
+        AND (%(patron)s::text IS NULL
+             OR nombre ILIKE %(patron)s ESCAPE '!'
+             OR (nombre = 'Anonimo' AND 'Anónimo' ILIKE %(patron)s ESCAPE '!')
+             OR tipo_sugerencia ILIKE %(patron)s ESCAPE '!'
+             OR descripcion_sugerencia ILIKE %(patron)s ESCAPE '!')
+    """
+    with _cursor_sugerencias() as cur:
+        cur.execute(f"""
+            WITH resumen AS (
+                SELECT COUNT(*) FILTER (WHERE {filtro}) AS total,
+                       COUNT(*) FILTER (WHERE estado_revision = 'nueva') AS nuevas,
+                       COUNT(*) FILTER (WHERE nivel_urgencia = 'urgente'
+                                          AND estado_revision <> 'resuelta') AS urgentes_abiertas,
+                       COUNT(*) FILTER (WHERE estado_revision = 'para aplicar') AS para_aplicar,
+                       COUNT(*) FILTER (WHERE estado_revision = 'resuelta') AS resueltas
+                FROM app_rrhh.b_2_participacion_consulta
+            ), pagina AS (
+                SELECT {_COLUMNAS_SUGERENCIAS}
+                FROM app_rrhh.b_2_participacion_consulta
+                WHERE {filtro}
+                ORDER BY fecha_hora_registro DESC, id_participacion DESC
+                LIMIT %(limite)s OFFSET %(desplazamiento)s
+            )
+            SELECT resumen.total,
+                   to_jsonb(resumen) - 'total' AS contadores,
+                   COALESCE((
+                       SELECT jsonb_agg(pagina ORDER BY fecha_hora_registro DESC, id_participacion DESC)
+                       FROM pagina
+                   ), '[]'::jsonb) AS sugerencias
+            FROM resumen
+        """, parametros)
+        resultado = cur.fetchone()
+    return {
+        "sugerencias": [
+            SugerenciaResponse.model_validate(fila).model_dump(mode="json")
+            for fila in resultado["sugerencias"]
+        ],
+        "total": resultado["total"],
+        "contadores": resultado["contadores"],
+    }
+
+
+# [FN-06.10] Gestionar una sugerencia sin sobrescribir una edición concurrente
+def actualizar_sugerencia(datos):
+    modelo = SugerenciaUpdate.model_validate(datos)
+    original = modelo.original
+    respuesta = modelo.respuesta
+    if respuesta != original.respuesta:
+        respuesta = (respuesta or "").strip() or None
+    identificador = str(modelo.id_participacion)
+
+    with _cursor_sugerencias(commit=True) as cur:
+        cur.execute(f"""
+            UPDATE app_rrhh.b_2_participacion_consulta
+            SET estado_revision = %s, nivel_urgencia = %s, respuesta = %s
+            WHERE id_participacion = %s
+              AND estado_revision = %s AND nivel_urgencia = %s
+              AND respuesta IS NOT DISTINCT FROM %s
+            RETURNING {_COLUMNAS_SUGERENCIAS}
+        """, (
+            modelo.estado_revision, modelo.nivel_urgencia, respuesta, identificador,
+            original.estado_revision, original.nivel_urgencia, original.respuesta,
+        ))
+        actualizado = cur.fetchone()
+        if actualizado is None:
+            cur.execute("""
+                SELECT 1 FROM app_rrhh.b_2_participacion_consulta WHERE id_participacion = %s
+            """, (identificador,))
+            if cur.fetchone() is None:
+                raise RegistroNoEncontradoError("La sugerencia no existe.")
+            raise AppBaseException(
+                "Otro usuario actualizó la sugerencia. Recargá el registro antes de guardar.",
+                codigo_error="ERROR_CONCURRENCIA",
+            )
+        return SugerenciaResponse.model_validate(actualizado).model_dump(mode="json")

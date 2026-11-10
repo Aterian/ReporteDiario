@@ -246,3 +246,9 @@ export const puedeGestionarProyectos = (usuario) => {
   const rol = getRolUsuario(usuario);
   return rol === 'admin';
 };
+
+// [FN-06.10] Acceso a la gestión de sugerencias
+export const puedeGestionarSugerencias = (usuario) => {
+  const rol = getRolUsuario(usuario);
+  return rol === 'admin' || rol === 'sub_admin' || rol === 'core';
+};
