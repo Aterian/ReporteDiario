@@ -732,3 +732,14 @@
   1. Acceso restringido exclusivamente a usuarios con `rol_app = 'admin'`.
   2. La exportación a archivo JSON se genera en el navegador del cliente mediante Blob descargable sin sobrecargar el backend.
   3. La resolución masiva (`marcar_todos_errores_remotos_resueltos`) actualiza atómicamente todos los registros pendientes asignando `resuelto = TRUE` y `resuelto_por = id_admin`.
+
+## [FN-02.08] Sincronización In-Place de Edición de Roster y Resolución de Proyectos en Historial
+- **Módulo**: [MOD-02] / [MOD-07] Gestión de Roster, Historiales y Triggers PostgreSQL
+- **Flujo Operativo**: Permite editar el proyecto, fechas o tipo de turnos de Roster y registros individuales en el historial (incluyendo aquellos originados por Roster) y eliminarlos lógicamente desde Gantt y tablas de historial sin violaciones de clave foránea en auditoría.
+- **Tablas afectadas**: `app_rrhh.b_1_roster`, `app_rrhh.b_1_asistencias`, `app_rrhh.b_1_modificaciones_realizadas`.
+- **Reglas de negocio e invariantes**:
+  1. `fn_sincronizar_asistencias_desde_roster` actualiza in-place las asistencias activas dentro de `[fecha_inicio, fecha_fin]` preservando `id_asistencia` y `costo_manual`, marca `eliminado_en` en los días que quedan fuera del nuevo rango e inserta solo las fechas faltantes con `lugar = 'roster'`.
+  2. `fn_registrar_modificacion_asistencia` inserta `id_asistencia = NULL` en `TG_OP = 'DELETE'` conservando el UUID original en `valores_anteriores`.
+  3. `modificar_registro` descarta `id_proyecto` residual cuando cambia `servicio` o `lugar`, permitiendo reasignar proyectos o áreas sin colisión con el proyecto previo.
+  4. Las validaciones de solapamiento de Roster filtran `eliminado_en IS NULL`.
+

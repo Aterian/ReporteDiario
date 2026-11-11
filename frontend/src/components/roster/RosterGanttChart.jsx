@@ -619,8 +619,8 @@ export default function RosterGanttChart({
                 <button
                   type="button"
                   className="btn-modal-delete"
-                  disabled
-                  onClick={onEliminarTurno} title="Eliminación bloqueada hasta disponer de borrado lógico"
+                  disabled={guardandoEdit || eliminandoEdit}
+                  onClick={onEliminarTurno} title="Eliminar este turno de Roster"
                   style={{
                     background: 'transparent',
                     border: '1px solid #ef4444',

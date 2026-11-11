@@ -1579,4 +1579,54 @@ def test_obtener_sesion_activa_conserva_sesion_ante_fallo_red_arranque(monkeypat
     assert archivo_sesion.exists()
 
 
+# [FN-02.08] Al cambiar el proyecto en modificar_registro, ignorar id_proyecto viejo y resolver el nuevo servicio
+def test_modificar_registro_cambia_proyecto_ignorando_id_proyecto_viejo(monkeypatch):
+    id_asist = str(uuid4())
+    proy_viejo = str(uuid4())
+    proy_nuevo = str(uuid4())
+
+    monkeypatch.setattr(db, "obtener_sesion_activa", lambda: {"id_usuario": USUARIO, "rol_app": "admin", "nombre": "Admin RRHH"})
+    monkeypatch.setattr(db, "resolver_usuario", lambda _: {"id_usuario": USUARIO, "nombre": "Admin RRHH"})
+    monkeypatch.setattr(db, "obtener_proyectos_cache", lambda: [
+        {"id_proyecto": proy_viejo, "denominacion": "Proyecto Viejo"},
+        {"id_proyecto": proy_nuevo, "denominacion": "Proyecto Nuevo"},
+    ])
+    monkeypatch.setattr(db, "consultar_asistencias", lambda id_asistencia=None, **_: [{
+        "id": id_asist,
+        "id_asistencia": id_asist,
+        "id_empleado": USUARIO,
+        "empleado": "Admin RRHH",
+        "fecha": "2026-10-15",
+        "tipo_ocf": "Campo",
+        "lugar": "Campo",
+        "modalidad": "obra",
+        "feriado": "NO",
+        "dedicado_a": "proyectos",
+        "id_proyecto": proy_viejo,
+        "servicio": "Proyecto Viejo",
+        "horas": 8,
+        "costo_manual": False,
+    }])
+
+    capturado = {}
+    def fake_modificar_asistencia(m, operador, administrador=False):
+        capturado["modelo"] = m
+        return {"id": id_asist, "costo_dia": "20000.00"}
+
+    monkeypatch.setattr(db, "modificar_asistencia", fake_modificar_asistencia)
+
+    res = ApiPuente().modificar_registro({
+        "id": id_asist,
+        "fecha": "2026-10-15",
+        "tipo_ocf": "Campo",
+        "lugar": "Campo",
+        "servicio": "Proyecto Nuevo",
+        "id_proyecto": proy_viejo,
+        "horas": 8,
+    })
+    assert res["exito"] is True
+    assert str(capturado["modelo"].id_proyecto) == proy_nuevo
+
+
+
 

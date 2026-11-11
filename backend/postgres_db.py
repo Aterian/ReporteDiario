@@ -46,14 +46,10 @@ def _registrar_uso_conexion(conn, timestamp=None):
 def _obtener_ultimo_uso(conn):
     if conn is None:
         return None
-    try:
-        d = getattr(conn, "__dict__", None)
-        if isinstance(d, dict) and "_ultimo_uso_monotonic" in d:
-            val = d["_ultimo_uso_monotonic"]
-            if isinstance(val, (int, float)):
-                return val
-    except Exception:
-        pass
+    d = getattr(conn, "__dict__", None)
+    if isinstance(d, dict):
+        val = d.get("_ultimo_uso_monotonic")
+        return val if isinstance(val, (int, float)) else None
     try:
         key = id(conn)
         with _ultimos_usos_lock:

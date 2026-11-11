@@ -2,6 +2,22 @@
 
 Historial cronológico de cambios, nuevas características y mejoras aplicadas al sistema **Check Diario Ingeap**.
 
+## [2.13.1] - 2026-11-11
+
+### 🛠️ Corrección en Edición y Eliminación de Turnos de Roster y Asistencias ([FN-02.08])
+- **Resolución de Error de Integridad FK en Auditoría (Migración SQL 008)**:
+  - En `app_rrhh.fn_registrar_modificacion_asistencia()`, inserción de `id_asistencia = NULL` ante operaciones de borrado físico (`TG_OP = 'DELETE'`), preservando el UUID de la asistencia dentro de `valores_anteriores` en JSONB.
+  - En `app_rrhh.fn_sincronizar_asistencias_desde_roster()`, actualización *in-place* de las asistencias asociadas al turno al editar proyecto, fechas o modalidad sin destruirlas con `DELETE`, preservando sus identificadores, recargos y costos manuales intactos.
+  - Se recreó el trigger `trg_generar_asistencias_roster` para monitorear `eliminado_en`, garantizando cascada de soft-delete automática desde el turno hacia sus asistencias diarias.
+- **Backend y Repositorio PostgreSQL**:
+  - Habilitada la edición y eliminación individual de registros en los historiales (`modificar_asistencia` y `eliminar_registro_asistencia`) aun cuando posean un `id_roster` asociado, permitiendo corregir imputaciones y desvincularlas hacia área u oficina si correspondiera.
+  - En `modificar_registro`, depuración del `id_proyecto` anterior al cambiar el selector de proyecto o modalidad, resolviendo siempre el nuevo proyecto o área seleccionada.
+  - En `guardar_rosters_atomicos` y `crear_rosters_desde_asistencias`, incorporación del filtro `AND (eliminado_en IS NULL)` en consultas de solapamiento de fechas.
+  - Eliminada firma duplicada de `eliminar_roster` en `postgres_bridge.py` que anulaba permisos de administrador.
+- **Frontend y Experiencia de Usuario**:
+  - Habilitado el botón `🗑️ Eliminar Turno` en el modal de edición de Roster en `RosterGanttChart.jsx`.
+  - Limpieza automática de `id_proyecto` y actualización reactiva de `modalidad` y `feriado` en los modales de edición de `HistoryView.jsx` y `HistoryEditRecordModal.jsx`.
+
 ## [2.13.0] - 2026-11-10
 
 ### Buzón de sugerencias y gestión ([FN-06.10])

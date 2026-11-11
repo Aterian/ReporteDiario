@@ -357,11 +357,12 @@ def guardar_rosters_atomicos(lista_datos, operador):
         for m in modelos:
             identificador = str(m.id_roster) if isinstance(m,RosterUpdate) else None
             if identificador:
-                cur.execute("SELECT id_roster FROM app_rrhh.b_1_roster WHERE id_roster=%s FOR UPDATE",(identificador,))
+                cur.execute("SELECT id_roster FROM app_rrhh.b_1_roster WHERE id_roster=%s AND (eliminado_en IS NULL) FOR UPDATE",(identificador,))
                 if not cur.fetchone():
                     raise RegistroNoEncontradoError("No se encontró el turno a modificar.")
             cur.execute("""SELECT id_roster FROM app_rrhh.b_1_roster WHERE id_usuario=%s
-                AND fecha_inicio<=%s AND fecha_fin>=%s AND (%s::uuid IS NULL OR id_roster<>%s::uuid) LIMIT 1""",
+                AND fecha_inicio<=%s AND fecha_fin>=%s AND (%s::uuid IS NULL OR id_roster<>%s::uuid)
+                AND (eliminado_en IS NULL) LIMIT 1""",
                 (str(m.id_usuario),m.fecha_fin,m.fecha_inicio,identificador,identificador))
             if cur.fetchone():
                 raise ValidacionError("El empleado ya tiene un turno que se superpone con estas fechas.")
@@ -426,8 +427,6 @@ def eliminar_registro_asistencia(id_registro, operador="", administrador=False):
         fila = cur.fetchone()
         if not fila:
             raise RegistroNoEncontradoError("No se encontró la asistencia o ya fue eliminada.")
-        if fila["id_roster"] is not None:
-            raise ValidacionError("Esta asistencia pertenece a un turno de Roster. Debe eliminar el turno desde el módulo de Roster.")
         if not administrador and str(fila["id_usuario"]) != str(operador_uid):
             raise PermisoDenegadoError("Solo puede eliminar sus propios registros de asistencia.")
         cur.execute("SELECT id_usuario FROM app_rrhh.a_1_usuarios WHERE id_usuario=%s FOR UPDATE", (str(fila["id_usuario"]),))
@@ -491,12 +490,16 @@ def preparar_asistencias(datos, usuario, permitir_costo_manual=False):
         for detalle in datos.get("proyectos") or [datos]:
             d = {**datos,**detalle}
             servicio = normalizar_texto(d.get("servicio"))
-            tiene_proyecto = bool(d.get("id_proyecto") or any(normalizar_texto(p["denominacion"]) == servicio for p in proyectos))
+            coincide_proyecto = any(normalizar_texto(p["denominacion"]) == servicio for p in proyectos)
+            tiene_proyecto = bool(d.get("id_proyecto") or coincide_proyecto)
+            es_area_corporativa = (servicio in ("ingenieria","mensura","sig","administracion","comercial","recursos humanos","area","i","m","g","a","c","r")
+                                   and not coincide_proyecto)
             es_area = (estado in ("vacaciones","licencia") or servicio.startswith("dedicado al") or
                        servicio in ("","campo","oficina","franco") or servicio.startswith("tiempo dedicado al") or
+                       es_area_corporativa or
                        (not tiene_proyecto and d.get("dedicado_a") == "areas"))
             if not es_area and not d.get("proyecto") and not d.get("id_proyecto"):
-                es_area = not any(normalizar_texto(p["denominacion"]) == servicio for p in proyectos)
+                es_area = not coincide_proyecto
                 if es_area and estado == "activo" and "area" not in d:
                     raise ValidacionError("La imputación no coincide con un proyecto ni con un área.")
             proyecto = None if es_area else resolver_proyecto(d,proyectos)
@@ -685,20 +688,21 @@ def consultar_asistencias(empleado="",mes_anio="",id_asistencia=None,limite=None
 def modificar_asistencia(m,operador,administrador=False):
     with obtener_cursor_pg(commit=True) as cur:
         cur.execute("SELECT id_usuario FROM app_rrhh.a_1_usuarios WHERE id_usuario=%s FOR UPDATE",(str(m.id_usuario),))
-        cur.execute("SELECT id_usuario,id_roster FROM app_rrhh.b_1_asistencias WHERE id_asistencia=%s FOR UPDATE",(str(m.id_asistencia),))
+        cur.execute("SELECT id_usuario,id_roster FROM app_rrhh.b_1_asistencias WHERE id_asistencia=%s AND (eliminado_en IS NULL) FOR UPDATE",(str(m.id_asistencia),))
         fila = cur.fetchone()
         if not fila:
             raise RegistroNoEncontradoError()
-        if fila["id_roster"] is not None:
-            raise ValidacionError("Edite este registro desde su turno de Roster.")
         if not administrador and (str(fila["id_usuario"])!=operador or str(m.id_usuario)!=operador):
             raise PermisoDenegadoError()
+        mantiene_roster = bool(fila["id_roster"] is not None and m.lugar != "oficina" and m.dedicado_a == "proyectos")
+        lugar_final = "roster" if (mantiene_roster and m.lugar == "obra") else m.lugar
+        id_roster_final = str(fila["id_roster"]) if mantiene_roster else None
         cur.execute("""UPDATE app_rrhh.b_1_asistencias SET id_usuario=%s,fecha=%s,activo_franco=%s,lugar=%s,tipo_dia=%s,
-            dedicado_a=%s,hora_inicio=%s,hora_fin=%s,horas_dedicadas=%s,id_proyecto=%s,costo_manual=%s,
+            dedicado_a=%s,hora_inicio=%s,hora_fin=%s,horas_dedicadas=%s,id_proyecto=%s,id_roster=%s,costo_manual=%s,
             costo_dia=CASE WHEN %s THEN %s ELSE costo_dia END,cargado_por=%s WHERE id_asistencia=%s
             RETURNING id_asistencia AS id,costo_dia""",
-            (str(m.id_usuario),m.fecha,m.activo_franco.value,m.lugar,m.tipo_dia,m.dedicado_a,m.hora_inicio,m.hora_fin,
-             m.horas_dedicadas,str(m.id_proyecto) if m.id_proyecto else None,m.costo_manual,m.costo_manual,m.costo_dia,operador,str(m.id_asistencia)))
+            (str(m.id_usuario),m.fecha,m.activo_franco.value,lugar_final,m.tipo_dia,m.dedicado_a,m.hora_inicio,m.hora_fin,
+             m.horas_dedicadas,str(m.id_proyecto) if m.id_proyecto else None,id_roster_final,m.costo_manual,m.costo_manual,m.costo_dia,operador,str(m.id_asistencia)))
         res = serializar(cur.fetchone())
         invalidar_caches_repositorio(('usuarios', True))
         return res
@@ -1109,14 +1113,14 @@ def crear_rosters_desde_asistencias(lista_datos, operador):
             uid = str(m.id_usuario)
             pid = str(m.id_proyecto)
             cur.execute("""SELECT id_roster FROM app_rrhh.b_1_roster WHERE id_usuario=%s
-                AND fecha_inicio<=%s AND fecha_fin>=%s LIMIT 1""", (uid, m.fecha_fin, m.fecha_inicio))
+                AND fecha_inicio<=%s AND fecha_fin>=%s AND (eliminado_en IS NULL) LIMIT 1""", (uid, m.fecha_fin, m.fecha_inicio))
             if cur.fetchone():
                 raise ValidacionError(f"El empleado ya posee un turno de Roster entre {m.fecha_inicio} y {m.fecha_fin}.")
             # Consultar asistencias previas en el rango antes de consolidar
             cur.execute("""SELECT fecha, activo_franco, lugar, tipo_dia, hora_inicio, hora_fin,
                 horas_dedicadas, id_proyecto, costo_manual, costo_dia
                 FROM app_rrhh.b_1_asistencias
-                WHERE id_usuario=%s AND fecha>=%s AND fecha<=%s AND id_roster IS NULL""",
+                WHERE id_usuario=%s AND fecha>=%s AND fecha<=%s AND id_roster IS NULL AND (eliminado_en IS NULL)""",
                 (uid, m.fecha_inicio, m.fecha_fin))
             asistencias_previas = cur.fetchall()
 

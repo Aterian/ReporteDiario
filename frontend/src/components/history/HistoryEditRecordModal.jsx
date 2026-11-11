@@ -87,6 +87,11 @@ export default function HistoryEditRecordModal({
                 } else if (nuevoLugar === 'Franco Obra Trabajado' || nuevoLugar === 'Feriado Trabajado') {
                   nuevoServicio = '';
                   nuevasHoras = 8;
+                } else if (['Campo', 'Campaña / Campo', 'Roster'].includes(nuevoLugar)) {
+                  if (!serviciosDisponibles.includes(nuevoServicio)) {
+                    nuevoServicio = '';
+                  }
+                  if (nuevasHoras === 0) nuevasHoras = 8;
                 } else if (nuevoLugar === 'Licencia') {
                   nuevoServicio = 'Licencia Médica';
                   nuevasHoras = 0;
@@ -101,6 +106,8 @@ export default function HistoryEditRecordModal({
                   modalidad: ['Vacaciones', 'Licencia'].includes(nuevoLugar)
                     ? (registroEditando.modalidad === 'obra' ? 'obra' : 'oficina')
                     : (['Campo', 'Campaña / Campo', 'Roster', 'Franco Obra', 'Franco de Obra', 'Franco Obra Trabajado', 'Feriado Trabajado'].includes(nuevoLugar) ? 'obra' : 'oficina'),
+                  feriado: nuevoLugar === 'Feriado Trabajado' ? 'SI' : 'NO',
+                  id_proyecto: '',
                   servicio: nuevoServicio,
                   horas: nuevasHoras
                 });
@@ -135,7 +142,8 @@ export default function HistoryEditRecordModal({
                 onChange={(e) => {
                   setRegistroEditando({
                     ...registroEditando,
-                    servicio: e.target.value
+                    servicio: e.target.value,
+                    id_proyecto: ''
                   });
                 }}
                 required
@@ -157,7 +165,7 @@ export default function HistoryEditRecordModal({
               <select
                 className="form-select form-select-clean"
                 value={registroEditando.servicio || ''}
-                onChange={(e) => setRegistroEditando({ ...registroEditando, servicio: e.target.value })}
+                onChange={(e) => setRegistroEditando({ ...registroEditando, servicio: e.target.value, id_proyecto: '' })}
                 required
               >
                 <option value="">-- Seleccionar asignación de Franco --</option>
@@ -195,7 +203,7 @@ export default function HistoryEditRecordModal({
               <select
                 className="form-select form-select-clean"
                 value={registroEditando.servicio || 'Tiempo dedicado al Área'}
-                onChange={(e) => setRegistroEditando({ ...registroEditando, servicio: e.target.value })}
+                onChange={(e) => setRegistroEditando({ ...registroEditando, servicio: e.target.value, id_proyecto: '' })}
                 required
               >
                 <optgroup label="Tareas y Áreas Internas">

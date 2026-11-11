@@ -93,6 +93,15 @@ def main():
             errores_y_proy = ROOT/"backend"/"sql"/"005_errores_remotos_y_gestion_proyectos.sql"
             if errores_y_proy.exists():
                 cur.execute(errores_y_proy.read_text(encoding="utf-8"))
+            borrado_logico = ROOT/"backend"/"sql"/"006_borrado_logico_asistencias_y_roster.sql"
+            if borrado_logico.exists():
+                cur.execute(borrado_logico.read_text(encoding="utf-8"))
+            corr_id_sueldo = ROOT/"backend"/"sql"/"007_corregir_id_sueldo_recalcular_liquidacion.sql"
+            if corr_id_sueldo.exists():
+                cur.execute(corr_id_sueldo.read_text(encoding="utf-8"))
+            corr_edicion_roster = ROOT/"backend"/"sql"/"008_corregir_edicion_eliminacion_roster_y_asistencias.sql"
+            if corr_edicion_roster.exists():
+                cur.execute(corr_edicion_roster.read_text(encoding="utf-8"))
     fixture = ROOT/"backend"/"tests"/"fixtures"/"postgres_schema.sql"
     fixture.parent.mkdir(parents=True,exist_ok=True)
     fixture.write_text("-- [FN-07.10] Estructura introspectada para pruebas aisladas; no contiene datos\n"+estructura.replace("\r\n","\n"),encoding="utf-8",newline="\n")

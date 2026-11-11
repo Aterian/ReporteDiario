@@ -249,19 +249,26 @@ class ApiPuente:
         if datos.get("empleado") and datos["empleado"] != anterior["empleado"] and not datos.get("id_empleado"):
             combinado["id_empleado"] = usuario["id_usuario"]
         if "servicio" in datos and datos["servicio"] != anterior["servicio"]:
-            combinado["id_proyecto"] = datos.get("id_proyecto") or None
+            id_proy_entrante = datos.get("id_proyecto") or None
+            if not id_proy_entrante or str(id_proy_entrante) == str(anterior.get("id_proyecto") or ""):
+                combinado["id_proyecto"] = None
+            else:
+                combinado["id_proyecto"] = id_proy_entrante
             combinado.pop("dedicado_a", None)
         elif not datos.get("id_proyecto"):
             combinado["id_proyecto"] = anterior.get("id_proyecto")
-        # Preservar o inferir modalidad coherentemente
-        if not datos.get("modalidad"):
-            nuevo_lugar = str(datos.get("tipo_ocf") or datos.get("lugar") or "").strip()
-            if nuevo_lugar in ("Campo", "Campaña / Campo", "Roster", "Franco Obra", "Franco de Obra", "Franco Obra Trabajado"):
-                combinado["modalidad"] = "obra"
-            elif nuevo_lugar in ("Oficina", "Franco", "Franco Ofic Trabajado"):
-                combinado["modalidad"] = "oficina"
-            elif anterior.get("modalidad"):
-                combinado["modalidad"] = anterior["modalidad"]
+        # Preservar o inferir modalidad coherentemente según el nuevo lugar
+        nuevo_lugar = str(datos.get("tipo_ocf") or datos.get("lugar") or "").strip()
+        if nuevo_lugar in ("Campo", "Campaña / Campo", "Roster", "Franco Obra", "Franco de Obra", "Franco Obra Trabajado"):
+            combinado["modalidad"] = "obra"
+            combinado.pop("dedicado_a", None)
+        elif nuevo_lugar in ("Oficina", "Franco Ofic Trabajado", "Franco Trabajado"):
+            combinado["modalidad"] = "oficina"
+            combinado.pop("dedicado_a", None)
+        elif not datos.get("modalidad") and anterior.get("modalidad"):
+            combinado["modalidad"] = anterior["modalidad"]
+        if "feriado" not in datos and nuevo_lugar and nuevo_lugar != "Feriado Trabajado":
+            combinado["feriado"] = "NO"
         if "costo_manual" in datos:
             combinado["costo_manual"] = bool(datos["costo_manual"]) if admin else False
             if combinado["costo_manual"]:
@@ -465,12 +472,8 @@ class ApiPuente:
         return db.obtener_rosters(fecha_desde,fecha_hasta)
 
     def purgar_rosters_locales(self):
-        self._sesion(admin=True)
-        return db.eliminar_registro_roster("")
-
-    def eliminar_roster(self, id_roster: str):
-        self._sesion(admin=True)
-        return db.eliminar_registro_roster(id_roster)
+        sesion = self._sesion(admin=True)
+        return db.eliminar_registro_roster("", operador=sesion["id_usuario"], administrador=True)
 
     def _destino_excel(self,nombre):
         if not self._ventana:

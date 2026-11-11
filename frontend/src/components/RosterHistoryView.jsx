@@ -236,7 +236,7 @@ export default function RosterHistoryView({ usuario, onVolver, onNuevoRoster, te
         setMensaje({ tipo: 'exito', texto: 'Registro eliminado correctamente.' });
         await cargarRegistrosMes(anioSeleccionado, mesSeleccionado);
       } else {
-        setMensaje({ tipo: 'error', texto: 'No se pudo eliminar el registro.' });
+        setMensaje({ tipo: 'error', texto: res?.error || 'No se pudo eliminar el registro.' });
       }
     } catch (err) {
       console.error(err);

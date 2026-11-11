@@ -126,7 +126,7 @@ CREATE TABLE "app_rrhh"."b_1_tarifas_roster" ("id_tarifa" uuid DEFAULT gen_rando
 "eliminado_por" uuid);
 
 CREATE TABLE "app_rrhh"."b_1_modificaciones_realizadas" ("id_modificacion" uuid DEFAULT gen_random_uuid() NOT NULL,
-"id_asistencia" uuid NOT NULL,
+"id_asistencia" uuid,
 "id_usuario" uuid NOT NULL,
 "fecha_asistencia" date NOT NULL,
 "tipo_operacion" app_rrhh.tipo_operacion_auditoria NOT NULL,
@@ -139,6 +139,7 @@ CREATE TABLE "app_rrhh"."b_1_modificaciones_realizadas" ("id_modificacion" uuid 
 "revisado_por" uuid,
 "fecha_hora_revision" timestamp with time zone);
 ALTER TABLE "app_rrhh"."b_1_modificaciones_realizadas" ADD CONSTRAINT "b_1_modificaciones_realizadas_pkey" PRIMARY KEY (id_modificacion);
+ALTER TABLE "app_rrhh"."b_1_modificaciones_realizadas" ADD CONSTRAINT "b_1_modificaciones_realizadas_id_asistencia_fkey" FOREIGN KEY (id_asistencia) REFERENCES app_rrhh.b_1_asistencias(id_asistencia) ON DELETE SET NULL;
 ALTER TABLE "app_rrhh"."b_1_modificaciones_realizadas" ADD CONSTRAINT "b_1_modificaciones_realizadas_id_usuario_fkey" FOREIGN KEY (id_usuario) REFERENCES app_rrhh.a_1_usuarios(id_usuario) ON DELETE RESTRICT;
 ALTER TABLE "app_rrhh"."b_1_modificaciones_realizadas" ADD CONSTRAINT "b_1_modificaciones_realizadas_modificado_por_fkey" FOREIGN KEY (modificado_por) REFERENCES app_rrhh.a_1_usuarios(id_usuario) ON DELETE SET NULL;
 ALTER TABLE "app_rrhh"."b_1_modificaciones_realizadas" ADD CONSTRAINT "b_1_modificaciones_realizadas_revisado_por_fkey" FOREIGN KEY (revisado_por) REFERENCES app_rrhh.a_1_usuarios(id_usuario) ON DELETE SET NULL;
@@ -692,107 +693,101 @@ CREATE OR REPLACE FUNCTION app_rrhh.fn_sincronizar_asistencias_desde_roster()
  RETURNS trigger
  LANGUAGE plpgsql
 AS $function$
-
 DECLARE
-
-    v_lugar app_rrhh.modalidad_lugar;
-
-    v_horas NUMERIC(4, 2);
-
-    v_preservados JSONB;
-
+    v_horas_default NUMERIC(4, 2);
 BEGIN
-
-    IF TG_OP = 'UPDATE' THEN
-
-        SELECT COALESCE(jsonb_agg(jsonb_build_object(
-            'fecha', fecha,
-            'costo_manual', costo_manual,
-            'costo_dia', costo_dia,
-            'tipo_dia', tipo_dia::text,
-            'hora_inicio', hora_inicio,
-            'hora_fin', hora_fin,
-            'horas_dedicadas', horas_dedicadas
-        )), '[]'::jsonb)
-        INTO v_preservados
-        FROM app_rrhh.b_1_asistencias
+    IF TG_OP = 'UPDATE' AND OLD.eliminado_en IS NULL AND NEW.eliminado_en IS NOT NULL THEN
+        UPDATE app_rrhh.b_1_asistencias
+        SET eliminado_en = NEW.eliminado_en,
+            eliminado_por = COALESCE(NEW.eliminado_por, NEW.cargado_por)
         WHERE id_roster = NEW.id_roster
-          AND costo_manual = TRUE
-          AND fecha >= NEW.fecha_inicio
-          AND fecha <= NEW.fecha_fin;
-
-        DELETE FROM app_rrhh.b_1_asistencias WHERE id_roster = NEW.id_roster;
-
+          AND eliminado_en IS NULL;
+        RETURN NEW;
     END IF;
 
-    IF NEW.tipo_turno = 'activo' THEN
+    IF NEW.eliminado_en IS NOT NULL THEN
+        RETURN NEW;
+    END IF;
 
-        v_lugar := 'roster';
+    v_horas_default := CASE WHEN NEW.tipo_turno = 'activo' THEN 8.00 ELSE 0.00 END;
 
-        v_horas := 8.00;
+    IF TG_OP = 'UPDATE' AND OLD.eliminado_en IS NOT NULL AND NEW.eliminado_en IS NULL THEN
+        UPDATE app_rrhh.b_1_asistencias
+        SET eliminado_en = NULL,
+            eliminado_por = NULL
+        WHERE id_roster = NEW.id_roster
+          AND fecha >= NEW.fecha_inicio
+          AND fecha <= NEW.fecha_fin;
+    END IF;
 
-    ELSE
+    IF TG_OP = 'UPDATE' THEN
+        UPDATE app_rrhh.b_1_asistencias
+        SET eliminado_en = TIMEZONE('utc', NOW()),
+            eliminado_por = COALESCE(NEW.cargado_por, OLD.cargado_por)
+        WHERE id_roster = NEW.id_roster
+          AND eliminado_en IS NULL
+          AND (fecha < NEW.fecha_inicio OR fecha > NEW.fecha_fin);
 
-        v_lugar := 'roster';
-
-        v_horas := 0.00;
-
+        UPDATE app_rrhh.b_1_asistencias
+        SET id_usuario = NEW.id_usuario,
+            id_proyecto = NEW.id_proyecto,
+            activo_franco = NEW.tipo_turno,
+            lugar = 'roster'::app_rrhh.modalidad_lugar,
+            dedicado_a = 'proyectos'::app_rrhh.tipo_dedicacion,
+            tipo_dia = CASE
+                WHEN NEW.tipo_turno = 'activo' THEN tipo_dia
+                ELSE 'dia_normal'::app_rrhh.clasificacion_dia
+            END,
+            horas_dedicadas = CASE
+                WHEN NEW.tipo_turno = 'activo' THEN
+                    CASE WHEN COALESCE(horas_dedicadas, 0) > 0 THEN horas_dedicadas ELSE 8.00 END
+                ELSE 0.00
+            END,
+            cargado_por = COALESCE(NEW.cargado_por, cargado_por)
+        WHERE id_roster = NEW.id_roster
+          AND eliminado_en IS NULL
+          AND fecha >= NEW.fecha_inicio
+          AND fecha <= NEW.fecha_fin;
     END IF;
 
     INSERT INTO app_rrhh.b_1_asistencias (
-
-        id_usuario, fecha, activo_franco, lugar, tipo_dia,
-
-        dedicado_a, horas_dedicadas, id_proyecto, id_roster, cargado_por
-
+        id_usuario,
+        fecha,
+        activo_franco,
+        lugar,
+        tipo_dia,
+        dedicado_a,
+        hora_inicio,
+        hora_fin,
+        horas_dedicadas,
+        id_proyecto,
+        id_roster,
+        cargado_por
     )
-
     SELECT
-
         NEW.id_usuario,
-
         d::DATE,
-
         NEW.tipo_turno,
-
-        v_lugar,
-
-        'dia_normal',
-
-        'proyectos',
-
-        v_horas,
-
+        'roster'::app_rrhh.modalidad_lugar,
+        'dia_normal'::app_rrhh.clasificacion_dia,
+        'proyectos'::app_rrhh.tipo_dedicacion,
+        NULL,
+        NULL,
+        v_horas_default,
         NEW.id_proyecto,
-
         NEW.id_roster,
-
         NEW.cargado_por
-
-    FROM generate_series(NEW.fecha_inicio, NEW.fecha_fin, '1 day'::interval) AS d;
-
-    IF TG_OP = 'UPDATE' AND v_preservados IS NOT NULL AND jsonb_array_length(v_preservados) > 0 THEN
-
-        UPDATE app_rrhh.b_1_asistencias a
-        SET costo_manual = TRUE,
-            costo_dia = (elem->>'costo_dia')::NUMERIC(12, 2),
-            tipo_dia = COALESCE((elem->>'tipo_dia')::app_rrhh.clasificacion_dia, a.tipo_dia),
-            hora_inicio = COALESCE((elem->>'hora_inicio')::TIME, a.hora_inicio),
-            hora_fin = COALESCE((elem->>'hora_fin')::TIME, a.hora_fin),
-            horas_dedicadas = CASE 
-                WHEN (elem->>'horas_dedicadas')::NUMERIC > 0 THEN (elem->>'horas_dedicadas')::NUMERIC(4, 2)
-                ELSE a.horas_dedicadas
-            END
-        FROM jsonb_array_elements(v_preservados) AS elem
+    FROM generate_series(NEW.fecha_inicio, NEW.fecha_fin, '1 day'::interval) AS d
+    WHERE NOT EXISTS (
+        SELECT 1
+        FROM app_rrhh.b_1_asistencias a
         WHERE a.id_roster = NEW.id_roster
-          AND a.fecha = (elem->>'fecha')::DATE;
+          AND a.fecha = d::DATE
+          AND a.eliminado_en IS NULL
+    );
 
-    END IF;
-
-    RETURN NULL;
-
+    RETURN NEW;
 END;
-
 $function$;
 
 CREATE OR REPLACE FUNCTION app_rrhh.fn_sincronizar_total_adicionales()
@@ -910,11 +905,40 @@ CREATE OR REPLACE FUNCTION app_rrhh.fn_registrar_modificacion_asistencia()
  LANGUAGE plpgsql
 AS $function$
 DECLARE
-    v_cambios TEXT[] := ARRAY[]::TEXT[];
     v_detalle TEXT;
+    v_cambios TEXT[] := ARRAY[]::TEXT[];
     v_autor UUID;
 BEGIN
     IF TG_OP = 'UPDATE' THEN
+        IF OLD.eliminado_en IS NULL AND NEW.eliminado_en IS NOT NULL THEN
+            v_detalle := format(
+                'Registro eliminado lógicamente (Fecha: %s | Estado: %s | Modalidad: %s | Horas: %s | Costo: $%s)',
+                OLD.fecha, OLD.activo_franco, OLD.lugar, OLD.horas_dedicadas, OLD.costo_dia
+            );
+            v_autor := COALESCE(NEW.eliminado_por, NEW.cargado_por, OLD.cargado_por);
+            INSERT INTO app_rrhh.b_1_modificaciones_realizadas (
+                id_asistencia, id_usuario, fecha_asistencia, tipo_operacion,
+                detalle_cambio, valores_anteriores, valores_nuevos, modificado_por
+            ) VALUES (
+                OLD.id_asistencia, OLD.id_usuario, OLD.fecha, 'ELIMINACION',
+                v_detalle, to_jsonb(OLD), to_jsonb(NEW), v_autor
+            );
+            RETURN NEW;
+        END IF;
+
+        IF OLD.eliminado_en IS NOT NULL AND NEW.eliminado_en IS NULL THEN
+            v_detalle := format('Registro restaurado a estado activo (Fecha: %s)', NEW.fecha);
+            v_autor := COALESCE(NEW.cargado_por, OLD.cargado_por);
+            INSERT INTO app_rrhh.b_1_modificaciones_realizadas (
+                id_asistencia, id_usuario, fecha_asistencia, tipo_operacion,
+                detalle_cambio, valores_anteriores, valores_nuevos, modificado_por
+            ) VALUES (
+                OLD.id_asistencia, OLD.id_usuario, OLD.fecha, 'MODIFICACION',
+                v_detalle, to_jsonb(OLD), to_jsonb(NEW), v_autor
+            );
+            RETURN NEW;
+        END IF;
+
         IF OLD.fecha IS DISTINCT FROM NEW.fecha THEN
             v_cambios := array_append(v_cambios, format('Fecha: %s -> %s', OLD.fecha, NEW.fecha));
         END IF;
@@ -962,7 +986,7 @@ BEGIN
 
     ELSIF TG_OP = 'DELETE' THEN
         v_detalle := format(
-            'Registro eliminado (Fecha: %s | Estado: %s | Modalidad: %s | Horas: %s | Costo: $%s)',
+            'Registro eliminado físicamente (Fecha: %s | Estado: %s | Modalidad: %s | Horas: %s | Costo: $%s)',
             OLD.fecha, OLD.activo_franco, OLD.lugar, OLD.horas_dedicadas, OLD.costo_dia
         );
 
@@ -970,8 +994,8 @@ BEGIN
             id_asistencia, id_usuario, fecha_asistencia, tipo_operacion,
             detalle_cambio, valores_anteriores, valores_nuevos, modificado_por
         ) VALUES (
-            OLD.id_asistencia, OLD.id_usuario, OLD.fecha, 'ELIMINACION',
-            v_detalle, to_jsonb(OLD), NULL, OLD.cargado_por
+            NULL, OLD.id_usuario, OLD.fecha, 'ELIMINACION',
+            v_detalle, to_jsonb(OLD), NULL, COALESCE(OLD.eliminado_por, OLD.cargado_por)
         );
 
         RETURN OLD;
@@ -989,7 +1013,7 @@ CREATE TRIGGER trg_calcular_costo_asistencia BEFORE INSERT OR UPDATE OF id_usuar
 
 CREATE TRIGGER trg_calcular_viaticos_roster BEFORE INSERT OR UPDATE OF id_proyecto, id_tarifa, fecha_inicio, fecha_fin, tipo_turno ON app_rrhh.b_1_roster FOR EACH ROW EXECUTE FUNCTION app_rrhh.fn_calcular_viaticos_roster();
 
-CREATE TRIGGER trg_generar_asistencias_roster AFTER INSERT OR UPDATE OF id_usuario, id_proyecto, fecha_inicio, fecha_fin, tipo_turno ON app_rrhh.b_1_roster FOR EACH ROW EXECUTE FUNCTION app_rrhh.fn_sincronizar_asistencias_desde_roster();
+CREATE TRIGGER trg_generar_asistencias_roster AFTER INSERT OR UPDATE OF id_usuario, id_proyecto, fecha_inicio, fecha_fin, tipo_turno, eliminado_en ON app_rrhh.b_1_roster FOR EACH ROW EXECUTE FUNCTION app_rrhh.fn_sincronizar_asistencias_desde_roster();
 
 CREATE TRIGGER trg_guardar_historial_sueldo BEFORE UPDATE ON app_rrhh.a_1_sueldos_base FOR EACH ROW EXECUTE FUNCTION app_rrhh.fn_archivar_historial_sueldo();
 

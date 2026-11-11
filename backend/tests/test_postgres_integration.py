@@ -111,7 +111,7 @@ def test_puente_transaccional(pg_repository):
     assert respuesta["exito"]
     assert api.obtener_historial()[0]["cargado_por_id"] == ids["usuario"]
     assert api.obtener_liquidacion(usuario["nombre"],"2026-10")["liquidacion"]["total_real"] == "20000.00"
-    assert api.eliminar_roster(str(uuid4()))["codigo_error"] == "BORRADO_LOGICO_PENDIENTE"
+    assert api.eliminar_roster(str(uuid4()))["codigo_error"] == "NO_ENCONTRADO"
     assert api.cerrar_sesion()["exito"]
 
 
@@ -368,3 +368,95 @@ def test_modalidad_calculo_sueldo_base_30_vs_por_dia(pg_repository, pg_connectio
     assert liq_feb_pordia["modalidad_calculo"] == "por_dia"
     assert liq_feb_pordia["cant_dias_ofi"] == 28
     assert Decimal(liq_feb_pordia["total_real"]) == Decimal("280000.00")
+
+
+# [FN-02.08] Editar proyecto/fechas y eliminar turno de Roster y asistencias en historial sin violación FK
+def test_edicion_y_eliminacion_roster_y_asistencias_historial(pg_repository, pg_connection):
+    db, ids = pg_repository
+    usuario = db.resolver_usuario(ids["usuario"])
+    db.guardar_sesion_activa(usuario)
+    api = ApiPuente()
+
+    # Crear un segundo proyecto con tarifa activa
+    proyecto_2 = str(uuid4())
+    nombre_proy_2 = "Proyecto Alternativo " + uuid4().hex[:6]
+    with pg_connection.cursor() as cur:
+        cur.execute(
+            "INSERT INTO app_proyectos.b_1_proyectos_servicios (id_proyecto, codificacion_serv) VALUES (%s, %s)",
+            (proyecto_2, nombre_proy_2),
+        )
+        cur.execute(
+            """INSERT INTO app_rrhh.b_1_tarifas_roster
+               (id_proyecto, dia_normal, dia_domingo, subida, bajada, adicional_turno)
+               VALUES (%s, 150, 300, 40, 60, 80)""",
+            (proyecto_2,),
+        )
+    db.invalidar_caches_repositorio()
+
+    # 1. Crear un turno de Roster del 2026-10-10 al 2026-10-13 en el proyecto 1
+    res_crear = api.guardar_roster({
+        "empleado": ids["usuario"],
+        "proyecto": ids["proyecto"],
+        "fecha_inicio": "2026-10-10",
+        "fecha_fin": "2026-10-13",
+        "tipo": "Campo",
+    })
+    assert res_crear["exito"] is True
+    id_roster = res_crear["id"]
+
+    # 2. Editar el turno cambiando al proyecto 2 y acortando fechas al 2026-10-12 (no debe lanzar ForeignKeyViolation)
+    res_edit_roster = api.guardar_roster({
+        "id": id_roster,
+        "empleado": ids["usuario"],
+        "proyecto": nombre_proy_2,
+        "fecha_inicio": "2026-10-10",
+        "fecha_fin": "2026-10-12",
+        "tipo": "Campo",
+    })
+    assert res_edit_roster["exito"] is True, res_edit_roster
+
+    asistencias_oct = db.consultar_asistencias(ids["usuario"], "2026-10")
+    assert len(asistencias_oct) == 3
+    assert {a["id_proyecto"] for a in asistencias_oct} == {proyecto_2}
+    assert {a["servicio"] for a in asistencias_oct} == {nombre_proy_2}
+    assert {a["modalidad"] for a in asistencias_oct} == {"roster"}
+
+    # 3. Editar desde Historial un día puntual proveniente de Roster cambiando de proyecto (enviando id_proyecto viejo como hace el modal)
+    reg_dia = next(a for a in asistencias_oct if a["fecha"] == "2026-10-10")
+    proy_1_nombre = next(p["denominacion"] for p in db.obtener_proyectos_cache() if p["id_proyecto"] == ids["proyecto"])
+    res_mod_hist = api.modificar_registro({
+        "id": reg_dia["id"],
+        "empleado": usuario["nombre"],
+        "fecha": "2026-10-10",
+        "tipo_ocf": "Campo",
+        "lugar": "Campo",
+        "servicio": proy_1_nombre,
+        "id_proyecto": proyecto_2,  # simula id_proyecto anterior aún presente en el objeto
+        "horas": 9,
+    })
+    assert res_mod_hist["exito"] is True, res_mod_hist
+    reg_actualizado = next(a for a in db.consultar_asistencias(ids["usuario"], "2026-10") if a["fecha"] == "2026-10-10")
+    assert reg_actualizado["id_proyecto"] == ids["proyecto"]
+    assert reg_actualizado["servicio"] == proy_1_nombre
+    assert Decimal(str(reg_actualizado["horas"])) == Decimal("9.00")
+
+    # 4. Eliminar desde Historial un día puntual proveniente de Roster
+    res_del_hist = api.eliminar_registro_asistencia(reg_dia["id"])
+    assert res_del_hist["exito"] is True, res_del_hist
+    assert len(db.consultar_asistencias(ids["usuario"], "2026-10")) == 2
+
+    # 5. Eliminar el turno de Roster completo y crear uno nuevo en las mismas fechas sin falso solapamiento
+    res_del_roster = api.eliminar_roster(id_roster)
+    assert res_del_roster["exito"] is True, res_del_roster
+    assert len(db.consultar_asistencias(ids["usuario"], "2026-10")) == 0
+    assert not any(r["id"] == id_roster for r in db.obtener_rosters("2026-10-01", "2026-10-31"))
+
+    res_recrear = api.guardar_roster({
+        "empleado": ids["usuario"],
+        "proyecto": ids["proyecto"],
+        "fecha_inicio": "2026-10-10",
+        "fecha_fin": "2026-10-12",
+        "tipo": "Campo",
+    })
+    assert res_recrear["exito"] is True, res_recrear
+

@@ -124,6 +124,8 @@ class EntornoCarga20Usuarios:
                 if uids:
                     cur.execute("DELETE FROM app_rrhh.b_1_asistencias WHERE id_usuario = ANY(%s::uuid[])", (uids,))
                     cur.execute("DELETE FROM app_rrhh.b_1_roster WHERE id_usuario = ANY(%s::uuid[])", (uids,))
+                    cur.execute("DELETE FROM app_rrhh.b_1_modificaciones_realizadas WHERE id_usuario = ANY(%s::uuid[])", (uids,))
+                    cur.execute("DELETE FROM app_rrhh.a_1_historial_sueldos WHERE id_usuario = ANY(%s::uuid[])", (uids,))
                     cur.execute("DELETE FROM app_rrhh.a_1_calculo_sueldo WHERE id_usuario = ANY(%s::uuid[])", (uids,))
                     cur.execute("DELETE FROM app_rrhh.a_1_sueldos_base WHERE id_usuario = ANY(%s::uuid[])", (uids,))
                     cur.execute("DELETE FROM app_rrhh.a_1_usuarios WHERE id_usuario = ANY(%s::uuid[])", (uids,))

@@ -15,7 +15,7 @@ from postgres_repository import inicializar_bd, obtener_sesion_activa, usuario_r
 from postgres_bridge import ApiPuente
 from postgres_db import cerrar_pool
 
-APP_VERSION = "2.13.0"
+APP_VERSION = "2.13.1"
 
 
 def recurso_path(ruta_relativa: str) -> str:
