@@ -365,6 +365,23 @@ const apiBase = {
     return { exito: true };
   },
 
+  // [FN-07.16] Marcar múltiples modificaciones específicas como revisadas en lote
+  async marcarModificacionesRevisadasLote(idsModificacion) {
+    if (!idsModificacion || idsModificacion.length === 0) {
+      return { exito: true, afectados: 0 };
+    }
+    const bridge = await getApi();
+    if (bridge.marcar_modificaciones_revisadas_lote) {
+      return await bridge.marcar_modificaciones_revisadas_lote(idsModificacion);
+    }
+    let afectados = 0;
+    for (const id of idsModificacion) {
+      const r = await this.marcarModificacionRevisada(id);
+      if (r && r.exito) afectados += 1;
+    }
+    return { exito: true, afectados };
+  },
+
   async marcarModificacionPorAsistenciaRevisada(idAsistencia) {
     const bridge = await getApi();
     if (bridge.marcar_modificacion_por_asistencia_revisada) {
@@ -620,10 +637,10 @@ const apiBase = {
     return fallback;
   },
 
-  async obtenerModificacionesRecientes(limite = 30) {
+  async obtenerModificacionesRecientes(limite = 30, soloNoRevisadas = false) {
     const bridge = await getApi();
     if (bridge.obtener_modificaciones_recientes) {
-      const res = await bridge.obtener_modificaciones_recientes(limite);
+      const res = await bridge.obtener_modificaciones_recientes(limite, soloNoRevisadas);
       if (res && res.exito === false) {
         toast.error(res.error || 'No se pudieron consultar las modificaciones en PostgreSQL.', {
           description: res.codigo_error ? `Código: ${res.codigo_error}` : undefined,

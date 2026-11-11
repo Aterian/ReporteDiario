@@ -396,16 +396,74 @@ export default function App() {
   };
 
   const handleDescartarNotificacion = async (idModificacion) => {
+    const notifEliminada = notificacionesModificaciones.find(n => n.id_modificacion === idModificacion);
+    setNotificacionesModificaciones(prev => prev.filter(n => n.id_modificacion !== idModificacion));
     try {
       const res = await api.marcarModificacionRevisada(idModificacion);
       if (res && res.exito === false) {
         toast.error(res.error || 'No se pudo descartar la notificación');
+        if (notifEliminada) {
+          setNotificacionesModificaciones(prev => [notifEliminada, ...prev]);
+        }
         return;
       }
-      setNotificacionesModificaciones(prev => prev.filter(n => n.id_modificacion !== idModificacion));
+      toast.success('Modificación marcada como revisada.');
+      const actualizadas = await api.obtenerNotificacionesModificaciones(true);
+      if (Array.isArray(actualizadas)) {
+        setNotificacionesModificaciones(actualizadas);
+      }
     } catch (e) {
       console.error(e);
       toast.error('Error de comunicación al descartar la notificación');
+      if (notifEliminada) {
+        setNotificacionesModificaciones(prev => [notifEliminada, ...prev]);
+      }
+    }
+  };
+
+  const handleDescartarNotificacionesLote = async (idsModificacion) => {
+    if (!idsModificacion || idsModificacion.length === 0) return;
+    const idsSet = new Set(idsModificacion);
+    const eliminadas = notificacionesModificaciones.filter(n => idsSet.has(n.id_modificacion));
+    setNotificacionesModificaciones(prev => prev.filter(n => !idsSet.has(n.id_modificacion)));
+    try {
+      const res = await api.marcarModificacionesRevisadasLote(idsModificacion);
+      if (res && res.exito === false) {
+        toast.error(res.error || 'No se pudieron descartar las modificaciones');
+        setNotificacionesModificaciones(prev => [...eliminadas, ...prev]);
+        return;
+      }
+      toast.success(`${res.afectados || idsModificacion.length} modificación(es) marcada(s) como revisada(s).`);
+      const actualizadas = await api.obtenerNotificacionesModificaciones(true);
+      if (Array.isArray(actualizadas)) {
+        setNotificacionesModificaciones(actualizadas);
+      }
+    } catch (e) {
+      console.error(e);
+      toast.error('Error de comunicación al descartar notificaciones');
+      setNotificacionesModificaciones(prev => [...eliminadas, ...prev]);
+    }
+  };
+
+  const handleMarcarTodasModificacionesRevisadas = async () => {
+    const previas = [...notificacionesModificaciones];
+    setNotificacionesModificaciones([]);
+    try {
+      const res = await api.marcarTodasModificacionesRevisadas();
+      if (res && res.exito === false) {
+        toast.error(res.error || 'No se pudieron marcar todas las modificaciones como revisadas');
+        setNotificacionesModificaciones(previas);
+        return;
+      }
+      toast.success(`Se marcaron ${res.actualizados || 'todas las'} modificaciones como revisadas.`);
+      const actualizadas = await api.obtenerNotificacionesModificaciones(true);
+      if (Array.isArray(actualizadas)) {
+        setNotificacionesModificaciones(actualizadas);
+      }
+    } catch (e) {
+      console.error(e);
+      toast.error('Error al marcar todas las modificaciones como revisadas');
+      setNotificacionesModificaciones(previas);
     }
   };
 
@@ -701,9 +759,17 @@ export default function App() {
             </button>
             <button
               type="button"
+              className="btn-rrhh-mark-all"
+              onClick={handleMarcarTodasModificacionesRevisadas}
+              title="Marcar todas las modificaciones pendientes como revisadas"
+            >
+              ✓ Marcar todas
+            </button>
+            <button
+              type="button"
               className="btn-rrhh-dismiss"
               onClick={() => handleDescartarNotificacion(notificacionesModificaciones[0].id_modificacion)}
-              title="Marcar como revisado"
+              title="Marcar como revisada esta notificación"
             >
               ✕
             </button>
@@ -810,6 +876,8 @@ export default function App() {
             notificacionesModificaciones={notificacionesModificaciones}
             onIrACalendarioModificacion={handleIrACalendarioModificacion}
             onDescartarNotificacion={handleDescartarNotificacion}
+            onDescartarNotificacionesLote={handleDescartarNotificacionesLote}
+            onMarcarTodasModificacionesRevisadas={handleMarcarTodasModificacionesRevisadas}
           />
         )}
 

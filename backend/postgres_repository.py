@@ -804,12 +804,13 @@ def obtener_resumen_modificaciones():
 
 
 # [FN-07.16] Listar modificaciones recientes de auditoría
-def obtener_modificaciones_recientes(limite=50):
+def obtener_modificaciones_recientes(limite=50, solo_no_revisadas=False):
     p = perfil_esquema()
     if not p.get("tiene_auditoria"):
         return []
     limite = max(1, min(int(limite or 50), 200))
     modificador_expr = p.get("nombre_modificador") or "um.nombre_completo"
+    filtro_rev = "WHERE m.revisado IS NOT TRUE" if solo_no_revisadas else ""
     with obtener_cursor_pg() as cur:
         cur.execute(f"""SELECT m.id_modificacion, m.id_asistencia, m.tipo_operacion,
             m.fecha_hora_modificacion, m.fecha_asistencia, m.detalle_cambio,
@@ -819,6 +820,7 @@ def obtener_modificaciones_recientes(limite=50):
             FROM app_rrhh.b_1_modificaciones_realizadas m
             LEFT JOIN app_rrhh.a_1_usuarios u ON u.id_usuario = m.id_usuario
             LEFT JOIN app_rrhh.a_1_usuarios um ON um.id_usuario = m.modificado_por
+            {filtro_rev}
             ORDER BY m.fecha_hora_modificacion DESC
             LIMIT %s""", (limite,))
         filas = serializar(cur.fetchall())
@@ -877,6 +879,26 @@ def marcar_modificacion_revisada(id_modificacion, id_operador=None):
         if not fila:
             raise RegistroNoEncontradoError("Modificación no encontrada.")
         return {"exito": True, "id_modificacion": str(fila["id_modificacion"])}
+
+
+# [FN-07.16] Marcar un lote de modificaciones específicas como revisadas
+def marcar_modificaciones_revisadas_lote(ids_modificacion, id_operador=None):
+    p = perfil_esquema()
+    if not p.get("tiene_auditoria"):
+        return {"exito": False, "error": "La tabla de auditoría no está configurada.", "codigo_error": "TABLA_NO_ENCONTRADA"}
+    if not ids_modificacion:
+        return {"exito": True, "afectados": 0}
+    operador_uuid = uuid_valido(id_operador) if id_operador else None
+    uuids = [uuid_valido(i) for i in ids_modificacion]
+    with obtener_cursor_pg(commit=True) as cur:
+        cur.execute("""UPDATE app_rrhh.b_1_modificaciones_realizadas
+            SET revisado = TRUE,
+                revisado_por = %s,
+                fecha_hora_revision = CURRENT_TIMESTAMP
+            WHERE id_modificacion = ANY(%s::uuid[]) AND revisado IS NOT TRUE
+            RETURNING id_modificacion""", (operador_uuid, uuids))
+        filas = cur.fetchall()
+        return {"exito": True, "afectados": len(filas)}
 
 
 # [FN-07.16] Marcar modificaciones de una asistencia como revisadas

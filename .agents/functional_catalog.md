@@ -640,7 +640,7 @@
 - **Reglas de negocio e invariantes**:
   1. Toda edición manual de costo diario (`actualizar_costo_dia_manual`) asocia el UUID del operador a `cargado_por` y anexa el motivo a `detalle_cambio`.
   2. Consultas de asistencias correlacionan modificaciones por fila para activar comparativas antes/después y banderas `modificacion_pendiente` / `modificacion_revisada`.
-  3. Las operaciones de marcado como revisado (`revisado = TRUE`) registran `revisado_por` y `fecha_hora_revision`, actualizando la UI únicamente ante respuesta confirmada (`res.exito === true`).
+  3. Las operaciones de marcado como revisado (`marcar_modificacion_revisada`, `marcar_modificaciones_revisadas_lote`, `marcar_todas_modificaciones_revisadas`) fijan `revisado = TRUE`, `revisado_por` y `fecha_hora_revision`, emitiendo `_notificar_cambios()` en el puente y soportando selección múltiple en UI con actualización optimista inmediata.
 
 ## [FN-07.19] Concurrencia Transaccional en Roster y Liquidación
 - **Módulo**: [MOD-07] Persistencia Relacional PostgreSQL y Auditoría RRHH

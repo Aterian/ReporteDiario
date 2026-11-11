@@ -1,9 +1,9 @@
 @echo off
 setlocal
-title Compilador del Instalador - Check Diario Ingeap v2.13.1
+title Compilador del Instalador - Check Diario Ingeap v2.13.2
 
 echo ============================================================
-echo   Compilacion de Check Diario - Ingeap v2.13.1
+echo   Compilacion de Check Diario - Ingeap v2.13.2
 echo ============================================================
 echo.
 

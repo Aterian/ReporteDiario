@@ -297,9 +297,9 @@ class ApiPuente:
         self._sesion(auditor=True)
         return db.obtener_resumen_modificaciones()
 
-    def obtener_modificaciones_recientes(self, limite: int = 50):
+    def obtener_modificaciones_recientes(self, limite: int = 50, solo_no_revisadas: bool = False):
         self._sesion(auditor=True)
-        return db.obtener_modificaciones_recientes(limite)
+        return db.obtener_modificaciones_recientes(limite, solo_no_revisadas)
 
     def obtener_notificaciones_modificaciones(self, solo_no_revisadas: bool = True):
         self._sesion(auditor=True)
@@ -307,11 +307,26 @@ class ApiPuente:
 
     def marcar_modificacion_revisada(self, id_modificacion: str):
         sesion = self._sesion(admin=True)
-        return db.marcar_modificacion_revisada(id_modificacion, sesion.get("id_usuario"))
+        res = db.marcar_modificacion_revisada(id_modificacion, sesion.get("id_usuario"))
+        if res.get("exito"):
+            self._notificar_cambios()
+        return res
 
     def marcar_modificacion_por_asistencia_revisada(self, id_asistencia: str):
         sesion = self._sesion(admin=True)
-        return db.marcar_modificacion_por_asistencia_revisada(id_asistencia, sesion.get("id_usuario"))
+        res = db.marcar_modificacion_por_asistencia_revisada(id_asistencia, sesion.get("id_usuario"))
+        if res.get("exito"):
+            self._notificar_cambios()
+        return res
+
+    def marcar_modificaciones_revisadas_lote(self, ids_modificacion: list):
+        sesion = self._sesion(admin=True)
+        if not isinstance(ids_modificacion, (list, tuple, set)):
+            raise ValidacionError("Debe suministrar una lista de identificadores de modificación.")
+        res = db.marcar_modificaciones_revisadas_lote(ids_modificacion, sesion.get("id_usuario"))
+        if res.get("exito"):
+            self._notificar_cambios()
+        return res
 
     def marcar_modificaciones_por_asistencias_lote(self, ids_asistencia: list):
         sesion = self._sesion(admin=True)
@@ -324,7 +339,10 @@ class ApiPuente:
 
     def marcar_todas_modificaciones_revisadas(self):
         sesion = self._sesion(admin=True)
-        return db.marcar_todas_modificaciones_revisadas(sesion.get("id_usuario"))
+        res = db.marcar_todas_modificaciones_revisadas(sesion.get("id_usuario"))
+        if res.get("exito"):
+            self._notificar_cambios()
+        return res
 
     def verificar_nuevas_modificaciones_sheets(self):
         self._sesion()

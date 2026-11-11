@@ -1628,5 +1628,64 @@ def test_modificar_registro_cambia_proyecto_ignorando_id_proyecto_viejo(monkeypa
     assert str(capturado["modelo"].id_proyecto) == proy_nuevo
 
 
+# [FN-07.16] Pruebas de marcado de modificaciones individuales y por lote
+def test_marcar_modificaciones_revisadas_lote_db(monkeypatch):
+    id_mod1 = str(uuid4())
+    id_mod2 = str(uuid4())
+    cursor = MagicMock()
+    cursor.fetchall.return_value = [{"id_modificacion": id_mod1}, {"id_modificacion": id_mod2}]
+
+    @contextmanager
+    def conexion(commit=False):
+        assert commit is True
+        yield cursor
+
+    monkeypatch.setattr(db, "obtener_cursor_pg", conexion)
+    monkeypatch.setattr(db, "perfil_esquema", lambda: {"tiene_auditoria": True})
+
+    res = db.marcar_modificaciones_revisadas_lote([id_mod1, id_mod2], id_operador=str(uuid4()))
+    assert res["exito"] is True
+    assert res["afectados"] == 2
+    sql, params = cursor.execute.call_args.args
+    assert "revisado = TRUE" in sql
+    assert "id_modificacion = ANY(%s::uuid[])" in sql
+
+
+def test_api_puente_notifica_en_marcado_modificaciones(monkeypatch):
+    puente = ApiPuente()
+    notificaciones = []
+    puente._notificar_cambios = lambda: notificaciones.append(True)
+
+    monkeypatch.setattr(puente, "_sesion", lambda admin=False, auditor=False: {
+        "id_usuario": str(uuid4()),
+        "rol_app": "admin"
+    })
+
+    id_mod = str(uuid4())
+    id_asist = str(uuid4())
+
+    monkeypatch.setattr(db, "marcar_modificacion_revisada", lambda m_id, op: {"exito": True, "id_modificacion": m_id})
+    monkeypatch.setattr(db, "marcar_modificacion_por_asistencia_revisada", lambda a_id, op: {"exito": True, "afectados": 1})
+    monkeypatch.setattr(db, "marcar_modificaciones_revisadas_lote", lambda ids, op: {"exito": True, "afectados": len(ids)})
+    monkeypatch.setattr(db, "marcar_todas_modificaciones_revisadas", lambda op: {"exito": True, "actualizados": 5})
+
+    r1 = puente.marcar_modificacion_revisada(id_mod)
+    assert r1["exito"] is True
+    assert len(notificaciones) == 1
+
+    r2 = puente.marcar_modificacion_por_asistencia_revisada(id_asist)
+    assert r2["exito"] is True
+    assert len(notificaciones) == 2
+
+    r3 = puente.marcar_modificaciones_revisadas_lote([id_mod])
+    assert r3["exito"] is True
+    assert len(notificaciones) == 3
+
+    r4 = puente.marcar_todas_modificaciones_revisadas()
+    assert r4["exito"] is True
+    assert len(notificaciones) == 4
+
+
+
 
 

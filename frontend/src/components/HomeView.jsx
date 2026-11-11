@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import RpgTavernBoard from './RpgTavernBoard';
 import DailyStatusWidget from './DailyStatusWidget';
 import { getTituloRpg } from '../utils/rpgTitles';
@@ -32,8 +32,11 @@ export default function HomeView({
   onVerErroresRemotos,
   notificacionesModificaciones = [],
   onIrACalendarioModificacion,
-  onDescartarNotificacion
+  onDescartarNotificacion,
+  onDescartarNotificacionesLote,
+  onMarcarTodasModificacionesRevisadas
 }) {
+  const [seleccionadasModif, setSeleccionadasModif] = useState(new Set());
   if (tema === 'rpg') {
     return (
       <RpgTavernBoard
@@ -502,43 +505,125 @@ export default function HomeView({
                   </div>
                   <span className="home-mod-subtitle">Cambios realizados por colaboradores</span>
                 </div>
-                <div className="home-mod-items-list">
-                  {notificacionesModificaciones.slice(0, 3).map((item) => (
-                    <div key={item.id_modificacion} className="home-mod-item">
-                      <div className="home-mod-item-main">
-                        <div className="home-mod-item-top">
-                          <span className="home-mod-emp">{item.empleado}</span>
-                          <span className="home-mod-fecha">{item.fecha}</span>
+
+                {/* Barra de Selección Múltiple y Marcado Masivo */}
+                <div className="home-mod-bulk-bar">
+                  <label className="home-mod-select-all-label">
+                    <input
+                      type="checkbox"
+                      checked={
+                        notificacionesModificaciones.length > 0 &&
+                        notificacionesModificaciones.every(item => seleccionadasModif.has(item.id_modificacion))
+                      }
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          setSeleccionadasModif(new Set(notificacionesModificaciones.map(n => n.id_modificacion)));
+                        } else {
+                          setSeleccionadasModif(new Set());
+                        }
+                      }}
+                    />
+                    <span>Seleccionar todas</span>
+                  </label>
+
+                  <div className="home-mod-bulk-actions">
+                    {seleccionadasModif.size > 0 && (
+                      <button
+                        type="button"
+                        className="btn-home-mod-bulk-mark"
+                        onClick={() => {
+                          if (onDescartarNotificacionesLote) {
+                            onDescartarNotificacionesLote(Array.from(seleccionadasModif));
+                            setSeleccionadasModif(new Set());
+                          }
+                        }}
+                        title="Marcar las modificaciones seleccionadas como revisadas"
+                      >
+                        ✓ Marcar seleccionadas ({seleccionadasModif.size})
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      className="btn-home-mod-all-mark"
+                      onClick={() => {
+                        if (onMarcarTodasModificacionesRevisadas) {
+                          onMarcarTodasModificacionesRevisadas();
+                          setSeleccionadasModif(new Set());
+                        }
+                      }}
+                      title="Marcar todas las modificaciones pendientes como revisadas"
+                    >
+                      ✓ Marcar todas ({notificacionesModificaciones.length})
+                    </button>
+                  </div>
+                </div>
+
+                <div className="home-mod-items-list" style={{ maxHeight: '280px', overflowY: 'auto' }}>
+                  {notificacionesModificaciones.map((item) => {
+                    const estaSeleccionada = seleccionadasModif.has(item.id_modificacion);
+                    return (
+                      <div key={item.id_modificacion} className={`home-mod-item ${estaSeleccionada ? 'selected' : ''}`}>
+                        <input
+                          type="checkbox"
+                          className="home-mod-item-checkbox"
+                          checked={estaSeleccionada}
+                          onChange={(e) => {
+                            setSeleccionadasModif(prev => {
+                              const next = new Set(prev);
+                              if (e.target.checked) {
+                                next.add(item.id_modificacion);
+                              } else {
+                                next.delete(item.id_modificacion);
+                              }
+                              return next;
+                            });
+                          }}
+                          title="Seleccionar para marcar en lote"
+                        />
+                        <div className="home-mod-item-main">
+                          <div className="home-mod-item-top">
+                            <span className="home-mod-emp">{item.empleado}</span>
+                            <span className="home-mod-fecha">{item.fecha}</span>
+                          </div>
+                          <div className="home-mod-diff-row">
+                            <span className="home-mod-diff-tag">
+                              {item.tipo_antes || 'Sin asignar'} ({item.horas_antes || 0}hs) ➔ {item.tipo_despues} ({item.horas_despues || 0}hs)
+                            </span>
+                            {item.quien_modifica && (
+                              <span className="home-mod-author">• Por {item.quien_modifica}</span>
+                            )}
+                          </div>
                         </div>
-                        <div className="home-mod-diff-row">
-                          <span className="home-mod-diff-tag">
-                            {item.tipo_antes || 'Sin asignar'} ({item.horas_antes || 0}hs) ➔ {item.tipo_despues} ({item.horas_despues || 0}hs)
-                          </span>
-                          {item.quien_modifica && (
-                            <span className="home-mod-author">• Por {item.quien_modifica}</span>
-                          )}
+                        <div className="home-mod-item-actions">
+                          <button
+                            type="button"
+                            className="btn-home-mod-view"
+                            onClick={() => onIrACalendarioModificacion && onIrACalendarioModificacion(item)}
+                            title="Abrir directamente en el calendario del empleado"
+                          >
+                            Ver en calendario ➔
+                          </button>
+                          <button
+                            type="button"
+                            className="btn-home-mod-check"
+                            onClick={() => {
+                              if (onDescartarNotificacion) {
+                                onDescartarNotificacion(item.id_modificacion);
+                                setSeleccionadasModif(prev => {
+                                  const next = new Set(prev);
+                                  next.delete(item.id_modificacion);
+                                  return next;
+                                });
+                              }
+                            }}
+                            title="Marcar como revisado"
+                          >
+                            ✕
+                          </button>
                         </div>
                       </div>
-                      <div className="home-mod-item-actions">
-                        <button
-                          type="button"
-                          className="btn-home-mod-view"
-                          onClick={() => onIrACalendarioModificacion && onIrACalendarioModificacion(item)}
-                          title="Abrir directamente en el calendario del empleado"
-                        >
-                          Ver en calendario ➔
-                        </button>
-                        <button
-                          type="button"
-                          className="btn-home-mod-check"
-                          onClick={() => onDescartarNotificacion && onDescartarNotificacion(item.id_modificacion)}
-                          title="Marcar como revisado"
-                        >
-                          ✕
-                        </button>
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             )}

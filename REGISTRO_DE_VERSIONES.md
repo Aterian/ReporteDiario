@@ -2,6 +2,18 @@
 
 Historial cronológico de cambios, nuevas características y mejoras aplicadas al sistema **Check Diario Ingeap**.
 
+## [2.13.2] - 2026-11-11
+
+### 🔔 Descarte Reactivo y Gestión Masiva de Notificaciones de Auditoría ([FN-07.16])
+- **Descarte Optimista Inmediato (`✕`)**:
+  - Corrección en el descarte de notificaciones del banner superior global (`App.jsx`) y de la tarjeta de inicio (`HomeView.jsx`), eliminando la latencia de red y evitando que el mismo bloque de modificaciones de Roster se atasque en pantalla.
+  - Al presionar `✕`, la notificación se descarta al instante en la interfaz y en segundo plano se persiste `revisado = TRUE` en PostgreSQL, recargando fluidamente las siguientes pendientes si existen.
+- **Acciones y Selección Masiva / Lote**:
+  - Incorporado en `postgres_repository.py` y `postgres_bridge.py` el método `marcar_modificaciones_revisadas_lote(ids_modificacion)` con control de permisos de administrador y emisión reactiva de eventos `_notificar_cambios()`.
+  - Agregado el botón **`✓ Marcar todas`** en el banner flotante superior para descartar todas las modificaciones pendientes con un solo clic.
+  - En la tarjeta de Inicio (`HomeView.jsx`), añadido selector de casillas de verificación, opción **`Seleccionar todas`**, botón **`✓ Marcar seleccionadas (N)`** y botón **`✓ Marcar todas`**.
+  - En el modal de auditoría (`DailyStatusWidget.jsx`), incorporadas pestañas de navegación (**`Pendientes (N)`** y **`Todas (N)`**), casillas de selección múltiple, botón masivo y botón individual **`✓ Revisar`** por ítem.
+
 ## [2.13.1] - 2026-11-11
 
 ### 🛠️ Corrección en Edición y Eliminación de Turnos de Roster y Asistencias ([FN-02.08])

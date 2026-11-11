@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { api } from '../services/apiBridge';
 import { puedeVerModificaciones } from '../utils/permissions';
+import { toast } from 'sonner';
 
 // [FN-06.02] Widget de Actividad de Ayer (Estilo Usuarios Conectados)
 export default function DailyStatusWidget({ usuario }) {
@@ -22,6 +23,9 @@ export default function DailyStatusWidget({ usuario }) {
   const [modalModificacionesOpen, setModalModificacionesOpen] = useState(false);
   const [modificacionesRecientes, setModificacionesRecientes] = useState([]);
   const [cargandoModificaciones, setCargandoModificaciones] = useState(false);
+  const [filtroModif, setFiltroModif] = useState('pendientes'); // 'pendientes' | 'todas'
+  const [seleccionadasModal, setSeleccionadasModal] = useState(new Set());
+  const [marcandoLote, setMarcandoLote] = useState(false);
 
   const cargarActividad = async () => {
     setCargando(true);
@@ -72,11 +76,10 @@ export default function DailyStatusWidget({ usuario }) {
     };
   }, [puedeVerModif]);
 
-  const handleVerModificaciones = async () => {
-    setModalModificacionesOpen(true);
+  const cargarModificacionesModal = async () => {
     setCargandoModificaciones(true);
     try {
-      const lista = await api.obtenerModificacionesRecientes(40);
+      const lista = await api.obtenerModificacionesRecientes(60);
       if (Array.isArray(lista)) {
         setModificacionesRecientes(lista);
       }
@@ -84,6 +87,85 @@ export default function DailyStatusWidget({ usuario }) {
       console.error('Error al cargar lista de modificaciones:', err);
     } finally {
       setCargandoModificaciones(false);
+    }
+  };
+
+  const handleVerModificaciones = async () => {
+    setModalModificacionesOpen(true);
+    setSeleccionadasModal(new Set());
+    setFiltroModif('pendientes');
+    await cargarModificacionesModal();
+  };
+
+  const handleMarcarIndividual = async (idModificacion) => {
+    if (!idModificacion) return;
+    setModificacionesRecientes(prev =>
+      prev.map(m => m.id_modificacion === idModificacion ? { ...m, revisado: 1 } : m)
+    );
+    setSeleccionadasModal(prev => {
+      const next = new Set(prev);
+      next.delete(idModificacion);
+      return next;
+    });
+    try {
+      const res = await api.marcarModificacionRevisada(idModificacion);
+      if (res && res.exito === false) {
+        toast.error(res.error || 'No se pudo marcar la modificación');
+        await cargarModificacionesModal();
+      } else {
+        toast.success('Modificación marcada como revisada.');
+        cargarResumenModificaciones();
+      }
+    } catch (err) {
+      toast.error('Error de comunicación');
+      await cargarModificacionesModal();
+    }
+  };
+
+  const handleMarcarSeleccionadas = async () => {
+    if (seleccionadasModal.size === 0) return;
+    const ids = Array.from(seleccionadasModal);
+    const idsSet = new Set(ids);
+    setMarcandoLote(true);
+    setModificacionesRecientes(prev =>
+      prev.map(m => idsSet.has(m.id_modificacion) ? { ...m, revisado: 1 } : m)
+    );
+    setSeleccionadasModal(new Set());
+    try {
+      const res = await api.marcarModificacionesRevisadasLote(ids);
+      if (res && res.exito === false) {
+        toast.error(res.error || 'No se pudieron marcar las modificaciones');
+        await cargarModificacionesModal();
+      } else {
+        toast.success(`${res.afectados || ids.length} modificación(es) marcada(s) como revisada(s).`);
+        cargarResumenModificaciones();
+      }
+    } catch (err) {
+      toast.error('Error de comunicación');
+      await cargarModificacionesModal();
+    } finally {
+      setMarcandoLote(false);
+    }
+  };
+
+  const handleMarcarTodas = async () => {
+    setMarcandoLote(true);
+    setModificacionesRecientes(prev => prev.map(m => ({ ...m, revisado: 1 })));
+    setSeleccionadasModal(new Set());
+    try {
+      const res = await api.marcarTodasModificacionesRevisadas();
+      if (res && res.exito === false) {
+        toast.error(res.error || 'No se pudieron marcar las modificaciones');
+        await cargarModificacionesModal();
+      } else {
+        toast.success(`Se marcaron ${res.actualizados || 'todas las'} modificaciones como revisadas.`);
+        cargarResumenModificaciones();
+      }
+    } catch (err) {
+      toast.error('Error de comunicación');
+      await cargarModificacionesModal();
+    } finally {
+      setMarcandoLote(false);
     }
   };
 
@@ -122,13 +204,15 @@ export default function DailyStatusWidget({ usuario }) {
   return (
     <div className="daily-status-widget-container connected-widget-compact">
       {/* Alerta/Badge sutil de Modificaciones de Auditoría (Exclusivo Justina Bertolozzi e Iván Valentin) */}
-      {puedeVerModif && resumenModificaciones && (resumenModificaciones.ultimas_24h > 0 || resumenModificaciones.total_modificaciones > 0) && (
+      {puedeVerModif && resumenModificaciones && (resumenModificaciones.ultimas_24h > 0 || resumenModificaciones.total_modificaciones > 0 || resumenModificaciones.no_revisadas > 0) && (
         <div className="audit-modification-banner-compact" onClick={handleVerModificaciones} title="Clic para ver historial de modificaciones">
           <span className="audit-bell-icon">🔔</span>
           <span className="audit-banner-text-compact">
-            {resumenModificaciones.ultimas_24h > 0
-              ? `${resumenModificaciones.ultimas_24h} modif. en 24h`
-              : `${resumenModificaciones.total_modificaciones} registros auditados`}
+            {resumenModificaciones.no_revisadas > 0
+              ? `${resumenModificaciones.no_revisadas} pendiente(s) de revisión`
+              : (resumenModificaciones.ultimas_24h > 0
+                ? `${resumenModificaciones.ultimas_24h} modif. en 24h`
+                : `${resumenModificaciones.total_modificaciones} registros auditados`)}
           </span>
           <span className="audit-link-inline">Ver detalle ›</span>
         </div>
@@ -279,104 +363,204 @@ export default function DailyStatusWidget({ usuario }) {
       </div>
 
       {/* Modal de Auditoría de Modificaciones */}
-      {puedeVerModif && modalModificacionesOpen && (
-        <div className="modal-backdrop">
-          <div className="modal-box" style={{ maxWidth: '640px', width: '92%' }}>
-            <div className="modal-header">
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <span style={{ fontSize: '18px' }}>📝</span>
-                <div>
-                  <span className="modal-title">Auditoría: Modificaciones Registradas</span>
-                  <div style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>
-                    Historial registrado en <code>1_1_modificaciones_realizadas</code>
+      {puedeVerModif && modalModificacionesOpen && (() => {
+        const pendientesLista = modificacionesRecientes.filter(m => !m.revisado);
+        const listaModifFiltrada = modificacionesRecientes.filter(m => {
+          if (filtroModif === 'pendientes') return !m.revisado;
+          return true;
+        });
+        const pendientesVisibles = listaModifFiltrada.filter(m => !m.revisado);
+
+        return (
+          <div className="modal-backdrop">
+            <div className="modal-box" style={{ maxWidth: '680px', width: '92%' }}>
+              <div className="modal-header">
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <span style={{ fontSize: '18px' }}>📝</span>
+                  <div>
+                    <span className="modal-title">Auditoría: Modificaciones Registradas</span>
+                    <div style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>
+                      Historial registrado en <code>1_1_modificaciones_realizadas</code>
+                    </div>
                   </div>
                 </div>
+                <button
+                  type="button"
+                  className="modal-close"
+                  onClick={() => setModalModificacionesOpen(false)}
+                >
+                  ✕
+                </button>
               </div>
-              <button
-                type="button"
-                className="modal-close"
-                onClick={() => setModalModificacionesOpen(false)}
-              >
-                ✕
-              </button>
-            </div>
 
-            <div className="modal-body" style={{ maxHeight: '420px', overflowY: 'auto', padding: '14px' }}>
-              {cargandoModificaciones ? (
-                <div style={{ padding: '30px', textAlign: 'center' }}>
-                  <div className="spinner" style={{ width: '24px', height: '24px', margin: '0 auto 8px' }} />
-                  <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>Cargando auditoría...</span>
+              {/* Filtros de Pestañas y Acciones Masivas */}
+              <div className="modal-audit-filter-bar">
+                <div className="daily-filter-pills-compact">
+                  <button
+                    type="button"
+                    className={`pill-btn-compact ${filtroModif === 'pendientes' ? 'active pending' : ''}`}
+                    onClick={() => setFiltroModif('pendientes')}
+                  >
+                    Pendientes ({pendientesLista.length})
+                  </button>
+                  <button
+                    type="button"
+                    className={`pill-btn-compact ${filtroModif === 'todas' ? 'active' : ''}`}
+                    onClick={() => setFiltroModif('todas')}
+                  >
+                    Todas ({modificacionesRecientes.length})
+                  </button>
                 </div>
-              ) : modificacionesRecientes.length === 0 ? (
-                <div style={{ padding: '30px', textAlign: 'center', color: 'var(--text-secondary)', fontSize: '13px' }}>
-                  No se han registrado modificaciones en el sistema hasta el momento.
-                </div>
-              ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                  {modificacionesRecientes.map((mod) => (
-                    <div
-                      key={mod.id_modificacion || mod.id}
-                      style={{
-                        background: 'var(--bg-surface)',
-                        border: '1px solid var(--border-subtle)',
-                        borderRadius: '8px',
-                        padding: '10px 12px',
-                        fontSize: '12px'
-                      }}
+
+                {pendientesVisibles.length > 0 && (
+                  <div className="modal-audit-bulk-actions">
+                    <label className="modal-audit-select-all">
+                      <input
+                        type="checkbox"
+                        checked={
+                          pendientesVisibles.length > 0 &&
+                          pendientesVisibles.every(m => seleccionadasModal.has(m.id_modificacion))
+                        }
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            const pendIds = pendientesVisibles.map(m => m.id_modificacion);
+                            setSeleccionadasModal(new Set(pendIds));
+                          } else {
+                            setSeleccionadasModal(new Set());
+                          }
+                        }}
+                      />
+                      <span>Seleccionar</span>
+                    </label>
+
+                    {seleccionadasModal.size > 0 && (
+                      <button
+                        type="button"
+                        className="btn-modal-mark-selected"
+                        onClick={handleMarcarSeleccionadas}
+                        disabled={marcandoLote}
+                      >
+                        ✓ Revisar seleccionadas ({seleccionadasModal.size})
+                      </button>
+                    )}
+
+                    <button
+                      type="button"
+                      className="btn-modal-mark-all"
+                      onClick={handleMarcarTodas}
+                      disabled={marcandoLote}
+                      title="Marcar todas las modificaciones como revisadas"
                     >
-                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
-                        <div>
-                          <strong style={{ color: 'var(--text-primary)' }}>
-                            {mod.quien_modifica || 'Usuario autenticado'}
-                          </strong>
-                          {mod.empleado && (
-                            <span style={{ color: 'var(--text-secondary)', marginLeft: '6px' }}>
-                              sobre <strong>{mod.empleado}</strong>
+                      ✓ Marcar todas
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              <div className="modal-body" style={{ maxHeight: '420px', overflowY: 'auto', padding: '14px' }}>
+                {cargandoModificaciones ? (
+                  <div style={{ padding: '30px', textAlign: 'center' }}>
+                    <div className="spinner" style={{ width: '24px', height: '24px', margin: '0 auto 8px' }} />
+                    <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>Cargando auditoría...</span>
+                  </div>
+                ) : listaModifFiltrada.length === 0 ? (
+                  <div style={{ padding: '30px', textAlign: 'center', color: 'var(--text-secondary)', fontSize: '13px' }}>
+                    {filtroModif === 'pendientes'
+                      ? 'No hay modificaciones pendientes de revisión en este momento.'
+                      : 'No se han registrado modificaciones en el sistema hasta el momento.'}
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    {listaModifFiltrada.map((mod) => (
+                      <div
+                        key={mod.id_modificacion || mod.id}
+                        className={`modal-audit-card-item ${mod.revisado ? 'item-reviewed' : 'item-pending'} ${seleccionadasModal.has(mod.id_modificacion) ? 'selected' : ''}`}
+                      >
+                        <div className="modal-audit-card-top">
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 }}>
+                            {!mod.revisado && (
+                              <input
+                                type="checkbox"
+                                checked={seleccionadasModal.has(mod.id_modificacion)}
+                                onChange={(e) => {
+                                  setSeleccionadasModal(prev => {
+                                    const next = new Set(prev);
+                                    if (e.target.checked) next.add(mod.id_modificacion);
+                                    else next.delete(mod.id_modificacion);
+                                    return next;
+                                  });
+                                }}
+                                title="Seleccionar para marcar en lote"
+                              />
+                            )}
+                            <span className={`modal-audit-status-badge ${mod.revisado ? 'badge-reviewed' : 'badge-pending'}`}>
+                              {mod.revisado ? '✓ Revisado' : '⏳ Pendiente'}
                             </span>
-                          )}
-                        </div>
-                        <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
-                          {mod.fecha_hora_modificaciones || mod.fecha_hora || ''}
-                        </span>
-                      </div>
+                            <strong style={{ color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                              {mod.quien_modifica || 'Usuario autenticado'}
+                            </strong>
+                            {mod.empleado && (
+                              <span style={{ color: 'var(--text-secondary)', fontSize: '11.5px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                sobre <strong>{mod.empleado}</strong>
+                              </span>
+                            )}
+                          </div>
 
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', background: 'var(--bg-app)', padding: '6px 8px', borderRadius: '6px' }}>
-                        <div>
-                          <div style={{ fontSize: '10px', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Antes</div>
-                          <div><strong>Modalidad:</strong> {mod.tipo_antes || '-'}</div>
-                          <div><strong>Horas:</strong> {mod.horas_antes ?? '-'} hs</div>
-                          <div style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                            <strong>Servicio:</strong> {mod.servicio_antes || '-'}
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
+                            <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                              {mod.fecha_hora_modificaciones || mod.fecha_hora || ''}
+                            </span>
+                            {!mod.revisado && (
+                              <button
+                                type="button"
+                                className="btn-modal-item-dismiss"
+                                onClick={() => handleMarcarIndividual(mod.id_modificacion)}
+                                title="Marcar como revisada esta modificación"
+                              >
+                                ✓ Revisar
+                              </button>
+                            )}
                           </div>
                         </div>
 
-                        <div>
-                          <div style={{ fontSize: '10px', color: '#cc3333', textTransform: 'uppercase', fontWeight: 'bold' }}>Después</div>
-                          <div><strong>Modalidad:</strong> {mod.tipo_despues || '-'}</div>
-                          <div><strong>Horas:</strong> {mod.horas_despues ?? '-'} hs</div>
-                          <div style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                            <strong>Servicio:</strong> {mod.servicio_despues || '-'}
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', background: 'var(--bg-app)', padding: '6px 8px', borderRadius: '6px', marginTop: '6px' }}>
+                          <div>
+                            <div style={{ fontSize: '10px', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Antes</div>
+                            <div><strong>Modalidad:</strong> {mod.tipo_antes || '-'}</div>
+                            <div><strong>Horas:</strong> {mod.horas_antes ?? '-'} hs</div>
+                            <div style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                              <strong>Servicio:</strong> {mod.servicio_antes || '-'}
+                            </div>
+                          </div>
+
+                          <div>
+                            <div style={{ fontSize: '10px', color: '#cc3333', textTransform: 'uppercase', fontWeight: 'bold' }}>Después</div>
+                            <div><strong>Modalidad:</strong> {mod.tipo_despues || '-'}</div>
+                            <div><strong>Horas:</strong> {mod.horas_despues ?? '-'} hs</div>
+                            <div style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                              <strong>Servicio:</strong> {mod.servicio_despues || '-'}
+                            </div>
                           </div>
                         </div>
                       </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
+                    ))}
+                  </div>
+                )}
+              </div>
 
-            <div className="modal-actions" style={{ padding: '10px 14px' }}>
-              <button
-                type="button"
-                className="modal-btn-cancel"
-                onClick={() => setModalModificacionesOpen(false)}
-              >
-                Cerrar
-              </button>
+              <div className="modal-actions" style={{ padding: '10px 14px' }}>
+                <button
+                  type="button"
+                  className="modal-btn-cancel"
+                  onClick={() => setModalModificacionesOpen(false)}
+                >
+                  Cerrar
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
     </div>
   );
 }
