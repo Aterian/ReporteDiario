@@ -4,9 +4,12 @@ import sys
 
 block_cipher = None
 base_dir = SPECPATH
+release_dir = os.environ.get("CHECK_DIARIO_RELEASE_DIR", os.path.join(base_dir, "..", "instalador"))
 
 added_files = [
-    (os.path.join(base_dir, "..", "instalador", "CheckDiarioIngeap.exe"), "."),
+    (os.path.join(base_dir, "..", "instalador", "Desinstalar.ps1"), "."),
+    (os.path.join(release_dir, "CheckDiarioLauncher.exe"), "."),
+    (os.path.join(release_dir, "CheckDiarioIngeap-win64.zip"), "."),
     (os.path.join(base_dir, ".env"), "."),
 ]
 
@@ -34,7 +37,7 @@ exe = EXE(
     a.zipfiles,
     a.datas,
     [],
-    name='Instalador_CheckDiario_Ingeap',
+    name='CheckDiarioIngeap',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,

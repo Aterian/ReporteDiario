@@ -1,0 +1,245 @@
+{
+  "norma_referencia": "ISO 9001:2026 (Sexta edicion)",
+  "fecha_generacion_evidencia": "2026-11-12T09:52:42.777245",
+  "1_eficacia_del_cambio_dias_corridos_desde_2026_10_01": {
+    "fecha_inicio_medicion": "2026-10-01",
+    "fecha_corte_medicion": "2026-11-12",
+    "dias_corridos_calendario": 43,
+    "usuarios_activos_totales": 26,
+    "usuarios_con_registros_en_periodo": 25,
+    "porcentaje_adopcion_plantilla": "96.15%",
+    "dias_calendario_esperados_empresa": 1118,
+    "dias_unicos_cubiertos_empresa": 656,
+    "registros_de_franco_cargados": 146,
+    "total_registros_asistencia": 691,
+    "porcentaje_uso_sobre_dias_corridos": "58.68%",
+    "detalle_cumplimiento_por_empleado": [
+      {
+        "empleado": "Facundo Ezequiel Calgaro",
+        "area": "I",
+        "dias_cargados": 43,
+        "dias_corridos_esperados": 43,
+        "porcentaje_cumplimiento": "100.0%"
+      },
+      {
+        "empleado": "Justina Bertolozzi",
+        "area": "RRHH",
+        "dias_cargados": 43,
+        "dias_corridos_esperados": 43,
+        "porcentaje_cumplimiento": "100.0%"
+      },
+      {
+        "empleado": "Daiana Ferrero",
+        "area": "M",
+        "dias_cargados": 42,
+        "dias_corridos_esperados": 43,
+        "porcentaje_cumplimiento": "97.7%"
+      },
+      {
+        "empleado": "Iván Valentin",
+        "area": "A",
+        "dias_cargados": 42,
+        "dias_corridos_esperados": 43,
+        "porcentaje_cumplimiento": "97.7%"
+      },
+      {
+        "empleado": "Francisco Tibaldo",
+        "area": "N",
+        "dias_cargados": 41,
+        "dias_corridos_esperados": 43,
+        "porcentaje_cumplimiento": "95.3%"
+      },
+      {
+        "empleado": "Daiana Sanchez",
+        "area": "VYM",
+        "dias_cargados": 40,
+        "dias_corridos_esperados": 43,
+        "porcentaje_cumplimiento": "93.0%"
+      },
+      {
+        "empleado": "Pablo Zanor",
+        "area": "I",
+        "dias_cargados": 40,
+        "dias_corridos_esperados": 43,
+        "porcentaje_cumplimiento": "93.0%"
+      },
+      {
+        "empleado": "Santiago Destefanis",
+        "area": "N",
+        "dias_cargados": 38,
+        "dias_corridos_esperados": 43,
+        "porcentaje_cumplimiento": "88.4%"
+      },
+      {
+        "empleado": "Alejandro Maglianesi",
+        "area": "VYM",
+        "dias_cargados": 35,
+        "dias_corridos_esperados": 43,
+        "porcentaje_cumplimiento": "81.4%"
+      },
+      {
+        "empleado": "Camila Llovio",
+        "area": "I",
+        "dias_cargados": 35,
+        "dias_corridos_esperados": 43,
+        "porcentaje_cumplimiento": "81.4%"
+      },
+      {
+        "empleado": "Marco Regis",
+        "area": "A",
+        "dias_cargados": 33,
+        "dias_corridos_esperados": 43,
+        "porcentaje_cumplimiento": "76.7%"
+      },
+      {
+        "empleado": "Lionel Juarez",
+        "area": "A",
+        "dias_cargados": 26,
+        "dias_corridos_esperados": 43,
+        "porcentaje_cumplimiento": "60.5%"
+      },
+      {
+        "empleado": "Santiago Suarez",
+        "area": "I",
+        "dias_cargados": 25,
+        "dias_corridos_esperados": 43,
+        "porcentaje_cumplimiento": "58.1%"
+      },
+      {
+        "empleado": "Nicolás Parajón",
+        "area": "I",
+        "dias_cargados": 22,
+        "dias_corridos_esperados": 43,
+        "porcentaje_cumplimiento": "51.2%"
+      },
+      {
+        "empleado": "Rocío Salim",
+        "area": "M",
+        "dias_cargados": 22,
+        "dias_corridos_esperados": 43,
+        "porcentaje_cumplimiento": "51.2%"
+      },
+      {
+        "empleado": "Sergio Juarez",
+        "area": "N",
+        "dias_cargados": 22,
+        "dias_corridos_esperados": 43,
+        "porcentaje_cumplimiento": "51.2%"
+      },
+      {
+        "empleado": "Agustina Ferrante",
+        "area": "I",
+        "dias_cargados": 12,
+        "dias_corridos_esperados": 43,
+        "porcentaje_cumplimiento": "27.9%"
+      },
+      {
+        "empleado": "Alejo Ferrero",
+        "area": "I",
+        "dias_cargados": 12,
+        "dias_corridos_esperados": 43,
+        "porcentaje_cumplimiento": "27.9%"
+      },
+      {
+        "empleado": "Fernando Aimar",
+        "area": "I",
+        "dias_cargados": 12,
+        "dias_corridos_esperados": 43,
+        "porcentaje_cumplimiento": "27.9%"
+      },
+      {
+        "empleado": "Gabriel Juarez",
+        "area": "I",
+        "dias_cargados": 12,
+        "dias_corridos_esperados": 43,
+        "porcentaje_cumplimiento": "27.9%"
+      },
+      {
+        "empleado": "Ivan Emanuel Altamirano",
+        "area": "I",
+        "dias_cargados": 12,
+        "dias_corridos_esperados": 43,
+        "porcentaje_cumplimiento": "27.9%"
+      },
+      {
+        "empleado": "José María Zufiaurre",
+        "area": "I",
+        "dias_cargados": 12,
+        "dias_corridos_esperados": 43,
+        "porcentaje_cumplimiento": "27.9%"
+      },
+      {
+        "empleado": "Maximiliano Kromm",
+        "area": "I",
+        "dias_cargados": 12,
+        "dias_corridos_esperados": 43,
+        "porcentaje_cumplimiento": "27.9%"
+      },
+      {
+        "empleado": "Rodolfo Julian Lescano",
+        "area": "I",
+        "dias_cargados": 12,
+        "dias_corridos_esperados": 43,
+        "porcentaje_cumplimiento": "27.9%"
+      },
+      {
+        "empleado": "Renzo Polo",
+        "area": "S",
+        "dias_cargados": 10,
+        "dias_corridos_esperados": 43,
+        "porcentaje_cumplimiento": "23.3%"
+      },
+      {
+        "empleado": "Norberto José Luis Botto",
+        "area": "I",
+        "dias_cargados": 0,
+        "dias_corridos_esperados": 43,
+        "porcentaje_cumplimiento": "0.0%"
+      }
+    ]
+  },
+  "2_asignacion_responsabilidades_rbac": [
+    {
+      "rol_app": "user_1",
+      "usuarios_activos": 15
+    },
+    {
+      "rol_app": "core",
+      "usuarios_activos": 4
+    },
+    {
+      "rol_app": "user_2",
+      "usuarios_activos": 4
+    },
+    {
+      "rol_app": "admin",
+      "usuarios_activos": 2
+    },
+    {
+      "rol_app": "sub_admin",
+      "usuarios_activos": 1
+    }
+  ],
+  "3_integridad_sistema_calidad": {
+    "cantidad_triggers_activos_en_bd": 10,
+    "lista_triggers_verificados": [
+      "trg_actualizar_total_adicionales",
+      "trg_auditar_modificaciones_asistencia",
+      "trg_calcular_costo_asistencia",
+      "trg_calcular_viaticos_roster",
+      "trg_generar_asistencias_roster",
+      "trg_gestionar_registro_participacion",
+      "trg_guardar_historial_sueldo",
+      "trg_recalcular_liquidacion_config_sueldo",
+      "trg_sincronizar_liquidacion_mensual",
+      "trg_unica_tarifa_activa"
+    ],
+    "auditoria_jsonb_modificaciones_totales": 434,
+    "auditoria_jsonb_modificaciones_revisadas_rrhh": 434
+  },
+  "4_monitoreo_riesgos_errores_remotos": {
+    "incidentes_registrados": 69,
+    "incidentes_resueltos": 69,
+    "incidentes_pendientes": 0
+  }
+}

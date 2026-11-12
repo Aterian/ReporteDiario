@@ -1252,7 +1252,7 @@ def test_obtener_pool_falla_marca_fallo_conexion(monkeypatch):
     def mock_init(*args, **kwargs):
         raise psycopg2.OperationalError("could not translate host name")
 
-    monkeypatch.setattr(pg, "ThreadedConnectionPool", mock_init)
+    monkeypatch.setattr(pg, "ResilientThreadedConnectionPool", mock_init)
 
     with pytest.raises(DatabaseTransactionError) as exc_info:
         pg.obtener_pool()
@@ -1498,7 +1498,7 @@ def test_conexion_c_sin_dict_registra_ultimo_uso():
 # [FN-07.27] La sesión guardada en disco sobrevive al reinicio de la aplicación y proceso
 def test_persistencia_sesion_disco_sobrevive_reinicio(monkeypatch, tmp_path):
     archivo_sesion = tmp_path / "sesion_activa.json"
-    monkeypatch.setenv("CHECK_DIARIO_SESSION_FILE", str(archivo_sesion))
+    monkeypatch.setattr(db, "_obtener_ruta_sesion", lambda: archivo_sesion)
 
     usuario_mock = {
         "id_usuario": str(uuid4()),
@@ -1528,7 +1528,7 @@ def test_persistencia_sesion_disco_sobrevive_reinicio(monkeypatch, tmp_path):
 # [FN-07.27] Cerrar sesión elimina el archivo físico en disco
 def test_borrar_sesion_elimina_archivo_disco(monkeypatch, tmp_path):
     archivo_sesion = tmp_path / "sesion_activa.json"
-    monkeypatch.setenv("CHECK_DIARIO_SESSION_FILE", str(archivo_sesion))
+    monkeypatch.setattr(db, "_obtener_ruta_sesion", lambda: archivo_sesion)
 
     usuario_mock = {
         "id_usuario": str(uuid4()),
@@ -1546,12 +1546,12 @@ def test_borrar_sesion_elimina_archivo_disco(monkeypatch, tmp_path):
     assert db.obtener_sesion_activa() is None
 
 
-# [FN-07.27] Al iniciar Windows sin red inmediata, conserva la sesión local de disco
-def test_obtener_sesion_activa_conserva_sesion_ante_fallo_red_arranque(monkeypatch, tmp_path):
+# [FN-07.27] Conservar identidad sin autorizar operaciones cuando no se puede revalidar
+def test_obtener_sesion_activa_conserva_identidad_sin_autorizar_sin_red(monkeypatch, tmp_path):
     from error_handler import DatabaseTransactionError
 
     archivo_sesion = tmp_path / "sesion_activa.json"
-    monkeypatch.setenv("CHECK_DIARIO_SESSION_FILE", str(archivo_sesion))
+    monkeypatch.setattr(db, "_obtener_ruta_sesion", lambda: archivo_sesion)
 
     usuario_mock = {
         "id_usuario": str(uuid4()),
@@ -1572,10 +1572,9 @@ def test_obtener_sesion_activa_conserva_sesion_ante_fallo_red_arranque(monkeypat
 
     monkeypatch.setattr(db, "obtener_usuarios_cache", mock_fallo_red)
 
-    # Debe retornar la identidad local sin destruir el archivo en disco
-    sesion = db.obtener_sesion_activa()
-    assert sesion is not None
-    assert sesion["id_usuario"] == usuario_mock["id_usuario"]
+    with pytest.raises(DatabaseTransactionError):
+        db.obtener_sesion_activa()
+    assert db._sesion["id_usuario"] == usuario_mock["id_usuario"]
     assert archivo_sesion.exists()
 
 
@@ -1684,8 +1683,3 @@ def test_api_puente_notifica_en_marcado_modificaciones(monkeypatch):
     r4 = puente.marcar_todas_modificaciones_revisadas()
     assert r4["exito"] is True
     assert len(notificaciones) == 4
-
-
-
-
-

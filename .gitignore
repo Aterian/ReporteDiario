@@ -27,6 +27,10 @@ backend/*.sqlite3
 # Superan límites de GitHub (50MB - 100MB) y deben subirse a GitHub Releases
 *.exe
 instalador/*.exe
+instalador/*.zip
+instalador/app/
+instalador/releases/
+instalador/ultima_compilacion.json
 backend/dist/*.exe
 *.msi
 
@@ -62,6 +66,7 @@ Desktop.ini
 $RECYCLE.BIN/
 # --- ARCHIVOS TEMPORALES Y SCRATCH ---
 *.txt
+!backend/requirements-test.txt
 !instalador/LEEME_INSTALACION.txt
 .pytest_cache/
 logs/

@@ -1,5 +1,11 @@
 # Catálogo Funcional del Sistema
 
+## [FN-00.11] Distribución en Carpeta Onedir, Modularización de Runtime y Recuperación de Versiones
+- **Módulo**: [MOD-00] Arquitectura, Runtime de Escritorio e Instalación
+- **Flujo Operativo**: Empaqueta la aplicación en modo onedir con dependencias fijadas y entorno aislado sin dependencias pesadas innecesarias; provee instalador/migrador autocontenido con paquete zip y manifiesto SHA-256; gestiona la actualización con journal de transacciones, verificación de arranque y rollback automático; y desacopla el ciclo de vida en módulos especializados (`startup_manager`, `desktop_runtime`, `launcher`, `updater`).
+- **Tablas afectadas**: Ninguna (Arquitectura de runtime de escritorio, empaquetado PyInstaller y distribución en Windows).
+- **Reglas de negocio e invariantes**: Restricción estricta de rutas al directorio de instalación (`contenido_seguro`); bloqueo contra instancias concurrentes previas a migración; fallback atómico ante fallo de inicio del proceso hijo; compatibilidad total con accesos directos heredados y desinstalación limpia.
+
 ## [FN-07.27] Persistencia de Sesión Activa en Disco Local y Restauración Post-Reinicio
 - **Módulo**: [MOD-07] Sesión y Persistencia Local
 - **Flujo Operativo**: Almacena de forma segura la sesión del usuario en `%LOCALAPPDATA%\Ingeap\CheckDiario\sesion_activa.json` al iniciar sesión; al arrancar la aplicación tras un reinicio de la PC, restaura la identidad desde el archivo local y revalida su estado contra PostgreSQL; en caso de falta temporal de red al encender Windows, preserva la sesión local sin forzar deslogueo; y al cerrar sesión explícitamente elimina el archivo físico.

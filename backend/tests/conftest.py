@@ -15,12 +15,37 @@ sys.path.insert(0,str(ROOT/"backend"))
 load_dotenv(ROOT/".env.test",override=False)
 
 
+# [FN-00.11] Evitar MAX_PATH en las instalaciones temporales de pruebas de Windows
+def pytest_configure(config):
+    if sys.platform == "win32" and not config.option.basetemp:
+        carpeta = ROOT / ".pytest_tmp"
+        if not carpeta.resolve().is_relative_to(ROOT.resolve()):
+            raise RuntimeError("El directorio temporal de pruebas debe quedar dentro del proyecto.")
+        carpeta.mkdir(exist_ok=True)
+        config.option.basetemp = str(carpeta / ("run-" + uuid4().hex[:8]))
+
+
+# [FN-00.10] Impedir conexiones accidentales fuera de la base aislada
+@pytest.fixture(autouse=True)
+def bloquear_base_operativa(monkeypatch):
+    conectar = psycopg2.connect
+    def conexion_aislada(*args, **kwargs):
+        dsn = args[0] if args else kwargs.get("dsn", "")
+        nombre = psycopg2.extensions.parse_dsn(dsn).get("dbname", kwargs.get("dbname", ""))
+        if not nombre.startswith("codex_check_diario_test_"):
+            raise AssertionError("Las pruebas no pueden conectar a una base operativa.")
+        return conectar(*args, **kwargs)
+    monkeypatch.setattr(psycopg2, "connect", conexion_aislada)
+
+
 # [FN-07.10] Conectar exclusivamente a la base de pruebas
 @pytest.fixture
 def pg_connection():
     dsn = os.getenv("TEST_DATABASE_URL")
     if not dsn:
         pytest.skip("Configure TEST_DATABASE_URL o ejecute backend/bootstrap_test_db.py.")
+    if not psycopg2.extensions.parse_dsn(dsn).get("dbname", "").startswith("codex_check_diario_test_"):
+        pytest.fail("TEST_DATABASE_URL debe identificar una base aislada antes de conectar.")
     try:
         conn = psycopg2.connect(dsn, connect_timeout=8)
     except psycopg2.OperationalError as exc:

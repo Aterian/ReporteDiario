@@ -16,6 +16,8 @@ import psycopg2
 
 from error_handler import AppBaseException, DatabaseTransactionError, PermisoDenegadoError, RegistroNoEncontradoError, ValidacionError
 from postgres_db import obtener_cursor_pg
+from app_paths import directorio_sesion
+from deployment import contenido_seguro
 from postgres_models import (
     UsuarioSueldoCreate, ErrorRemotoCreate, ProyectoCreate, ProyectoUpdate,
     AsistenciaCreate, RosterCreate, RosterUpdate, RosterResponse,
@@ -205,13 +207,10 @@ def resolver_usuario(referencia, usuarios=None):
 
 # [FN-07.27] Resolver ruta del archivo de sesión local con aislamiento para pytest
 def _obtener_ruta_sesion() -> Path | None:
-    ruta_custom = os.environ.get("CHECK_DIARIO_SESSION_FILE", "").strip()
-    if ruta_custom:
-        return Path(ruta_custom)
     if os.environ.get("PYTEST_CURRENT_TEST"):
         return None
-    local_app_data = os.environ.get("LOCALAPPDATA") or str(Path.home() / "AppData" / "Local")
-    return Path(local_app_data) / "Ingeap" / "CheckDiario" / "sesion_activa.json"
+    raiz = directorio_sesion()
+    return contenido_seguro(raiz, raiz / "sesion_activa.json")
 
 
 def _guardar_sesion_disco(datos_usuario: dict) -> None:
@@ -266,11 +265,7 @@ def obtener_sesion_activa():
         identidad = dict(_sesion) if _sesion else None
     if identidad is None:
         return None
-    try:
-        usuarios = obtener_usuarios_cache()
-    except DatabaseTransactionError:
-        # Si al iniciar la PC aún no hay red hacia PostgreSQL, conservar la sesión local
-        return identidad
+    usuarios = obtener_usuarios_cache()
     actual = next((u for u in usuarios if str(u.get("id_usuario")) == str(identidad.get("id_usuario"))), None)
     if actual is None:
         borrar_sesion()

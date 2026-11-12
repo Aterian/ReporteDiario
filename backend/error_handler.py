@@ -9,9 +9,10 @@ from contextlib import contextmanager
 
 # 1. Configuración de Loguru
 from loguru import logger
+from app_paths import directorio_datos
 
 # Directorio persistente de logs
-LOGS_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "logs"))
+LOGS_DIR = str(directorio_datos() / "logs")
 os.makedirs(LOGS_DIR, exist_ok=True)
 LOG_FILE = os.path.join(LOGS_DIR, "app_errors.log")
 
@@ -19,12 +20,13 @@ LOG_FILE = os.path.join(LOGS_DIR, "app_errors.log")
 logger.remove()
 
 # Handler 1: Consola con formato enriquecido
-logger.add(
-    sys.stdout,
-    format="<green>{time:YYYY-MM-DD HH:mm:ss}</green> | <level>{level: <8}</level> | <cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> - <level>{message}</level>",
-    level="INFO",
-    colorize=True
-)
+if sys.stdout is not None:
+    logger.add(
+        sys.stdout,
+        format="<green>{time:YYYY-MM-DD HH:mm:ss}</green> | <level>{level: <8}</level> | <cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> - <level>{message}</level>",
+        level="INFO",
+        colorize=True
+    )
 
 # Handler 2: Archivo rotativo para persistencia de fallos y auditoría
 logger.add(
@@ -35,7 +37,7 @@ logger.add(
     level="INFO",
     encoding="utf-8",
     backtrace=True,
-    diagnose=True,
+    diagnose=False,
     enqueue=True
 )
 

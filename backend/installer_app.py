@@ -1,116 +1,84 @@
+# [MOD-00] Instalador autocontenido y migrador para clientes anteriores
+import ctypes
 import os
 import sys
-import shutil
-import time
-import subprocess
-import ctypes
-import winreg
+from pathlib import Path
 
-INSTALLER_VERSION = "2.13.2"
+from app_paths import recurso_path, validar_directorio_instalacion
+from app_version import APP_VERSION
+from deployment import ErrorPaquete, instalar_paquete, validar_paquete, leer_operacion, revertir, bloqueo_instalacion
+from updater import opciones_actualizador, esperar_proceso, iniciar_y_comprobar
 
-# [FN-00.01] Instalador Autonomo de Escritorio Check Diario Ingeap
-def resource_path(relative_path):
-    """Obtiene la ruta absoluta al recurso embebido en PyInstaller."""
-    base_path = getattr(sys, "_MEIPASS", os.path.abspath("."))
-    return os.path.join(base_path, relative_path)
+INSTALLER_VERSION = APP_VERSION
 
-def main():
+
+def comprobar_instancia_cerrada():
+    from instance_manager import InstanciaUnica
+    instancia = InstanciaUnica()
     try:
-        # 1. Definir directorio de destino oficial en LocalAppData (libre de restricciones de permisos)
-        local_app_data = os.environ.get("LOCALAPPDATA") or os.path.expanduser(r"~\AppData\Local")
-        target_dir = os.path.join(local_app_data, "Ingeap", "CheckDiario")
-        os.makedirs(target_dir, exist_ok=True)
-        target_exe = os.path.join(target_dir, "CheckDiarioIngeap.exe")
+        if not instancia.primaria:
+            raise ErrorPaquete("Cerrá Check Diario desde la bandeja antes de instalar o reparar.")
+    finally:
+        instancia.cerrar()
 
-        # 2. Cerrar procesos previos de CheckDiario si están abiertos para permitir reemplazo
-        no_window_flag = subprocess.CREATE_NO_WINDOW if hasattr(subprocess, "CREATE_NO_WINDOW") else 0
-        subprocess.run(["taskkill", "/F", "/IM", "CheckDiarioIngeap.exe"], capture_output=True, creationflags=no_window_flag)
-        time.sleep(1)
 
-        # 3. Extraer y copiar el binario embebido a la carpeta oficial
-        payload_exe = resource_path("CheckDiarioIngeap.exe")
-        if not os.path.exists(payload_exe):
-            # Fallback en caso de ejecución de prueba
-            fallback_payload = os.path.join(os.path.dirname(__file__), "..", "instalador", "CheckDiarioIngeap.exe")
-            if os.path.exists(fallback_payload):
-                payload_exe = fallback_payload
-            else:
-                raise FileNotFoundError(f"No se encontró el binario empaquetado: {payload_exe}")
+def instalar(raiz, paquete, *, iniciar=iniciar_y_comprobar):
+    from installer_settings import capturar, restaurar, configurar
+    raiz = Path(raiz).resolve()
+    primera = not (raiz / "app").exists() and not (raiz / "CheckDiarioIngeap.exe").exists()
+    raiz.mkdir(parents=True, exist_ok=True)
+    return instalar_paquete(
+        paquete, raiz, iniciar=iniciar,
+        preparar=lambda tx: capturar(raiz, tx),
+        configurar=lambda exe, op: configurar(raiz, exe, primera_instalacion=primera,
+                                              launcher=recurso_path("CheckDiarioLauncher.exe"), transaccion=op["id"],
+                                              desinstalador=recurso_path("Desinstalar.ps1")),
+        restaurar=lambda tx: restaurar(raiz, tx),
+    )
 
-        shutil.copy2(payload_exe, target_exe)
 
-        # Extraer y asegurar archivo .env con configuracion de base de datos
-        payload_env = resource_path(".env")
-        target_env = os.path.join(target_dir, ".env")
-        if os.path.exists(payload_env):
-            shutil.copy2(payload_env, target_env)
+def main(argv=None):
+    args = opciones_actualizador(sys.argv[1:] if argv is None else argv)
+    paquete = Path(recurso_path("CheckDiarioIngeap-win64.zip"))
+    try:
+        if args.validate_package_only:
+            validar_paquete(paquete)
+            return 0
+        raiz = validar_directorio_instalacion(args.target_dir)
+        if args.updater:
+            esperar_proceso(args.parent_pid)
+        comprobar_instancia_cerrada()
+        if args.rollback:
+            from installer_settings import restaurar
+            with bloqueo_instalacion(raiz):
+                operacion = leer_operacion(raiz)
+                if not operacion:
+                    raise ErrorPaquete("No hay una actualización registrada para revertir.")
+                revertir(raiz, operacion, lambda tx: restaurar(raiz, tx))
+        else:
+            validar_paquete(paquete)
+            raiz.mkdir(parents=True, exist_ok=True)
+            origen = Path(recurso_path(".env"))
+            destino = raiz / ".env"
+            if origen.is_file() and not destino.exists():
+                with destino.open("xb") as salida:
+                    salida.write(origen.read_bytes())
+            instalar(raiz, paquete)
+        if not args.updater:
+            mensaje = ("Se restauró la versión anterior. Podés abrirla desde el acceso directo."
+                       if args.rollback else f"Check Diario {APP_VERSION} quedó instalado. Podés abrirlo desde la bandeja o el acceso directo.")
+            ctypes.windll.user32.MessageBoxW(
+                0, mensaje,
+                "Check Diario - Ingeap", 0x40,
+            )
+        return 0
+    except Exception as exc:
+        if sys.platform == "win32" and not args.validate_package_only:
+            ctypes.windll.user32.MessageBoxW(0, str(exc), "No se pudo completar la instalación", 0x10)
+        return 1
 
-        # Desbloquear permisos de Windows 11 SmartScreen (quitar Zone.Identifier) en el ejecutable instalado
-        ps_unblock = f"Unblock-File -LiteralPath '{target_exe}' -ErrorAction SilentlyContinue"
-        subprocess.run(["powershell", "-NoProfile", "-NonInteractive", "-Command", ps_unblock], capture_output=True, creationflags=no_window_flag)
-
-        # 4. Crear accesos directos en Escritorio y Menú Inicio
-        desktop_dir = os.path.join(os.environ.get("USERPROFILE", ""), "Desktop")
-        programs_dir = os.path.join(os.environ.get("APPDATA", ""), r"Microsoft\Windows\Start Menu\Programs")
-
-        shortcut_desktop = os.path.join(desktop_dir, "Check Diario - Ingeap.lnk")
-        shortcut_start = os.path.join(programs_dir, "Check Diario - Ingeap.lnk")
-
-        ps_cmd = f"""
-$w = New-Object -ComObject WScript.Shell
-$s1 = $w.CreateShortcut('{shortcut_desktop}')
-$s1.TargetPath = '{target_exe}'
-$s1.WorkingDirectory = '{target_dir}'
-$s1.Description = 'Check Diario de Asistencia y Proyectos - Ingeap'
-$s1.IconLocation = '{target_exe},0'
-$s1.Save()
-
-$s2 = $w.CreateShortcut('{shortcut_start}')
-$s2.TargetPath = '{target_exe}'
-$s2.WorkingDirectory = '{target_dir}'
-$s2.Description = 'Check Diario de Asistencia y Proyectos - Ingeap'
-$s2.IconLocation = '{target_exe},0'
-$s2.Save()
-"""
-        subprocess.run(["powershell", "-NoProfile", "-NonInteractive", "-Command", ps_cmd], capture_output=True, creationflags=no_window_flag)
-
-        # 5. Registrar en Windows Run (inicio automático al iniciar sesión)
-        try:
-            key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Software\Microsoft\Windows\CurrentVersion\Run", 0, winreg.KEY_SET_VALUE)
-            winreg.SetValueEx(key, "CheckDiarioIngeap", 0, winreg.REG_SZ, f'"{target_exe}"')
-            winreg.CloseKey(key)
-        except Exception as reg_err:
-            print(f"[Installer] Registro Run omitido o con advertencia: {reg_err}")
-
-        # 6. Lanzar la aplicación instalada con entorno limpio de PyInstaller y directorio de trabajo correcto
-        clean_env = os.environ.copy()
-        for k in list(clean_env.keys()):
-            if k.startswith(("_MEI", "_PYI", "PYINSTALLER")):
-                clean_env.pop(k, None)
-        clean_env["PYINSTALLER_RESET_ENVIRONMENT"] = "1"
-
-        creation_flags = subprocess.CREATE_NEW_PROCESS_GROUP if hasattr(subprocess, "CREATE_NEW_PROCESS_GROUP") else 0
-        subprocess.Popen([target_exe, "--post-install"], cwd=target_dir, env=clean_env, creationflags=creation_flags)
-
-        # 7. Cuadro de diálogo de confirmación
-        ctypes.windll.user32.MessageBoxW(
-            0,
-            f"¡Check Diario Ingeap v{INSTALLER_VERSION} se ha instalado correctamente en tu equipo!\n\n"
-            "✓ Acceso directo creado en el Escritorio\n"
-            "✓ Agregado al Menú Inicio de Windows\n"
-            "✓ Configurado para iniciar con tu sesión\n\n"
-            "La aplicación ya se encuentra abierta.",
-            f"Instalación Completada - Ingeap v{INSTALLER_VERSION}",
-            0x40  # MB_ICONINFORMATION
-        )
-
-    except Exception as e:
-        ctypes.windll.user32.MessageBoxW(
-            0,
-            f"Ocurrió un inconveniente durante la instalación:\n{str(e)}",
-            "Error de Instalación - Ingeap",
-            0x10  # MB_ICONERROR
-        )
 
 if __name__ == "__main__":
-    main()
+    import multiprocessing
+    multiprocessing.freeze_support()
+    raise SystemExit(main())

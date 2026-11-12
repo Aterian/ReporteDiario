@@ -289,11 +289,27 @@
   // ---- Rendering ----
   let renderCounter = 0;
 
+  // BEGIN SAFE-DOM
+  function textElement(tag, className, text) {
+    const element = document.createElement(tag);
+    element.className = className;
+    element.textContent = String(text ?? '');
+    return element;
+  }
+
+  function showDiagramMessage(message) {
+    const paragraph = textElement('p', '', message);
+    paragraph.style.padding = '40px';
+    paragraph.style.color = '#f66';
+    container.replaceChildren(paragraph);
+  }
+  // END SAFE-DOM
+
   async function renderDiagram(name) {
     currentDiagram = name;
     const source = DATA.diagrams[name];
     if (!source) {
-      container.innerHTML = '<p style="padding:40px;color:#f66">Diagram not found: ' + name + '</p>';
+      showDiagramMessage('Diagram not found: ' + String(name));
       return;
     }
 
@@ -306,7 +322,7 @@
       resetView();
       attachInteractions();
     } catch (err) {
-      container.innerHTML = '<p style="padding:40px;color:#f66">Render error: ' + err.message + '</p>';
+      showDiagramMessage('Render error: ' + String(err?.message ?? err));
     }
   }
 
@@ -398,21 +414,22 @@
 
   // ---- Tooltips ----
   function showNodeTooltip(e, meta, mermaidId) {
-    if (!meta) {
-      tooltip.innerHTML = `<div class="tt-name">${escapeHtml(mermaidId)}</div>`;
-    } else {
-      const typeText = escapeHtml((meta.type || '').replace('_',' '));
-      const badge = `<span class="tt-badge ${escapeHtml(meta.type)}">${typeText}</span>`;
-      const tagHtml = meta.tag ? `<span class="tt-badge ${escapeHtml(meta.tag)}">${escapeHtml(meta.tag)}</span>` : '';
-      const updateHtml = (meta.status === 'updated' && meta.update)
-        ? `<div class="tt-update">${escapeHtml(meta.update)}</div>`
-        : '';
-      tooltip.innerHTML = `
-        <div class="tt-name">${escapeHtml(meta.name)}${badge}${tagHtml}</div>
-        ${meta.description ? `<div class="tt-desc">${escapeHtml(meta.description)}</div>` : ''}
-        ${meta.file_path ? `<div class="tt-file">${escapeHtml(meta.file_path)}::${escapeHtml(meta.function)}</div>` : ''}
-        ${updateHtml}
-      `;
+    const name = textElement('div', 'tt-name', meta ? meta.name : mermaidId);
+    tooltip.replaceChildren(name);
+    if (meta) {
+      const type = String(meta.type || '');
+      const badge = textElement('span', 'tt-badge', type.replace('_', ' '));
+      if (['start_point', 'process', 'end_point'].includes(type)) badge.classList.add(type);
+      name.appendChild(badge);
+      if (meta.tag) {
+        const tag = String(meta.tag);
+        const tagBadge = textElement('span', 'tt-badge', tag);
+        if (['updated', 'new'].includes(tag)) tagBadge.classList.add(tag);
+        name.appendChild(tagBadge);
+      }
+      if (meta.description) tooltip.appendChild(textElement('div', 'tt-desc', meta.description));
+      if (meta.file_path) tooltip.appendChild(textElement('div', 'tt-file', String(meta.file_path) + '::' + String(meta.function ?? '')));
+      if (meta.status === 'updated' && meta.update) tooltip.appendChild(textElement('div', 'tt-update', meta.update));
     }
     tooltip.style.display = 'block';
     positionTooltip(e);
@@ -420,25 +437,16 @@
 
   function showEdgeTooltip(e, labelEl) {
     const labelText = (labelEl.textContent || '').trim().replace(/^"|"$/g, '');
-    // Find matching edge by label text
-    let edgeMeta = null;
-    for (const [key, meta] of Object.entries(DATA.edges)) {
-      if (meta.label === labelText) {
-        edgeMeta = meta;
-        break;
-      }
-    }
-
+    const edgeMeta = Object.values(DATA.edges).find(meta => meta.label === labelText);
+    tooltip.replaceChildren(textElement('div', 'tt-edge-label', edgeMeta ? edgeMeta.label : labelText));
     if (edgeMeta) {
-      let html = `<div class="tt-edge-label">${escapeHtml(edgeMeta.label)}</div>`;
-      if (edgeMeta.description) html += `<div class="tt-desc">${escapeHtml(edgeMeta.description)}</div>`;
-      const idx = edgeMeta.index != null ? escapeHtml(edgeMeta.index) : 'N/A';
-      html += `<div class="tt-row">Index: <span>${idx}</span></div>`;
-      const cond = escapeHtml(edgeMeta.condition) || 'None';
-      html += `<div class="tt-row">Condition: <span>${cond}</span></div>`;
-      tooltip.innerHTML = html;
-    } else {
-      tooltip.innerHTML = `<div class="tt-edge-label">${escapeHtml(labelText)}</div>`;
+      if (edgeMeta.description) tooltip.appendChild(textElement('div', 'tt-desc', edgeMeta.description));
+      const indexRow = textElement('div', 'tt-row', 'Index: ');
+      indexRow.appendChild(textElement('span', '', edgeMeta.index ?? 'N/A'));
+      tooltip.appendChild(indexRow);
+      const conditionRow = textElement('div', 'tt-row', 'Condition: ');
+      conditionRow.appendChild(textElement('span', '', edgeMeta.condition || 'None'));
+      tooltip.appendChild(conditionRow);
     }
     tooltip.style.display = 'block';
     positionTooltip(e);

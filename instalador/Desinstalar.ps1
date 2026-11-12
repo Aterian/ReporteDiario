@@ -1,4 +1,4 @@
-# =========================================================
+﻿# =========================================================
 # Ingeap - Desinstalador de Accesos Directos y Auto-Inicio
 # Check Diario de Asistencia y Proyectos
 # =========================================================
@@ -41,6 +41,22 @@ if (Test-Path $ShortcutMenu) {
 $StartupShortcut = Join-Path $StartupPath "Check Diario - Ingeap.lnk"
 if (Test-Path $StartupShortcut) {
     Remove-Item $StartupShortcut -Force -ErrorAction SilentlyContinue
+}
+
+# [FN-00.10] Retirar únicamente la tarea del usuario actual
+try {
+    $Sid = [Security.Principal.WindowsIdentity]::GetCurrent().User.Value
+    $Scheduler = New-Object -ComObject 'Schedule.Service'
+    $Scheduler.Connect()
+    $Folder = $Scheduler.GetFolder('\')
+    $Task = $Folder.GetTask(('CheckDiarioIngeap-' + $Sid))
+    $ConfigDir = [IO.Path]::GetDirectoryName($Task.Definition.Actions.Item(1).Path)
+    if ((Split-Path -Leaf $ConfigDir) -eq 'app') { $ConfigDir = Split-Path -Parent $ConfigDir }
+    $ConfigPath = Join-Path $ConfigDir 'inicio_automatico.json'
+    @{exito=$true; habilitado=[bool]$Task.Enabled; demora=90} | ConvertTo-Json -Compress | Set-Content -LiteralPath $ConfigPath -Encoding UTF8
+    $Folder.DeleteTask(('CheckDiarioIngeap-' + $Sid), 0)
+} catch {
+    Write-Host 'No existe una tarea de inicio de Check Diario o Windows no permitió retirarla.'
 }
 
 # 5. Eliminar autoinicio del Registro de Windows

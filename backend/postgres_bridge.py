@@ -32,6 +32,9 @@ METODOS_LECTURA = {
     "obtener_errores_remotos",
 }
 _METODOS_SUGERENCIAS = {"crear_sugerencia", "obtener_sugerencias", "actualizar_sugerencia"}
+_METODOS_LOCALES = {"set_ventana", "obtener_estado_inicializacion", "reintentar_conexion", "cerrar_sesion",
+                    "minimizar_a_bandeja", "redimensionar_ventana", "maximizar_ventana", "restaurar_ventana",
+                    "verificar_actualizacion", "aplicar_actualizacion"}
 
 
 def es_operacion_lectura(nombre: str) -> bool:
@@ -49,6 +52,9 @@ def respuesta_segura(funcion, *, privado=False):
 
     @functools.wraps(funcion)
     def ejecutar(*args, **kwargs):
+        conexion = getattr(args[0], "_conexion", None) if args else None
+        if conexion and funcion.__name__ not in _METODOS_LOCALES and conexion.estado()["estado"] != "disponible":
+            return error_seguro("Todavía no hay conexión con Ingeap. Reintentaremos automáticamente.", "BD_NO_DISPONIBLE")
         max_reintentos = 2 if es_lectura else 0
         intento = 0
         while True:
@@ -62,6 +68,9 @@ def respuesta_segura(funcion, *, privado=False):
                     or "No se pudo conectar a PostgreSQL" in str(exc)
                     or "conexiones están ocupadas" in str(exc)
                 )
+                if es_fallo_conn and conexion:
+                    conexion.desconectado()
+                    return error_seguro("Se perdió la conexión. Revisá el historial antes de repetir una operación.", "BD_NO_DISPONIBLE")
                 if es_lectura and es_fallo_conn and intento < max_reintentos:
                     intento += 1
                     logger.warning("[API] Reintentando consulta de lectura '{}' (intento {}/{}) tras fallo transitorio: {}",
@@ -101,6 +110,9 @@ def respuesta_segura(funcion, *, privado=False):
             except Exception as exc:
                 logger.error("[API] {}: {}",funcion.__name__,type(exc).__name__)
                 es_err_conn = isinstance(exc, (psycopg2.OperationalError, psycopg2.InterfaceError, psycopg2.pool.PoolError))
+                if es_err_conn and conexion:
+                    conexion.desconectado()
+                    return error_seguro("Se perdió la conexión. Revisá el historial antes de repetir una operación.", "BD_NO_DISPONIBLE")
                 if es_lectura and es_err_conn and intento < max_reintentos:
                     intento += 1
                     logger.warning("[API] Reintentando consulta de lectura '{}' (intento {}/{}) tras fallo transitorio no encapsulado: {}",
@@ -127,6 +139,21 @@ def respuesta_segura(funcion, *, privado=False):
 class ApiPuente:
     def __init__(self):
         self._ventana = None
+        self._conexion = None
+        self._escritorio = None
+
+    def _configurar_runtime(self, conexion, escritorio):
+        self._conexion = conexion
+        self._escritorio = escritorio
+
+    @manejar_errores_api
+    def obtener_estado_inicializacion(self):
+        estado = self._conexion.estado() if self._conexion else {"estado": "disponible", "revision": 0}
+        return {**estado, "visible": self._escritorio.visible if self._escritorio else True}
+
+    @manejar_errores_api
+    def reintentar_conexion(self):
+        return {"solicitado": self._conexion.reintentar() if self._conexion else False}
 
     def set_ventana(self, ventana):
         self._ventana = ventana
@@ -153,7 +180,9 @@ class ApiPuente:
         self._notificar_cambios()
 
     def minimizar_a_bandeja(self):
-        if self._ventana:
+        if self._escritorio:
+            self._escritorio.ocultar()
+        elif self._ventana:
             self._ventana.hide()
         return {"exito":True}
 

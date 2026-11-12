@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="es">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Prueba de arranque aislada</title></head>
+<body>
+<nav style="padding:12px;display:flex;gap:8px;flex-wrap:wrap">
+<button id="conectar">Simular conexión</button><button id="desconectar">Simular sin red</button>
+<button id="ocultar">Simular ventana oculta</button><button id="mostrar">Simular ventana visible</button>
+<span id="contador">Consultas de sesión: 0</span></nav>
+<div id="root"></div><script type="module">
+import React from 'react';
+import {createRoot} from 'react-dom/client';
+import {QueryClientProvider} from '@tanstack/react-query';
+import {queryClient} from '/src/services/queryClient.js';
+import App from '/src/App.jsx';
+import '/src/index.css';
+import '/src/postgres.css';
+let estado='sin_conexion',revision=1,visible=true,sesiones=0;
+const usuario={id_usuario:'00000000-0000-4000-8000-000000000001',nombre:'Colaborador de prueba',dni:'00000000',area:'I',rol_app:'user_1'};
+const consultas=[];
+window.pywebview={api:new Proxy({
+obtener_estado_inicializacion:async()=>({exito:true,datos:{estado,revision,visible,mensaje:estado==='sin_conexion'?'Sin conexión. Reintentaremos automáticamente.':'Conectado'}}),
+reintentar_conexion:async()=>({exito:true,datos:{solicitado:true}}),
+obtener_estado_sesion:async()=>{sesiones++;document.getElementById('contador').textContent='Consultas de sesión: '+sesiones;return {logueado:true,usuario}},
+verificar_registro_hoy:async()=>({registrado:true}),
+obtener_actividad_dia_anterior:async()=>({fecha:'2026-11-11',total:0,enviados:0,pendientes:0,usuarios:[]}),
+obtener_servicios:async()=>[],
+obtener_todos_usuarios:async()=>[usuario],
+obtener_historial:async()=>[],
+obtener_todos_registros_empleado:async()=>[],
+obtener_notificaciones_modificaciones:async()=>[],
+obtener_errores_remotos:async()=>({exito:true,datos:[]}),
+verificar_actualizacion:async()=>({actualizacion_disponible:false}),
+}, {get:(target,key)=>key==='then'?undefined:target[key]??(async()=>{consultas.push(key);return {exito:true}})})};
+function cambiar(nuevo){estado=nuevo;revision++;queryClient.invalidateQueries({queryKey:['desktop-state']})}
+document.getElementById('conectar').onclick=()=>cambiar('disponible');
+document.getElementById('desconectar').onclick=()=>cambiar('sin_conexion');
+document.getElementById('ocultar').onclick=()=>{visible=false;window.dispatchEvent(new CustomEvent('escritorio-visibilidad',{detail:{visible}}))};
+document.getElementById('mostrar').onclick=()=>{visible=true;window.dispatchEvent(new CustomEvent('escritorio-visibilidad',{detail:{visible}}))};
+createRoot(document.getElementById('root')).render(React.createElement(QueryClientProvider,{client:queryClient},React.createElement(App)));
+</script></body></html>

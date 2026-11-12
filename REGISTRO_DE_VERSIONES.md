@@ -2,6 +2,28 @@
 
 Historial cronológico de cambios, nuevas características y mejoras aplicadas al sistema **Check Diario Ingeap**.
 
+## [2.14.0] - 2026-11-12 (candidata, pendiente de piloto)
+
+### Distribución en carpeta y recuperación ([FN-00.11])
+- Runtime onedir con entorno aislado y dependencias fijadas; NumPy fuera del paquete.
+- Instalador/migrador autocontenido compatible con el protocolo anterior, paquete completo con manifiesto y SHA-256.
+- Promoción con journal, confirmación local de arranque y restauración de carpeta, accesos y preferencias.
+- Lanzador para accesos anteriores y script de retiro de inicio/accesos incluido.
+- Verificación de Excel compatible con la hoja heredada Roster y errores controlados sin diálogo de traceback.
+- Pruebas locales y mediciones de CLI documentadas en IMPLEMENTACION_INICIO_WINDOWS.md; piloto nativo e integración PostgreSQL pendientes.
+- Revisión Snyk: rutas persistentes obtenidas de Windows y limitadas a la app; sesión sin ruta arbitraria de entorno; procesos sin shell; bootstrap con esquema local revisable y mensajes del visor como texto. Detalle en REVISION_SNYK.md.
+
+## [2.13.3] - 2026-11-12 (candidata, pendiente de piloto)
+
+### Inicio liviano de Windows ([FN-00.10])
+- Autoarranque diferido configurable desde instalación; la apertura ordinaria deja de recrear HKCU/Run.
+- Bandeja sin crear WebView2 hasta pedir la interfaz; instancia única con señal de apertura.
+- PostgreSQL se inicializa en segundo plano, con estado visible, reintentos cancelables y revalidación de sesión.
+- Carga diferida de vistas; comprobación de GitHub pospuesta y consultas periódicas pausadas al ocultar.
+- Logs persistentes compatibles con ejecución sin consola; instrumentación de etapas del inicio.
+- Se conserva onefile y el protocolo actual de actualización durante esta primera entrega.
+- Estado, validaciones y limitaciones en IMPLEMENTACION_INICIO_WINDOWS.md.
+
 ## [2.13.2] - 2026-11-11
 
 ### 🔔 Descarte Reactivo y Gestión Masiva de Notificaciones de Auditoría ([FN-07.16])

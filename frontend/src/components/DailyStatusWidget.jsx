@@ -1,10 +1,13 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useContext } from 'react';
 import { api } from '../services/apiBridge';
 import { puedeVerModificaciones } from '../utils/permissions';
 import { toast } from 'sonner';
 
+import { DesktopActivityContext } from '../services/desktopState';
+
 // [FN-06.02] Widget de Actividad de Ayer (Estilo Usuarios Conectados)
 export default function DailyStatusWidget({ usuario }) {
+  const activo = useContext(DesktopActivityContext);
   const [data, setData] = useState({
     fecha: '',
     total: 0,
@@ -54,6 +57,7 @@ export default function DailyStatusWidget({ usuario }) {
   };
 
   useEffect(() => {
+    if (!activo) return;
     cargarActividad();
     if (puedeVerModif) {
       cargarResumenModificaciones();
@@ -74,7 +78,7 @@ export default function DailyStatusWidget({ usuario }) {
       if (debounceTimer) clearTimeout(debounceTimer);
       window.removeEventListener('catalogos-actualizados', handleCatalogos);
     };
-  }, [puedeVerModif]);
+  }, [puedeVerModif, activo]);
 
   const cargarModificacionesModal = async () => {
     setCargandoModificaciones(true);

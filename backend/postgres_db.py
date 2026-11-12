@@ -14,8 +14,9 @@ from psycopg2.extras import RealDictCursor
 from psycopg2.pool import ThreadedConnectionPool
 
 from error_handler import DatabaseTransactionError, RegistroDuplicadoError, ValidacionError, logger
+from app_paths import directorio_datos
 
-_base = Path(sys.executable).parent if getattr(sys, "frozen", False) else Path(__file__).resolve().parent.parent
+_base = directorio_datos()
 load_dotenv(_base / ".env", override=False)
 load_dotenv(_base / "backend" / ".env", override=False)
 if getattr(sys, "frozen", False) and hasattr(sys, "_MEIPASS"):

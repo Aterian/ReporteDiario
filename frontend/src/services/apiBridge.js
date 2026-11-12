@@ -1,4 +1,5 @@
 import { toast } from 'sonner';
+import { normalizarEstadoEscritorio } from './desktopState';
 
 // Purgar inmediatamente cualquier dato simulado residual de versiones anteriores
 try {
@@ -180,6 +181,16 @@ async function invocarSugerencias(metodo, datos) {
 }
 
 const apiBase = {
+  async obtenerEstadoInicializacion() {
+    const bridge = await getApi();
+    if (!bridge.obtener_estado_inicializacion) return { estado: 'disponible', revision: 0, visible: true };
+    return normalizarEstadoEscritorio(await bridge.obtener_estado_inicializacion());
+  },
+
+  async reintentarConexion() {
+    const bridge = await getApi();
+    return bridge.reintentar_conexion ? await bridge.reintentar_conexion() : { exito: false };
+  },
   /**
    * @param {import('../types/suggestions').SugerenciaCreate} datos
    * @returns {Promise<import('../types/suggestions').RespuestaSugerencias<import('../types/suggestions').ComprobanteSugerencia>>}
@@ -883,6 +894,3 @@ export const api = new Proxy(apiBase, {
 });
 
 export { toast };
-
-
-

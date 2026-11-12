@@ -1,20 +1,20 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { lazy, Suspense, useState, useEffect, useRef } from 'react';
 import { api } from './services/apiBridge';
 import { queryClient } from './services/queryClient';
 import logoIngeap from './assets/Logo_Ingeap1.png';
 import LoginView from './components/LoginView';
 import HomeView from './components/HomeView';
-import CheckForm from './components/CheckForm';
-import HistoryView from './components/HistoryView';
-import OtherEmployeesHistoryView from './components/OtherEmployeesHistoryView';
-import RosterView from './components/RosterView';
-import RosterHistoryView from './components/RosterHistoryView';
-import UsersManagementView from './components/UsersManagementView';
-import ProjectsManagementView from './components/ProjectsManagementView';
-import SuggestionForm from './components/SuggestionForm';
-import SuggestionsManagementView from './components/SuggestionsManagementView';
-import RemoteErrorsView from './components/RemoteErrorsView';
-import RemoteErrorsModal from './components/RemoteErrorsModal';
+const CheckForm = lazy(() => import('./components/CheckForm'));
+const HistoryView = lazy(() => import('./components/HistoryView'));
+const OtherEmployeesHistoryView = lazy(() => import('./components/OtherEmployeesHistoryView'));
+const RosterView = lazy(() => import('./components/RosterView'));
+const RosterHistoryView = lazy(() => import('./components/RosterHistoryView'));
+const UsersManagementView = lazy(() => import('./components/UsersManagementView'));
+const ProjectsManagementView = lazy(() => import('./components/ProjectsManagementView'));
+const SuggestionForm = lazy(() => import('./components/SuggestionForm'));
+const SuggestionsManagementView = lazy(() => import('./components/SuggestionsManagementView'));
+const RemoteErrorsView = lazy(() => import('./components/RemoteErrorsView'));
+const RemoteErrorsModal = lazy(() => import('./components/RemoteErrorsModal'));
 import { ErrorBoundary } from 'react-error-boundary';
 import ErrorFallback from './components/ErrorFallback';
 import { Toaster, toast } from 'sonner';
@@ -22,8 +22,15 @@ import { puedeAccederRoster, puedeVerHistorialOtros, puedeVerModificaciones, esA
 import { SUGGESTIONS_QUERY_KEY } from './types/suggestions';
 import './components/suggestions.css';
 
+import { useDesktopState } from './hooks/useDesktopState';
+import { DesktopActivityContext } from './services/desktopState';
+import ConnectionScreen from './components/ConnectionScreen';
+
 // [MOD-00] App Principal
 export default function App() {
+  const { conexion, visible } = useDesktopState();
+  const disponible = conexion.estado === 'disponible';
+  const updateEnCurso = useRef(false);
   const [cargandoSesion, setCargandoSesion] = useState(true);
   const [usuario, setUsuario] = useState(null);
   const [vistaActiva, setVistaActiva] = useState('home'); // 'home' | 'check' | 'historial' | 'historial-otros' | 'roster' | 'historial-roster' | 'usuarios' | 'proyectos'
@@ -165,6 +172,9 @@ export default function App() {
 
   useEffect(() => {
     let montado = true;
+    setCargandoSesion(true);
+    setUsuario(null);
+    if (!disponible) return;
     async function verificarSesion() {
       try {
         const res = await api.obtenerEstadoSesion();
@@ -181,7 +191,7 @@ export default function App() {
     return () => {
       montado = false;
     };
-  }, []);
+  }, [disponible, conexion.revision]);
 
   // [FN-07.23] Verificar si el usuario completó el registro de hoy y alerta de fin de mes
   const chequearRegistroHoy = async () => {
@@ -232,7 +242,7 @@ export default function App() {
 
   // [FN-02.02] Monitoreo y carga de notificaciones de modificaciones (Exclusivo Justina Bertolozzi e Iván Valentin)
   useEffect(() => {
-    if (!usuario || !puedeVerModificaciones(usuario)) {
+    if (!usuario || !visible || !disponible || !puedeVerModificaciones(usuario)) {
       setNotificacionesModificaciones([]);
       return;
     }
@@ -271,7 +281,7 @@ export default function App() {
       if (debounceTimer) clearTimeout(debounceTimer);
       window.removeEventListener('catalogos-actualizados', handleCatalogos);
     };
-  }, [usuario]);
+  }, [usuario, visible, disponible]);
 
   // [FN-07.21] Carga y polling de errores remotos del sistema (Exclusivo Administrador)
   const cargarErroresRemotos = async () => {
@@ -287,14 +297,14 @@ export default function App() {
   };
 
   useEffect(() => {
-    if (!usuario || !esAdmin(usuario)) {
+    if (!usuario || !visible || !disponible || !esAdmin(usuario)) {
       setErroresRemotos([]);
       return;
     }
     cargarErroresRemotos();
     const intervalErr = setInterval(cargarErroresRemotos, 60000);
     return () => clearInterval(intervalErr);
-  }, [usuario]);
+  }, [usuario, visible, disponible]);
 
   const handleMarcarErrorResuelto = async (idError) => {
     setCargandoErrores(true);
@@ -352,6 +362,8 @@ export default function App() {
 
   // [FN-03.06] Comprobar si hay actualizaciones disponibles en segundo plano desde GitHub Releases
   const comprobarUpdate = async () => {
+    if (updateEnCurso.current) return;
+    updateEnCurso.current = true;
     try {
       const res = await api.verificarActualizacion();
       if (res && res.actualizacion_disponible) {
@@ -359,14 +371,17 @@ export default function App() {
       }
     } catch (err) {
       // Silencioso si no hay conexión o no está configurado
+    } finally {
+      updateEnCurso.current = false;
     }
   };
 
   useEffect(() => {
-    comprobarUpdate();
+    if (!disponible || !visible) return;
+    const primerUpdate = setTimeout(comprobarUpdate, 30000);
     const intervalUpdate = setInterval(comprobarUpdate, 15 * 60 * 1000);
-    return () => clearInterval(intervalUpdate);
-  }, []);
+    return () => { clearTimeout(primerUpdate); clearInterval(intervalUpdate); };
+  }, [disponible, visible]);
 
   const handleActualizar = async () => {
     if (!actualizacion?.url_descarga) return;
@@ -531,6 +546,8 @@ export default function App() {
     if (partes.length === 1) return partes[0].substring(0, 2).toUpperCase();
     return (partes[0][0] + partes[partes.length - 1][0]).toUpperCase();
   };
+
+  if (!disponible) return <ConnectionScreen conexion={conexion} />;
 
   if (cargandoSesion) {
     return (
@@ -856,6 +873,8 @@ export default function App() {
       <Toaster position="top-right" richColors closeButton expand={false} duration={4000} theme={tema} />
 
       {/* Navegación por vistas protegida con react-error-boundary */}
+      <DesktopActivityContext.Provider value={visible && disponible}>
+      <Suspense fallback={<div className="loading-screen">Cargando vista...</div>}>
       <ErrorBoundary FallbackComponent={ErrorFallback} onReset={() => setVistaActiva('home')}>
         {vistaActiva === 'home' && (
           <HomeView
@@ -966,9 +985,12 @@ export default function App() {
           />
         )}
       </ErrorBoundary>
+      </Suspense>
+      </DesktopActivityContext.Provider>
 
       {/* [FN-07.21] Modal de Auditoría de Errores Remotos para Administradores */}
-      {esAdmin(usuario) && (
+      {esAdmin(usuario) && modalErroresAbierto && (
+        <Suspense fallback={null}>
         <RemoteErrorsModal
           isOpen={modalErroresAbierto}
           onClose={() => setModalErroresAbierto(false)}
@@ -977,6 +999,7 @@ export default function App() {
           onMarcarTodosResueltos={handleMarcarTodosErroresResueltos}
           cargando={cargandoErrores}
         />
+        </Suspense>
       )}
     </div>
   );

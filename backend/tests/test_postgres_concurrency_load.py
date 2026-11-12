@@ -35,6 +35,8 @@ class EntornoCarga20Usuarios:
         self._slots = None
 
     def __enter__(self):
+        if not psycopg2.extensions.parse_dsn(self.dsn).get("dbname", "").startswith("codex_check_diario_test_"):
+            raise RuntimeError("La prueba de carga solo puede conectar a una base aislada.")
         conn_verif = psycopg2.connect(self.dsn, connect_timeout=8)
         dbname = conn_verif.info.dbname
         conn_verif.close()

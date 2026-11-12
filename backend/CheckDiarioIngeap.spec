@@ -9,7 +9,6 @@ base_dir = SPECPATH
 added_files = [
     (os.path.join(base_dir, "dist"), "dist"),
     (os.path.join(base_dir, "assets"), "assets"),
-    (os.path.join(base_dir, ".env"), "."),
 ]
 
 hidden_imports = [
@@ -45,7 +44,7 @@ a = Analysis(
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
-    excludes=[],
+    excludes=["numpy", "pandas", "pytest"],
     win_no_prefer_redirects=False,
     win_private_assemblies=False,
     noarchive=False,
@@ -54,24 +53,10 @@ a = Analysis(
 pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
 
 exe = EXE(
-    pyz,
-    a.scripts,
-    a.binaries,
-    a.zipfiles,
-    a.datas,
-    [],
-    name='CheckDiarioIngeap',
-    debug=False,
-    bootloader_ignore_signals=False,
-    strip=False,
-    upx=False,
-    runtime_tmpdir=None,
-    console=False,
-    disable_windowed_traceback=False,
-    argv_emulation=False,
-    target_arch=None,
-    codesign_identity=None,
-    entitlements_file=None,
+    pyz, a.scripts, [], exclude_binaries=True,
+    name='CheckDiarioIngeap', console=False, upx=False,
+    contents_directory='_internal',
     version=os.path.join(base_dir, "file_version_info.txt"),
     icon=os.path.join(base_dir, "assets", "app.ico"),
 )
+coll = COLLECT(exe, a.binaries, a.datas, strip=False, upx=False, name='app')

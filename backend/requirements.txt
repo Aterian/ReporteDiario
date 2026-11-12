@@ -1,11 +1,1 @@
-pywebview>=5.0.0
-pystray>=0.19.5
-Pillow>=10.0.0
-openpyxl>=3.1.0
-pyinstaller==6.22.0
-pytest>=8.0.0
-loguru>=0.7.0
-pydantic>=2.0.0
-psycopg2-binary>=2.9.11
-
-python-dotenv>=1.2.0
+-r requirements-runtime.lock

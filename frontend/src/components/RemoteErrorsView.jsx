@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { api } from '../services/apiBridge';
 import { esAdmin, getEtiquetaRol } from '../utils/permissions';
+import { descargarJson } from '../utils/downloadJson';
 
 export default function RemoteErrorsView({ usuario, onVolver, tema }) {
   const isDark = tema === 'dark';
@@ -161,17 +162,8 @@ export default function RemoteErrorsView({ usuario, onVolver, tema }) {
         resuelto: e.resuelto
       }));
 
-      const jsonStr = JSON.stringify(datosExport, null, 2);
-      const blob = new Blob([jsonStr], { type: 'application/json;charset=utf-8;' });
-      const url = URL.createObjectURL(blob);
       const fechaHoy = new Date().toISOString().split('T')[0];
-      const link = document.createElement('a');
-      link.href = url;
-      link.setAttribute('download', `log_errores_remotos_${fechaHoy}.json`);
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(url);
+      descargarJson(datosExport, `log_errores_remotos_${fechaHoy}.json`);
 
       setMensajeFeedback({
         tipo: 'exito',
