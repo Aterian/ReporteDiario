@@ -1,5 +1,11 @@
 # Catálogo Funcional del Sistema
 
+## [FN-00.12] Activación Segura de Ventana, Prevención de Deadlock WinForms y Despertar Post-Instalación
+- **Módulo**: [MOD-00] Arquitectura, Runtime de Escritorio e Instalación
+- **Flujo Operativo**: Protege el cierre hacia bandeja despachando `evaluate_js` fuera del hilo UI WinForms para impedir interbloqueos; restaura ventanas minimizadas o fuera de monitor y fuerza su visibilidad en primer plano al abrir desde bandeja, accesos directos o recordatorios; blinda el hilo IPC `solicitudes-apertura` con `try/except` y `AllowSetForegroundWindow`; y despierta automáticamente la ventana tras instalar, actualizar o re-ejecutar la misma versión activa.
+- **Tablas afectadas**: Ninguna (Capa Win32/WinForms de escritorio, ciclo de vida de `pywebview`, bandeja `pystray` e instalador).
+- **Reglas de negocio e invariantes**: Verificación previa de eventos `shown` y `_pywebviewready` antes de llamadas síncronas bloqueantes; despacho asíncrono de `escritorio-visibilidad` cuando `InvokeRequired` es booleano real; identificación de `HWND` por `native.Handle` o PID propio; apertura exclusiva tras confirmación de bandeja en instalaciones y actualizaciones sin romper rollback.
+
 ## [FN-00.11] Distribución en Carpeta Onedir, Modularización de Runtime y Recuperación de Versiones
 - **Módulo**: [MOD-00] Arquitectura, Runtime de Escritorio e Instalación
 - **Flujo Operativo**: Empaqueta la aplicación en modo onedir con dependencias fijadas y entorno aislado sin dependencias pesadas innecesarias; provee instalador/migrador autocontenido con paquete zip y manifiesto SHA-256; gestiona la actualización con journal de transacciones, verificación de arranque y rollback automático; y desacopla el ciclo de vida en módulos especializados (`startup_manager`, `desktop_runtime`, `launcher`, `updater`).

@@ -129,6 +129,8 @@ def ejecutar_escritorio(autostart=False, instancia=None, salud=None):
         ),
     )
     try:
+        if instancia:
+            instancia.escuchar(control.mostrar, control.detener)
         if salud:
             from updater import confirmar_arranque
             def bandeja_lista(icon):
@@ -138,10 +140,9 @@ def ejecutar_escritorio(autostart=False, instancia=None, salud=None):
         else:
             tray.run_detached()
         tiempos.registrar("bandeja_lista")
-        if instancia:
-            instancia.escuchar(control.mostrar, control.detener)
         conexion.iniciar()
-        recordatorios = Recordatorios(lambda texto: tray.notify(texto, "Check Diario - Ingeap"))
+        recordatorios = Recordatorios(lambda texto: tray.notify(texto, "Check Diario - Ingeap"),
+                                    abrir=control.mostrar)
         threading.Thread(target=recordatorios.ejecutar, args=(control.detener, conexion),
                          name="recordatorios", daemon=True).start()
         if not autostart:
@@ -167,6 +168,7 @@ def ejecutar_escritorio(autostart=False, instancia=None, salud=None):
             control.ocultar()
             return False
         ventana.events.closing += al_cerrar
+        ventana.events.shown += control.al_mostrar_ventana
         ventana.events.loaded += lambda: tiempos.registrar("interfaz_cargada")
         tiempos.registrar("iniciando_webview2")
         webview.start(gui="edgechromium")

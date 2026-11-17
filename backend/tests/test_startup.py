@@ -333,3 +333,101 @@ def test_prueba_de_carga_rechaza_dsn_operativa_antes_de_conectar(monkeypatch):
     with pytest.raises(RuntimeError, match="base aislada"):
         EntornoCarga20Usuarios("dbname=operativa host=invalid.example").__enter__()
     conectar.assert_not_called()
+
+
+def test_mostrar_restaura_ventana_y_tolera_eventos_pendientes():
+    control = ControlEscritorio()
+    shown = threading.Event()
+    ready = threading.Event()
+    ventana = Mock()
+    ventana.events.shown = shown
+    ventana.events._pywebviewready = ready
+    ventana.native = SimpleNamespace(WindowState="Minimized", Handle=None, InvokeRequired=None)
+    control.ventana = ventana
+
+    control.mostrar()
+    assert control.abrir.is_set()
+    assert control.visible is True
+    ventana.show.assert_not_called()
+    ventana.evaluate_js.assert_not_called()
+
+    shown.set()
+    ready.set()
+    control.mostrar()
+    ventana.restore.assert_called_once()
+    ventana.show.assert_called_once()
+    assert "true" in ventana.evaluate_js.call_args.args[0]
+
+    control.ocultar()
+    control.al_mostrar_ventana()
+    ventana.hide.assert_called()
+
+
+def test_ocultar_en_hilo_gui_no_bloquea_por_evaluate_js():
+    control = ControlEscritorio()
+    desbloquear = threading.Event()
+    llamado = threading.Event()
+    def eval_bloqueante(_):
+        llamado.set()
+        desbloquear.wait(2)
+    ventana = Mock()
+    ventana.events.shown = threading.Event()
+    ventana.events.shown.set()
+    ventana.events._pywebviewready = threading.Event()
+    ventana.events._pywebviewready.set()
+    ventana.native = SimpleNamespace(WindowState="Normal", Handle=None, InvokeRequired=False)
+    ventana.evaluate_js.side_effect = eval_bloqueante
+    control.ventana = ventana
+
+    control.ocultar()
+    assert control.visible is False
+    ventana.hide.assert_called_once()
+    assert llamado.wait(1)
+    desbloquear.set()
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="Interfaz de handles de Windows")
+def test_escuchar_instancia_unica_sobrevive_excepcion_en_callback(monkeypatch):
+    import ctypes
+    from instance_manager import InstanciaUnica
+    kernel = Mock()
+    kernel.CreateEventW.return_value = 101
+    kernel.CreateMutexW.return_value = 102
+    detener = threading.Event()
+    llamadas = []
+    segundo_intento = threading.Event()
+
+    def esperar_evento(_handle, _ms):
+        return 0 if len(llamadas) < 2 else 258
+
+    def abrir():
+        llamadas.append(len(llamadas) + 1)
+        if len(llamadas) == 1:
+            raise RuntimeError("Fallo transitorio")
+        segundo_intento.set()
+        detener.set()
+
+    kernel.WaitForSingleObject.side_effect = esperar_evento
+    monkeypatch.setattr(ctypes, "WinDLL", Mock(return_value=kernel))
+    monkeypatch.setattr(ctypes, "get_last_error", Mock(return_value=0))
+    instancia = InstanciaUnica()
+    try:
+        instancia.escuchar(abrir, detener)
+        assert segundo_intento.wait(2)
+        assert len(llamadas) >= 2
+    finally:
+        detener.set()
+        instancia.cerrar()
+
+
+def test_recordatorios_solicitan_apertura_cuando_se_configura_callback(monkeypatch):
+    import postgres_repository as db
+    from datetime import datetime
+    monkeypatch.setattr(db, "obtener_sesion_activa", Mock(return_value={"id_usuario": "usuario"}))
+    monkeypatch.setattr(db, "usuario_registro_hoy", Mock(return_value=False))
+    avisos = Mock()
+    abrir = Mock()
+    recordatorios = Recordatorios(avisos, ahora=lambda: datetime(2026, 11, 17, 10, 0), abrir=abrir)
+    recordatorios.comprobar()
+    avisos.assert_called_once()
+    abrir.assert_called_once()

@@ -1,6 +1,6 @@
 @echo off
 setlocal
-title Compilador Check Diario Ingeap 2.14.0
+title Compilador Check Diario Ingeap 2.14.1
 set "ROOT_DIR=%~dp0"
 set "BUILD_PYTHON=%ROOT_DIR%backend\venv\Scripts\python.exe"
 if not exist "%BUILD_PYTHON%" (

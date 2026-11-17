@@ -1,13 +1,21 @@
-# [MOD-00] Recordatorios cancelables sin crear la interfaz
+# [MOD-00] Recordatorios cancelables con apertura opcional de ventana
 from datetime import datetime, time
 import calendar
 
 
 class Recordatorios:
-    def __init__(self, notificar, *, ahora=datetime.now):
+    def __init__(self, notificar, *, ahora=datetime.now, abrir=None):
         self._notificar = notificar
         self._ahora = ahora
+        self._abrir = abrir
         self._enviados = set()
+
+    def _solicitar_apertura(self):
+        if self._abrir:
+            try:
+                self._abrir()
+            except Exception:
+                pass
 
     def comprobar(self):
         from postgres_repository import obtener_sesion_activa, obtener_dias_faltantes_mes, usuario_registro_hoy
@@ -20,6 +28,7 @@ class Recordatorios:
             faltantes = obtener_dias_faltantes_mes(sesion["id_usuario"])
             if faltantes.get("es_ultimo_dia_mes") and faltantes.get("cantidad_faltantes", 0):
                 self._notificar(f"Hoy es fin de mes y tenés {faltantes['cantidad_faltantes']} día(s) sin cargar.")
+                self._solicitar_apertura()
             self._enviados.add((clave, "fin_mes"))
         if (clave, "inicio") in self._enviados and (ahora.time() < time(16, 30) or (clave, "tarde") in self._enviados):
             return
@@ -27,10 +36,12 @@ class Recordatorios:
         if (clave, "inicio") not in self._enviados:
             if not registrado and ahora.time() < time(16, 30):
                 self._notificar("Buenos días, ¡recordá registrar tu jornada antes de que finalice el día!")
+                self._solicitar_apertura()
             self._enviados.add((clave, "inicio"))
         if ahora.time() >= time(16, 30) and (clave, "tarde") not in self._enviados:
             if not registrado:
                 self._notificar("Son más de las 16:30 hs. ¡No olvides completar tu registro diario de hoy!")
+                self._solicitar_apertura()
             self._enviados.add((clave, "tarde"))
 
     def ejecutar(self, detener, conexion):

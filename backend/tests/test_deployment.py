@@ -297,3 +297,55 @@ def test_release_sin_migrador_exacto_no_se_ofrece_como_actualizacion(monkeypatch
     }).encode()
     monkeypatch.setattr(main.urllib.request, "urlopen", Mock(return_value=respuesta))
     assert main.verificar_actualizacion_github()["actualizacion_disponible"] is False
+
+
+def test_instalador_solicita_apertura_luego_de_actualizar(tmp_path, monkeypatch):
+    import installer_app
+    raiz = tmp_path / "instalada"
+    paquete = armar_paquete(tmp_path)
+    monkeypatch.setattr(installer_app, "recurso_path", lambda nombre: str(paquete if nombre.endswith(".zip") else tmp_path / "inexistente"))
+    monkeypatch.setattr(installer_app, "validar_directorio_instalacion", Mock(return_value=raiz))
+    monkeypatch.setattr(installer_app, "esperar_proceso", Mock())
+    monkeypatch.setattr(installer_app, "comprobar_instancia_cerrada", Mock(return_value=False))
+    monkeypatch.setattr(installer_app, "instalar", Mock())
+    abrir = Mock(return_value=True)
+    monkeypatch.setattr(installer_app, "solicitar_apertura_instalada", abrir)
+    assert installer_app.main([
+        "--updater", "--parent-pid", "123", "--target-dir", str(raiz), "--update-file", "dummy.exe"
+    ]) == 0
+    abrir.assert_called_once()
+
+
+def test_instalador_manual_despierta_misma_version_activa_sin_error(tmp_path, monkeypatch):
+    import installer_app
+    import instance_manager
+    raiz = tmp_path / "instalada"
+    paquete = armar_paquete(tmp_path, installer_app.APP_VERSION)
+    d.instalar_paquete(paquete, raiz, iniciar=lambda *_: None)
+    instancia = Mock(primaria=False)
+    monkeypatch.setattr(instance_manager, "InstanciaUnica", Mock(return_value=instancia))
+    monkeypatch.setattr(installer_app, "recurso_path", lambda nombre: str(paquete))
+    monkeypatch.setattr(installer_app, "validar_directorio_instalacion", Mock(return_value=raiz))
+    instalar = Mock()
+    monkeypatch.setattr(installer_app, "instalar", instalar)
+    assert installer_app.main([]) == 0
+    instancia.solicitar_apertura.assert_called_once()
+    instancia.cerrar.assert_called_once()
+    instalar.assert_not_called()
+
+
+def test_instalador_manual_rechaza_otra_version_si_instancia_sigue_abierta(tmp_path, monkeypatch):
+    import installer_app
+    import instance_manager
+    raiz = tmp_path / "instalada"
+    paquete_viejo = armar_paquete(tmp_path, "2.13.3", "vieja")
+    d.instalar_paquete(paquete_viejo, raiz, iniciar=lambda *_: None)
+    instancia = Mock(primaria=False)
+    monkeypatch.setattr(instance_manager, "InstanciaUnica", Mock(return_value=instancia))
+    monkeypatch.setattr(installer_app, "recurso_path", lambda nombre: str(paquete_viejo))
+    monkeypatch.setattr(installer_app, "validar_directorio_instalacion", Mock(return_value=raiz))
+    if sys.platform == "win32":
+        monkeypatch.setattr(installer_app.ctypes.windll.user32, "MessageBoxW", Mock())
+    assert installer_app.main([]) == 1
+    instancia.solicitar_apertura.assert_not_called()
+    instancia.cerrar.assert_called_once()

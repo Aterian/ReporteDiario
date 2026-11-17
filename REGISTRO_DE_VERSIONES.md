@@ -2,6 +2,20 @@
 
 Historial cronológico de cambios, nuevas características y mejoras aplicadas al sistema **Check Diario Ingeap**.
 
+## [2.14.1] - 2026-11-17
+
+### 🪟 Activación de Ventana, Prevención de Deadlock en Bandeja y Despertar Post-Instalación ([FN-00.12])
+- **Corrección de Interbloqueo en Hilo UI WinForms / EdgeChrome (`desktop_runtime.py`)**:
+  - Despacho no bloqueante en hilo demonio de eventos `escritorio-visibilidad` (`evaluate_js`) cuando `InvokeRequired` es booleano real de WinForms, eliminando el bloqueo permanente al minimizar o cerrar hacia bandeja con `X`.
+  - Verificación previa de eventos `shown` y `_pywebviewready` en `ControlEscritorio` antes de invocar métodos síncronos bloqueantes de `pywebview`.
+  - Restauración nativa de ventanas minimizadas (`WindowState == Minimized` / `IsIconic`), preservación del estado maximizado, reposicionamiento automático si la ventana quedó fuera de monitores conectados (`MonitorFromRect`), y elevación explícita en primer plano (`ShowWindow`, `SetWindowPos`, `BringWindowToTop`, `SetForegroundWindow`).
+- **Blindaje IPC y Cesión de Foco (`instance_manager.py`, `main.py`)**:
+  - Transferencia de permiso de primer plano mediante `AllowSetForegroundWindow(0xFFFFFFFF)` al despertar una instancia en segundo plano.
+  - Protección `try/except` en el bucle `solicitudes-apertura` para evitar caídas silenciosas del hilo de escucha IPC e inicio del receptor previo al registro en bandeja.
+- **Apertura en Recordatorios e Instalador (`reminders.py`, `installer_app.py`)**:
+  - Apertura automática de la ventana desde recordatorios matutinos, de las 16:30 hs o de fin de mes cuando el usuario con sesión activa aún no cargó su registro del día.
+  - Despertar automático de la ventana al finalizar instalación o actualización (`--updater`) y al re-ejecutar manualmente el instalador mientras la misma versión permanece activa en bandeja.
+
 ## [2.14.0] - 2026-11-12 (candidata, pendiente de piloto)
 
 ### Distribución en carpeta y recuperación ([FN-00.11])

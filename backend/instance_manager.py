@@ -33,23 +33,49 @@ class InstanciaUnica:
             raise ctypes.WinError(error)
         self.primaria = error != 183
 
+    # [FN-00.12] Despertar instancia activa cediendo permiso de primer plano
     def solicitar_apertura(self):
+        if sys.platform == "win32":
+            try:
+                import ctypes
+                from ctypes import wintypes
+                user32 = ctypes.WinDLL("user32", use_last_error=True)
+                user32.AllowSetForegroundWindow.argtypes = [wintypes.DWORD]
+                user32.AllowSetForegroundWindow.restype = wintypes.BOOL
+                user32.AllowSetForegroundWindow(0xFFFFFFFF)
+            except Exception:
+                pass
         if self._evento:
             self._kernel.SetEvent(self._evento)
-        if not self.primaria:
-            import ctypes
-            hwnd = ctypes.windll.user32.FindWindowW(None, "Check Diario - Ingeap")
-            if hwnd:
-                ctypes.windll.user32.ShowWindow(hwnd, 9)
-                ctypes.windll.user32.SetForegroundWindow(hwnd)
+        if not self.primaria and sys.platform == "win32":
+            try:
+                import ctypes
+                from ctypes import wintypes
+                user32 = ctypes.WinDLL("user32", use_last_error=True)
+                user32.FindWindowW.argtypes = [wintypes.LPCWSTR, wintypes.LPCWSTR]
+                user32.FindWindowW.restype = wintypes.HWND
+                user32.ShowWindow.argtypes = [wintypes.HWND, ctypes.c_int]
+                user32.ShowWindow.restype = wintypes.BOOL
+                user32.SetForegroundWindow.argtypes = [wintypes.HWND]
+                user32.SetForegroundWindow.restype = wintypes.BOOL
+                hwnd = user32.FindWindowW(None, "Check Diario - Ingeap")
+                if hwnd:
+                    user32.ShowWindow(hwnd, 9)
+                    user32.SetForegroundWindow(hwnd)
+            except Exception:
+                pass
 
+    # [FN-00.12] Escuchar eventos de apertura sin interrumpir el hilo IPC ante fallos transitorios
     def escuchar(self, abrir, detener):
         if not self._evento:
             return
         def escuchar_evento():
             while not detener.is_set():
                 if self._kernel.WaitForSingleObject(self._evento, 250) == 0:
-                    abrir()
+                    try:
+                        abrir()
+                    except Exception:
+                        pass
         self._hilo = threading.Thread(target=escuchar_evento, name="solicitudes-apertura", daemon=True)
         self._hilo.start()
 
