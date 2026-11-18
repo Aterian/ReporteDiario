@@ -2,6 +2,20 @@
 
 Historial cronológico de cambios, nuevas características y mejoras aplicadas al sistema **Check Diario Ingeap**.
 
+## [2.16.0] - 2026-11-18
+
+### 💼 Porcentaje Complementario y Costo Total Empresa Provisorio en Empleados ([MOD-08] / [FN-08.02])
+- **Persistencia Relacional PostgreSQL (`009_costo_empresa_empleados.sql`, `postgres_models.py`, `postgres_repository.py`)**:
+  - Agregada columna `porcentaje_costo_empresa NUMERIC(5,2) NOT NULL DEFAULT 0.00` (check `0..500`) y columna generada `costo_total_empresa` sobre el sueldo habitual en `app_rrhh.a_1_sueldos_base`, junto con script de reversión `009_revertir_costo_empresa_empleados.sql`.
+  - Extendida la consulta de catálogo (`obtener_usuarios_cache`) cruzando la liquidación del ciclo mensual vigente (`app_rrhh.a_1_calculo_sueldo.sueldo_total`) y aplicando respaldo automático sobre el sueldo base habitual cuando no existe liquidación activa (`Base * (1 + porcentaje / 100)`).
+  - Resiliencia de esquema mediante `perfil_esquema()` (`tiene_costo_empresa`) y preservación de `vigente_desde` e historial salarial cuando RRHH modifica únicamente el porcentaje complementario.
+  - Minimización RBAC intacta en `ApiPuente.obtener_todos_usuarios`: campos de costo empresa restringidos exclusivamente a roles `admin`, `sub_admin` (lectura/edición) y `core` (solo lectura).
+- **Interfaz del Módulo de Empleados (`UsersManagementView.jsx`, `costoEmpresa.js`, `index.css`)**:
+  - Incorporada columna específica **`Costo Empresa (% / Total)`** en la tabla principal de colaboradores indicando total resultante, badge de porcentaje y origen de la base aplicada.
+  - Añadidos en el modal de alta y edición el campo editable **`Costo Complementario / Empresa (%)`** y el campo calculado en tiempo real **`Costo Total Empresa ($)`**, con soporte para temas Claro, Oscuro y RPG.
+- **Pruebas Automatizadas (`test_postgres_contract.py`, `test_postgres_integration.py`, `usersCostEmpresa.test.js`)**:
+  - Agregadas pruebas unitarias, de contrato e integración sobre PostgreSQL real verificando fórmula (ej. `$1.250.000 + 30% = $1.625.000`), fallback a sueldo base, precedencia de liquidación y aislamiento RBAC.
+
 ## [2.15.0] - 2026-11-18
 
 ### 📊 Nuevo Módulo de Estadísticas de Uso y Evolución Temporal ISO 9001 ([MOD-11] / [FN-11.01])

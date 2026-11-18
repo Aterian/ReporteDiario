@@ -62,6 +62,9 @@ def main():
             corr_edicion_roster = ROOT/"backend"/"sql"/"008_corregir_edicion_eliminacion_roster_y_asistencias.sql"
             if corr_edicion_roster.exists():
                 cur.execute(corr_edicion_roster.read_text(encoding="utf-8"))
+            costo_empresa = ROOT/"backend"/"sql"/"009_costo_empresa_empleados.sql"
+            if costo_empresa.exists():
+                cur.execute(costo_empresa.read_text(encoding="utf-8"))
     (ROOT/".env.test").write_text("TEST_DATABASE_URL="+repr(destino)+"\n",encoding="utf-8")
     print("Base de pruebas creada:",nombre)
     print("Conexión guardada en .env.test (ignorado por Git); esquema local versionado, sin datos operativos.")

@@ -1,4 +1,5 @@
 # [MOD-07] Integración con PostgreSQL y triggers reales
+from datetime import date
 from decimal import Decimal
 from uuid import uuid4
 
@@ -459,4 +460,80 @@ def test_edicion_y_eliminacion_roster_y_asistencias_historial(pg_repository, pg_
         "tipo": "Campo",
     })
     assert res_recrear["exito"] is True, res_recrear
+
+
+# [FN-08.02] Validar cálculo de porcentaje y costo total empresa en PostgreSQL real
+def test_costo_empresa_empleados_en_postgresql(pg_repository, pg_connection):
+    db, ids = pg_repository
+    u_id = ids["usuario"]
+    usuario_actual = db.resolver_usuario(u_id)
+
+    # 1. Asignar sueldo base 1.250.000 y 30% complementario sin liquidación en el mes actual (fallback a sueldo_base)
+    res_up = db.actualizar_usuario_y_sueldo(
+        {
+            "id_usuario": u_id,
+            "nombre": usuario_actual["primer_nombre"],
+            "apellido": usuario_actual["apellido"],
+            "dni": usuario_actual["dni"],
+            "correo": usuario_actual["email"],
+            "area": usuario_actual["area"],
+            "rol_app": usuario_actual["rol_app"],
+            "activo": True,
+            "sueldo_oficina": Decimal("1250000.00"),
+            "sueldo_obra": Decimal("2000000.00"),
+            "lugar_habitual": "oficina",
+            "modalidad_calculo": "base_30",
+            "porcentaje_costo_empresa": Decimal("30.00"),
+        },
+        operador_sesion={"id_usuario": u_id, "rol_app": "admin"},
+    )
+    assert res_up["exito"] is True
+    assert Decimal(res_up["porcentaje_costo_empresa"]) == Decimal("30.00")
+    assert Decimal(res_up["costo_total_empresa"]) == Decimal("1625000.00")
+
+    cat = next(u for u in db.obtener_usuarios_cache(incluir_inactivos=True) if u["id_usuario"] == u_id)
+    assert cat["origen_base_costo_empresa"] == "sueldo_base"
+    assert Decimal(cat["base_costo_empresa"]) == Decimal("1250000.00")
+    assert Decimal(cat["costo_total_empresa"]) == Decimal("1625000.00")
+
+    # 2. Insertar asistencia en el ciclo actual (genera a_1_calculo_sueldo) y verificar precedencia de liquidacion_actual
+    hoy = date.today().isoformat()
+    db.guardar_asistencias_atomicas(
+        [AsistenciaCreate(id_usuario=u_id, fecha=hoy, activo_franco="activo", lugar="oficina", dedicado_a="areas", horas_dedicadas=8)],
+        u_id,
+    )
+    cat_liq = next(u for u in db.obtener_usuarios_cache(incluir_inactivos=True) if u["id_usuario"] == u_id)
+    assert cat_liq["origen_base_costo_empresa"] == "liquidacion"
+    liq_monto = Decimal(cat_liq["liquidacion_actual"])
+    assert Decimal(cat_liq["base_costo_empresa"]) == liq_monto
+    assert Decimal(cat_liq["costo_total_empresa"]) == (liq_monto * Decimal("1.30")).quantize(Decimal("0.01"))
+
+    # 3. Modificar únicamente el porcentaje no debe archivar historial ni reiniciar vigencia salarial
+    with pg_connection.cursor() as cur:
+        cur.execute("SELECT COUNT(*) FROM app_rrhh.a_1_historial_sueldos WHERE id_usuario=%s", (u_id,))
+        hist_antes = cur.fetchone()[0]
+
+    res_pct = db.actualizar_usuario_y_sueldo(
+        {
+            "id_usuario": u_id,
+            "nombre": usuario_actual["primer_nombre"],
+            "apellido": usuario_actual["apellido"],
+            "dni": usuario_actual["dni"],
+            "correo": usuario_actual["email"],
+            "area": usuario_actual["area"],
+            "rol_app": usuario_actual["rol_app"],
+            "activo": True,
+            "sueldo_oficina": Decimal("1250000.00"),
+            "sueldo_obra": Decimal("2000000.00"),
+            "lugar_habitual": "oficina",
+            "modalidad_calculo": "base_30",
+            "porcentaje_costo_empresa": Decimal("20.00"),
+        },
+        operador_sesion={"id_usuario": u_id, "rol_app": "admin"},
+    )
+    assert Decimal(res_pct["porcentaje_costo_empresa"]) == Decimal("20.00")
+    with pg_connection.cursor() as cur:
+        cur.execute("SELECT COUNT(*) FROM app_rrhh.a_1_historial_sueldos WHERE id_usuario=%s", (u_id,))
+        hist_despues = cur.fetchone()[0]
+    assert hist_despues == hist_antes
 

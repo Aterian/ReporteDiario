@@ -152,6 +152,7 @@ class UsuarioSueldoUpdate(BaseModel):
     sueldo_obra: Decimal = Field(default=Decimal("0"), ge=0, allow_inf_nan=False)
     lugar_habitual: Literal["oficina", "obra"] = "oficina"
     modalidad_calculo: Literal["por_dia", "base_30"] = "base_30"
+    porcentaje_costo_empresa: Decimal | None = Field(default=None, ge=0, le=500, allow_inf_nan=False)
     cumpleanos: str | None = None
     vigente_desde: date | str | None = None
 
@@ -163,6 +164,8 @@ class UsuarioSueldoUpdate(BaseModel):
                 data["correo"] = data["email"]
             if "nombre" not in data and "primer_nombre" in data:
                 data["nombre"] = data["primer_nombre"]
+            if data.get("porcentaje_costo_empresa") == "":
+                data["porcentaje_costo_empresa"] = Decimal("0")
         return data
 
 # [FN-04.13] Actualización administrativa de modalidad de cálculo y lugar habitual
@@ -186,6 +189,14 @@ class UsuarioSueldoCreate(BaseModel):
     sueldo_obra: Decimal = Field(default=Decimal("0"), ge=0, allow_inf_nan=False)
     lugar_habitual: Literal["oficina", "obra"] = "oficina"
     modalidad_calculo: Literal["por_dia", "base_30"] = "base_30"
+    porcentaje_costo_empresa: Decimal = Field(default=Decimal("0"), ge=0, le=500, allow_inf_nan=False)
+
+    @model_validator(mode="before")
+    @classmethod
+    def normalizar_porcentaje(cls, data):
+        if isinstance(data, dict) and data.get("porcentaje_costo_empresa") in (None, ""):
+            data = {**data, "porcentaje_costo_empresa": Decimal("0")}
+        return data
 
 
 # [FN-07.21] Registro y captura de errores remotos

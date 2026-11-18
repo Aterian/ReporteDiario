@@ -9,6 +9,59 @@ try {
   // Ignorar en entornos sin acceso a localStorage
 }
 
+const mockUsuariosEstado = [
+  {
+    id_usuario: 'mock-u-1',
+    id_origen: 'mock-u-1',
+    dni: '40158951',
+    nombre: 'Iván Valentin',
+    primer_nombre: 'Iván',
+    apellido: 'Valentin',
+    mail: 'sge@ingeap.com',
+    email: 'sge@ingeap.com',
+    area: 'A',
+    rol_app: 'admin',
+    activo: true,
+    sueldo_oficina: 1250000,
+    sueldo_obra: 1600000,
+    costo_dia_ofi: 41666.67,
+    costo_dia_obra: 53333.33,
+    lugar_habitual: 'oficina',
+    modalidad_calculo: 'base_30',
+    porcentaje_costo_empresa: 30,
+    liquidacion_actual: 1250000,
+    ciclo_liquidacion_actual: '2026-11',
+    base_costo_empresa: 1250000,
+    origen_base_costo_empresa: 'liquidacion',
+    costo_total_empresa: 1625000
+  },
+  {
+    id_usuario: 'mock-u-2',
+    id_origen: 'mock-u-2',
+    dni: '35123456',
+    nombre: 'Colaborador Ingeniería',
+    primer_nombre: 'Colaborador',
+    apellido: 'Ingeniería',
+    mail: 'ingenieria@ingeap.com',
+    email: 'ingenieria@ingeap.com',
+    area: 'I',
+    rol_app: 'user_1',
+    activo: true,
+    sueldo_oficina: 980000,
+    sueldo_obra: 1450000,
+    costo_dia_ofi: 32666.67,
+    costo_dia_obra: 48333.33,
+    lugar_habitual: 'obra',
+    modalidad_calculo: 'base_30',
+    porcentaje_costo_empresa: 25,
+    liquidacion_actual: null,
+    ciclo_liquidacion_actual: '2026-11',
+    base_costo_empresa: 1450000,
+    origen_base_costo_empresa: 'sueldo_base',
+    costo_total_empresa: 1812500
+  }
+];
+
 const mockApi = {
   obtener_estado_sesion: async () => {
     const sesionLocal = localStorage.getItem('ingeap_sesion_mock');
@@ -99,7 +152,15 @@ const mockApi = {
   obtener_historial_otros_empleados: async (filtroEmpleado = '') => ([]),
   eliminar_registro_asistencia: async (idRegistro) => ({ exito: true, mensaje: 'Registro eliminado (simulado).' }),
   obtener_todos_registros_empleado: async (empleado, mesAnio = '') => ([]),
-  obtener_todos_usuarios: async (area = null) => [],
+  obtener_todos_usuarios: async (area = null, incluirInactivos = false) => {
+    return mockUsuariosEstado.filter((u) => {
+      if (!incluirInactivos && !u.activo) return false;
+      if (area && area.toUpperCase() !== 'TODOS') {
+        return String(u.area || '').toUpperCase() === area.toUpperCase();
+      }
+      return true;
+    });
+  },
   obtener_estado_diario_empleados: async (fecha = '') => ({
     fecha: fecha || new Date().toISOString().slice(0, 10),
     total_empleados: 0,
@@ -129,7 +190,59 @@ const mockApi = {
   }),
   obtener_tarifas_roster: async () => [],
   guardar_tarifa_roster: async (datos) => ({ exito: true, id_tarifa: 'mock-tarifa-' + Date.now() }),
-  actualizar_usuario_y_sueldo: async (datos) => ({ exito: true, id_usuario: datos.id_usuario }),
+  actualizar_usuario_y_sueldo: async (datos) => {
+    const idx = mockUsuariosEstado.findIndex((u) => u.id_usuario === datos.id_usuario);
+    if (idx !== -1) {
+      const prev = mockUsuariosEstado[idx];
+      const sueldoOfi = Number(datos.sueldo_oficina ?? prev.sueldo_oficina) || 0;
+      const sueldoObra = Number(datos.sueldo_obra ?? prev.sueldo_obra) || 0;
+      const lugar = datos.lugar_habitual || prev.lugar_habitual || 'oficina';
+      const pct = Number(datos.porcentaje_costo_empresa ?? prev.porcentaje_costo_empresa ?? 0) || 0;
+      const base = (prev.liquidacion_actual && Number(prev.liquidacion_actual) > 0)
+        ? Number(prev.liquidacion_actual)
+        : (lugar === 'obra' ? sueldoObra : sueldoOfi);
+      mockUsuariosEstado[idx] = {
+        ...prev,
+        ...datos,
+        nombre: `${datos.primer_nombre || prev.primer_nombre} ${datos.apellido || prev.apellido}`.trim(),
+        sueldo_oficina: sueldoOfi,
+        sueldo_obra: sueldoObra,
+        costo_dia_ofi: Math.round((sueldoOfi / 30) * 100) / 100,
+        costo_dia_obra: Math.round((sueldoObra / 30) * 100) / 100,
+        porcentaje_costo_empresa: pct,
+        base_costo_empresa: base,
+        costo_total_empresa: Math.round(base * (1 + pct / 100) * 100) / 100
+      };
+    }
+    return { exito: true, id_usuario: datos.id_usuario };
+  },
+  crear_usuario_y_sueldo: async (datos) => {
+    const idNuevo = 'mock-u-' + Date.now();
+    const sueldoOfi = Number(datos.sueldo_oficina) || 0;
+    const sueldoObra = Number(datos.sueldo_obra) || 0;
+    const lugar = datos.lugar_habitual || 'oficina';
+    const pct = Number(datos.porcentaje_costo_empresa) || 0;
+    const base = lugar === 'obra' ? sueldoObra : sueldoOfi;
+    mockUsuariosEstado.push({
+      id_usuario: idNuevo,
+      id_origen: idNuevo,
+      ...datos,
+      nombre: `${datos.primer_nombre || ''} ${datos.apellido || ''}`.trim(),
+      mail: datos.email,
+      sueldo_oficina: sueldoOfi,
+      sueldo_obra: sueldoObra,
+      costo_dia_ofi: Math.round((sueldoOfi / 30) * 100) / 100,
+      costo_dia_obra: Math.round((sueldoObra / 30) * 100) / 100,
+      lugar_habitual: lugar,
+      porcentaje_costo_empresa: pct,
+      liquidacion_actual: null,
+      ciclo_liquidacion_actual: '2026-11',
+      base_costo_empresa: base,
+      origen_base_costo_empresa: 'sueldo_base',
+      costo_total_empresa: Math.round(base * (1 + pct / 100) * 100) / 100
+    });
+    return { exito: true, id_usuario: idNuevo };
+  },
   obtener_liquidacion: async () => ({ exito: true, liquidacion: null }),
   actualizar_costo_dia_manual: async (datos) => ({ exito: true, mensaje: 'Costo actualizado (simulado).' }),
   obtener_estadisticas_uso: async (fechaHasta = '') => {
