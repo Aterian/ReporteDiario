@@ -1683,3 +1683,118 @@ def test_api_puente_notifica_en_marcado_modificaciones(monkeypatch):
     r4 = puente.marcar_todas_modificaciones_revisadas()
     assert r4["exito"] is True
     assert len(notificaciones) == 4
+
+
+# [FN-11.01] Métricas de uso y serie temporal ISO 9001 desde 01/10/2026
+def test_obtener_estadisticas_uso_calcula_metricas_y_serie_desde_octubre(monkeypatch):
+    from datetime import date
+    from error_handler import ValidacionError
+
+    u1 = str(uuid4())
+    u2 = str(uuid4())
+    cursor = MagicMock()
+    cursor.fetchall.side_effect = [
+        [
+            {
+                "id_usuario": u1,
+                "empleado": "Ana Supervisora",
+                "area": "I",
+                "rol_app": "core",
+                "dias_cargados": 6,
+                "dias_activos": 4,
+                "dias_franco": 2,
+                "registros_franco": 2,
+                "total_registros": 6,
+                "ultima_fecha": date(2026, 10, 6),
+            },
+            {
+                "id_usuario": u2,
+                "empleado": "Beto SinCarga",
+                "area": "M",
+                "rol_app": "user_1",
+                "dias_cargados": 0,
+                "dias_activos": 0,
+                "dias_franco": 0,
+                "registros_franco": 0,
+                "total_registros": 0,
+                "ultima_fecha": None,
+            },
+        ],
+        [
+            {"id_usuario": u1, "fecha": date(2026, 10, d)}
+            for d in range(1, 7)
+        ],
+    ]
+
+    @contextmanager
+    def conexion(commit=False):
+        assert commit is False
+        yield cursor
+
+    monkeypatch.setattr(db, "obtener_cursor_pg", conexion)
+    monkeypatch.setattr(db, "perfil_esquema", lambda: {
+        "nombre": "u.nombre_completo",
+        "rol": "u.rol_app",
+        "tiene_soft_delete_asistencias": True,
+    })
+
+    with pytest.raises(ValidacionError):
+        db.obtener_estadisticas_uso("2026-09-30")
+
+    res = db.obtener_estadisticas_uso("2026-10-10")
+    resumen = res["resumen_general"]
+    assert resumen["fecha_inicio_medicion"] == "2026-10-01"
+    assert resumen["fecha_corte_medicion"] == "2026-10-10"
+    assert resumen["dias_corridos_calendario"] == 10
+    assert resumen["usuarios_activos_totales"] == 2
+    assert resumen["usuarios_con_registros"] == 1
+    assert resumen["porcentaje_adopcion_plantilla"] == 50.0
+    assert resumen["dias_calendario_esperados_empresa"] == 20
+    assert resumen["dias_unicos_cubiertos_empresa"] == 6
+    assert resumen["registros_de_franco_cargados"] == 2
+    assert resumen["total_registros_asistencia"] == 6
+    assert resumen["porcentaje_uso_sobre_dias_corridos"] == 30.0
+
+    empleados = res["detalle_empleados"]
+    assert len(empleados) == 2
+    assert empleados[0]["porcentaje_cumplimiento"] == 60.0
+    assert empleados[0]["dias_faltantes"] == 4
+    assert len(empleados[0]["fechas_cubiertas"]) == 6
+    assert empleados[1]["porcentaje_cumplimiento"] == 0.0
+
+    serie = res["serie_diaria"]
+    assert len(serie) == 10
+    assert serie[0]["fecha"] == "2026-10-01"
+    assert serie[0]["porcentaje_diario"] == 50.0
+    assert serie[0]["porcentaje_acumulado"] == 50.0
+    assert serie[-1]["fecha"] == "2026-10-10"
+    assert serie[-1]["porcentaje_diario"] == 0.0
+    assert serie[-1]["porcentaje_acumulado"] == 30.0
+
+
+# [FN-11.01] Restricción RBAC para estadísticas de uso (solo core, sub_admin, admin)
+def test_api_puente_estadisticas_uso_valida_rbac(monkeypatch):
+    puente = ApiPuente()
+    esperado = {"resumen_general": {"dias_corridos_calendario": 1}, "detalle_empleados": [], "serie_diaria": []}
+    llamadas = []
+
+    def fake_stats(fecha_hasta=None):
+        llamadas.append(fecha_hasta)
+        return esperado
+
+    monkeypatch.setattr(db, "obtener_estadisticas_uso", fake_stats)
+
+    for rol_denegado in ("user_1", "user_2"):
+        monkeypatch.setattr(db, "obtener_sesion_activa", lambda r=rol_denegado: {"id_usuario": str(uuid4()), "rol_app": r})
+        res = puente.obtener_estadisticas_uso("2026-10-10")
+        assert res["exito"] is False
+        assert res["codigo_error"] == "ACCESO_DENEGADO"
+
+    assert len(llamadas) == 0
+
+    for rol_ok in ("core", "sub_admin", "admin"):
+        monkeypatch.setattr(db, "obtener_sesion_activa", lambda r=rol_ok: {"id_usuario": str(uuid4()), "rol_app": r})
+        res_ok = puente.obtener_estadisticas_uso("2026-10-10")
+        assert res_ok == esperado
+
+    assert llamadas == ["2026-10-10", "2026-10-10", "2026-10-10"]

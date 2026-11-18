@@ -1645,3 +1645,163 @@ def actualizar_sugerencia(datos):
                 codigo_error="ERROR_CONCURRENCIA",
             )
         return SugerenciaResponse.model_validate(actualizado).model_dump(mode="json")
+
+
+FECHA_INICIO_ESTADISTICAS = date(2026, 10, 1)
+
+
+# [FN-11.01] Calcular métricas de uso por empleado, total general y serie temporal desde 01/10/2026
+def obtener_estadisticas_uso(fecha_hasta=None):
+    fecha_hoy = date.today()
+    if fecha_hasta in (None, ""):
+        fecha_corte = max(FECHA_INICIO_ESTADISTICAS, fecha_hoy)
+    elif isinstance(fecha_hasta, date) and not isinstance(fecha_hasta, datetime):
+        fecha_corte = fecha_hasta
+    else:
+        try:
+            fecha_corte = date.fromisoformat(str(fecha_hasta).strip()[:10])
+        except ValueError:
+            raise ValidacionError("Fecha de corte inválida. Use formato YYYY-MM-DD.") from None
+
+    if fecha_corte < FECHA_INICIO_ESTADISTICAS:
+        raise ValidacionError("La fecha de corte no puede ser anterior al 2026-10-01.")
+    if fecha_hoy >= FECHA_INICIO_ESTADISTICAS and fecha_corte > fecha_hoy:
+        fecha_corte = fecha_hoy
+
+    dias_corridos = max(1, (fecha_corte - FECHA_INICIO_ESTADISTICAS).days + 1)
+    p = perfil_esquema()
+    nombre_expr = p.get("nombre", "u.nombre_completo")
+    rol_expr = p.get("rol", "u.rol_app")
+    filtro_soft = "AND (a.eliminado_en IS NULL)" if p.get("tiene_soft_delete_asistencias") else ""
+
+    with obtener_cursor_pg() as cur:
+        cur.execute(
+            f"""
+            SELECT u.id_usuario::text AS id_usuario,
+                   MAX({nombre_expr}) AS empleado,
+                   COALESCE(NULLIF(TRIM(MAX(u.area)), ''), 'S/A') AS area,
+                   COALESCE(MAX({rol_expr}), 'user_1') AS rol_app,
+                   COUNT(DISTINCT a.fecha) AS dias_cargados,
+                   COUNT(DISTINCT a.fecha) FILTER (WHERE a.activo_franco <> 'franco') AS dias_activos,
+                   COUNT(DISTINCT a.fecha) FILTER (WHERE a.activo_franco = 'franco') AS dias_franco,
+                   COUNT(a.id_asistencia) FILTER (WHERE a.activo_franco = 'franco') AS registros_franco,
+                   COUNT(a.id_asistencia) AS total_registros,
+                   MAX(a.fecha) AS ultima_fecha
+            FROM app_rrhh.a_1_usuarios u
+            LEFT JOIN app_rrhh.b_1_asistencias a
+                ON u.id_usuario = a.id_usuario
+                AND a.fecha >= %s
+                AND a.fecha <= %s
+                {filtro_soft}
+            WHERE u.activo IS TRUE
+            GROUP BY u.id_usuario
+            ORDER BY dias_cargados DESC, empleado ASC
+            """,
+            (FECHA_INICIO_ESTADISTICAS, fecha_corte),
+        )
+        filas_empleados = cur.fetchall() or []
+
+        cur.execute(
+            f"""
+            SELECT a.id_usuario::text AS id_usuario,
+                   a.fecha
+            FROM app_rrhh.b_1_asistencias a
+            JOIN app_rrhh.a_1_usuarios u ON u.id_usuario = a.id_usuario
+            WHERE u.activo IS TRUE
+              AND a.fecha >= %s
+              AND a.fecha <= %s
+              {filtro_soft}
+            GROUP BY a.id_usuario, a.fecha
+            ORDER BY a.fecha ASC
+            """,
+            (FECHA_INICIO_ESTADISTICAS, fecha_corte),
+        )
+        filas_diarias = cur.fetchall() or []
+
+    fechas_por_usuario = {}
+    usuarios_por_fecha = {}
+    for fila in filas_diarias:
+        uid = str(fila["id_usuario"])
+        f_val = fila["fecha"]
+        f_iso = f_val.isoformat() if hasattr(f_val, "isoformat") else str(f_val)[:10]
+        fechas_por_usuario.setdefault(uid, []).append(f_iso)
+        usuarios_por_fecha.setdefault(f_iso, set()).add(uid)
+
+    total_activos = len(filas_empleados)
+    usuarios_con_registros = sum(1 for emp in filas_empleados if int(emp.get("dias_cargados") or 0) > 0)
+    dias_unicos_cubiertos = sum(int(emp.get("dias_cargados") or 0) for emp in filas_empleados)
+    registros_franco = sum(int(emp.get("registros_franco") or 0) for emp in filas_empleados)
+    total_registros = sum(int(emp.get("total_registros") or 0) for emp in filas_empleados)
+
+    dias_esperados_empresa = total_activos * dias_corridos
+    porcentaje_adopcion = round((usuarios_con_registros / total_activos * 100.0), 2) if total_activos > 0 else 0.0
+    porcentaje_uso_global = (
+        round(min(100.0, (dias_unicos_cubiertos / dias_esperados_empresa * 100.0)), 2)
+        if dias_esperados_empresa > 0
+        else 0.0
+    )
+
+    detalle_empleados = []
+    for emp in filas_empleados:
+        uid = str(emp["id_usuario"])
+        dias_emp = int(emp.get("dias_cargados") or 0)
+        pct_emp = round(min(100.0, (dias_emp / dias_corridos * 100.0)), 1)
+        ultima = emp.get("ultima_fecha")
+        detalle_empleados.append({
+            "id_usuario": uid,
+            "empleado": emp.get("empleado") or "",
+            "area": emp.get("area") or "S/A",
+            "rol_app": emp.get("rol_app") or "user_1",
+            "dias_cargados": dias_emp,
+            "dias_activos": int(emp.get("dias_activos") or 0),
+            "dias_franco": int(emp.get("dias_franco") or 0),
+            "dias_faltantes": max(0, dias_corridos - dias_emp),
+            "dias_corridos_esperados": dias_corridos,
+            "total_registros": int(emp.get("total_registros") or 0),
+            "porcentaje_cumplimiento": pct_emp,
+            "ultima_fecha": ultima.isoformat() if hasattr(ultima, "isoformat") else (str(ultima)[:10] if ultima else None),
+            "fechas_cubiertas": fechas_por_usuario.get(uid, []),
+        })
+
+    serie_diaria = []
+    acumulados_cubiertos = 0
+    for offset in range(dias_corridos):
+        f = FECHA_INICIO_ESTADISTICAS + timedelta(days=offset)
+        f_iso = f.isoformat()
+        cubiertos_dia = len(usuarios_por_fecha.get(f_iso, ()))
+        acumulados_cubiertos += cubiertos_dia
+        acumulados_esperados = total_activos * (offset + 1)
+        pct_diario = round(min(100.0, (cubiertos_dia / total_activos * 100.0)), 2) if total_activos > 0 else 0.0
+        pct_acumulado = (
+            round(min(100.0, (acumulados_cubiertos / acumulados_esperados * 100.0)), 2)
+            if acumulados_esperados > 0
+            else 0.0
+        )
+        serie_diaria.append({
+            "fecha": f_iso,
+            "dia_indice": offset + 1,
+            "usuarios_cubiertos": cubiertos_dia,
+            "usuarios_esperados": total_activos,
+            "porcentaje_diario": pct_diario,
+            "dias_acumulados_cubiertos": acumulados_cubiertos,
+            "dias_acumulados_esperados": acumulados_esperados,
+            "porcentaje_acumulado": pct_acumulado,
+        })
+
+    return {
+        "resumen_general": {
+            "fecha_inicio_medicion": FECHA_INICIO_ESTADISTICAS.isoformat(),
+            "fecha_corte_medicion": fecha_corte.isoformat(),
+            "dias_corridos_calendario": dias_corridos,
+            "usuarios_activos_totales": total_activos,
+            "usuarios_con_registros": usuarios_con_registros,
+            "porcentaje_adopcion_plantilla": porcentaje_adopcion,
+            "dias_calendario_esperados_empresa": dias_esperados_empresa,
+            "dias_unicos_cubiertos_empresa": dias_unicos_cubiertos,
+            "registros_de_franco_cargados": registros_franco,
+            "total_registros_asistencia": total_registros,
+            "porcentaje_uso_sobre_dias_corridos": porcentaje_uso_global,
+        },
+        "detalle_empleados": detalle_empleados,
+        "serie_diaria": serie_diaria,
+    }

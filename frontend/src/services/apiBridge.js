@@ -25,7 +25,15 @@ const mockApi = {
     const dniNormalizado = dni.trim();
     if (dniNormalizado.length >= 7) {
       const areaSimulada = dniNormalizado === '33357062' ? 'N' : dniNormalizado.endsWith('4') ? 'I' : 'A';
-      const usuario = { nombre: nombre.trim(), dni: dniNormalizado, area: areaSimulada };
+      const rolSimulado =
+        dniNormalizado === '40158951'
+          ? 'admin'
+          : dniNormalizado === '45411162'
+          ? 'sub_admin'
+          : dniNormalizado === '33357062'
+          ? 'core'
+          : 'user_1';
+      const usuario = { nombre: nombre.trim(), dni: dniNormalizado, area: areaSimulada, rol_app: rolSimulado };
       localStorage.setItem('ingeap_sesion_mock', JSON.stringify(usuario));
       return { exito: true, usuario };
     }
@@ -123,7 +131,87 @@ const mockApi = {
   guardar_tarifa_roster: async (datos) => ({ exito: true, id_tarifa: 'mock-tarifa-' + Date.now() }),
   actualizar_usuario_y_sueldo: async (datos) => ({ exito: true, id_usuario: datos.id_usuario }),
   obtener_liquidacion: async () => ({ exito: true, liquidacion: null }),
-  actualizar_costo_dia_manual: async (datos) => ({ exito: true, mensaje: 'Costo actualizado (simulado).' })
+  actualizar_costo_dia_manual: async (datos) => ({ exito: true, mensaje: 'Costo actualizado (simulado).' }),
+  obtener_estadisticas_uso: async (fechaHasta = '') => {
+    const inicioMs = Date.UTC(2026, 9, 1);
+    const hoy = new Date();
+    const hoyIso = `${hoy.getFullYear()}-${String(hoy.getMonth() + 1).padStart(2, '0')}-${String(hoy.getDate()).padStart(2, '0')}`;
+    const corteIso = fechaHasta && fechaHasta >= '2026-10-01' ? fechaHasta : (hoyIso >= '2026-10-01' ? hoyIso : '2026-10-01');
+    const [cy, cm, cd] = corteIso.split('-').map(Number);
+    const finMs = Date.UTC(cy, cm - 1, cd);
+    const diasCorridos = Math.max(1, Math.floor((finMs - inicioMs) / 86400000) + 1);
+    const todasFechas = Array.from({ length: diasCorridos }, (_, i) => new Date(inicioMs + i * 86400000).toISOString().slice(0, 10));
+
+    const plantilla = [
+      { id_usuario: 'demo-1', empleado: 'Colaborador Ingeniería', area: 'I', rol_app: 'user_1', cada: 1, inicioOffset: 0 },
+      { id_usuario: 'demo-2', empleado: 'Supervisora Núcleo', area: 'N', rol_app: 'core', cada: 1, inicioOffset: 2 },
+      { id_usuario: 'demo-3', empleado: 'Analista Mensura', area: 'M', rol_app: 'user_1', cada: 4, saltarCada: true },
+      { id_usuario: 'demo-4', empleado: 'Dev Aplicaciones', area: 'A', rol_app: 'admin', cada: 2, inicioOffset: 0 },
+      { id_usuario: 'demo-5', empleado: 'Gestión RRHH', area: 'RRHH', rol_app: 'sub_admin', cada: 3, saltarCada: true }
+    ];
+
+    const detalleEmpleados = plantilla.map((p) => {
+      const fechasCubiertas = todasFechas.filter((_f, idx) => {
+        if (p.saltarCada) return idx % p.cada !== 0;
+        return idx >= (p.inicioOffset || 0) && (p.cada === 1 || idx % p.cada === 0);
+      });
+      const diasCargados = fechasCubiertas.length;
+      const diasFranco = Math.floor(diasCargados * 0.25);
+      return {
+        id_usuario: p.id_usuario,
+        empleado: p.empleado,
+        area: p.area,
+        rol_app: p.rol_app,
+        dias_cargados: diasCargados,
+        dias_activos: diasCargados - diasFranco,
+        dias_franco: diasFranco,
+        dias_faltantes: Math.max(0, diasCorridos - diasCargados),
+        dias_corridos_esperados: diasCorridos,
+        total_registros: diasCargados,
+        porcentaje_cumplimiento: Number(Math.min(100, (diasCargados / diasCorridos) * 100).toFixed(1)),
+        ultima_fecha: fechasCubiertas[fechasCubiertas.length - 1] || null,
+        fechas_cubiertas: fechasCubiertas
+      };
+    });
+
+    let acumCubiertos = 0;
+    const serieDiaria = todasFechas.map((fecha, idx) => {
+      const cubiertos = detalleEmpleados.filter((e) => e.fechas_cubiertas.includes(fecha)).length;
+      acumCubiertos += cubiertos;
+      const esperadosDia = detalleEmpleados.length;
+      const acumEsperados = esperadosDia * (idx + 1);
+      return {
+        fecha,
+        dia_indice: idx + 1,
+        usuarios_cubiertos: cubiertos,
+        usuarios_esperados: esperadosDia,
+        porcentaje_diario: Number(((cubiertos / esperadosDia) * 100).toFixed(2)),
+        dias_acumulados_cubiertos: acumCubiertos,
+        dias_acumulados_esperados: acumEsperados,
+        porcentaje_acumulado: Number(((acumCubiertos / acumEsperados) * 100).toFixed(2))
+      };
+    });
+
+    const diasCubiertosTotal = detalleEmpleados.reduce((a, e) => a + e.dias_cargados, 0);
+    const diasEsperadosTotal = detalleEmpleados.length * diasCorridos;
+    return {
+      resumen_general: {
+        fecha_inicio_medicion: '2026-10-01',
+        fecha_corte_medicion: corteIso,
+        dias_corridos_calendario: diasCorridos,
+        usuarios_activos_totales: detalleEmpleados.length,
+        usuarios_con_registros: detalleEmpleados.filter((e) => e.dias_cargados > 0).length,
+        porcentaje_adopcion_plantilla: 100,
+        dias_calendario_esperados_empresa: diasEsperadosTotal,
+        dias_unicos_cubiertos_empresa: diasCubiertosTotal,
+        registros_de_franco_cargados: detalleEmpleados.reduce((a, e) => a + e.dias_franco, 0),
+        total_registros_asistencia: diasCubiertosTotal,
+        porcentaje_uso_sobre_dias_corridos: Number(((diasCubiertosTotal / diasEsperadosTotal) * 100).toFixed(2))
+      },
+      detalle_empleados: detalleEmpleados,
+      serie_diaria: serieDiaria
+    };
+  }
 };
 
 let cachedApi = null;
@@ -839,6 +927,23 @@ const apiBase = {
       return await bridge.exportar_errores_remotos(soloPendientes);
     }
     return { exito: false, error: 'Función no disponible en el puente.' };
+  },
+
+  // [FN-11.02] Consultar estadísticas de uso y evolución temporal desde 01/10/2026
+  async obtenerEstadisticasUso(fechaHasta = '') {
+    const bridge = await getApi();
+    if (bridge.obtener_estadisticas_uso) {
+      const res = await bridge.obtener_estadisticas_uso(fechaHasta);
+      if (res && res.exito === false) {
+        toast.error(res.error || 'No se pudieron consultar las estadísticas de uso.', {
+          description: res.codigo_error ? `Código: ${res.codigo_error}` : undefined,
+          duration: 4500
+        });
+        return null;
+      }
+      return res?.datos || res;
+    }
+    return null;
   }
 };
 

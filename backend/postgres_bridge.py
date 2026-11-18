@@ -30,6 +30,7 @@ METODOS_LECTURA = {
     "obtener_dias_faltantes_mes",
     "obtener_proyectos_admin",
     "obtener_errores_remotos",
+    "obtener_estadisticas_uso",
 }
 _METODOS_SUGERENCIAS = {"crear_sugerencia", "obtener_sugerencias", "actualizar_sugerencia"}
 _METODOS_LOCALES = {"set_ventana", "obtener_estado_inicializacion", "reintentar_conexion", "cerrar_sesion",
@@ -396,6 +397,11 @@ class ApiPuente:
     def obtener_actividad_dia_anterior(self):
         self._sesion(auditor=True)
         return db.obtener_actividad_dia_anterior()
+
+    # [FN-11.01] Consultar estadísticas de uso desde 01/10/2026 para core, sub_admin y admin
+    def obtener_estadisticas_uso(self, fecha_hasta: str = ""):
+        self._sesion(auditor=True)
+        return db.obtener_estadisticas_uso(fecha_hasta or None)
 
     def eliminar_registro_asistencia(self, id_registro: int | str):
         sesion = self._sesion()

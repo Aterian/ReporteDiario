@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { getTituloRpg } from '../utils/rpgTitles';
 import { api } from '../services/apiBridge';
-import { puedeVerHistorialOtros, puedeAccederRoster, puedeGestionarUsuarios, puedeGestionarSugerencias, puedeGestionarProyectos } from '../utils/permissions';
+import { puedeVerHistorialOtros, puedeAccederRoster, puedeGestionarUsuarios, puedeGestionarSugerencias, puedeGestionarProyectos, puedeVerEstadisticasUso } from '../utils/permissions';
 
 // Iconos vectoriales medievales para garantizar renderizado perfecto sin depender de compatibilidad de emojis
 const QuillIcon = ({ size = 16, color = "#6b4317" }) => (
@@ -60,6 +60,7 @@ export default function RpgTavernBoard({
   onNuevaSugerencia,
   onGestionSugerencias,
   onGestionProyectos,
+  onEstadisticasUso,
   onVerErroresRemotos
 }) {
   const puedeOtros = puedeVerHistorialOtros(usuario);
@@ -309,6 +310,18 @@ export default function RpgTavernBoard({
                 onClick={onGestionSugerencias}
               >
                 Gestionar sugerencias
+              </button>
+            )}
+
+            {puedeVerEstadisticasUso(usuario) && onEstadisticasUso && (
+              <button
+                type="button"
+                className="rpg-parchment-btn-sec"
+                style={{ marginTop: '6px', minHeight: '44px', borderColor: '#059669', color: '#065f46', fontWeight: 700 }}
+                onClick={onEstadisticasUso}
+                title="Códice de eficacia ISO 9001 y estadísticas de cumplimiento desde 01/10/2026"
+              >
+                📊 Códice de Eficacia y Uso (Estadísticas)
               </button>
             )}
 

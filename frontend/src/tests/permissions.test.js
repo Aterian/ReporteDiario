@@ -20,7 +20,8 @@ import {
   puedeVerCalculadoraLiquidacion,
   puedeVerModificaciones,
   puedeModificarRegistro,
-  puedeGestionarProyectos
+  puedeGestionarProyectos,
+  puedeVerEstadisticasUso
 } from '../utils/permissions';
 
 describe('RBAC - Control de Roles y Capacidades', () => {
@@ -151,6 +152,16 @@ describe('RBAC - Control de Roles y Capacidades', () => {
       expect(puedeModificarHistorialOtros(subAdminUser)).toBe(true);
       expect(puedeModificarHistorialOtros(coreUser)).toBe(false);
       expect(puedeModificarHistorialOtros(user1)).toBe(false);
+    });
+
+    it('permite ver estadísticas de uso exclusivamente a usuarios core o superior', () => {
+      expect(puedeVerEstadisticasUso(adminUser)).toBe(true);
+      expect(puedeVerEstadisticasUso(subAdminUser)).toBe(true);
+      expect(puedeVerEstadisticasUso(coreUser)).toBe(true);
+      expect(puedeVerEstadisticasUso(user1)).toBe(false);
+      expect(puedeVerEstadisticasUso(user2)).toBe(false);
+      expect(puedeVerEstadisticasUso(unknownUser)).toBe(false);
+      expect(puedeVerEstadisticasUso(null)).toBe(false);
     });
   });
 

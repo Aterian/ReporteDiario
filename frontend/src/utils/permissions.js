@@ -252,3 +252,9 @@ export const puedeGestionarSugerencias = (usuario) => {
   const rol = getRolUsuario(usuario);
   return rol === 'admin' || rol === 'sub_admin' || rol === 'core';
 };
+
+// [FN-11.02] Acceso al módulo de Estadísticas de Uso (core, sub_admin y admin)
+export const puedeVerEstadisticasUso = (usuario) => {
+  const rol = getRolUsuario(usuario);
+  return rol === 'admin' || rol === 'sub_admin' || rol === 'core';
+};

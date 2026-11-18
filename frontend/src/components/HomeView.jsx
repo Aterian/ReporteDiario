@@ -11,6 +11,7 @@ import {
   puedeGestionarUsuarios,
   puedeGestionarSugerencias,
   puedeGestionarProyectos,
+  puedeVerEstadisticasUso,
   esAdmin
 } from '../utils/permissions';
 
@@ -28,6 +29,7 @@ export default function HomeView({
   onNuevaSugerencia,
   onGestionSugerencias,
   onGestionProyectos,
+  onEstadisticasUso,
   erroresRemotos = [],
   onVerErroresRemotos,
   notificacionesModificaciones = [],
@@ -51,6 +53,7 @@ export default function HomeView({
         onNuevaSugerencia={onNuevaSugerencia}
         onGestionSugerencias={onGestionSugerencias}
         onGestionProyectos={onGestionProyectos}
+        onEstadisticasUso={onEstadisticasUso}
         onVerErroresRemotos={onVerErroresRemotos}
       />
     );
@@ -65,7 +68,8 @@ export default function HomeView({
   const puedeGestionar = puedeGestionarUsuarios(usuario);
   const puedeGestionarBuzon = puedeGestionarSugerencias(usuario);
   const puedeProyectos = puedeGestionarProyectos(usuario);
-  const tieneModulosGestion = puedeRoster || puedeOtros || puedeVerAyer || puedeGestionar || puedeGestionarBuzon || puedeProyectos;
+  const puedeEstadisticas = puedeVerEstadisticasUso(usuario);
+  const tieneModulosGestion = puedeRoster || puedeOtros || puedeVerAyer || puedeGestionar || puedeGestionarBuzon || puedeProyectos || puedeEstadisticas;
 
   const getFechaFormateada = () => {
     const hoy = new Date();
@@ -397,6 +401,35 @@ export default function HomeView({
                   <div className="action-card-content">
                     <span className="action-card-title">Gestionar sugerencias</span>
                     <span className="action-card-desc">Revisá las sugerencias y registrá las acciones tomadas</span>
+                  </div>
+                  <div className="action-card-arrow">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <polyline points="9 18 15 12 9 6" />
+                    </svg>
+                  </div>
+                </button>
+              )}
+
+              {/* [FN-11.05] Botón: Módulo de Estadísticas de Uso (core, sub_admin y admin) */}
+              {puedeEstadisticas && (
+                <button
+                  type="button"
+                  className="home-action-card card-usage-stats"
+                  onClick={onEstadisticasUso}
+                  style={{ borderLeft: '4px solid #059669' }}
+                >
+                  <div className="action-card-icon-box" style={{ background: '#d1fae5', color: '#059669' }}>
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <line x1="18" y1="20" x2="18" y2="10" />
+                      <line x1="12" y1="20" x2="12" y2="4" />
+                      <line x1="6" y1="20" x2="6" y2="14" />
+                    </svg>
+                  </div>
+                  <div className="action-card-content">
+                    <span className="action-card-title">Estadísticas de Uso</span>
+                    <span className="action-card-desc">
+                      Métricas de adopción, cumplimiento por empleado y evolución desde 01/10/2026
+                    </span>
                   </div>
                   <div className="action-card-arrow">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
