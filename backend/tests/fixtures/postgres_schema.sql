@@ -68,6 +68,8 @@ CREATE TABLE "app_rrhh"."a_1_sueldos_base" ("id_sueldo" uuid DEFAULT gen_random_
 "dia_obra" numeric(12,2) GENERATED ALWAYS AS (round((sueldo_obra / 30.0), 2)) STORED,
 "lugar_habitual" app_rrhh.tipo_lugar_habitual DEFAULT 'oficina'::app_rrhh.tipo_lugar_habitual NOT NULL,
 "modalidad_calculo" app_rrhh.tipo_modalidad_calculo DEFAULT 'base_30'::app_rrhh.tipo_modalidad_calculo NOT NULL,
+"porcentaje_costo_empresa" numeric(5,2) DEFAULT 0.00 NOT NULL,
+"costo_total_empresa" numeric(12,2) GENERATED ALWAYS AS (round(((CASE WHEN (lugar_habitual = 'obra'::app_rrhh.tipo_lugar_habitual) THEN sueldo_obra ELSE sueldo_oficina END) * (1.0 + (porcentaje_costo_empresa / 100.0))), 2)) STORED,
 "vigente_desde" date DEFAULT CURRENT_DATE NOT NULL,
 "actualizado_en" timestamp with time zone DEFAULT CURRENT_TIMESTAMP);
 
@@ -171,6 +173,8 @@ ALTER TABLE "app_rrhh"."a_1_sueldos_base" ADD CONSTRAINT "a_1_sueldos_base_pkey"
 ALTER TABLE "app_rrhh"."a_1_sueldos_base" ADD CONSTRAINT "a_1_sueldos_base_sueldo_obra_check" CHECK ((sueldo_obra >= (0)::numeric));
 
 ALTER TABLE "app_rrhh"."a_1_sueldos_base" ADD CONSTRAINT "a_1_sueldos_base_sueldo_oficina_check" CHECK ((sueldo_oficina >= (0)::numeric));
+
+ALTER TABLE "app_rrhh"."a_1_sueldos_base" ADD CONSTRAINT "a_1_sueldos_base_porcentaje_costo_empresa_check" CHECK (((porcentaje_costo_empresa >= (0)::numeric) AND (porcentaje_costo_empresa <= (500)::numeric)));
 
 ALTER TABLE "app_rrhh"."a_1_usuarios" ADD CONSTRAINT "a_1_usuarios_correo_key" UNIQUE (correo);
 

@@ -1,5 +1,11 @@
 # Catálogo Funcional del Sistema
 
+## [FN-08.02] Porcentaje de Costo Complementario y Costo Total Empresa Provisorio
+- **Módulo**: [MOD-08] Gestión de Empleados
+- **Flujo Operativo**: Permite a `admin` y `sub_admin` asignar por colaborador un `% de costo complementario/empresa` en `app_rrhh.a_1_sueldos_base`, calculando y mostrando el `Costo Total Empresa` tanto en una columna dedicada de `UsersManagementView.jsx` como con vista previa en vivo dentro del modal de alta y edición sobre la liquidación mensual vigente (`a_1_calculo_sueldo.sueldo_total`) con respaldo en el sueldo base habitual.
+- **Tablas afectadas**: app_rrhh.a_1_sueldos_base, app_rrhh.a_1_calculo_sueldo.
+- **Reglas de negocio e invariantes**: Porcentaje acotado en rango `[0, 500]`%; columna generada `costo_total_empresa` en PostgreSQL como respaldo determinista sobre sueldo habitual; precedencia en consulta de liquidación mensual vigente (`sueldo_total > 0`); modificación exclusiva de `%` preserva `vigente_desde` sin generar historial ni recalcular liquidación; campos ocultos para roles operativos (`user_1`, `user_2`).
+
 ## [FN-11.01] Módulo de Estadísticas de Uso y Evolución Temporal ISO 9001 desde 01/10/2026
 - **Módulo**: [MOD-11] Estadísticas de Uso y Conformidad ISO 9001
 - **Flujo Operativo**: Calcula desde PostgreSQL el cumplimiento de días corridos calendario desde el `01/10/2026` (activos y francos) a nivel global y por colaborador activo; expone KPIs generales, un gráfico SVG interactivo de `% de uso` temporal en tres modos (`Acumulado ISO`, `Diario`, `Semanal`) filtrable por área o empleado frente al promedio empresa, y una tabla detallada con exportación JSON.

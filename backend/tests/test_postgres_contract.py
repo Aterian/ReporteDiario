@@ -1798,3 +1798,215 @@ def test_api_puente_estadisticas_uso_valida_rbac(monkeypatch):
         assert res_ok == esperado
 
     assert llamadas == ["2026-10-10", "2026-10-10", "2026-10-10"]
+
+
+# [FN-08.02] Consultar y exponer porcentaje y costo total empresa en catálogo con RBAC
+def test_obtener_usuarios_cache_costo_empresa_y_rbac(monkeypatch):
+    id_u = str(uuid4())
+    cursor = MagicMock()
+    cursor.fetchall.return_value = [
+        {
+            "id_usuario": id_u,
+            "id_origen": id_u,
+            "dni": "40158951",
+            "nombre": "Iván Valentin",
+            "primer_nombre": "Iván",
+            "apellido": "Valentin",
+            "mail": "sge@ingeap.com",
+            "email": "sge@ingeap.com",
+            "area": "A",
+            "rol_app": "admin",
+            "activo": True,
+            "sueldo_oficina": Decimal("1250000.00"),
+            "sueldo_obra": Decimal("1600000.00"),
+            "costo_dia_ofi": Decimal("41666.67"),
+            "costo_dia_obra": Decimal("53333.33"),
+            "lugar_habitual": "oficina",
+            "modalidad_calculo": "base_30",
+            "porcentaje_costo_empresa": Decimal("30.00"),
+            "liquidacion_actual": Decimal("1250000.00"),
+            "ciclo_liquidacion_actual": "2026-11",
+            "base_costo_empresa": Decimal("1250000.00"),
+            "origen_base_costo_empresa": "liquidacion",
+            "costo_total_empresa": Decimal("1625000.00"),
+        }
+    ]
+
+    @contextmanager
+    def conexion(commit=False):
+        assert commit is False
+        yield cursor
+
+    monkeypatch.setattr(db, "obtener_cursor_pg", conexion)
+    monkeypatch.setattr(db, "perfil_esquema", lambda: {
+        "nombre": "u.nombre_completo",
+        "primer_nombre": "u.nombre",
+        "apellido": "u.apellido",
+        "correo": "u.correo",
+        "rol": "u.rol_app",
+        "proyecto": "p.codificacion_serv",
+        "tiene_costo_empresa": True,
+    })
+    db.invalidar_caches_repositorio(("usuarios", True))
+
+    filas = db.obtener_usuarios_cache(incluir_inactivos=True)
+    sql_ejecutado = cursor.execute.call_args.args[0]
+    assert "a_1_calculo_sueldo" in sql_ejecutado
+    assert "s.porcentaje_costo_empresa" in sql_ejecutado
+    assert "costo_total_empresa" in sql_ejecutado
+    assert filas[0]["porcentaje_costo_empresa"] == "30.00"
+    assert filas[0]["costo_total_empresa"] == "1625000.00"
+
+    puente = ApiPuente()
+    monkeypatch.setattr(db, "obtener_sesion_activa", lambda: {"id_usuario": id_u, "rol_app": "user_2"})
+    res_op = puente.obtener_todos_usuarios(incluir_inactivos=True)
+    assert "porcentaje_costo_empresa" not in res_op[0]
+    assert "costo_total_empresa" not in res_op[0]
+    assert "liquidacion_actual" not in res_op[0]
+
+    monkeypatch.setattr(db, "obtener_sesion_activa", lambda: {"id_usuario": id_u, "rol_app": "core"})
+    res_core = puente.obtener_todos_usuarios(incluir_inactivos=True)
+    assert res_core[0]["porcentaje_costo_empresa"] == "30.00"
+    assert res_core[0]["costo_total_empresa"] == "1625000.00"
+
+
+# [FN-08.02] Persistir porcentaje de costo empresa en alta y actualización sin alterar vigencia
+def test_actualizar_y_crear_usuario_persiste_porcentaje_costo_empresa(monkeypatch):
+    from pydantic import ValidationError as PydanticValidationError
+
+    id_u = USUARIO
+    cursor = MagicMock()
+    cursor.fetchone.side_effect = [
+        {"id_usuario": id_u, "rol_app": "user_1"},
+        {"id_usuario": id_u},
+        {
+            "id_sueldo": str(uuid4()),
+            "sueldo_oficina": Decimal("1250000.00"),
+            "sueldo_obra": Decimal("2000000.00"),
+            "lugar_habitual": "oficina",
+            "modalidad_calculo": "base_30",
+            "porcentaje_costo_empresa": Decimal("0.00"),
+            "costo_total_empresa": Decimal("1250000.00"),
+            "dia_oficina": Decimal("41666.67"),
+            "dia_obra": Decimal("66666.67"),
+            "vigente_desde": date(2026, 2, 1),
+        },
+        {
+            "id_sueldo": str(uuid4()),
+            "dia_oficina": Decimal("41666.67"),
+            "dia_obra": Decimal("66666.67"),
+            "lugar_habitual": "oficina",
+            "modalidad_calculo": "base_30",
+            "porcentaje_costo_empresa": Decimal("30.00"),
+            "costo_total_empresa": Decimal("1625000.00"),
+            "vigente_desde": date(2026, 2, 1),
+        },
+    ]
+
+    @contextmanager
+    def conexion(commit=False):
+        yield cursor
+
+    monkeypatch.setattr(db, "obtener_cursor_pg", conexion)
+    monkeypatch.setattr(db, "perfil_esquema", lambda: {"apellido": "u.apellido", "tiene_costo_empresa": True})
+
+    datos = {
+        "id_usuario": id_u,
+        "nombre": "Ana",
+        "apellido": "Lopez",
+        "dni": "35111222",
+        "correo": "ana@ingeap.com",
+        "area": "I",
+        "rol_app": "user_1",
+        "activo": True,
+        "sueldo_oficina": Decimal("1250000.00"),
+        "sueldo_obra": Decimal("2000000.00"),
+        "lugar_habitual": "oficina",
+        "modalidad_calculo": "base_30",
+        "porcentaje_costo_empresa": Decimal("30.00"),
+    }
+
+    res = db.actualizar_usuario_y_sueldo(datos, operador_sesion={"id_usuario": id_u, "rol_app": "admin"})
+    assert res["exito"] is True
+    assert res["porcentaje_costo_empresa"] == "30.00"
+    assert res["costo_total_empresa"] == "1625000.00"
+    assert res["vigente_desde"] == "2026-02-01"
+
+    consultas = [call.args[0] for call in cursor.execute.call_args_list]
+    assert any("SET porcentaje_costo_empresa = %s" in q for q in consultas)
+    assert not any("fn_recalcular_liquidacion_mes" in q for q in consultas)
+
+    # Validar rango de porcentaje en Pydantic
+    with pytest.raises(PydanticValidationError):
+        db.UsuarioSueldoCreate(
+            primer_nombre="Ana",
+            dni="35111222",
+            email="ana@ingeap.com",
+            area="I",
+            porcentaje_costo_empresa=Decimal("501"),
+        )
+
+    # Verificar creación de usuario con porcentaje_costo_empresa
+    id_nuevo = str(uuid4())
+    cursor_crear = MagicMock()
+    cursor_crear.fetchone.side_effect = [
+        None,
+        {
+            "id_usuario": id_nuevo,
+            "nombre": "Carlos",
+            "apellido": "Ríos",
+            "dni": "36222333",
+            "correo": "carlos@ingeap.com",
+            "area": "M",
+            "rol_app": "user_1",
+            "activo": True,
+            "creado_en": date(2026, 11, 18),
+        },
+        {
+            "id_sueldo": str(uuid4()),
+            "dia_oficina": Decimal("40000.00"),
+            "dia_obra": Decimal("50000.00"),
+            "lugar_habitual": "oficina",
+            "modalidad_calculo": "base_30",
+            "porcentaje_costo_empresa": Decimal("25.00"),
+            "costo_total_empresa": Decimal("1500000.00"),
+            "vigente_desde": date(2026, 11, 18),
+        },
+    ]
+
+    @contextmanager
+    def conexion_crear(commit=False):
+        yield cursor_crear
+
+    monkeypatch.setattr(db, "obtener_cursor_pg", conexion_crear)
+    res_crear = db.crear_usuario_y_sueldo(
+        {
+            "primer_nombre": "Carlos",
+            "apellido": "Ríos",
+            "dni": "36222333",
+            "email": "carlos@ingeap.com",
+            "area": "M",
+            "sueldo_oficina": Decimal("1200000.00"),
+            "sueldo_obra": Decimal("1500000.00"),
+            "porcentaje_costo_empresa": Decimal("25.00"),
+        },
+        operador_sesion={"id_usuario": id_u, "rol_app": "sub_admin"},
+    )
+    assert res_crear["exito"] is True
+    assert res_crear["porcentaje_costo_empresa"] == "25.00"
+    assert res_crear["costo_total_empresa"] == "1500000.00"
+
+    # Esquema sin migración 009 debe rechazar porcentaje > 0 con error claro
+    monkeypatch.setattr(db, "perfil_esquema", lambda: {"apellido": "u.apellido", "tiene_costo_empresa": False})
+    with pytest.raises(ValidacionError):
+        db.crear_usuario_y_sueldo(
+            {
+                "primer_nombre": "Sin",
+                "apellido": "Migracion",
+                "dni": "36999888",
+                "email": "sinmig@ingeap.com",
+                "area": "M",
+                "porcentaje_costo_empresa": Decimal("30.00"),
+            },
+            operador_sesion={"id_usuario": id_u, "rol_app": "admin"},
+        )

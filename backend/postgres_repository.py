@@ -131,6 +131,7 @@ def perfil_esquema():
         raise ValidacionError("El esquema operativo de PostgreSQL está incompleto; revise tablas y columnas.")
     tiene_auditoria = ("app_rrhh", "b_1_modificaciones_realizadas") in tablas and {"id_modificacion", "id_asistencia", "detalle_cambio"} <= tablas.get(("app_rrhh", "b_1_modificaciones_realizadas"), set())
     tiene_soft_delete_asistencias = "eliminado_en" in tablas.get(("app_rrhh", "b_1_asistencias"), set())
+    tiene_costo_empresa = "porcentaje_costo_empresa" in tablas.get(("app_rrhh", "a_1_sueldos_base"), set())
     return {"nombre": nombre, "correo": correo, "rol": "u.rol_app" if "rol_app" in usuarios else "NULL::text",
             "primer_nombre": "u.nombre" if "nombre" in usuarios else "split_part(u.nombre_completo, ' ', 1)",
             "apellido": "u.apellido" if "apellido" in usuarios else "split_part(u.nombre_completo, ' ', 2)",
@@ -138,6 +139,7 @@ def perfil_esquema():
             "proyecto_area": "p.area" if "area" in proyectos else "NULL::text", "roles_disponibles": "rol_app" in usuarios, "nombre_cargador": nombre_cargador,
             "nombre_modificador": nombre_modificador, "tiene_auditoria": tiene_auditoria,
             "tiene_soft_delete_asistencias": tiene_soft_delete_asistencias,
+            "tiene_costo_empresa": tiene_costo_empresa,
             "modalidad_calculo": "s.modalidad_calculo::text" if "modalidad_calculo" in tablas.get(("app_rrhh", "a_1_sueldos_base"), set()) else "'base_30'"}
 
 
@@ -146,10 +148,11 @@ def inicializar_bd():
     return perfil_esquema()
 
 
-# [FN-07.02] Consultar empleados, valores diarios generados y último registro
+# [FN-07.02] Consultar empleados, valores diarios generados, último registro y costo empresa provisorio
 def obtener_usuarios_cache(incluir_inactivos=False):
     def _cargar():
         p = perfil_esquema()
+        pct_expr = "COALESCE(s.porcentaje_costo_empresa, 0.00)" if p.get("tiene_costo_empresa") else "0.00::numeric(5,2)"
         with obtener_cursor_pg() as cur:
             cur.execute(f"""SELECT u.id_usuario, u.id_usuario AS id_origen, u.dni, {p['nombre']} AS nombre,
                 {p['primer_nombre']} AS primer_nombre, {p['apellido']} AS apellido,
@@ -157,10 +160,35 @@ def obtener_usuarios_cache(incluir_inactivos=False):
                 u.activo, s.sueldo_oficina, s.sueldo_obra,
                 s.dia_oficina AS costo_dia_ofi, s.dia_obra AS costo_dia_obra, COALESCE(s.lugar_habitual, 'oficina') AS lugar_habitual,
                 COALESCE(s.modalidad_calculo::text, 'base_30') AS modalidad_calculo,
+                ce.pct AS porcentaje_costo_empresa,
+                c.sueldo_total AS liquidacion_actual,
+                COALESCE(c.ciclo_cobro, TO_CHAR(CURRENT_DATE, 'YYYY-MM')) AS ciclo_liquidacion_actual,
+                ce.base_monto AS base_costo_empresa,
+                ce.origen_base AS origen_base_costo_empresa,
+                ROUND(ce.base_monto * (1.0 + (ce.pct / 100.0)), 2) AS costo_total_empresa,
                 ult.fecha AS ultima_asistencia_fecha, ult.lugar AS ultima_asistencia_lugar,
                 ult.activo_franco AS ultima_asistencia_estado, ult.denominacion AS ultima_asistencia_proyecto
                 FROM app_rrhh.a_1_usuarios u
                 LEFT JOIN app_rrhh.a_1_sueldos_base s ON s.id_usuario = u.id_usuario
+                LEFT JOIN app_rrhh.a_1_calculo_sueldo c
+                    ON c.id_usuario = u.id_usuario
+                   AND c.ciclo_cobro = TO_CHAR(CURRENT_DATE, 'YYYY-MM')
+                CROSS JOIN LATERAL (
+                    SELECT
+                        {pct_expr} AS pct,
+                        COALESCE(
+                            NULLIF(c.sueldo_total, 0),
+                            CASE
+                                WHEN COALESCE(s.lugar_habitual::text, 'oficina') = 'obra'
+                                    THEN COALESCE(s.sueldo_obra, 0.00)
+                                ELSE COALESCE(s.sueldo_oficina, 0.00)
+                            END
+                        ) AS base_monto,
+                        CASE
+                            WHEN COALESCE(c.sueldo_total, 0) > 0 THEN 'liquidacion'
+                            ELSE 'sueldo_base'
+                        END AS origen_base
+                ) ce
                 LEFT JOIN LATERAL (
                     SELECT a.fecha, a.lugar, a.activo_franco, {p['proyecto']} AS denominacion
                     FROM app_rrhh.b_1_asistencias a
@@ -1067,11 +1095,25 @@ def actualizar_usuario_y_sueldo(datos, operador_sesion=None):
         if not cur.fetchone():
             raise RegistroNoEncontradoError("Usuario no encontrado.")
 
-        cur.execute("""SELECT id_sueldo, sueldo_oficina, sueldo_obra, lugar_habitual, modalidad_calculo, dia_oficina, dia_obra, vigente_desde
+        tiene_costo_empresa = bool(p.get("tiene_costo_empresa"))
+        cols_sueldo = (
+            "id_sueldo, sueldo_oficina, sueldo_obra, lugar_habitual, modalidad_calculo, "
+            "porcentaje_costo_empresa, costo_total_empresa, dia_oficina, dia_obra, vigente_desde"
+            if tiene_costo_empresa
+            else "id_sueldo, sueldo_oficina, sueldo_obra, lugar_habitual, modalidad_calculo, dia_oficina, dia_obra, vigente_desde"
+        )
+        cur.execute(f"""SELECT {cols_sueldo}
             FROM app_rrhh.a_1_sueldos_base WHERE id_usuario = %s""", (str(modelo.id_usuario),))
         sueldo_actual = cur.fetchone()
 
         sueldo_cambio = False
+        pct_cambio = False
+        pct_act = Decimal(str(sueldo_actual.get("porcentaje_costo_empresa") or 0)) if sueldo_actual else Decimal("0.00")
+        pct_nuevo = Decimal(str(modelo.porcentaje_costo_empresa)) if modelo.porcentaje_costo_empresa is not None else pct_act
+
+        if not tiene_costo_empresa and modelo.porcentaje_costo_empresa is not None and pct_nuevo > 0 and pct_nuevo != pct_act:
+            raise ValidacionError("La base de datos requiere aplicar la migración SQL 009 (porcentaje_costo_empresa) para guardar costos complementarios.")
+
         if not sueldo_actual:
             sueldo_cambio = True
         else:
@@ -1087,26 +1129,51 @@ def actualizar_usuario_y_sueldo(datos, operador_sesion=None):
 
             if s_ofi_act != s_ofi_nuevo or s_obra_act != s_obra_nuevo or lugar_act != lugar_nuevo or mod_act != mod_nuevo:
                 sueldo_cambio = True
+            if tiene_costo_empresa and pct_act != pct_nuevo:
+                pct_cambio = True
 
         if sueldo_cambio:
             vigente_desde = getattr(modelo, "vigente_desde", None) or datos.get("vigente_desde") or date.today()
             mod_final = getattr(modelo, "modalidad_calculo", "base_30") or "base_30"
-            cur.execute("""INSERT INTO app_rrhh.a_1_sueldos_base
-                (id_usuario, sueldo_oficina, sueldo_obra, lugar_habitual, modalidad_calculo, vigente_desde)
-                VALUES (%s, %s, %s, %s, %s, %s)
-                ON CONFLICT (id_usuario) DO UPDATE
-                SET sueldo_oficina=EXCLUDED.sueldo_oficina,
-                    sueldo_obra=EXCLUDED.sueldo_obra,
-                    lugar_habitual=EXCLUDED.lugar_habitual,
-                    modalidad_calculo=EXCLUDED.modalidad_calculo,
-                    vigente_desde=EXCLUDED.vigente_desde,
-                    actualizado_en=CURRENT_TIMESTAMP
-                RETURNING id_sueldo, dia_oficina, dia_obra, lugar_habitual, modalidad_calculo, vigente_desde""",
-                (str(modelo.id_usuario), modelo.sueldo_oficina, modelo.sueldo_obra, modelo.lugar_habitual, mod_final, vigente_desde))
+            if tiene_costo_empresa:
+                cur.execute("""INSERT INTO app_rrhh.a_1_sueldos_base
+                    (id_usuario, sueldo_oficina, sueldo_obra, lugar_habitual, modalidad_calculo, porcentaje_costo_empresa, vigente_desde)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s)
+                    ON CONFLICT (id_usuario) DO UPDATE
+                    SET sueldo_oficina=EXCLUDED.sueldo_oficina,
+                        sueldo_obra=EXCLUDED.sueldo_obra,
+                        lugar_habitual=EXCLUDED.lugar_habitual,
+                        modalidad_calculo=EXCLUDED.modalidad_calculo,
+                        porcentaje_costo_empresa=EXCLUDED.porcentaje_costo_empresa,
+                        vigente_desde=EXCLUDED.vigente_desde,
+                        actualizado_en=CURRENT_TIMESTAMP
+                    RETURNING id_sueldo, dia_oficina, dia_obra, lugar_habitual, modalidad_calculo, porcentaje_costo_empresa, costo_total_empresa, vigente_desde""",
+                    (str(modelo.id_usuario), modelo.sueldo_oficina, modelo.sueldo_obra, modelo.lugar_habitual, mod_final, pct_nuevo, vigente_desde))
+            else:
+                cur.execute("""INSERT INTO app_rrhh.a_1_sueldos_base
+                    (id_usuario, sueldo_oficina, sueldo_obra, lugar_habitual, modalidad_calculo, vigente_desde)
+                    VALUES (%s, %s, %s, %s, %s, %s)
+                    ON CONFLICT (id_usuario) DO UPDATE
+                    SET sueldo_oficina=EXCLUDED.sueldo_oficina,
+                        sueldo_obra=EXCLUDED.sueldo_obra,
+                        lugar_habitual=EXCLUDED.lugar_habitual,
+                        modalidad_calculo=EXCLUDED.modalidad_calculo,
+                        vigente_desde=EXCLUDED.vigente_desde,
+                        actualizado_en=CURRENT_TIMESTAMP
+                    RETURNING id_sueldo, dia_oficina, dia_obra, lugar_habitual, modalidad_calculo, vigente_desde""",
+                    (str(modelo.id_usuario), modelo.sueldo_oficina, modelo.sueldo_obra, modelo.lugar_habitual, mod_final, vigente_desde))
             res_sueldo = cur.fetchone()
 
             ciclo_actual = date.today().strftime("%Y-%m")
             cur.execute("SELECT app_rrhh.fn_recalcular_liquidacion_mes(%s, %s)", (str(modelo.id_usuario), ciclo_actual))
+        elif pct_cambio:
+            cur.execute("""UPDATE app_rrhh.a_1_sueldos_base
+                SET porcentaje_costo_empresa = %s,
+                    actualizado_en = CURRENT_TIMESTAMP
+                WHERE id_usuario = %s
+                RETURNING id_sueldo, dia_oficina, dia_obra, lugar_habitual, modalidad_calculo, porcentaje_costo_empresa, costo_total_empresa, vigente_desde""",
+                (pct_nuevo, str(modelo.id_usuario)))
+            res_sueldo = cur.fetchone()
         else:
             res_sueldo = sueldo_actual
 
@@ -1359,6 +1426,9 @@ def crear_usuario_y_sueldo(datos, operador_sesion=None):
         raise PermisoDenegadoError("Solo un administrador puede crear usuarios con rol admin.")
 
     p = perfil_esquema()
+    tiene_costo_empresa = bool(p.get("tiene_costo_empresa"))
+    if not tiene_costo_empresa and Decimal(str(modelo.porcentaje_costo_empresa or 0)) > 0:
+        raise ValidacionError("La base de datos requiere aplicar la migración SQL 009 (porcentaje_costo_empresa) para guardar costos complementarios.")
     dni_limpio = str(modelo.dni).strip()
 
     with obtener_cursor_pg(commit=True) as cur:
@@ -1386,11 +1456,18 @@ def crear_usuario_y_sueldo(datos, operador_sesion=None):
         id_nuevo = str(nuevo_u["id_usuario"])
 
         # 3. Insertar sueldo base vinculado
-        cur.execute("""INSERT INTO app_rrhh.a_1_sueldos_base
-            (id_usuario, sueldo_oficina, sueldo_obra, lugar_habitual, modalidad_calculo, vigente_desde)
-            VALUES (%s, %s, %s, %s, %s, CURRENT_DATE)
-            RETURNING id_sueldo, dia_oficina, dia_obra, lugar_habitual, modalidad_calculo, vigente_desde""",
-            (id_nuevo, modelo.sueldo_oficina, modelo.sueldo_obra, modelo.lugar_habitual, modelo.modalidad_calculo))
+        if tiene_costo_empresa:
+            cur.execute("""INSERT INTO app_rrhh.a_1_sueldos_base
+                (id_usuario, sueldo_oficina, sueldo_obra, lugar_habitual, modalidad_calculo, porcentaje_costo_empresa, vigente_desde)
+                VALUES (%s, %s, %s, %s, %s, %s, CURRENT_DATE)
+                RETURNING id_sueldo, dia_oficina, dia_obra, lugar_habitual, modalidad_calculo, porcentaje_costo_empresa, costo_total_empresa, vigente_desde""",
+                (id_nuevo, modelo.sueldo_oficina, modelo.sueldo_obra, modelo.lugar_habitual, modelo.modalidad_calculo, modelo.porcentaje_costo_empresa))
+        else:
+            cur.execute("""INSERT INTO app_rrhh.a_1_sueldos_base
+                (id_usuario, sueldo_oficina, sueldo_obra, lugar_habitual, modalidad_calculo, vigente_desde)
+                VALUES (%s, %s, %s, %s, %s, CURRENT_DATE)
+                RETURNING id_sueldo, dia_oficina, dia_obra, lugar_habitual, modalidad_calculo, vigente_desde""",
+                (id_nuevo, modelo.sueldo_oficina, modelo.sueldo_obra, modelo.lugar_habitual, modelo.modalidad_calculo))
         nuevo_s = cur.fetchone()
 
     invalidar_caches_repositorio(('usuarios', False), ('usuarios', True))

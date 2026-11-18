@@ -3,6 +3,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { api } from '../services/apiBridge';
 import { puedeGestionarUsuarios, puedeEditarUsuarios, esAdmin, esSubAdmin, esCore, getEtiquetaRol } from '../utils/permissions';
 import { formatMoneda } from './history/historyConstants';
+import { calcularCostoEmpresa } from '../utils/costoEmpresa';
 
 export const AREAS_SISTEMA = [
   { codigo: 'I', etiqueta: 'Ingeniería (I)', nombre: 'Ingeniería' },
@@ -58,7 +59,8 @@ export default function UsersManagementView({ usuario, onVolver, tema }) {
     sueldo_oficina: '',
     sueldo_obra: '',
     lugar_habitual: 'oficina',
-    modalidad_calculo: 'base_30'
+    modalidad_calculo: 'base_30',
+    porcentaje_costo_empresa: '0'
   });
   const [guardando, setGuardando] = useState(false);
   const [mensajeFeedback, setMensajeFeedback] = useState(null);
@@ -131,7 +133,8 @@ export default function UsersManagementView({ usuario, onVolver, tema }) {
       sueldo_oficina: '',
       sueldo_obra: '',
       lugar_habitual: 'oficina',
-      modalidad_calculo: 'base_30'
+      modalidad_calculo: 'base_30',
+      porcentaje_costo_empresa: '0'
     });
     setMensajeFeedback(null);
   };
@@ -152,7 +155,8 @@ export default function UsersManagementView({ usuario, onVolver, tema }) {
       sueldo_oficina: u.sueldo_oficina !== undefined && u.sueldo_oficina !== null ? String(u.sueldo_oficina) : '',
       sueldo_obra: u.sueldo_obra !== undefined && u.sueldo_obra !== null ? String(u.sueldo_obra) : '',
       lugar_habitual: u.lugar_habitual || 'oficina',
-      modalidad_calculo: u.modalidad_calculo || 'base_30'
+      modalidad_calculo: u.modalidad_calculo || 'base_30',
+      porcentaje_costo_empresa: u.porcentaje_costo_empresa !== undefined && u.porcentaje_costo_empresa !== null ? String(u.porcentaje_costo_empresa) : '0'
     });
     setMensajeFeedback(null);
   };
@@ -173,10 +177,11 @@ export default function UsersManagementView({ usuario, onVolver, tema }) {
         area: formDatos.area.trim(),
         rol_app: formDatos.rol_app,
         activo: Boolean(formDatos.activo),
-        sueldo_oficina: formDatos.sueldo_oficina !== '' ? parseFloat(formDatos.sueldo_oficina) : null,
-        sueldo_obra: formDatos.sueldo_obra !== '' ? parseFloat(formDatos.sueldo_obra) : null,
+        sueldo_oficina: formDatos.sueldo_oficina !== '' ? parseFloat(formDatos.sueldo_oficina) : 0,
+        sueldo_obra: formDatos.sueldo_obra !== '' ? parseFloat(formDatos.sueldo_obra) : 0,
         lugar_habitual: formDatos.lugar_habitual,
-        modalidad_calculo: formDatos.modalidad_calculo || 'base_30'
+        modalidad_calculo: formDatos.modalidad_calculo || 'base_30',
+        porcentaje_costo_empresa: formDatos.porcentaje_costo_empresa !== '' ? parseFloat(formDatos.porcentaje_costo_empresa) : 0
       };
 
       const res = modoCreacion
@@ -223,6 +228,36 @@ export default function UsersManagementView({ usuario, onVolver, tema }) {
     const s = parseFloat(formDatos.sueldo_obra) || 0;
     return s > 0 ? Math.round((s / 30) * 100) / 100 : 0;
   }, [formDatos.sueldo_obra]);
+
+  // [FN-08.02] Previsualización en tiempo real del Costo Total Empresa en el modal
+  const resumenCostoEmpresaModal = useMemo(() => {
+    const esEdicionObj = usuarioEditando && typeof usuarioEditando === 'object' && !modoCreacion;
+    const sueldoOfiOrig = Number(esEdicionObj ? usuarioEditando.sueldo_oficina : 0) || 0;
+    const sueldoObraOrig = Number(esEdicionObj ? usuarioEditando.sueldo_obra : 0) || 0;
+    const lugarOrig = (esEdicionObj ? usuarioEditando.lugar_habitual : 'oficina') || 'oficina';
+
+    const sueldoModificado =
+      esEdicionObj &&
+      ((Number(formDatos.sueldo_oficina) || 0) !== sueldoOfiOrig ||
+        (Number(formDatos.sueldo_obra) || 0) !== sueldoObraOrig ||
+        (formDatos.lugar_habitual || 'oficina') !== lugarOrig);
+
+    return calcularCostoEmpresa({
+      liquidacionActual: esEdicionObj ? usuarioEditando.liquidacion_actual : null,
+      sueldoOficina: formDatos.sueldo_oficina,
+      sueldoObra: formDatos.sueldo_obra,
+      lugarHabitual: formDatos.lugar_habitual,
+      porcentajeCostoEmpresa: formDatos.porcentaje_costo_empresa,
+      preferirSueldoForm: Boolean(modoCreacion || sueldoModificado)
+    });
+  }, [
+    usuarioEditando,
+    modoCreacion,
+    formDatos.sueldo_oficina,
+    formDatos.sueldo_obra,
+    formDatos.lugar_habitual,
+    formDatos.porcentaje_costo_empresa
+  ]);
 
   // Si no tiene permisos, mostrar aviso
   if (!puedeGestionarUsuarios(usuario)) {
@@ -429,6 +464,7 @@ export default function UsersManagementView({ usuario, onVolver, tema }) {
                   <th>Empleado</th>
                   <th>Área / Lugar Habitual</th>
                   <th>Sueldo Base y Valor Día</th>
+                  <th>Costo Empresa (% / Total)</th>
                   <th>Última Asistencia</th>
                   <th style={{ textAlign: 'center' }}>Rol / Estado</th>
                   <th style={{ textAlign: 'center' }}>Acción</th>
@@ -525,6 +561,55 @@ export default function UsersManagementView({ usuario, onVolver, tema }) {
                             <span className="sueldo-day-est" style={{ fontSize: '11px', color: 'var(--text-muted, #94a3b8)' }}>({formatMoneda(u.costo_dia_obra || (u.sueldo_obra ? u.sueldo_obra / 30 : 0))}/d)</span>
                           </div>
                         </div>
+                      </td>
+
+                      {/* Costo Empresa (% / Total) */}
+                      <td style={{ padding: '12px 16px' }}>
+                        {(() => {
+                          const calc = calcularCostoEmpresa({
+                            liquidacionActual: u.liquidacion_actual,
+                            sueldoOficina: u.sueldo_oficina,
+                            sueldoObra: u.sueldo_obra,
+                            lugarHabitual: lugarHabitual,
+                            porcentajeCostoEmpresa: u.porcentaje_costo_empresa
+                          });
+                          const pctMostrar = Number(u.porcentaje_costo_empresa ?? calc.porcentaje) || 0;
+                          const totalMostrar = u.costo_total_empresa !== undefined && u.costo_total_empresa !== null
+                            ? Number(u.costo_total_empresa)
+                            : calc.costoTotal;
+                          const baseMostrar = u.base_costo_empresa !== undefined && u.base_costo_empresa !== null
+                            ? Number(u.base_costo_empresa)
+                            : calc.baseMonto;
+                          const usaLiq = (u.origen_base_costo_empresa || calc.origen) === 'liquidacion';
+
+                          return (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '3px', fontSize: '12px' }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                                <strong className="costo-empresa-total" style={{ fontSize: '13px', fontWeight: 800, color: '#cc3333' }}>
+                                  {formatMoneda(totalMostrar)}
+                                </strong>
+                                <span
+                                  className="costo-empresa-pct-badge"
+                                  style={{
+                                    padding: '1px 6px',
+                                    borderRadius: '6px',
+                                    fontSize: '10px',
+                                    fontWeight: 700,
+                                    backgroundColor: pctMostrar > 0 ? '#fee2e2' : '#f1f5f9',
+                                    color: pctMostrar > 0 ? '#991b1b' : '#64748b'
+                                  }}
+                                >
+                                  +{pctMostrar}%
+                                </span>
+                              </div>
+                              <div className="costo-empresa-base-sub" style={{ fontSize: '11px', color: 'var(--text-secondary, #64748b)' }}>
+                                {usaLiq
+                                  ? `Base Liq.${u.ciclo_liquidacion_actual ? ` ${u.ciclo_liquidacion_actual}` : ''}: ${formatMoneda(baseMostrar)}`
+                                  : `Base ${lugarHabitual === 'obra' ? 'Obra' : 'Oficina'}: ${formatMoneda(baseMostrar)}`}
+                              </div>
+                            </div>
+                          );
+                        })()}
                       </td>
 
                       {/* Última Asistencia */}
@@ -817,16 +902,16 @@ export default function UsersManagementView({ usuario, onVolver, tema }) {
             </div>
           </div>
 
-          {/* Sección 3: Sueldo Base y Costos Diarios (app_rrhh.a_1_sueldos_base) */}
+          {/* Sección 3: Sueldo Base, Costos Diarios y Costo Empresa (app_rrhh.a_1_sueldos_base) */}
           <div className="users-modal-sueldos-box">
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
               <h4 style={{ margin: 0, fontSize: '14px', fontWeight: 700, color: '#cc3333', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                3. Sueldo Base Mensual y Valor Día
+                3. Sueldo Base Mensual y Costo Empresa
               </h4>
               <span style={{ fontSize: '11px', color: 'var(--text-secondary, #64748b)' }}>app_rrhh.a_1_sueldos_base</span>
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '14px', marginBottom: '14px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '14px', marginBottom: '14px' }}>
               <div>
                 <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, marginBottom: '4px' }}>
                   Sueldo Oficina ($)
@@ -902,10 +987,60 @@ export default function UsersManagementView({ usuario, onVolver, tema }) {
                   Modalidad preferente
                 </div>
               </div>
+
+              <div>
+                <label
+                  htmlFor="input-porcentaje-costo-empresa"
+                  style={{ display: 'block', fontSize: '12px', fontWeight: 600, marginBottom: '4px' }}
+                >
+                  Costo Complementario / Empresa (%)
+                </label>
+                <input
+                  id="input-porcentaje-costo-empresa"
+                  type="number"
+                  min="0"
+                  max="500"
+                  step="0.5"
+                  placeholder="0"
+                  className="users-modal-input"
+                  style={{ fontWeight: 700 }}
+                  value={formDatos.porcentaje_costo_empresa}
+                  onChange={(e) => setFormDatos(prev => ({ ...prev, porcentaje_costo_empresa: e.target.value }))}
+                  disabled={guardando || !puedeEditar || (soySubAdmin && usuarioEditando?.rol_app === "admin")}
+                />
+                <div style={{ fontSize: '11px', color: 'var(--text-secondary, #64748b)', marginTop: '4px' }}>
+                  Adicional s/ {resumenCostoEmpresaModal.origen === 'liquidacion'
+                    ? `Liq. ${usuarioEditando?.ciclo_liquidacion_actual || 'actual'}`
+                    : `Base ${formDatos.lugar_habitual === 'obra' ? 'Obra' : 'Oficina'}`}:{' '}
+                  <strong>{formatMoneda(resumenCostoEmpresaModal.montoComplementario)}</strong>
+                </div>
+              </div>
+
+              <div>
+                <label
+                  htmlFor="display-costo-total-empresa"
+                  style={{ display: 'block', fontSize: '12px', fontWeight: 600, marginBottom: '4px' }}
+                >
+                  Costo Total Empresa ($)
+                </label>
+                <input
+                  id="display-costo-total-empresa"
+                  type="text"
+                  readOnly
+                  tabIndex={-1}
+                  aria-label="Costo Total Empresa"
+                  className="users-modal-input users-modal-costo-total-display"
+                  style={{ fontWeight: 800, color: '#cc3333', cursor: 'default' }}
+                  value={formatMoneda(resumenCostoEmpresaModal.costoTotal)}
+                />
+                <div className="users-modal-costo-sub" style={{ fontSize: '11px', color: 'var(--text-secondary, #64748b)', marginTop: '4px' }}>
+                  Base {formatMoneda(resumenCostoEmpresaModal.baseMonto)} + {resumenCostoEmpresaModal.porcentaje}%
+                </div>
+              </div>
             </div>
 
             <div className="users-modal-info-box">
-              ℹ️ Al guardar, PostgreSQL actualiza automáticamente <code>costo_dia_ofi</code> y <code>costo_dia_obra</code> mediante columnas generadas e impacta los cálculos de liquidación.
+              ℹ️ Al guardar, PostgreSQL actualiza automáticamente <code>costo_dia_ofi</code>, <code>costo_dia_obra</code> y el respaldo de <code>costo_total_empresa</code>. La vista aplica el porcentaje complementario sobre la liquidación mensual vigente (o el sueldo base habitual si aún no hay liquidación).
             </div>
           </div>
 
