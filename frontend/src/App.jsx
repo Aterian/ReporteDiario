@@ -15,10 +15,11 @@ const SuggestionForm = lazy(() => import('./components/SuggestionForm'));
 const SuggestionsManagementView = lazy(() => import('./components/SuggestionsManagementView'));
 const RemoteErrorsView = lazy(() => import('./components/RemoteErrorsView'));
 const RemoteErrorsModal = lazy(() => import('./components/RemoteErrorsModal'));
+const UsageStatsView = lazy(() => import('./components/UsageStatsView'));
 import { ErrorBoundary } from 'react-error-boundary';
 import ErrorFallback from './components/ErrorFallback';
 import { Toaster, toast } from 'sonner';
-import { puedeAccederRoster, puedeVerHistorialOtros, puedeVerModificaciones, esAreaAplicaciones, puedeGestionarUsuarios, puedeGestionarProyectos, puedeGestionarSugerencias, esAdmin } from './utils/permissions';
+import { puedeAccederRoster, puedeVerHistorialOtros, puedeVerModificaciones, esAreaAplicaciones, puedeGestionarUsuarios, puedeGestionarProyectos, puedeGestionarSugerencias, puedeVerEstadisticasUso, esAdmin } from './utils/permissions';
 import { SUGGESTIONS_QUERY_KEY } from './types/suggestions';
 import './components/suggestions.css';
 
@@ -358,6 +359,9 @@ export default function App() {
     if (vistaActiva === 'sugerencias-gestion' && !puedeGestionarSugerencias(usuario)) {
       setVistaActiva('home');
     }
+    if (vistaActiva === 'estadisticas-uso' && !puedeVerEstadisticasUso(usuario)) {
+      setVistaActiva('home');
+    }
   }, [vistaActiva, usuario]);
 
   // [FN-03.06] Comprobar si hay actualizaciones disponibles en segundo plano desde GitHub Releases
@@ -569,7 +573,7 @@ export default function App() {
   }
 
   return (
-    <div className={`app-container ${['roster', 'historial-roster', 'historial', 'historial-otros', 'usuarios', 'proyectos', 'sugerencias-gestion'].includes(vistaActiva) ? 'app-panoramic' : ''}`}>
+    <div className={`app-container ${['roster', 'historial-roster', 'historial', 'historial-otros', 'usuarios', 'proyectos', 'sugerencias-gestion', 'estadisticas-uso'].includes(vistaActiva) ? 'app-panoramic' : ''}`}>
       {/* Input oculto para abrir el explorador de Windows al elegir avatar */}
       <input
         type="file"
@@ -889,6 +893,7 @@ export default function App() {
             onNuevaSugerencia={() => setVistaActiva('sugerencia-nueva')}
             onGestionSugerencias={() => setVistaActiva('sugerencias-gestion')}
             onGestionProyectos={() => setVistaActiva('proyectos')}
+            onEstadisticasUso={() => setVistaActiva('estadisticas-uso')}
             erroresRemotos={erroresRemotos}
             onVerErroresRemotos={() => setVistaActiva('errores-remotos')}
             onAvatarClick={handleTriggerAvatar}
@@ -973,6 +978,14 @@ export default function App() {
         {vistaActiva === 'sugerencias-gestion' && puedeGestionarSugerencias(usuario) && (
           <SuggestionsManagementView
             sessionKey={`${usuario.id_usuario}:${usuario.rol_app}`}
+            onVolver={() => setVistaActiva('home')}
+          />
+        )}
+
+        {vistaActiva === 'estadisticas-uso' && puedeVerEstadisticasUso(usuario) && (
+          <UsageStatsView
+            usuario={usuario}
+            tema={tema}
             onVolver={() => setVistaActiva('home')}
           />
         )}

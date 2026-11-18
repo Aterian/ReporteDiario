@@ -2,6 +2,20 @@
 
 Historial cronológico de cambios, nuevas características y mejoras aplicadas al sistema **Check Diario Ingeap**.
 
+## [2.15.0] - 2026-11-18
+
+### 📊 Nuevo Módulo de Estadísticas de Uso y Evolución Temporal ISO 9001 ([MOD-11] / [FN-11.01])
+- **Motor Analítico PostgreSQL (`postgres_repository.py`, `postgres_bridge.py`)**:
+  - Implementado `obtener_estadisticas_uso(fecha_hasta)` tomando como punto inicial fijo el `01/10/2026` (`FECHA_INICIO_ESTADISTICAS = date(2026, 10, 1)`) y evaluando días corridos calendario (activos, francos, vacaciones y licencias), en alineación con `verificar_conformidad_iso9001.py`.
+  - Cálculo de métricas globales (`% uso sobre días corridos`, `% adopción de plantilla`, días cubiertos vs. esperados, volumen total y francos), desglose individual por empleado y serie temporal diaria continua.
+  - Endpoint expuesto en `ApiPuente` protegido estrictamente por `_sesion(auditor=True)` (exclusivo para roles `core`, `sub_admin` y `admin`).
+- **Interfaz Dedicada y Gráfico Interactivo (`UsageStatsView.jsx`, `UsageEvolutionChart.jsx`, `App.jsx`, `HomeView.jsx`, `RpgTavernBoard.jsx`)**:
+  - Vista panorámica con tarjetas KPI globales, selector de fecha de corte (`>= 2026-10-01`) y exportación de evidencia en JSON compatible con auditoría ISO 9001.
+  - Gráfico SVG interactivo (`Eje Y: 0%..100%` vs `Eje X: 01/10/2026..fecha de corte`) con conmutador de 3 vistas (`% Acumulado ISO`, `% Diario`, `Semanal`), filtros por Área y Colaborador individual, referencia comparativa del promedio empresa y tooltip interactivo.
+  - Tabla detallada por colaborador con barra semafórica de cumplimiento, búsqueda, filtros por área/nivel, ordenamiento, fila de total general y salto directo al gráfico.
+- **Control RBAC, Estilos y Pruebas (`permissions.js`, `index.css`, `test_postgres_contract.py`, `permissions.test.js`, `usageStatsChart.test.js`)**:
+  - Añadido `puedeVerEstadisticasUso` y soporte completo para temas Claro, Oscuro y RPG con objetivos táctiles `>= 44x44 px`.
+
 ## [2.14.1] - 2026-11-17
 
 ### 🪟 Activación de Ventana, Prevención de Deadlock en Bandeja y Despertar Post-Instalación ([FN-00.12])

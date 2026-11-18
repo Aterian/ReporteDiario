@@ -1,5 +1,11 @@
 # Catálogo Funcional del Sistema
 
+## [FN-11.01] Módulo de Estadísticas de Uso y Evolución Temporal ISO 9001 desde 01/10/2026
+- **Módulo**: [MOD-11] Estadísticas de Uso y Conformidad ISO 9001
+- **Flujo Operativo**: Calcula desde PostgreSQL el cumplimiento de días corridos calendario desde el `01/10/2026` (activos y francos) a nivel global y por colaborador activo; expone KPIs generales, un gráfico SVG interactivo de `% de uso` temporal en tres modos (`Acumulado ISO`, `Diario`, `Semanal`) filtrable por área o empleado frente al promedio empresa, y una tabla detallada con exportación JSON.
+- **Tablas afectadas**: app_rrhh.a_1_usuarios, app_rrhh.b_1_asistencias (lectura pura).
+- **Reglas de negocio e invariantes**: Acceso restringido exclusivamente a roles `core`, `sub_admin` y `admin` validado en UI (`puedeVerEstadisticasUso`) y puente (`_sesion(auditor=True)`); inicio fijo `2026-10-01` acotado hasta la fecha actual; exclusión automática de asistencias con borrado lógico (`eliminado_en IS NULL`).
+
 ## [FN-00.12] Activación Segura de Ventana, Prevención de Deadlock WinForms y Despertar Post-Instalación
 - **Módulo**: [MOD-00] Arquitectura, Runtime de Escritorio e Instalación
 - **Flujo Operativo**: Protege el cierre hacia bandeja despachando `evaluate_js` fuera del hilo UI WinForms para impedir interbloqueos; restaura ventanas minimizadas o fuera de monitor y fuerza su visibilidad en primer plano al abrir desde bandeja, accesos directos o recordatorios; blinda el hilo IPC `solicitudes-apertura` con `try/except` y `AllowSetForegroundWindow`; y despierta automáticamente la ventana tras instalar, actualizar o re-ejecutar la misma versión activa.
