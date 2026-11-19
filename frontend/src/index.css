@@ -13503,4 +13503,122 @@ html, body {
   color: #2b1d0c;
 }
 
+.usage-pdf-modal {
+  max-width: 560px;
+}
+
+.usage-pdf-modal .modal-close {
+  min-width: 44px;
+  min-height: 44px;
+}
+
+.usage-pdf-modal-body {
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.usage-pdf-period-info {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm, 8px);
+  background: var(--bg-surface-hover);
+  border: 1px solid var(--border-subtle);
+  font-size: 0.84rem;
+  color: var(--text-secondary);
+}
+
+.usage-pdf-field-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.usage-pdf-section-label {
+  font-size: 0.74rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  color: var(--text-secondary);
+}
+
+.usage-pdf-scope-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.usage-pdf-scope-btn {
+  min-height: 44px;
+  min-width: 44px;
+  padding: 8px 10px;
+  border-radius: var(--radius-sm, 8px);
+  border: 1px solid var(--border-input);
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  font-size: 0.82rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: var(--transition);
+}
+
+.usage-pdf-scope-btn.active {
+  background: var(--brand-red, #cc3333);
+  border-color: var(--brand-red, #cc3333);
+  color: #ffffff;
+  box-shadow: var(--shadow-red);
+}
+
+.usage-pdf-selectors-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 12px;
+}
+
+.usage-pdf-selectors-grid .form-select-clean,
+.usage-pdf-field-group .form-select-clean {
+  min-height: 44px;
+}
+
+.usage-pdf-checkbox-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  padding: 6px 10px;
+  border-radius: var(--radius-sm, 8px);
+  border: 1px solid var(--border-subtle);
+  background: var(--bg-surface-hover);
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  cursor: pointer;
+}
+
+.usage-pdf-checkbox-row input[type='checkbox'] {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--brand-red, #cc3333);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.usage-pdf-modal-actions {
+  padding: 14px 18px;
+  border-top: 1px solid var(--border-subtle);
+  background: var(--bg-surface);
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+[data-theme='rpg'] .usage-pdf-modal .usage-pdf-period-info,
+[data-theme='rpg'] .usage-pdf-modal .usage-pdf-checkbox-row {
+  background: rgba(255, 255, 255, 0.72);
+  border-color: #c9aa6d;
+  color: #2b1d0c;
+}
+
 

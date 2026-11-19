@@ -32,7 +32,7 @@ export function calcularPuntosEvolucion({
 
   const hayFiltro = Boolean(empleadoFiltro) || (areaFiltro && areaFiltro !== 'TODAS');
   const empleadosFiltrados = detalleEmpleados.filter((emp) => {
-    if (empleadoFiltro) return emp.id_usuario === empleadoFiltro;
+    if (empleadoFiltro) return String(emp.id_usuario) === String(empleadoFiltro);
     if (areaFiltro && areaFiltro !== 'TODAS') return emp.area === areaFiltro;
     return true;
   });

@@ -2,7 +2,8 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { api, toast } from '../services/apiBridge';
 import { puedeVerEstadisticasUso } from '../utils/permissions';
-import { descargarJson } from '../utils/downloadJson';
+import { construirDatosInformePdf } from '../utils/usageReportStats';
+import logoIngeap from '../assets/Logo_Ingeap1.png';
 import UsageEvolutionChart from './UsageEvolutionChart';
 
 function obtenerHoyLocalIso() {
@@ -47,6 +48,16 @@ export default function UsageStatsView({ usuario, onVolver, tema }) {
   const [areaTabla, setAreaTabla] = useState('TODAS');
   const [nivelFiltro, setNivelFiltro] = useState('todos'); // 'todos' | 'alto' | 'medio' | 'bajo'
   const [ordenTabla, setOrdenTabla] = useState('pct_desc');
+
+  // Modal de exportación de informe PDF
+  const [modalPdfAbierto, setModalPdfAbierto] = useState(false);
+  const [alcancePdf, setAlcancePdf] = useState('general'); // 'general' | 'area' | 'persona'
+  const [areaPdf, setAreaPdf] = useState('TODAS');
+  const [personaPdf, setPersonaPdf] = useState('');
+  const [modoGraficoPdf, setModoGraficoPdf] = useState('acumulado');
+  const [incluirGraficoPdf, setIncluirGraficoPdf] = useState(true);
+  const [incluirDetallePdf, setIncluirDetallePdf] = useState(true);
+  const [exportandoPdf, setExportandoPdf] = useState(false);
 
   useEffect(() => {
     if (esAutorizado) {
@@ -154,31 +165,141 @@ export default function UsageStatsView({ usuario, onVolver, tema }) {
     chartSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   };
 
-  const handleExportarJson = () => {
-    if (!datos) return;
-    const evidencia = {
-      norma_referencia: 'ISO 9001:2026 (Sexta edicion)',
-      fecha_generacion_evidencia: new Date().toISOString(),
-      '1_eficacia_del_cambio_dias_corridos_desde_2026_10_01': {
-        ...resumen,
-        porcentaje_adopcion_plantilla: `${resumen.porcentaje_adopcion_plantilla}%`,
-        porcentaje_uso_sobre_dias_corridos: `${resumen.porcentaje_uso_sobre_dias_corridos}%`,
-        detalle_cumplimiento_por_empleado: detalleEmpleados.map((e) => ({
-          empleado: e.empleado,
-          area: e.area,
-          dias_cargados: e.dias_cargados,
-          dias_activos: e.dias_activos,
-          dias_franco: e.dias_franco,
-          dias_faltantes: e.dias_faltantes,
-          dias_corridos_esperados: e.dias_corridos_esperados,
-          porcentaje_cumplimiento: `${e.porcentaje_cumplimiento}%`,
-          ultima_fecha: e.ultima_fecha
-        }))
-      },
-      serie_evolucion_diaria: serieGlobal
+  const empleadosOrdenadosNombre = useMemo(() => {
+    return detalleEmpleados
+      .slice()
+      .sort((a, b) => String(a.empleado || '').localeCompare(String(b.empleado || ''), 'es'));
+  }, [detalleEmpleados]);
+
+  const empleadosModalPdf = useMemo(() => {
+    if (areaPdf === 'TODAS') return empleadosOrdenadosNombre;
+    return empleadosOrdenadosNombre.filter((e) => e.area === areaPdf);
+  }, [empleadosOrdenadosNombre, areaPdf]);
+
+  useEffect(() => {
+    if (!modalPdfAbierto) return undefined;
+    const onKeyDown = (ev) => {
+      if (ev.key === 'Escape' && !exportandoPdf) {
+        setModalPdfAbierto(false);
+      }
     };
-    descargarJson(evidencia, `estadisticas_uso_iso9001_${resumen.fecha_corte_medicion}.json`);
-    toast.success('Evidencia de estadísticas exportada en JSON.');
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [modalPdfAbierto, exportandoPdf]);
+
+  useEffect(() => {
+    if (!modalPdfAbierto || alcancePdf !== 'persona') return;
+    if (empleadosModalPdf.length === 0) {
+      if (personaPdf !== '') setPersonaPdf('');
+      return;
+    }
+    const existeEnLista = empleadosModalPdf.some(
+      (emp) => String(emp.id_usuario) === String(personaPdf)
+    );
+    if (!existeEnLista) {
+      setPersonaPdf(String(empleadosModalPdf[0].id_usuario));
+    }
+  }, [modalPdfAbierto, alcancePdf, empleadosModalPdf, personaPdf]);
+
+  const handleAbrirModalPdf = () => {
+    if (!datos) return;
+    if (empleadoGrafico) {
+      const empObj = detalleEmpleados.find((e) => String(e.id_usuario) === String(empleadoGrafico));
+      setAlcancePdf('persona');
+      setAreaPdf(empObj?.area || (areaGrafico !== 'TODAS' ? areaGrafico : 'TODAS'));
+      setPersonaPdf(empObj ? String(empObj.id_usuario) : String(empleadoGrafico));
+    } else if (areaGrafico !== 'TODAS' || areaTabla !== 'TODAS') {
+      const areaActiva = areaGrafico !== 'TODAS' ? areaGrafico : areaTabla;
+      setAlcancePdf('area');
+      setAreaPdf(areaActiva);
+      const primeroArea = empleadosOrdenadosNombre.find((e) => e.area === areaActiva);
+      setPersonaPdf(primeroArea ? String(primeroArea.id_usuario) : '');
+    } else {
+      setAlcancePdf('general');
+      setAreaPdf('TODAS');
+      setPersonaPdf(empleadosOrdenadosNombre[0] ? String(empleadosOrdenadosNombre[0].id_usuario) : '');
+    }
+    setModoGraficoPdf(modoGrafico);
+    setModalPdfAbierto(true);
+  };
+
+  const handleCambiarAlcancePdf = (nuevoAlcance) => {
+    setAlcancePdf(nuevoAlcance);
+    if (nuevoAlcance === 'general') {
+      setAreaPdf('TODAS');
+      return;
+    }
+    if (nuevoAlcance === 'area' && (areaPdf === 'TODAS' || !areasDisponibles.includes(areaPdf))) {
+      setAreaPdf(areasDisponibles[0] || 'TODAS');
+      return;
+    }
+    if (nuevoAlcance === 'persona') {
+      const listaVisible = areaPdf === 'TODAS'
+        ? empleadosOrdenadosNombre
+        : empleadosOrdenadosNombre.filter((e) => e.area === areaPdf);
+      const coincide = listaVisible.some((e) => String(e.id_usuario) === String(personaPdf));
+      if (!coincide) {
+        setPersonaPdf(listaVisible[0] ? String(listaVisible[0].id_usuario) : '');
+      }
+    }
+  };
+
+  const handleConfirmarExportarPdf = async () => {
+    if (!datos || exportandoPdf) return;
+    if (alcancePdf === 'area' && (!areaPdf || areaPdf === 'TODAS')) {
+      toast.error('Seleccione un área para generar el informe PDF.');
+      return;
+    }
+    const personaSeleccionada = alcancePdf === 'persona'
+      ? (empleadosModalPdf.find((emp) => String(emp.id_usuario) === String(personaPdf))
+        || empleadosOrdenadosNombre.find((emp) => String(emp.id_usuario) === String(personaPdf))
+        || null)
+      : null;
+    if (alcancePdf === 'persona' && !personaSeleccionada) {
+      toast.error('Seleccione un colaborador para generar el informe PDF.');
+      return;
+    }
+
+    setExportandoPdf(true);
+    try {
+      const informe = construirDatosInformePdf({
+        datos,
+        alcance: alcancePdf,
+        areaSeleccionada: areaPdf,
+        empleadoId: personaSeleccionada ? String(personaSeleccionada.id_usuario) : '',
+        modoGrafico: modoGraficoPdf,
+        fechaCorte: resumen.fecha_corte_medicion
+      });
+      const { generarInformeUsoPdf } = await import('../utils/usageStatsPdf');
+      const { nombreArchivo, blob, base64 } = await generarInformeUsoPdf({
+        informe,
+        opciones: {
+          incluirGrafico: incluirGraficoPdf,
+          incluirDetalle: incluirDetallePdf
+        },
+        usuarioEmisor: usuario,
+        logoUrl: logoIngeap
+      });
+
+      const res = await api.guardarInformePdf(nombreArchivo, base64, blob);
+      if (res?.cancelado) {
+        toast.info('Exportación PDF cancelada.');
+        return;
+      }
+      if (res?.exito) {
+        setModalPdfAbierto(false);
+        toast.success(
+          res.descargadoNavegador
+            ? `Informe PDF descargado (${nombreArchivo}).`
+            : `Informe PDF guardado en ${res.ruta || nombreArchivo}.`
+        );
+      }
+    } catch (err) {
+      console.error('Error al generar o guardar informe PDF:', err);
+      toast.error('No se pudo generar el informe PDF de estadísticas.');
+    } finally {
+      setExportandoPdf(false);
+    }
   };
 
   if (!esAutorizado) {
@@ -238,10 +359,10 @@ export default function UsageStatsView({ usuario, onVolver, tema }) {
           <button
             type="button"
             className="usage-btn-primary"
-            onClick={handleExportarJson}
-            disabled={!datos || cargando}
+            onClick={handleAbrirModalPdf}
+            disabled={!datos || cargando || detalleEmpleados.length === 0}
           >
-            📥 Exportar JSON
+            📄 Exportar PDF
           </button>
         </div>
       </div>
@@ -481,6 +602,190 @@ export default function UsageStatsView({ usuario, onVolver, tema }) {
           </table>
         </div>
       </section>
+
+      {modalPdfAbierto && (
+        <div
+          className="modal-backdrop"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="usage-pdf-modal-title"
+          onClick={(e) => {
+            if (e.target === e.currentTarget && !exportandoPdf) {
+              setModalPdfAbierto(false);
+            }
+          }}
+        >
+          <div className="modal-box usage-pdf-modal">
+            <div className="modal-header">
+              <span id="usage-pdf-modal-title" className="modal-title">
+                📄 Descargar Informe PDF de Métricas de Uso
+              </span>
+              <button
+                type="button"
+                className="modal-close"
+                aria-label="Cerrar modal de exportación PDF"
+                onClick={() => !exportandoPdf && setModalPdfAbierto(false)}
+                disabled={exportandoPdf}
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="usage-pdf-modal-body">
+              <p className="usage-pdf-period-info">
+                Período evaluado: <strong>01/10/2026</strong> al{' '}
+                <strong>{formatearFechaUi(resumen.fecha_corte_medicion)}</strong> ({resumen.dias_corridos_calendario} días corridos)
+              </p>
+
+              <div className="usage-pdf-field-group">
+                <span className="usage-pdf-section-label">Alcance del informe</span>
+                <div className="usage-pdf-scope-grid" role="group" aria-label="Alcance del informe PDF">
+                  <button
+                    type="button"
+                    className={`usage-pdf-scope-btn ${alcancePdf === 'general' ? 'active' : ''}`}
+                    onClick={() => handleCambiarAlcancePdf('general')}
+                    disabled={exportandoPdf}
+                  >
+                    🏢 Toda la empresa
+                  </button>
+                  <button
+                    type="button"
+                    className={`usage-pdf-scope-btn ${alcancePdf === 'area' ? 'active' : ''}`}
+                    onClick={() => handleCambiarAlcancePdf('area')}
+                    disabled={exportandoPdf || areasDisponibles.length === 0}
+                  >
+                    🗂️ Por Área
+                  </button>
+                  <button
+                    type="button"
+                    className={`usage-pdf-scope-btn ${alcancePdf === 'persona' ? 'active' : ''}`}
+                    onClick={() => handleCambiarAlcancePdf('persona')}
+                    disabled={exportandoPdf || empleadosOrdenadosNombre.length === 0}
+                  >
+                    👤 Por Persona
+                  </button>
+                </div>
+              </div>
+
+              {(alcancePdf === 'area' || alcancePdf === 'persona') && (
+                <div className="usage-pdf-selectors-grid">
+                  <div className="usage-filter-field">
+                    <label htmlFor="usage-pdf-area">
+                      {alcancePdf === 'area' ? 'Área a informar' : 'Filtrar por Área (opcional)'}
+                    </label>
+                    <select
+                      id="usage-pdf-area"
+                      className="form-select form-select-clean"
+                      value={areaPdf}
+                      disabled={exportandoPdf}
+                      onChange={(e) => {
+                        const nuevaArea = e.target.value;
+                        setAreaPdf(nuevaArea);
+                        if (alcancePdf === 'persona') {
+                          const listaArea = nuevaArea === 'TODAS'
+                            ? empleadosOrdenadosNombre
+                            : empleadosOrdenadosNombre.filter((emp) => emp.area === nuevaArea);
+                          if (!listaArea.some((emp) => String(emp.id_usuario) === String(personaPdf))) {
+                            setPersonaPdf(listaArea[0] ? String(listaArea[0].id_usuario) : '');
+                          }
+                        }
+                      }}
+                    >
+                      {alcancePdf === 'persona' && <option value="TODAS">Todas las áreas</option>}
+                      {areasDisponibles.map((area) => (
+                        <option key={area} value={area}>
+                          Área {area}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {alcancePdf === 'persona' && (
+                    <div className="usage-filter-field">
+                      <label htmlFor="usage-pdf-persona">Colaborador</label>
+                      <select
+                        id="usage-pdf-persona"
+                        className="form-select form-select-clean"
+                        value={String(personaPdf || '')}
+                        disabled={exportandoPdf || empleadosModalPdf.length === 0}
+                        onChange={(e) => setPersonaPdf(String(e.target.value))}
+                      >
+                        {empleadosModalPdf.map((emp) => (
+                          <option key={String(emp.id_usuario)} value={String(emp.id_usuario)}>
+                            {emp.empleado} ({emp.area} · {emp.porcentaje_cumplimiento}%)
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              <div className="usage-pdf-field-group">
+                <label className="usage-pdf-section-label" htmlFor="usage-pdf-chart-mode">
+                  Serie temporal de evolución
+                </label>
+                <select
+                  id="usage-pdf-chart-mode"
+                  className="form-select form-select-clean"
+                  value={modoGraficoPdf}
+                  disabled={exportandoPdf || !incluirGraficoPdf}
+                  onChange={(e) => setModoGraficoPdf(e.target.value)}
+                >
+                  <option value="acumulado">% Acumulado ISO (días corridos desde 01/10/2026)</option>
+                  <option value="diario">% Diario (cobertura día a día)</option>
+                  <option value="semanal">Semanal (bloques de 7 días)</option>
+                </select>
+              </div>
+
+              <div className="usage-pdf-field-group">
+                <span className="usage-pdf-section-label">Secciones del documento</span>
+                <label className="usage-pdf-checkbox-row">
+                  <input
+                    type="checkbox"
+                    checked={incluirGraficoPdf}
+                    disabled={exportandoPdf}
+                    onChange={(e) => setIncluirGraficoPdf(e.target.checked)}
+                  />
+                  <span>Incluir gráfico de evolución temporal (% uso vs meta 80%)</span>
+                </label>
+                <label className="usage-pdf-checkbox-row">
+                  <input
+                    type="checkbox"
+                    checked={incluirDetallePdf}
+                    disabled={exportandoPdf}
+                    onChange={(e) => setIncluirDetallePdf(e.target.checked)}
+                  />
+                  <span>
+                    {alcancePdf === 'persona'
+                      ? 'Incluir resumen mensual y listado de días sin cargar'
+                      : 'Incluir tabla detallada de cumplimiento por colaborador'}
+                  </span>
+                </label>
+              </div>
+            </div>
+
+            <div className="modal-actions usage-pdf-modal-actions">
+              <button
+                type="button"
+                className="usage-btn-secondary"
+                onClick={() => setModalPdfAbierto(false)}
+                disabled={exportandoPdf}
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                className="usage-btn-primary"
+                onClick={handleConfirmarExportarPdf}
+                disabled={exportandoPdf}
+              >
+                {exportandoPdf ? '⏳ Generando PDF...' : '⬇ Generar y Guardar PDF'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
