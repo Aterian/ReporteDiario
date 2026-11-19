@@ -2,6 +2,17 @@
 
 Historial cronológico de cambios, nuevas características y mejoras aplicadas al sistema **Check Diario Ingeap**.
 
+## [2.17.0] - 2026-11-19
+
+### 📄 Informes PDF Vectoriales por Área, Persona y General en Métricas de Uso ([MOD-11] / [FN-11.05])
+- **Motor de Reportes y Generación PDF Vectorial (`usageReportStats.js`, `usageStatsPdf.js`, `jspdf`, `jspdf-autotable`)**:
+  - Agregador puro por alcance (`Toda la empresa`, `Por Área`, `Por Persona`) reutilizando los datos de `obtener_estadisticas_uso` sin consultas adicionales a PostgreSQL.
+  - Renderizado PDF A4 vectorial bajo carga diferida (*dynamic import*) con encabezado corporativo Ingeap ISO 9001:2026, tarjetas KPI con semáforo de cumplimiento, gráfico de evolución (`% Acumulado ISO`, `% Diario`, `Semanal`) frente a meta `80%` y promedio empresa, resumen por área y desglose mensual + calendario de fechas faltantes por colaborador desde el `01/10/2026`.
+- **Puente Nativo de Guardado Seguro (`postgres_bridge.py`, `apiBridge.js`, `downloadJson.js`)**:
+  - Incorporado `ApiPuente.guardar_informe_pdf` protegido por `_sesion(auditor=True)` con diálogo nativo `"Guardar como... (*.pdf)"`, saneamiento de ruta, rechazo de symlinks y validación de firma `%PDF-`, más fallback automático por descarga `Blob` en navegador web.
+- **Interfaz y Pruebas (`UsageStatsView.jsx`, `index.css`, `usageStatsPdf.test.js`, `test_postgres_contract.py`)**:
+  - Botón `📄 Exportar PDF` y modal interactivo con preselección inteligente del filtro activo, toggles opcionales de gráfico/detalle, accesibilidad táctil `>= 44x44 px` y cobertura en Claro, Oscuro y RPG.
+
 ## [2.16.0] - 2026-11-18
 
 ### 💼 Porcentaje Complementario y Costo Total Empresa Provisorio en Empleados ([MOD-08] / [FN-08.02])

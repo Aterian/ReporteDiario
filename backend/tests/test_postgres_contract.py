@@ -2010,3 +2010,49 @@ def test_actualizar_y_crear_usuario_persiste_porcentaje_costo_empresa(monkeypatc
             },
             operador_sesion={"id_usuario": id_u, "rol_app": "admin"},
         )
+
+
+# [FN-11.05] Guardar informe PDF valida RBAC, firma %PDF-, symlinks y diálogo SAVE nativo
+def test_api_puente_guardar_informe_pdf_rbac_y_seguridad(monkeypatch, tmp_path):
+    import base64
+
+    puente = ApiPuente()
+    pdf_valido = b"%PDF-1.4\n1 0 obj\n<<>>\nendobj\n%%EOF\n"
+    b64_ok = base64.b64encode(pdf_valido).decode("ascii")
+
+    # 1. Roles operativos bloqueados
+    for rol_no in ("user_1", "user_2"):
+        monkeypatch.setattr(db, "obtener_sesion_activa", lambda r=rol_no: {"id_usuario": str(uuid4()), "rol_app": r})
+        res_denegado = puente.guardar_informe_pdf("informe.pdf", b64_ok)
+        assert res_denegado["exito"] is False
+        assert res_denegado["codigo_error"] == "ACCESO_DENEGADO"
+
+    # 2. Autorizados sin ventana nativa retornan indicador sin_ventana
+    monkeypatch.setattr(db, "obtener_sesion_activa", lambda: {"id_usuario": str(uuid4()), "rol_app": "core"})
+    res_sin_ventana = puente.guardar_informe_pdf("informe.pdf", b64_ok)
+    assert res_sin_ventana["exito"] is False
+    assert res_sin_ventana["sin_ventana"] is True
+
+    # 3. Con ventana nativa simulada: rechaza contenido no PDF
+    ventana = MagicMock()
+    puente.set_ventana(ventana)
+    b64_html = base64.b64encode(b"<html>no pdf</html>").decode("ascii")
+    res_invalido = puente.guardar_informe_pdf("informe.pdf", b64_html)
+    assert res_invalido["exito"] is False
+    assert res_invalido["codigo_error"] == "VALIDACION_ERROR"
+    ventana.create_file_dialog.assert_not_called()
+
+    # 4. Cancelación del diálogo de guardado
+    ventana.create_file_dialog.return_value = None
+    res_cancelado = puente.guardar_informe_pdf("../../informe area.pdf", b64_ok)
+    assert res_cancelado["exito"] is False
+    assert res_cancelado["cancelado"] is True
+    assert ventana.create_file_dialog.call_args.kwargs["save_filename"] == "informe_area.pdf"
+
+    # 5. Guardado exitoso en disco
+    destino = tmp_path / "informe_area_I.pdf"
+    ventana.create_file_dialog.return_value = str(destino)
+    res_ok = puente.guardar_informe_pdf("informe_area_I.pdf", b64_ok)
+    assert res_ok["exito"] is True
+    assert res_ok["bytes"] == len(pdf_valido)
+    assert destino.read_bytes() == pdf_valido

@@ -1,7 +1,11 @@
 # [MOD-07] Puente de escritorio PostgreSQL
+import base64
+import binascii
 import functools
+import re
 import time
 from datetime import date
+from pathlib import Path
 
 from loguru import logger
 from pydantic import ValidationError
@@ -35,7 +39,7 @@ METODOS_LECTURA = {
 _METODOS_SUGERENCIAS = {"crear_sugerencia", "obtener_sugerencias", "actualizar_sugerencia"}
 _METODOS_LOCALES = {"set_ventana", "obtener_estado_inicializacion", "reintentar_conexion", "cerrar_sesion",
                     "minimizar_a_bandeja", "redimensionar_ventana", "maximizar_ventana", "restaurar_ventana",
-                    "verificar_actualizacion", "aplicar_actualizacion"}
+                    "verificar_actualizacion", "aplicar_actualizacion", "guardar_informe_pdf"}
 
 
 def es_operacion_lectura(nombre: str) -> bool:
@@ -528,13 +532,61 @@ class ApiPuente:
         sesion = self._sesion(admin=True)
         return db.eliminar_registro_roster("", operador=sesion["id_usuario"], administrador=True)
 
-    def _destino_excel(self,nombre):
+    def _destino_archivo(self, nombre: str, file_types: tuple = ("Todos los archivos (*.*)",)):
         if not self._ventana:
             return None
         import webview
-        modo = getattr(getattr(webview,"FileDialog",object),"SAVE",getattr(webview,"SAVE_DIALOG",0))
-        resultado = self._ventana.create_file_dialog(modo,save_filename=nombre,file_types=("Archivos Excel (*.xlsx)","Todos los archivos (*.*)"))
-        return resultado if isinstance(resultado,str) else resultado[0] if resultado else None
+        modo = getattr(getattr(webview, "FileDialog", object), "SAVE", getattr(webview, "SAVE_DIALOG", 0))
+        resultado = self._ventana.create_file_dialog(modo, save_filename=nombre, file_types=file_types)
+        return resultado if isinstance(resultado, str) else resultado[0] if resultado else None
+
+    def _destino_excel(self, nombre):
+        return self._destino_archivo(nombre, file_types=("Archivos Excel (*.xlsx)", "Todos los archivos (*.*)"))
+
+    # [FN-11.05] Guardar informe PDF vectorial mediante diálogo nativo de escritorio
+    def guardar_informe_pdf(self, nombre_archivo: str, contenido_base64: str):
+        self._sesion(auditor=True)
+        if not isinstance(nombre_archivo, str) or not isinstance(contenido_base64, str):
+            raise ValidacionError("Parámetros inválidos para exportar el informe PDF.")
+        b64_limpio = contenido_base64.strip()
+        if b64_limpio.startswith("data:") and "," in b64_limpio:
+            b64_limpio = b64_limpio.split(",", 1)[1].strip()
+        if not b64_limpio or len(b64_limpio) > 35_000_000:
+            raise ValidacionError("El contenido del informe PDF está vacío o supera el tamaño máximo (25 MB).")
+        try:
+            datos_pdf = base64.b64decode(b64_limpio, validate=True)
+        except (binascii.Error, ValueError) as err:
+            raise ValidacionError("El informe PDF no tiene codificación Base64 válida.") from err
+        if len(datos_pdf) == 0 or len(datos_pdf) > 25 * 1024 * 1024:
+            raise ValidacionError("El archivo PDF generado supera el límite permitido de 25 MB.")
+        if not datos_pdf.startswith(b"%PDF-"):
+            raise ValidacionError("El contenido recibido no corresponde a un archivo PDF válido.")
+
+        base_nombre = Path(nombre_archivo.strip() or "informe_estadisticas_uso.pdf").name
+        if not base_nombre.lower().endswith(".pdf"):
+            base_nombre = f"{base_nombre}.pdf"
+        nombre_seguro = re.sub(r"[^A-Za-z0-9._-]", "_", base_nombre)
+        if not nombre_seguro or nombre_seguro.startswith("."):
+            nombre_seguro = "informe_estadisticas_uso.pdf"
+
+        if not self._ventana:
+            return {"exito": False, "codigo_error": "SIN_VENTANA", "sin_ventana": True}
+
+        destino = self._destino_archivo(
+            nombre_seguro,
+            file_types=("Archivos PDF (*.pdf)", "Todos los archivos (*.*)"),
+        )
+        if not destino:
+            return {"exito": False, "cancelado": True}
+
+        ruta_destino = Path(destino)
+        if ruta_destino.suffix.lower() != ".pdf":
+            ruta_destino = ruta_destino.with_suffix(".pdf")
+        if ruta_destino.is_symlink():
+            raise ValidacionError("No se permite guardar el informe sobre un enlace simbólico.")
+        ruta_destino.parent.mkdir(parents=True, exist_ok=True)
+        ruta_destino.write_bytes(datos_pdf)
+        return {"exito": True, "ruta": str(ruta_destino), "bytes": len(datos_pdf)}
 
     def exportar_roster_excel(self, anio: int, mes: int, proyecto: str = ""):
         self._sesion(admin=True)

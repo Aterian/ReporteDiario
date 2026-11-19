@@ -1,5 +1,11 @@
 # Catálogo Funcional del Sistema
 
+## [FN-11.05] Exportación de Informes PDF Vectoriales por Área, Persona o General en Métricas de Uso
+- **Módulo**: [MOD-11] Estadísticas de Uso y Conformidad ISO 9001
+- **Flujo Operativo**: Desde `UsageStatsView.jsx` habilita la descarga de informes PDF vectoriales (`jspdf` + `jspdf-autotable` cargados de forma diferida) con alcance `Toda la empresa`, `Por Área` o `Por Persona` preseleccionado desde los filtros activos, incluyendo encabezado Ingeap ISO 9001, 4 tarjetas KPI, gráfico de evolución temporal opcional y tablas paginadas o listado de días faltantes desde el `01/10/2026`; guarda en disco vía diálogo nativo `SAVE` en `pywebview` (`ApiPuente.guardar_informe_pdf`) o descarga Blob en navegador.
+- **Tablas afectadas**: Ninguna escritura en BD (reutiliza instantánea en memoria de `obtener_estadisticas_uso`).
+- **Reglas de negocio e invariantes**: Acceso restringido exclusivamente a roles `core`, `sub_admin` y `admin` validado en cliente y en `_sesion(auditor=True)`; verificación obligatoria de firma binaria `%PDF-`, límite `<= 25 MB`, saneamiento de nombre y bloqueo de enlaces simbólicos antes de escribir a disco.
+
 ## [FN-08.02] Porcentaje de Costo Complementario y Costo Total Empresa Provisorio
 - **Módulo**: [MOD-08] Gestión de Empleados
 - **Flujo Operativo**: Permite a `admin` y `sub_admin` asignar por colaborador un `% de costo complementario/empresa` en `app_rrhh.a_1_sueldos_base`, calculando y mostrando el `Costo Total Empresa` tanto en una columna dedicada de `UsersManagementView.jsx` como con vista previa en vivo dentro del modal de alta y edición sobre la liquidación mensual vigente (`a_1_calculo_sueldo.sueldo_total`) con respaldo en el sueldo base habitual.

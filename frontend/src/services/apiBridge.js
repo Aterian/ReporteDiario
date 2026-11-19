@@ -1,5 +1,6 @@
 import { toast } from 'sonner';
 import { normalizarEstadoEscritorio } from './desktopState';
+import { descargarPdfBlob } from '../utils/downloadJson';
 
 // Purgar inmediatamente cualquier dato simulado residual de versiones anteriores
 try {
@@ -1057,6 +1058,19 @@ const apiBase = {
       return res?.datos || res;
     }
     return null;
+  },
+
+  // [FN-11.05] Guardar informe PDF vía diálogo nativo pywebview o descarga navegador
+  async guardarInformePdf(nombreArchivo, contenidoBase64, blobFallback = null) {
+    const bridge = await getApi();
+    if (bridge.guardar_informe_pdf) {
+      const res = await bridge.guardar_informe_pdf(nombreArchivo, contenidoBase64);
+      if (res && !res.sin_ventana) {
+        return res;
+      }
+    }
+    descargarPdfBlob(blobFallback, nombreArchivo, contenidoBase64);
+    return { exito: true, descargadoNavegador: true, ruta: nombreArchivo };
   }
 };
 
