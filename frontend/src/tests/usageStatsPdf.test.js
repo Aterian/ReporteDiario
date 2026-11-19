@@ -125,6 +125,35 @@ describe('Informes PDF de Estadísticas de Uso ([FN-11.05])', () => {
     expect(inf.personaDetalle.fechasFaltantes.map((f) => f.iso)).toEqual(['2026-10-04', '2026-10-05']);
   });
 
+  it('selecciona estrictamente al colaborador elegido sin hacer fallback al índice 0 y rechaza IDs inexistentes', () => {
+    const infTercero = construirDatosInformePdf({
+      datos: datosBase,
+      alcance: 'persona',
+      empleadoId: 'u3',
+      modoGrafico: 'acumulado'
+    });
+    expect(infTercero.tituloAlcance).toBe('Sofía Mensura (Área M)');
+    expect(infTercero.personaDetalle.empleado.id_usuario).toBe('u3');
+    expect(infTercero.personaDetalle.empleado.empleado).toBe('Sofía Mensura');
+    expect(infTercero.empleadosTabla.map((e) => e.id_usuario)).toEqual(['u3']);
+    expect(infTercero.kpis[0].valor).toBe('20.0%');
+    expect(infTercero.personaDetalle.fechasFaltantes.map((f) => f.iso)).toEqual([
+      '2026-10-02',
+      '2026-10-03',
+      '2026-10-04',
+      '2026-10-05'
+    ]);
+
+    expect(() =>
+      construirDatosInformePdf({
+        datos: datosBase,
+        alcance: 'persona',
+        empleadoId: 'u-inexistente',
+        modoGrafico: 'acumulado'
+      })
+    ).toThrow(/colaborador seleccionado/i);
+  });
+
   it('genera documentos PDF binarios válidos (%PDF-) para General, Área y Persona', async () => {
     for (const cfg of [
       { alcance: 'general' },

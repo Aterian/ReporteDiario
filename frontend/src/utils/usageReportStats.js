@@ -169,7 +169,13 @@ export function construirDatosInformePdf({
   }
 
   if (alcance === 'persona') {
-    const emp = detalleEmpleados.find((e) => e.id_usuario === empleadoId) || detalleEmpleados[0] || null;
+    const empleadoIdNorm = empleadoId === null || empleadoId === undefined ? '' : String(empleadoId).trim();
+    const emp = empleadoIdNorm
+      ? detalleEmpleados.find((e) => String(e.id_usuario) === empleadoIdNorm) || null
+      : detalleEmpleados[0] || null;
+    if (empleadoIdNorm && !emp) {
+      throw new Error('No se encontró el colaborador seleccionado para generar el informe PDF.');
+    }
     const fechasPeriodo = serieGlobal.length > 0
       ? serieGlobal.map((s) => s.fecha)
       : generarRangoFechasIso(fechaInicio, fechaFin);

@@ -2,6 +2,16 @@
 
 Historial cronológico de cambios, nuevas características y mejoras aplicadas al sistema **Check Diario Ingeap**.
 
+## [2.17.1] - 2026-11-19
+
+### 🛠️ Corrección en Selección por Persona del PDF y Limpieza de Acciones en Métricas de Uso ([MOD-11] / [FN-11.05])
+- **Sincronización Estricta de Selector en Modal PDF (`UsageStatsView.jsx`)**:
+  - Inicialización consistente de `areaPdf` en `'TODAS'` desde el alcance general, sincronización reactiva (`useEffect` y `handleCambiarAlcancePdf`) para mantener `personaPdf` siempre alineado con una opción visible de `empleadosModalPdf` y resolución explícita del colaborador elegido antes de generar el informe.
+- **Eliminación de Fallback Silencioso y Normalización de IDs (`usageReportStats.js`, `UsageEvolutionChart.jsx`, `usageStatsPdf.test.js`)**:
+  - Comparación estricta por `String(id_usuario)` al generar informes `Por Persona` y en la serie evolutiva; ante un identificador inexistente lanza error explícito en lugar de retornar al primer colaborador de la nómina.
+- **Depuración de UI (`UsageStatsView.jsx`)**:
+  - Eliminado el botón `📥 Exportar JSON`, `handleExportarJson` y su importación en `UsageStatsView.jsx`, conservando únicamente la exportación unificada en PDF.
+
 ## [2.17.0] - 2026-11-19
 
 ### 📄 Informes PDF Vectoriales por Área, Persona y General en Métricas de Uso ([MOD-11] / [FN-11.05])

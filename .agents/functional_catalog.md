@@ -2,9 +2,9 @@
 
 ## [FN-11.05] Exportación de Informes PDF Vectoriales por Área, Persona o General en Métricas de Uso
 - **Módulo**: [MOD-11] Estadísticas de Uso y Conformidad ISO 9001
-- **Flujo Operativo**: Desde `UsageStatsView.jsx` habilita la descarga de informes PDF vectoriales (`jspdf` + `jspdf-autotable` cargados de forma diferida) con alcance `Toda la empresa`, `Por Área` o `Por Persona` preseleccionado desde los filtros activos, incluyendo encabezado Ingeap ISO 9001, 4 tarjetas KPI, gráfico de evolución temporal opcional y tablas paginadas o listado de días faltantes desde el `01/10/2026`; guarda en disco vía diálogo nativo `SAVE` en `pywebview` (`ApiPuente.guardar_informe_pdf`) o descarga Blob en navegador.
+- **Flujo Operativo**: Desde `UsageStatsView.jsx` habilita la descarga de informes PDF vectoriales (`jspdf` + `jspdf-autotable` cargados de forma diferida) con alcance `Toda la empresa`, `Por Área` o `Por Persona` (sincronizado estrictamente con el colaborador visible en el selector, sin fallback silencioso) preseleccionado desde los filtros activos, incluyendo encabezado Ingeap ISO 9001, 4 tarjetas KPI, gráfico de evolución temporal opcional y tablas paginadas o listado de días faltantes desde el `01/10/2026`; guarda en disco vía diálogo nativo `SAVE` en `pywebview` (`ApiPuente.guardar_informe_pdf`) o descarga Blob en navegador.
 - **Tablas afectadas**: Ninguna escritura en BD (reutiliza instantánea en memoria de `obtener_estadisticas_uso`).
-- **Reglas de negocio e invariantes**: Acceso restringido exclusivamente a roles `core`, `sub_admin` y `admin` validado en cliente y en `_sesion(auditor=True)`; verificación obligatoria de firma binaria `%PDF-`, límite `<= 25 MB`, saneamiento de nombre y bloqueo de enlaces simbólicos antes de escribir a disco.
+- **Reglas de negocio e invariantes**: Acceso restringido exclusivamente a roles `core`, `sub_admin` y `admin` validado en cliente y en `_sesion(auditor=True)`; verificación obligatoria de firma binaria `%PDF-`, límite `<= 25 MB`, saneamiento de nombre, rechazo de IDs inexistentes y bloqueo de enlaces simbólicos antes de escribir a disco.
 
 ## [FN-08.02] Porcentaje de Costo Complementario y Costo Total Empresa Provisorio
 - **Módulo**: [MOD-08] Gestión de Empleados
@@ -14,7 +14,7 @@
 
 ## [FN-11.01] Módulo de Estadísticas de Uso y Evolución Temporal ISO 9001 desde 01/10/2026
 - **Módulo**: [MOD-11] Estadísticas de Uso y Conformidad ISO 9001
-- **Flujo Operativo**: Calcula desde PostgreSQL el cumplimiento de días corridos calendario desde el `01/10/2026` (activos y francos) a nivel global y por colaborador activo; expone KPIs generales, un gráfico SVG interactivo de `% de uso` temporal en tres modos (`Acumulado ISO`, `Diario`, `Semanal`) filtrable por área o empleado frente al promedio empresa, y una tabla detallada con exportación JSON.
+- **Flujo Operativo**: Calcula desde PostgreSQL el cumplimiento de días corridos calendario desde el `01/10/2026` (activos y francos) a nivel global y por colaborador activo; expone KPIs generales, un gráfico SVG interactivo de `% de uso` temporal en tres modos (`Acumulado ISO`, `Diario`, `Semanal`) filtrable por área o empleado frente al promedio empresa, y una tabla detallada por colaborador (con exportación unificada a PDF vía `[FN-11.05]`).
 - **Tablas afectadas**: app_rrhh.a_1_usuarios, app_rrhh.b_1_asistencias (lectura pura).
 - **Reglas de negocio e invariantes**: Acceso restringido exclusivamente a roles `core`, `sub_admin` y `admin` validado en UI (`puedeVerEstadisticasUso`) y puente (`_sesion(auditor=True)`); inicio fijo `2026-10-01` acotado hasta la fecha actual; exclusión automática de asistencias con borrado lógico (`eliminado_en IS NULL`).
 
