@@ -11,6 +11,7 @@ from pathlib import Path, PurePosixPath
 
 APP_EXE = "CheckDiarioIngeap.exe"
 FORMATO = "check-diario/onedir-v1"
+EDICIONES_VALIDAS = {"operativa", "gestion"}
 MAX_TOTAL = 512 * 1024 * 1024
 MAX_FILE = 128 * 1024 * 1024
 RESERVADOS = {"CON", "PRN", "AUX", "NUL", *(f"COM{i}" for i in range(1, 10)), *(f"LPT{i}" for i in range(1, 10))}
@@ -56,9 +57,11 @@ def guardar_json(ruta, datos):
     temporal.replace(ruta)
 
 
-def crear_paquete(carpeta, destino, version):
+def crear_paquete(carpeta, destino, version, edicion="gestion"):
     if not re.fullmatch(r"\d+\.\d+\.\d+", version):
         raise ErrorPaquete("Versión inválida.")
+    if edicion not in EDICIONES_VALIDAS:
+        raise ErrorPaquete("Edición inválida.")
     carpeta = Path(carpeta).resolve()
     archivos = {}
     for archivo in sorted(carpeta.rglob("*")):
@@ -72,7 +75,13 @@ def crear_paquete(carpeta, destino, version):
                 raise ErrorPaquete("No se admite configuración privada dentro del paquete.")
             archivos[nombre] = {"bytes": archivo.stat().st_size,
                                 "sha256": hashlib.sha256(archivo.read_bytes()).hexdigest()}
-    manifiesto = {"formato": FORMATO, "version": version, "arquitectura": "win_amd64", "archivos": archivos}
+    manifiesto = {
+        "formato": FORMATO,
+        "version": version,
+        "edicion": edicion,
+        "arquitectura": "win_amd64",
+        "archivos": archivos,
+    }
     with zipfile.ZipFile(destino, "w", compression=zipfile.ZIP_DEFLATED) as paquete:
         paquete.writestr("manifest.json", json.dumps(manifiesto, sort_keys=True))
         for nombre in archivos:
@@ -102,6 +111,8 @@ def validar_paquete(ruta):
         if (manifiesto.get("formato") != FORMATO or manifiesto.get("arquitectura") != "win_amd64" or
                 not re.fullmatch(r"\d+\.\d+\.\d+", manifiesto.get("version", ""))):
             raise ErrorPaquete("El formato, la arquitectura o la versión no son compatibles.")
+        if manifiesto.get("edicion", "gestion") not in EDICIONES_VALIDAS:
+            raise ErrorPaquete("La edición del paquete no es compatible.")
         archivos = manifiesto.get("archivos")
         if not isinstance(archivos, dict) or set(archivos) | {"manifest.json"} != set(paquete.namelist()):
             raise ErrorPaquete("El contenido no coincide con el manifiesto.")
@@ -129,6 +140,8 @@ def validar_instalacion(carpeta):
     manifiesto = json.loads((carpeta / "manifest.json").read_text(encoding="utf-8"))
     if manifiesto.get("formato") != FORMATO:
         raise ErrorPaquete("La instalación no tiene un manifiesto compatible.")
+    if manifiesto.get("edicion", "gestion") not in EDICIONES_VALIDAS:
+        raise ErrorPaquete("La instalación no corresponde a una edición compatible.")
     for nombre, info in manifiesto["archivos"].items():
         archivo = contenido_seguro(carpeta, carpeta / nombre_seguro(nombre))
         if not archivo.is_file() or archivo.stat().st_size != info["bytes"]:
@@ -229,6 +242,7 @@ def instalar_paquete(paquete, raiz, *, iniciar, preparar=None, configurar=None, 
                     shutil.copyfileobj(entrada, salida, 1024 * 1024)
         validar_instalacion(stage)
         operacion = {"formato": FORMATO, "id": tx, "version": manifiesto["version"],
+                     "edicion": manifiesto.get("edicion", "gestion"),
                      "habia_app": app.exists(), "estado": "preparada"}
         if preparar:
             preparar(tx)

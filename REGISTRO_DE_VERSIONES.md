@@ -2,6 +2,22 @@
 
 Historial cronológico de cambios, nuevas características y mejoras aplicadas al sistema **Check Diario Ingeap**.
 
+## [2.18.0] - 2026-11-24
+
+### 📦 Distribución Dual Física por Perfil de Rol: Edición Operativa y Edición Gestión ([MOD-00] / [FN-00.13])
+- **Doble Formato de Empaquetado y Versionado Independiente (`app_version.py`, `deployment.py`, `build_release.py`, `compilar_instalador.bat`)**:
+  - Introducidos contadores independientes `OPERATIVA_VERSION = "2.18.0"` y `GESTION_VERSION = "2.18.0"`, sello de edición en tiempo de compilación (`_build_edition`) y atributo `"edicion": "operativa" | "gestion"` en `manifest.json` y `updates/pending.json` / `health-<token>.json`.
+  - Nuevo selector `--edicion {gestion,operativa,ambas}` para generar de manera independiente o conjunta los binarios Operativos (`CheckDiarioIngeap.exe`, `Instalador_CheckDiario_Ingeap.exe`, `CheckDiarioIngeap-win64.zip`) sin `openpyxl`/`jspdf`/`html2canvas` y los binarios Gestión (`CheckDiarioIngeap_Gestion.exe`, `Instalador_CheckDiario_Gestion.exe`, `CheckDiarioIngeap-gestion-win64.zip`).
+- **Canales de Auto-Actualización por Rol y Auto-Crossgrade (`update_channels.py`, `main.py`, `installer_app.py`, `updater.py`, `package_checks.py`)**:
+  - Los colaboradores `user_1` y `user_2` evalúan únicamente releases generales `v*` e ignoran los tags exclusivos `gestion-v*`, evitando descargas innecesarias ante cambios de RRHH o Administración.
+  - Los roles `core`, `sub_admin` y `admin` evalúan el mayor SemVer entre `gestion-v*` y `v*`, con detección automática de *crossgrade* hacia `CheckDiarioIngeap_Gestion.exe` cuando un usuario asciende de rol estando instalado en Edición Operativa.
+- **Poda Estática en Frontend, Rediseño de Cabecera y Blindaje en Puente (`vite.config.js`, `edition.js`, `App.jsx`, `HomeView.jsx`, `RpgTavernBoard.jsx`, `index.css`, `postgres_bridge.py`)**:
+  - Eliminación en compilación de los 10 componentes y dependencias de gestión en la Edición Operativa, conservando `CheckForm`, `HistoryView`, `SuggestionForm` y `RpgTavernBoard` (sin botones administrativos) para usuarios operativos del área Aplicaciones (`user_2`).
+  - Rediseño minimalista de `.app-header` (logo `ingeap` a la izquierda, bloque `[Avatar + Nombre/Correo + ícono cerrar sesión]` a la derecha y línea divisoria inferior roja `#cc3333`), leyenda de versión/edición persistente en la esquina inferior izquierda en ambas ediciones y HUD momentáneo de zoom al acercar/alejar con `Ctrl + Rueda` o `Ctrl + +/-/0`.
+  - Bloqueo en `ApiPuente` de operaciones administrativas/auditoría y proyección reducida en `obtener_todos_usuarios` cuando `APP_EDITION == "operativa"`.
+- **Pruebas y Documentación (`test_update_channels.py`, `test_deployment.py`, `test_postgres_contract.py`, `edition.test.js`, `DISTRIBUCION_WINDOWS.md`)**:
+  - Agregada cobertura unitaria y de contrato para selección de canales por rol, *crossgrade*, exclusión de `openpyxl` en verificación operativa y restricción de puente.
+
 ## [2.17.1] - 2026-11-19
 
 ### 🛠️ Corrección en Selección por Persona del PDF y Limpieza de Acciones en Métricas de Uso ([MOD-11] / [FN-11.05])

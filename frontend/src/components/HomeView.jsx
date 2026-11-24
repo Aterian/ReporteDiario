@@ -1,7 +1,9 @@
-import React, { useState } from 'react';
+import React, { lazy, Suspense, useState } from 'react';
 import RpgTavernBoard from './RpgTavernBoard';
-import DailyStatusWidget from './DailyStatusWidget';
+import { ES_EDICION_GESTION } from '../config/edition';
 import { getTituloRpg } from '../utils/rpgTitles';
+
+const DailyStatusWidget = __APP_EDITION__ === 'gestion' ? lazy(() => import('./DailyStatusWidget')) : null;
 import { 
   puedeAccederRoster, 
   puedeVerHistorialOtros, 
@@ -69,7 +71,9 @@ export default function HomeView({
   const puedeGestionarBuzon = puedeGestionarSugerencias(usuario);
   const puedeProyectos = puedeGestionarProyectos(usuario);
   const puedeEstadisticas = puedeVerEstadisticasUso(usuario);
-  const tieneModulosGestion = puedeRoster || puedeOtros || puedeVerAyer || puedeGestionar || puedeGestionarBuzon || puedeProyectos || puedeEstadisticas;
+  const tieneModulosGestion =
+    ES_EDICION_GESTION &&
+    (puedeRoster || puedeOtros || puedeVerAyer || puedeGestionar || puedeGestionarBuzon || puedeProyectos || puedeEstadisticas);
 
   const getFechaFormateada = () => {
     const hoy = new Date();
@@ -662,8 +666,10 @@ export default function HomeView({
             )}
 
             {/* [FN-06.05] Widget de Actividad de ayer (Exclusivo Núcleo, Aplicaciones y Justina Bertolozzi) */}
-            {puedeVerAyer && (
-              <DailyStatusWidget usuario={usuario} />
+            {ES_EDICION_GESTION && DailyStatusWidget && puedeVerAyer && (
+              <Suspense fallback={null}>
+                <DailyStatusWidget usuario={usuario} />
+              </Suspense>
             )}
           </div>
         )}

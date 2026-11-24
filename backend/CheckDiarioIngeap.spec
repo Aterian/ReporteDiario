@@ -1,10 +1,11 @@
 # -*- mode: python ; coding: utf-8 -*-
 import os
-import sys
 
 block_cipher = None
 
 base_dir = SPECPATH
+edicion = os.environ.get("CHECK_DIARIO_EDITION", "gestion").strip().lower()
+version_file = os.environ.get("CHECK_DIARIO_VERSION_FILE", os.path.join(base_dir, "file_version_info.txt"))
 
 added_files = [
     (os.path.join(base_dir, "dist"), "dist"),
@@ -12,6 +13,8 @@ added_files = [
 ]
 
 hidden_imports = [
+    "_build_edition",
+    "update_channels",
     "clr",
     "pythonnet",
     "webview",
@@ -22,10 +25,6 @@ hidden_imports = [
     "PIL",
     "PIL.Image",
     "PIL.ImageDraw",
-    "openpyxl",
-    "openpyxl.styles",
-    "openpyxl.utils",
-    "openpyxl.worksheet",
     "loguru",
     "pydantic",
     "psycopg2",
@@ -34,6 +33,18 @@ hidden_imports = [
     "psycopg2.pool",
     "dotenv",
 ]
+
+excludes = ["numpy", "pandas", "pytest"]
+
+if edicion == "operativa":
+    excludes.extend(["openpyxl", "roster_export", "liquidacion_export", "postgres_exports"])
+else:
+    hidden_imports.extend([
+        "openpyxl",
+        "openpyxl.styles",
+        "openpyxl.utils",
+        "openpyxl.worksheet",
+    ])
 
 a = Analysis(
     [os.path.join(base_dir, 'main.py')],
@@ -44,7 +55,7 @@ a = Analysis(
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
-    excludes=["numpy", "pandas", "pytest"],
+    excludes=excludes,
     win_no_prefer_redirects=False,
     win_private_assemblies=False,
     noarchive=False,
@@ -56,7 +67,7 @@ exe = EXE(
     pyz, a.scripts, [], exclude_binaries=True,
     name='CheckDiarioIngeap', console=False, upx=False,
     contents_directory='_internal',
-    version=os.path.join(base_dir, "file_version_info.txt"),
+    version=version_file,
     icon=os.path.join(base_dir, "assets", "app.ico"),
 )
 coll = COLLECT(exe, a.binaries, a.datas, strip=False, upx=False, name='app')

@@ -12,6 +12,7 @@ from pydantic import ValidationError
 import psycopg2
 import psycopg2.pool
 
+import app_version
 import postgres_repository as db
 from error_handler import AppBaseException, PermisoDenegadoError, ValidacionError, formatear_respuesta, manejar_errores_api
 from postgres_models import AsistenciaUpdate
@@ -154,7 +155,12 @@ class ApiPuente:
     @manejar_errores_api
     def obtener_estado_inicializacion(self):
         estado = self._conexion.estado() if self._conexion else {"estado": "disponible", "revision": 0}
-        return {**estado, "visible": self._escritorio.visible if self._escritorio else True}
+        return {
+            **estado,
+            "visible": self._escritorio.visible if self._escritorio else True,
+            "edicion": app_version.APP_EDITION,
+            "version_app": app_version.APP_VERSION,
+        }
 
     @manejar_errores_api
     def reintentar_conexion(self):
@@ -163,10 +169,16 @@ class ApiPuente:
     def set_ventana(self, ventana):
         self._ventana = ventana
 
+    def _requerir_edicion_gestion(self):
+        if app_version.APP_EDITION != "gestion":
+            raise PermisoDenegadoError("Esta función requiere Check Diario Edición Gestión.")
+
     def _sesion(self, admin=False, auditor=False):
         sesion = db.obtener_sesion_activa()
         if not sesion:
             raise PermisoDenegadoError("Inicie sesión para continuar.")
+        if admin or auditor:
+            self._requerir_edicion_gestion()
         rol = sesion.get("rol_app")
         if admin and rol not in ("admin","sub_admin"):
             raise PermisoDenegadoError("La operación requiere rol_app admin o sub_admin en PostgreSQL.")
@@ -193,7 +205,12 @@ class ApiPuente:
 
     def obtener_estado_sesion(self):
         sesion = db.obtener_sesion_activa()
-        return {"logueado":sesion is not None,"usuario":sesion}
+        return {
+            "logueado": sesion is not None,
+            "usuario": sesion,
+            "edicion": app_version.APP_EDITION,
+            "version_app": app_version.APP_VERSION,
+        }
 
     def iniciar_sesion(self, nombre: str, dni: str):
         db.perfil_esquema.cache_clear()
@@ -416,6 +433,7 @@ class ApiPuente:
 
     def eliminar_roster(self, id_roster: int | str):
         sesion = self._sesion()
+        self._requerir_edicion_gestion()
         admin = sesion.get("rol_app") in ("admin", "sub_admin")
         if not admin:
             raise PermisoDenegadoError("Solo usuarios con rol admin o sub_admin pueden eliminar turnos de Roster.")
@@ -425,7 +443,10 @@ class ApiPuente:
 
     def obtener_todos_usuarios(self, area: str | None = None, incluir_inactivos: bool = False):
         sesion = self._sesion()
-        es_autorizado = sesion.get("rol_app") in ("admin", "sub_admin", "core")
+        es_autorizado = (
+            app_version.APP_EDITION == "gestion"
+            and sesion.get("rol_app") in ("admin", "sub_admin", "core")
+        )
         usuarios = db.obtener_usuarios_cache(incluir_inactivos=incluir_inactivos and es_autorizado)
         if area and area.upper() != "TODOS":
             usuarios = [u for u in usuarios if (u.get("area") or "").upper() == area.upper()]
@@ -448,9 +469,9 @@ class ApiPuente:
             **info_faltantes
         }
 
-    def verificar_actualizacion(self):
+    def verificar_actualizacion(self, forzar: bool = False):
         from main import verificar_actualizacion_github
-        return verificar_actualizacion_github()
+        return verificar_actualizacion_github(forzar=bool(forzar))
 
     def aplicar_actualizacion(self, url_descarga: str):
         self._sesion()
@@ -686,12 +707,14 @@ class ApiPuente:
 
     def obtener_errores_remotos(self, solo_pendientes: bool = True, limite: int = 50):
         sesion = self._sesion()
+        self._requerir_edicion_gestion()
         if sesion.get("rol_app") != "admin":
             raise PermisoDenegadoError("Solo los administradores pueden consultar el log de errores remotos.")
         return db.obtener_errores_remotos(solo_pendientes=solo_pendientes, limite=limite)
 
     def marcar_error_remoto_resuelto(self, id_error: str | None = None, todos: bool = False):
         sesion = self._sesion()
+        self._requerir_edicion_gestion()
         if sesion.get("rol_app") != "admin":
             raise PermisoDenegadoError("Solo los administradores pueden resolver errores remotos.")
         res = db.marcar_error_remoto_resuelto(id_error=id_error, todos=todos, id_operador=sesion.get("id_usuario"))
@@ -701,6 +724,7 @@ class ApiPuente:
     # [FN-04.14] Alta de nuevo usuario y sueldo base
     def crear_usuario_y_sueldo(self, datos: dict):
         sesion = self._sesion()
+        self._requerir_edicion_gestion()
         if sesion.get("rol_app") not in ("admin", "sub_admin"):
             raise PermisoDenegadoError("Solo usuarios admin o sub_admin pueden dar de alta empleados.")
         res = db.crear_usuario_y_sueldo(datos, operador_sesion=sesion)
@@ -710,12 +734,14 @@ class ApiPuente:
     # [FN-07.22] Gestión integral de proyectos por administradores
     def obtener_proyectos_admin(self, incluir_inactivos: bool = True):
         sesion = self._sesion()
+        self._requerir_edicion_gestion()
         if sesion.get("rol_app") != "admin":
             raise PermisoDenegadoError("La gestión de proyectos es exclusiva para administradores.")
         return db.obtener_proyectos_gestion(incluir_inactivos=incluir_inactivos)
 
     def crear_proyecto(self, datos: dict):
         sesion = self._sesion()
+        self._requerir_edicion_gestion()
         if sesion.get("rol_app") != "admin":
             raise PermisoDenegadoError("La gestión de proyectos es exclusiva para administradores.")
         res = db.crear_proyecto(datos)
@@ -724,6 +750,7 @@ class ApiPuente:
 
     def actualizar_proyecto(self, datos: dict):
         sesion = self._sesion()
+        self._requerir_edicion_gestion()
         if sesion.get("rol_app") != "admin":
             raise PermisoDenegadoError("La gestión de proyectos es exclusiva para administradores.")
         res = db.actualizar_proyecto(datos)
@@ -734,6 +761,7 @@ class ApiPuente:
 
     def exportar_errores_remotos(self, solo_pendientes: bool = False):
         sesion = self._sesion()
+        self._requerir_edicion_gestion()
         if sesion.get("rol_app") != "admin":
             raise PermisoDenegadoError("Solo los administradores pueden exportar errores remotos.")
         lista = db.obtener_errores_remotos(solo_pendientes=solo_pendientes, limite=500)

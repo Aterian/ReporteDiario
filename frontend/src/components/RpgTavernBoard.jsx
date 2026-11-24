@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { getTituloRpg } from '../utils/rpgTitles';
 import { api } from '../services/apiBridge';
+import { ES_EDICION_GESTION } from '../config/edition';
 import { puedeVerHistorialOtros, puedeAccederRoster, puedeGestionarUsuarios, puedeGestionarSugerencias, puedeGestionarProyectos, puedeVerEstadisticasUso } from '../utils/permissions';
 
 // Iconos vectoriales medievales para garantizar renderizado perfecto sin depender de compatibilidad de emojis
@@ -63,8 +64,8 @@ export default function RpgTavernBoard({
   onEstadisticasUso,
   onVerErroresRemotos
 }) {
-  const puedeOtros = puedeVerHistorialOtros(usuario);
-  const puedeRoster = puedeAccederRoster(usuario);
+  const puedeOtros = ES_EDICION_GESTION && puedeVerHistorialOtros(usuario);
+  const puedeRoster = ES_EDICION_GESTION && puedeAccederRoster(usuario);
   const [diasRegistrados, setDiasRegistrados] = useState(new Set());
 
   // Fecha actual
@@ -278,7 +279,7 @@ export default function RpgTavernBoard({
               📖 Abrir Tomo de Crónicas (Historial)
             </button>
 
-            {puedeOtros && onHistorialOtrosEmpleados && (
+            {ES_EDICION_GESTION && puedeOtros && onHistorialOtrosEmpleados && (
               <button 
                 type="button" 
                 className="rpg-parchment-btn-sec"
@@ -290,7 +291,7 @@ export default function RpgTavernBoard({
               </button>
             )}
 
-            {puedeGestionarUsuarios(usuario) && onGestionUsuarios && (
+            {ES_EDICION_GESTION && puedeGestionarUsuarios(usuario) && onGestionUsuarios && (
               <button 
                 type="button" 
                 className="rpg-parchment-btn-sec"
@@ -302,7 +303,7 @@ export default function RpgTavernBoard({
               </button>
             )}
 
-            {puedeGestionarSugerencias(usuario) && onGestionSugerencias && (
+            {ES_EDICION_GESTION && puedeGestionarSugerencias(usuario) && onGestionSugerencias && (
               <button
                 type="button"
                 className="rpg-parchment-btn-sec"
@@ -313,7 +314,7 @@ export default function RpgTavernBoard({
               </button>
             )}
 
-            {puedeVerEstadisticasUso(usuario) && onEstadisticasUso && (
+            {ES_EDICION_GESTION && puedeVerEstadisticasUso(usuario) && onEstadisticasUso && (
               <button
                 type="button"
                 className="rpg-parchment-btn-sec"
@@ -325,7 +326,7 @@ export default function RpgTavernBoard({
               </button>
             )}
 
-            {puedeGestionarProyectos(usuario) && onGestionProyectos && (
+            {ES_EDICION_GESTION && puedeGestionarProyectos(usuario) && onGestionProyectos && (
               <button 
                 type="button" 
                 className="rpg-parchment-btn-sec"
@@ -336,7 +337,7 @@ export default function RpgTavernBoard({
                 🏰 Catálogo de Fortalezas (Proyectos)
               </button>
             )}
-            {puedeGestionarProyectos(usuario) && onVerErroresRemotos && (
+            {ES_EDICION_GESTION && puedeGestionarProyectos(usuario) && onVerErroresRemotos && (
               <button 
                 type="button" 
                 className="rpg-parchment-btn-sec"
@@ -436,7 +437,7 @@ export default function RpgTavernBoard({
             <button type="button" className="rpg-wood-btn" onClick={onVerHistorial}>
               📖 Crónicas
             </button>
-            {puedeOtros && onHistorialOtrosEmpleados && (
+            {ES_EDICION_GESTION && puedeOtros && onHistorialOtrosEmpleados && (
               <button type="button" className="rpg-wood-btn" onClick={onHistorialOtrosEmpleados} title="Ver auditoría y misiones de todos los colaboradores">
                 👥 Aventureros
               </button>

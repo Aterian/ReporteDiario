@@ -349,3 +349,50 @@ def test_instalador_manual_rechaza_otra_version_si_instancia_sigue_abierta(tmp_p
     assert installer_app.main([]) == 1
     instancia.solicitar_apertura.assert_not_called()
     instancia.cerrar.assert_called_once()
+
+
+def test_paquete_operativo_registra_edicion_y_rechaza_edicion_invalida(tmp_path):
+    app = tmp_path / "op"
+    (app / "_internal" / "dist").mkdir(parents=True)
+    (app / d.APP_EXE).write_bytes(b"MZ-2.18.0")
+    (app / "_internal" / "dist" / "index.html").write_text("<html>Op</html>", encoding="utf-8")
+    ruta = tmp_path / "op.zip"
+    manifiesto = d.crear_paquete(app, ruta, "2.18.0", edicion="operativa")
+    assert manifiesto["edicion"] == "operativa"
+    assert d.validar_paquete(ruta)["edicion"] == "operativa"
+
+    with pytest.raises(d.ErrorPaquete):
+        d.crear_paquete(app, tmp_path / "bad.zip", "2.18.0", edicion="desconocida")
+
+
+def test_misma_version_instalada_distingue_edicion_operativa_vs_gestion(tmp_path, monkeypatch):
+    import installer_app
+
+    raiz = tmp_path / "instalada"
+    app = tmp_path / "op"
+    (app / "_internal" / "dist").mkdir(parents=True)
+    (app / d.APP_EXE).write_bytes(b"MZ-2.18.0")
+    (app / "_internal" / "dist" / "index.html").write_text("<html>Op</html>", encoding="utf-8")
+    paquete = tmp_path / "op.zip"
+    d.crear_paquete(app, paquete, "2.18.0", edicion="operativa")
+    d.instalar_paquete(paquete, raiz, iniciar=lambda *_: None)
+
+    monkeypatch.setattr(installer_app, "APP_VERSION", "2.18.0")
+    monkeypatch.setattr(installer_app, "APP_EDITION", "operativa")
+    assert installer_app._misma_version_instalada(raiz) is True
+
+    monkeypatch.setattr(installer_app, "APP_EDITION", "gestion")
+    assert installer_app._misma_version_instalada(raiz) is False
+
+
+def test_package_checks_operativa_omite_y_rechaza_openpyxl(monkeypatch):
+    import package_checks
+
+    monkeypatch.setattr(package_checks, "validar_instalacion", Mock(return_value={"edicion": "operativa"}))
+    if "openpyxl" not in sys.modules:
+        assert package_checks.verificar_paquete_instalado(Path("."), exigir_sin_numpy=False) is True
+
+    monkeypatch.setitem(sys.modules, "openpyxl", SimpleNamespace(__version__="3.1.5"))
+    with pytest.raises(d.ErrorPaquete, match="openpyxl"):
+        package_checks.verificar_paquete_instalado(Path("."), exigir_sin_numpy=False)
+

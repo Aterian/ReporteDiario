@@ -1,21 +1,22 @@
-import React, { lazy, Suspense, useState, useEffect, useRef } from 'react';
+import React, { lazy, Suspense, useState, useEffect, useRef, useCallback } from 'react';
 import { api } from './services/apiBridge';
 import { queryClient } from './services/queryClient';
+import { APP_EDITION, APP_VERSION, ES_EDICION_GESTION, formatearLeyendaVersion } from './config/edition';
 import logoIngeap from './assets/Logo_Ingeap1.png';
 import LoginView from './components/LoginView';
 import HomeView from './components/HomeView';
 const CheckForm = lazy(() => import('./components/CheckForm'));
 const HistoryView = lazy(() => import('./components/HistoryView'));
-const OtherEmployeesHistoryView = lazy(() => import('./components/OtherEmployeesHistoryView'));
-const RosterView = lazy(() => import('./components/RosterView'));
-const RosterHistoryView = lazy(() => import('./components/RosterHistoryView'));
-const UsersManagementView = lazy(() => import('./components/UsersManagementView'));
-const ProjectsManagementView = lazy(() => import('./components/ProjectsManagementView'));
 const SuggestionForm = lazy(() => import('./components/SuggestionForm'));
-const SuggestionsManagementView = lazy(() => import('./components/SuggestionsManagementView'));
-const RemoteErrorsView = lazy(() => import('./components/RemoteErrorsView'));
-const RemoteErrorsModal = lazy(() => import('./components/RemoteErrorsModal'));
-const UsageStatsView = lazy(() => import('./components/UsageStatsView'));
+const OtherEmployeesHistoryView = __APP_EDITION__ === 'gestion' ? lazy(() => import('./components/OtherEmployeesHistoryView')) : null;
+const RosterView = __APP_EDITION__ === 'gestion' ? lazy(() => import('./components/RosterView')) : null;
+const RosterHistoryView = __APP_EDITION__ === 'gestion' ? lazy(() => import('./components/RosterHistoryView')) : null;
+const UsersManagementView = __APP_EDITION__ === 'gestion' ? lazy(() => import('./components/UsersManagementView')) : null;
+const ProjectsManagementView = __APP_EDITION__ === 'gestion' ? lazy(() => import('./components/ProjectsManagementView')) : null;
+const SuggestionsManagementView = __APP_EDITION__ === 'gestion' ? lazy(() => import('./components/SuggestionsManagementView')) : null;
+const RemoteErrorsView = __APP_EDITION__ === 'gestion' ? lazy(() => import('./components/RemoteErrorsView')) : null;
+const RemoteErrorsModal = __APP_EDITION__ === 'gestion' ? lazy(() => import('./components/RemoteErrorsModal')) : null;
+const UsageStatsView = __APP_EDITION__ === 'gestion' ? lazy(() => import('./components/UsageStatsView')) : null;
 import { ErrorBoundary } from 'react-error-boundary';
 import ErrorFallback from './components/ErrorFallback';
 import { Toaster, toast } from 'sonner';
@@ -59,6 +60,18 @@ export default function App() {
     const valor = guardado ? Number(guardado) : 100;
     return isNaN(valor) ? 100 : Math.min(Math.max(valor, MIN_ZOOM), MAX_ZOOM);
   });
+  const [zoomHudVisible, setZoomHudVisible] = useState(false);
+  const zoomHudTimerRef = useRef(null);
+
+  const mostrarHudZoom = useCallback(() => {
+    setZoomHudVisible(true);
+    if (zoomHudTimerRef.current) {
+      clearTimeout(zoomHudTimerRef.current);
+    }
+    zoomHudTimerRef.current = setTimeout(() => {
+      setZoomHudVisible(false);
+    }, 1400);
+  }, []);
 
   useEffect(() => {
     const factor = zoom / 100;
@@ -67,20 +80,22 @@ export default function App() {
     localStorage.setItem('ingeap_zoom', String(zoom));
   }, [zoom]);
 
-  const aumentarZoom = () => {
-    setZoom(prev => Math.min(prev + 10, MAX_ZOOM));
-  };
-  const disminuirZoom = () => {
-    setZoom(prev => Math.max(prev - 10, MIN_ZOOM));
-  };
+  useEffect(() => {
+    return () => {
+      if (zoomHudTimerRef.current) {
+        clearTimeout(zoomHudTimerRef.current);
+      }
+    };
+  }, []);
 
-  // [FN-04.09] Atajo Ctrl + Wheel y teclado para ajuste de Zoom fluido
+  // [FN-04.09] Atajo Ctrl + Wheel y teclado para ajuste de Zoom fluido con indicador momentáneo
   useEffect(() => {
     const handleWheel = (e) => {
       if (e.ctrlKey) {
         e.preventDefault();
         const delta = e.deltaY < 0 ? 5 : -5;
         setZoom(prev => Math.min(Math.max(prev + delta, MIN_ZOOM), MAX_ZOOM));
+        mostrarHudZoom();
       }
     };
 
@@ -89,12 +104,15 @@ export default function App() {
         if (e.key === '+' || e.key === '=') {
           e.preventDefault();
           setZoom(prev => Math.min(prev + 5, MAX_ZOOM));
+          mostrarHudZoom();
         } else if (e.key === '-' || e.key === '_') {
           e.preventDefault();
           setZoom(prev => Math.max(prev - 5, MIN_ZOOM));
+          mostrarHudZoom();
         } else if (e.key === '0') {
           e.preventDefault();
           setZoom(100);
+          mostrarHudZoom();
         }
       }
     };
@@ -105,7 +123,7 @@ export default function App() {
       window.removeEventListener('wheel', handleWheel);
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, []);
+  }, [mostrarHudZoom]);
 
   // [FN-07.21] Captura global de excepciones no controladas de ventana y promesas rechazadas
   useEffect(() => {
@@ -243,7 +261,7 @@ export default function App() {
 
   // [FN-02.02] Monitoreo y carga de notificaciones de modificaciones (Exclusivo Justina Bertolozzi e Iván Valentin)
   useEffect(() => {
-    if (!usuario || !visible || !disponible || !puedeVerModificaciones(usuario)) {
+    if (!ES_EDICION_GESTION || !usuario || !visible || !disponible || !puedeVerModificaciones(usuario)) {
       setNotificacionesModificaciones([]);
       return;
     }
@@ -286,7 +304,7 @@ export default function App() {
 
   // [FN-07.21] Carga y polling de errores remotos del sistema (Exclusivo Administrador)
   const cargarErroresRemotos = async () => {
-    if (!usuario || !esAdmin(usuario)) return;
+    if (!ES_EDICION_GESTION || !usuario || !esAdmin(usuario)) return;
     try {
       const lista = await api.obtenerErroresRemotos(true);
       if (Array.isArray(lista)) {
@@ -298,7 +316,7 @@ export default function App() {
   };
 
   useEffect(() => {
-    if (!usuario || !visible || !disponible || !esAdmin(usuario)) {
+    if (!ES_EDICION_GESTION || !usuario || !visible || !disponible || !esAdmin(usuario)) {
       setErroresRemotos([]);
       return;
     }
@@ -341,9 +359,16 @@ export default function App() {
     }
   };
 
-  // Guardia de navegación por permisos y roles
+  // Guardia de navegación por permisos, edición y roles
   useEffect(() => {
     if (!usuario) return;
+    if (
+      !ES_EDICION_GESTION &&
+      ['roster', 'historial-roster', 'historial-otros', 'usuarios', 'proyectos', 'sugerencias-gestion', 'estadisticas-uso', 'errores-remotos'].includes(vistaActiva)
+    ) {
+      setVistaActiva('home');
+      return;
+    }
     if ((vistaActiva === 'roster' || vistaActiva === 'historial-roster') && !puedeAccederRoster(usuario)) {
       setVistaActiva('home');
     }
@@ -362,30 +387,40 @@ export default function App() {
     if (vistaActiva === 'estadisticas-uso' && !puedeVerEstadisticasUso(usuario)) {
       setVistaActiva('home');
     }
+    if (vistaActiva === 'errores-remotos' && !esAdmin(usuario)) {
+      setVistaActiva('home');
+    }
   }, [vistaActiva, usuario]);
 
-  // [FN-03.06] Comprobar si hay actualizaciones disponibles en segundo plano desde GitHub Releases
-  const comprobarUpdate = async () => {
+  // [FN-03.06] Comprobar si hay actualizaciones disponibles por canal de rol y edición
+  const comprobarUpdate = useCallback(async (forzar = false) => {
     if (updateEnCurso.current) return;
     updateEnCurso.current = true;
     try {
-      const res = await api.verificarActualizacion();
+      const res = await api.verificarActualizacion(forzar);
       if (res && res.actualizacion_disponible) {
         setActualizacion(res);
+      } else if (forzar) {
+        setActualizacion(null);
       }
-    } catch (err) {
+    } catch (_err) {
       // Silencioso si no hay conexión o no está configurado
     } finally {
       updateEnCurso.current = false;
     }
-  };
+  }, []);
 
   useEffect(() => {
     if (!disponible || !visible) return;
-    const primerUpdate = setTimeout(comprobarUpdate, 30000);
-    const intervalUpdate = setInterval(comprobarUpdate, 15 * 60 * 1000);
+    const primerUpdate = setTimeout(() => comprobarUpdate(false), 30000);
+    const intervalUpdate = setInterval(() => comprobarUpdate(false), 15 * 60 * 1000);
     return () => { clearTimeout(primerUpdate); clearInterval(intervalUpdate); };
-  }, [disponible, visible]);
+  }, [disponible, visible, comprobarUpdate]);
+
+  useEffect(() => {
+    if (!disponible || !visible || !usuario?.id_usuario) return;
+    comprobarUpdate(true);
+  }, [disponible, visible, usuario?.id_usuario, usuario?.rol_app, comprobarUpdate]);
 
   const handleActualizar = async () => {
     if (!actualizacion?.url_descarga) return;
@@ -493,19 +528,11 @@ export default function App() {
       await api.cerrarSesion();
       queryClient.removeQueries({ queryKey: SUGGESTIONS_QUERY_KEY });
       setUsuario(null);
+      setActualizacion(null);
       setRecordatorioPendiente(null);
       setVistaActiva('home');
     } catch (err) {
       console.error('Error al cerrar sesión:', err);
-    }
-  };
-
-
-  const handleMinimizar = async () => {
-    try {
-      await api.minimizar();
-    } catch (err) {
-      console.error('Error al minimizar:', err);
     }
   };
 
@@ -551,15 +578,37 @@ export default function App() {
     return (partes[0][0] + partes[partes.length - 1][0]).toUpperCase();
   };
 
-  if (!disponible) return <ConnectionScreen conexion={conexion} />;
+  const leyendaVersion = formatearLeyendaVersion(
+    conexion?.version_app || APP_VERSION,
+    conexion?.edicion || APP_EDITION
+  );
+
+  const zoomHud = zoomHudVisible ? (
+    <div className="zoom-hud-toast" role="status" aria-live="polite" data-testid="zoom-hud">
+      <span className="zoom-hud-value">Zoom {zoom}%</span>
+      {zoom !== 100 && <span className="zoom-hud-hint">Ctrl+0</span>}
+    </div>
+  ) : null;
+
+  if (!disponible) {
+    return (
+      <>
+        {zoomHud}
+        <ConnectionScreen conexion={conexion} />
+        <span className="app-corner-version" data-testid="app-version-badge">{leyendaVersion}</span>
+      </>
+    );
+  }
 
   if (cargandoSesion) {
     return (
       <div className="app-container">
+        {zoomHud}
         <div className="loading-screen">
           <div className="spinner" style={{ width: '32px', height: '32px' }} />
           <p>Iniciando Check Diario...</p>
         </div>
+        <span className="app-corner-version" data-testid="app-version-badge">{leyendaVersion}</span>
       </div>
     );
   }
@@ -567,13 +616,16 @@ export default function App() {
   if (!usuario) {
     return (
       <div className="app-container">
+        {zoomHud}
         <LoginView onLoginSuccess={(u) => { setUsuario(u); setVistaActiva('home'); }} tema={tema} onToggleTema={toggleTema} />
+        <span className="app-corner-version" data-testid="app-version-badge">{leyendaVersion}</span>
       </div>
     );
   }
 
   return (
     <div className={`app-container ${['roster', 'historial-roster', 'historial', 'historial-otros', 'usuarios', 'proyectos', 'sugerencias-gestion', 'estadisticas-uso'].includes(vistaActiva) ? 'app-panoramic' : ''}`}>
+      {zoomHud}
       {/* Input oculto para abrir el explorador de Windows al elegir avatar */}
       <input
         type="file"
@@ -585,128 +637,51 @@ export default function App() {
 
       {/* Barra superior / Header */}
       <header className="app-header">
-        <div className="user-profile">
-          <img 
-            src={logoIngeap} 
-            alt="Ingeap" 
-            className="header-brand-logo" 
-            onClick={() => setVistaActiva('home')}
-            style={{ cursor: 'pointer' }}
-            title="Ir al Inicio"
-          />
+        <img
+          src={logoIngeap}
+          alt="Ingeap"
+          className="header-brand-logo"
+          onClick={() => setVistaActiva('home')}
+          title="Ir al Inicio"
+        />
 
-          <div 
-            className="user-avatar-header" 
-            onClick={handleTriggerAvatar} 
-            title="Clic para cambiar tu avatar"
-          >
-            {usuario.avatar ? (
-              <img src={usuario.avatar} alt={usuario.nombre} className="user-avatar-header-img" />
-            ) : (
-              <div className="user-avatar">
-                {getIniciales(usuario.nombre)}
-              </div>
-            )}
-            <div className="avatar-header-edit-icon">✎</div>
-          </div>
-
-          <div className="user-info">
-            <span className="user-name">{usuario.nombre}</span>
-            <span className="user-dni">
-              {usuario.mail ? usuario.mail : `DNI: ${usuario.dni}`}
-            </span>
-          </div>
-        </div>
-
-        <div className="header-actions">
-          {/* Botón selector de Tema (Claro / Oscuro / RPG Quest para Área A) */}
-          <button
-            type="button"
-            className={`btn-header-icon ${tema === 'rpg' ? 'btn-header-rpg' : ''}`}
-            onClick={toggleTema}
-            title={
-              tema === 'light'
-                ? 'Cambiar a Tema Oscuro'
-                : tema === 'dark'
-                ? (esAplicaciones ? 'Cambiar a Modo Aventura RPG (Quest)' : 'Cambiar a Tema Claro')
-                : 'Cambiar a Tema Claro'
-            }
-          >
-            {tema === 'rpg' ? (
-              <span style={{ fontSize: '13px', lineHeight: 1 }} title="Modo Aventura RPG">⚔️</span>
-            ) : tema === 'dark' ? (
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                <circle cx="12" cy="12" r="5" />
-                <line x1="12" y1="1" x2="12" y2="3" />
-                <line x1="12" y1="21" x2="12" y2="23" />
-                <line x1="4.22" y1="4.22" x2="5.64" y2="5.64" />
-                <line x1="18.36" y1="18.36" x2="19.78" y2="19.78" />
-                <line x1="1" y1="12" x2="3" y2="12" />
-                <line x1="21" y1="12" x2="23" y2="12" />
-                <line x1="4.22" y1="19.78" x2="5.64" y2="18.36" />
-                <line x1="18.36" y1="5.64" x2="19.78" y2="4.22" />
-              </svg>
-            ) : (
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
-              </svg>
-            )}
-          </button>
-
-          {/* [FN-04.08] Control de Zoom Accesible */}
-          <div className="header-zoom-group" title="Ajustar zoom de pantalla (Ctrl + Rueda del ratón)">
-            <button
-              type="button"
-              className="btn-zoom"
-              onClick={disminuirZoom}
-              disabled={zoom <= MIN_ZOOM}
-              title="Reducir zoom (A- o Ctrl + -)"
-              aria-label="Reducir zoom"
+        <div className="header-right-group">
+          <div className="user-profile">
+            <div
+              className="user-avatar-header"
+              onClick={handleTriggerAvatar}
+              title="Clic para cambiar tu avatar"
             >
-              A-
-            </button>
-            <span
-              className="zoom-indicator"
-              onClick={() => setZoom(100)}
-              title="Restablecer zoom al 100% (Ctrl + 0)"
-            >
-              {zoom}%
-            </span>
-            <button
-              type="button"
-              className="btn-zoom"
-              onClick={aumentarZoom}
-              disabled={zoom >= MAX_ZOOM}
-              title="Aumentar zoom (A+ o Ctrl + +)"
-              aria-label="Aumentar zoom"
-            >
-              A+
-            </button>
+              {usuario.avatar ? (
+                <img src={usuario.avatar} alt={usuario.nombre} className="user-avatar-header-img" />
+              ) : (
+                <div className="user-avatar">
+                  {getIniciales(usuario.nombre)}
+                </div>
+              )}
+              <div className="avatar-header-edit-icon">✎</div>
+            </div>
+
+            <div className="user-info">
+              <span className="user-name">{usuario.nombre}</span>
+              <span className="user-dni">
+                {usuario.mail ? usuario.mail : `DNI: ${usuario.dni}`}
+              </span>
+            </div>
           </div>
 
           <button
             type="button"
-            className="btn-header-icon"
-            onClick={handleMinimizar}
-            title="Minimizar a la bandeja del sistema"
-          >
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <line x1="5" y1="12" x2="19" y2="12" />
-            </svg>
-          </button>
-
-          <button
-            type="button"
-            className="btn-logout"
+            className="btn-logout-icon"
             onClick={handleCerrarSesion}
             title="Cerrar sesión de este equipo"
+            aria-label="Cerrar sesión"
           >
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
-              <polyline points="16 17 21 12 16 7" />
-              <line x1="21" y1="12" x2="9" y2="12" />
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M10 4H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h4" />
+              <polyline points="15 16 20 12 15 8" />
+              <line x1="20" y1="12" x2="9" y2="12" />
             </svg>
-            Salir
           </button>
         </div>
       </header>
@@ -716,10 +691,15 @@ export default function App() {
         <div className="update-banner">
           <div className="update-content">
             <div className="update-title">
-              <span>🚀</span> Actualización disponible: v{actualizacion.version_nueva}
+              <span>{actualizacion.cambio_edicion ? '⚡' : '🚀'}</span>{' '}
+              {actualizacion.cambio_edicion
+                ? `Edición Gestión disponible: v${actualizacion.version_nueva}`
+                : `Actualización disponible: v${actualizacion.version_nueva}`}
             </div>
             <div className="update-notes">
-              {actualizacion.notas || 'Nueva versión con mejoras y correcciones disponible.'}
+              {actualizacion.cambio_edicion
+                ? `Tu perfil (${usuario?.rol_app || 'gestión'}) requiere Check Diario Edición Gestión para habilitar los módulos de RRHH, supervisión y reportes.`
+                : (actualizacion.notas || 'Nueva versión con mejoras y correcciones disponible.')}
             </div>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -729,7 +709,9 @@ export default function App() {
               disabled={actualizando}
               onClick={handleActualizar}
             >
-              {actualizando ? 'Descargando...' : 'Actualizar ahora'}
+              {actualizando
+                ? 'Descargando...'
+                : (actualizacion.cambio_edicion ? 'Instalar Edición Gestión' : 'Actualizar ahora')}
             </button>
             <button
               type="button"
@@ -878,142 +860,182 @@ export default function App() {
 
       {/* Navegación por vistas protegida con react-error-boundary */}
       <DesktopActivityContext.Provider value={visible && disponible}>
-      <Suspense fallback={<div className="loading-screen">Cargando vista...</div>}>
-      <ErrorBoundary FallbackComponent={ErrorFallback} onReset={() => setVistaActiva('home')}>
-        {vistaActiva === 'home' && (
-          <HomeView
-            usuario={usuario}
-            tema={tema}
-            onNuevoReporte={() => setVistaActiva('check')}
-            onVerHistorial={() => setVistaActiva('historial')}
-            onNuevoRoster={() => setVistaActiva('roster')}
-            onHistorialRoster={() => setVistaActiva('historial-roster')}
-            onHistorialOtrosEmpleados={() => setVistaActiva('historial-otros')}
-            onGestionUsuarios={() => setVistaActiva('usuarios')}
-            onNuevaSugerencia={() => setVistaActiva('sugerencia-nueva')}
-            onGestionSugerencias={() => setVistaActiva('sugerencias-gestion')}
-            onGestionProyectos={() => setVistaActiva('proyectos')}
-            onEstadisticasUso={() => setVistaActiva('estadisticas-uso')}
-            erroresRemotos={erroresRemotos}
-            onVerErroresRemotos={() => setVistaActiva('errores-remotos')}
-            onAvatarClick={handleTriggerAvatar}
-            notificacionesModificaciones={notificacionesModificaciones}
-            onIrACalendarioModificacion={handleIrACalendarioModificacion}
-            onDescartarNotificacion={handleDescartarNotificacion}
-            onDescartarNotificacionesLote={handleDescartarNotificacionesLote}
-            onMarcarTodasModificacionesRevisadas={handleMarcarTodasModificacionesRevisadas}
-          />
-        )}
+        <Suspense fallback={<div className="loading-screen">Cargando vista...</div>}>
+          <ErrorBoundary FallbackComponent={ErrorFallback} onReset={() => setVistaActiva('home')}>
+            {vistaActiva === 'home' && (
+              <HomeView
+                usuario={usuario}
+                tema={tema}
+                onNuevoReporte={() => setVistaActiva('check')}
+                onVerHistorial={() => setVistaActiva('historial')}
+                onNuevoRoster={() => setVistaActiva('roster')}
+                onHistorialRoster={() => setVistaActiva('historial-roster')}
+                onHistorialOtrosEmpleados={() => setVistaActiva('historial-otros')}
+                onGestionUsuarios={() => setVistaActiva('usuarios')}
+                onNuevaSugerencia={() => setVistaActiva('sugerencia-nueva')}
+                onGestionSugerencias={() => setVistaActiva('sugerencias-gestion')}
+                onGestionProyectos={() => setVistaActiva('proyectos')}
+                onEstadisticasUso={() => setVistaActiva('estadisticas-uso')}
+                erroresRemotos={erroresRemotos}
+                onVerErroresRemotos={() => setVistaActiva('errores-remotos')}
+                onAvatarClick={handleTriggerAvatar}
+                notificacionesModificaciones={notificacionesModificaciones}
+                onIrACalendarioModificacion={handleIrACalendarioModificacion}
+                onDescartarNotificacion={handleDescartarNotificacion}
+                onDescartarNotificacionesLote={handleDescartarNotificacionesLote}
+                onMarcarTodasModificacionesRevisadas={handleMarcarTodasModificacionesRevisadas}
+              />
+            )}
 
-        {vistaActiva === 'check' && (
-          <CheckForm
-            tema={tema}
-            onRegistroGuardado={() => {
-              setRecordatorioPendiente(null);
-              chequearRegistroHoy();
-            }}
-            onVolver={() => setVistaActiva('home')}
-          />
-        )}
+            {vistaActiva === 'check' && (
+              <CheckForm
+                tema={tema}
+                onRegistroGuardado={() => {
+                  setRecordatorioPendiente(null);
+                  chequearRegistroHoy();
+                }}
+                onVolver={() => setVistaActiva('home')}
+              />
+            )}
 
-        {vistaActiva === 'historial' && (
-          <HistoryView
-            usuario={usuario}
-            tema={tema}
-            onVolver={() => setVistaActiva('home')}
-            onNuevoReporte={() => setVistaActiva('check')}
-            onHistorialOtrosEmpleados={() => setVistaActiva('historial-otros')}
-          />
-        )}
+            {vistaActiva === 'historial' && (
+              <HistoryView
+                usuario={usuario}
+                tema={tema}
+                onVolver={() => setVistaActiva('home')}
+                onNuevoReporte={() => setVistaActiva('check')}
+                onHistorialOtrosEmpleados={() => setVistaActiva('historial-otros')}
+              />
+            )}
 
-        {vistaActiva === 'historial-otros' && puedeVerHistorialOtros(usuario) && (
-          <OtherEmployeesHistoryView
-            usuario={usuario}
-            tema={tema}
-            onVolver={() => setVistaActiva('home')}
-            onVerMiHistorial={() => setVistaActiva('historial')}
-            onNuevoReporte={() => setVistaActiva('check')}
-            navegacionAuditoria={navegacionAuditoria}
-            onConsumirNavegacion={() => setNavegacionAuditoria(null)}
-          />
-        )}
+            {ES_EDICION_GESTION && OtherEmployeesHistoryView && vistaActiva === 'historial-otros' && puedeVerHistorialOtros(usuario) && (
+              <OtherEmployeesHistoryView
+                usuario={usuario}
+                tema={tema}
+                onVolver={() => setVistaActiva('home')}
+                onVerMiHistorial={() => setVistaActiva('historial')}
+                onNuevoReporte={() => setVistaActiva('check')}
+                navegacionAuditoria={navegacionAuditoria}
+                onConsumirNavegacion={() => setNavegacionAuditoria(null)}
+              />
+            )}
 
-        {vistaActiva === 'roster' && puedeAccederRoster(usuario) && (
-          <RosterView
-            usuario={usuario}
-            tema={tema}
-            onVolver={() => setVistaActiva('home')}
-          />
-        )}
+            {ES_EDICION_GESTION && RosterView && vistaActiva === 'roster' && puedeAccederRoster(usuario) && (
+              <RosterView
+                usuario={usuario}
+                tema={tema}
+                onVolver={() => setVistaActiva('home')}
+              />
+            )}
 
-        {vistaActiva === 'historial-roster' && puedeAccederRoster(usuario) && (
-          <RosterHistoryView
-            usuario={usuario}
-            tema={tema}
-            onVolver={() => setVistaActiva('home')}
-            onNuevoRoster={() => setVistaActiva('roster')}
-          />
-        )}
+            {ES_EDICION_GESTION && RosterHistoryView && vistaActiva === 'historial-roster' && puedeAccederRoster(usuario) && (
+              <RosterHistoryView
+                usuario={usuario}
+                tema={tema}
+                onVolver={() => setVistaActiva('home')}
+                onNuevoRoster={() => setVistaActiva('roster')}
+              />
+            )}
 
-        {vistaActiva === 'usuarios' && puedeGestionarUsuarios(usuario) && (
-          <UsersManagementView
-            usuario={usuario}
-            tema={tema}
-            onVolver={() => setVistaActiva('home')}
-          />
-        )}
+            {ES_EDICION_GESTION && UsersManagementView && vistaActiva === 'usuarios' && puedeGestionarUsuarios(usuario) && (
+              <UsersManagementView
+                usuario={usuario}
+                tema={tema}
+                onVolver={() => setVistaActiva('home')}
+              />
+            )}
 
-        {vistaActiva === 'proyectos' && puedeGestionarProyectos(usuario) && (
-          <ProjectsManagementView
-            usuario={usuario}
-            tema={tema}
-            onVolver={() => setVistaActiva('home')}
-          />
-        )}
+            {ES_EDICION_GESTION && ProjectsManagementView && vistaActiva === 'proyectos' && puedeGestionarProyectos(usuario) && (
+              <ProjectsManagementView
+                usuario={usuario}
+                tema={tema}
+                onVolver={() => setVistaActiva('home')}
+              />
+            )}
 
-        {vistaActiva === 'sugerencia-nueva' && (
-          <SuggestionForm onVolver={() => setVistaActiva('home')} />
-        )}
+            {vistaActiva === 'sugerencia-nueva' && (
+              <SuggestionForm onVolver={() => setVistaActiva('home')} />
+            )}
 
-        {vistaActiva === 'sugerencias-gestion' && puedeGestionarSugerencias(usuario) && (
-          <SuggestionsManagementView
-            sessionKey={`${usuario.id_usuario}:${usuario.rol_app}`}
-            onVolver={() => setVistaActiva('home')}
-          />
-        )}
+            {ES_EDICION_GESTION && SuggestionsManagementView && vistaActiva === 'sugerencias-gestion' && puedeGestionarSugerencias(usuario) && (
+              <SuggestionsManagementView
+                sessionKey={`${usuario.id_usuario}:${usuario.rol_app}`}
+                onVolver={() => setVistaActiva('home')}
+              />
+            )}
 
-        {vistaActiva === 'estadisticas-uso' && puedeVerEstadisticasUso(usuario) && (
-          <UsageStatsView
-            usuario={usuario}
-            tema={tema}
-            onVolver={() => setVistaActiva('home')}
-          />
-        )}
+            {ES_EDICION_GESTION && UsageStatsView && vistaActiva === 'estadisticas-uso' && puedeVerEstadisticasUso(usuario) && (
+              <UsageStatsView
+                usuario={usuario}
+                tema={tema}
+                onVolver={() => setVistaActiva('home')}
+              />
+            )}
 
-        {vistaActiva === 'errores-remotos' && esAdmin(usuario) && (
-          <RemoteErrorsView
-            usuario={usuario}
-            tema={tema}
-            onVolver={() => setVistaActiva('home')}
-          />
-        )}
-      </ErrorBoundary>
-      </Suspense>
+            {ES_EDICION_GESTION && RemoteErrorsView && vistaActiva === 'errores-remotos' && esAdmin(usuario) && (
+              <RemoteErrorsView
+                usuario={usuario}
+                tema={tema}
+                onVolver={() => setVistaActiva('home')}
+              />
+            )}
+          </ErrorBoundary>
+        </Suspense>
       </DesktopActivityContext.Provider>
 
       {/* [FN-07.21] Modal de Auditoría de Errores Remotos para Administradores */}
-      {esAdmin(usuario) && modalErroresAbierto && (
+      {ES_EDICION_GESTION && RemoteErrorsModal && esAdmin(usuario) && modalErroresAbierto && (
         <Suspense fallback={null}>
-        <RemoteErrorsModal
-          isOpen={modalErroresAbierto}
-          onClose={() => setModalErroresAbierto(false)}
-          errores={erroresRemotos}
-          onMarcarResuelto={handleMarcarErrorResuelto}
-          onMarcarTodosResueltos={handleMarcarTodosErroresResueltos}
-          cargando={cargandoErrores}
-        />
+          <RemoteErrorsModal
+            isOpen={modalErroresAbierto}
+            onClose={() => setModalErroresAbierto(false)}
+            errores={erroresRemotos}
+            onMarcarResuelto={handleMarcarErrorResuelto}
+            onMarcarTodosResueltos={handleMarcarTodosErroresResueltos}
+            cargando={cargandoErrores}
+          />
         </Suspense>
       )}
+
+      {/* Leyenda persistente de versión en esquina inferior izquierda */}
+      <span className="app-corner-version" data-testid="app-version-badge">
+        {leyendaVersion}
+      </span>
+
+      {/* Selector discreto de tema (Claro / Oscuro / RPG) en esquina inferior derecha */}
+      <button
+        type="button"
+        className={`app-corner-theme-btn ${tema === 'rpg' ? 'btn-header-rpg' : ''}`}
+        onClick={toggleTema}
+        title={
+          tema === 'light'
+            ? 'Cambiar a Tema Oscuro'
+            : tema === 'dark'
+            ? (esAplicaciones ? 'Cambiar a Modo Aventura RPG (Quest)' : 'Cambiar a Tema Claro')
+            : 'Cambiar a Tema Claro'
+        }
+        aria-label="Cambiar tema visual"
+      >
+        {tema === 'rpg' ? (
+          <span style={{ fontSize: '15px', lineHeight: 1 }} title="Modo Aventura RPG">⚔️</span>
+        ) : tema === 'dark' ? (
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.1" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <circle cx="12" cy="12" r="5" />
+            <line x1="12" y1="1" x2="12" y2="3" />
+            <line x1="12" y1="21" x2="12" y2="23" />
+            <line x1="4.22" y1="4.22" x2="5.64" y2="5.64" />
+            <line x1="18.36" y1="18.36" x2="19.78" y2="19.78" />
+            <line x1="1" y1="12" x2="3" y2="12" />
+            <line x1="21" y1="12" x2="23" y2="12" />
+            <line x1="4.22" y1="19.78" x2="5.64" y2="18.36" />
+            <line x1="18.36" y1="5.64" x2="19.78" y2="4.22" />
+          </svg>
+        ) : (
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.1" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
+          </svg>
+        )}
+      </button>
     </div>
   );
 }

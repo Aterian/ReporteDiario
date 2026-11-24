@@ -2056,3 +2056,55 @@ def test_api_puente_guardar_informe_pdf_rbac_y_seguridad(monkeypatch, tmp_path):
     assert res_ok["exito"] is True
     assert res_ok["bytes"] == len(pdf_valido)
     assert destino.read_bytes() == pdf_valido
+
+
+# [FN-00.13] Blindaje de ApiPuente en Edición Operativa y proyección pública de catálogo
+def test_api_puente_bloquea_metodos_gestion_en_edicion_operativa(monkeypatch):
+    import app_version
+
+    puente = ApiPuente()
+    monkeypatch.setattr(app_version, "APP_EDITION", "operativa")
+    monkeypatch.setattr(
+        db,
+        "obtener_sesion_activa",
+        lambda: {"id_usuario": str(uuid4()), "rol_app": "admin", "nombre": "Admin Prueba", "area": "A"},
+    )
+    monkeypatch.setattr(
+        db,
+        "obtener_usuarios_cache",
+        lambda incluir_inactivos=False: [
+            {
+                "id_usuario": "u1",
+                "id_origen": "u1",
+                "nombre": "Ana Prueba",
+                "primer_nombre": "Ana",
+                "apellido": "Prueba",
+                "area": "I",
+                "lugar_habitual": "oficina",
+                "activo": True,
+                "sueldo_oficina": Decimal("1000000"),
+                "dni": "12345678",
+            }
+        ],
+    )
+
+    for res_bloqueado in (
+        puente.obtener_estadisticas_uso(),
+        puente.obtener_rosters(),
+        puente.obtener_proyectos_admin(),
+        puente.obtener_errores_remotos(),
+        puente.crear_usuario_y_sueldo({"nombre": "X"}),
+        puente.eliminar_roster(str(uuid4())),
+    ):
+        assert res_bloqueado["exito"] is False
+        assert res_bloqueado["codigo_error"] == "ACCESO_DENEGADO"
+
+    usuarios = puente.obtener_todos_usuarios(incluir_inactivos=True)
+    assert len(usuarios) == 1
+    assert "sueldo_oficina" not in usuarios[0]
+    assert "dni" not in usuarios[0]
+    assert usuarios[0]["nombre"] == "Ana Prueba"
+
+    estado = puente.obtener_estado_sesion()
+    assert estado["edicion"] == "operativa"
+

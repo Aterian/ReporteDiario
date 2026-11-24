@@ -1,79 +1,58 @@
-# Distribución de Check Diario 2.14.0
+# Distribución de Check Diario (`2.18.0` — Ediciones Duales por Rol)
 
-Estado: candidata para piloto. Requiere completar las pruebas nativas y la integración PostgreSQL antes de publicar.
+Estado: distribución dual física activa sobre monorepo único (`[FN-00.13]`).
 
-## Archivos que produce la compilación
+## Ediciones y Archivos que Produce la Compilación
 
-| Archivo | Uso |
-| --- | --- |
-| CheckDiarioIngeap.exe | Migrador autocontenido que consumen también los clientes antiguos. Debe conservar este nombre exacto en Releases. |
-| Instalador_CheckDiario_Ingeap.exe | El mismo migrador, con nombre explícito para instalación manual. |
-| CheckDiarioIngeap-win64.zip | Aplicación completa con manifiesto y hashes. Se incluye dentro del migrador. |
-| app/ | Runtime onedir completo, para revisión y pruebas. No distribuir su exe aislado. |
-| CheckDiarioLauncher.exe | Lanzador pequeño que se instala en la ubicación anterior para conservar accesos anclados. |
+| Edición | Roles Destino | Artefactos en `instalador/` | Alcance Funcional |
+| --- | --- | --- | --- |
+| **Operativa** (`operativa`) | `user_1`, `user_2` *(incluido RPG liviano para Área Aplicaciones)* | `CheckDiarioIngeap.exe`, `Instalador_CheckDiario_Ingeap.exe`, `CheckDiarioIngeap-win64.zip`, `CheckDiarioLauncher.exe` | Registro diario (`CheckForm`), historial personal (`HistoryView`), buzón de sugerencias, recordatorios locales y tema RPG sin vistas administrativas. Excluye `openpyxl`, `jspdf`, `html2canvas` y endpoints de gestión. |
+| **Gestión** (`gestion`) | `core`, `sub_admin`, `admin` | `CheckDiarioIngeap_Gestion.exe`, `Instalador_CheckDiario_Gestion.exe`, `CheckDiarioIngeap-gestion-win64.zip`, `CheckDiarioLauncher.exe` | Funcionalidad completa: módulos operativos + Roster Gantt, liquidaciones Excel, supervisión de terceros, usuarios/sueldos, proyectos, estadísticas ISO 9001 PDF y errores remotos. |
 
-Cada construcción usa una carpeta nueva en instalador/releases/. instalador/ultima_compilacion.json identifica la construcción completa más reciente. Los dos instaladores y el ZIP se copian también a instalador/ para mantener los nombres de entrega.
+Cada construcción genera su carpeta independiente en `instalador/releases/<edicion>-<version>-<id>/`. `instalador/ultima_compilacion.json` registra los metadatos de cada edición generada y las copias de entrega en `instalador/`.
 
-## Preparar una construcción
+## Preparar una Construcción
 
-Entorno probado: Windows x64 y Python 3.14.0.
-
-1. Preparar un venv de construcción con backend/requirements-build.lock.
-2. Mantener backend/.env disponible únicamente en el entorno privado de construcción.
-3. Ejecutar backend/build_release.py --clean-env desde ese venv. La opción construye un segundo entorno aislado con las distribuciones fijadas y verifica sus archivos contra RECORD.
-4. Revisar output/build-frontend.log, build-onedir.log, build-launcher.log y build-migrator.log.
-5. Ejecutar las pruebas y la verificación del paquete antes de distribuir.
-
-Desde la raíz del proyecto, iniciar la construcción con el entorno preparado:
+Entorno probado: Windows x64 y Python 3.14.0 con `backend/requirements-build.lock`.
 
 ~~~powershell
-.\backend\venv\Scripts\python.exe backend\build_release.py --clean-env
+# Compilar ambas ediciones (Operativa + Gestión) para una entrega general:
+.\compilar_instalador.bat ambas
+# O directamente desde el venv:
+.\backend\venv\Scripts\python.exe backend\build_release.py --edicion ambas --clean-env
+
+# Compilar únicamente Edición Gestión (cambios exclusivos de RRHH/Supervisión/Admin):
+.\compilar_instalador.bat gestion
+.\backend\venv\Scripts\python.exe backend\build_release.py --edicion gestion --clean-env
+
+# Compilar únicamente Edición Operativa:
+.\compilar_instalador.bat operativa
 ~~~
 
-Las dependencias de ejecución están en requirements-runtime.lock; la construcción agrega PyInstaller y sus herramientas. NumPy y pandas quedan excluidos del paquete. La verificación del binario comprueba exportaciones reales de liquidación y roster, conservando la hoja adicional Roster de compatibilidad.
+Logs generados en `output/`: `build-frontend-<edicion>.log`, `build-onedir-<edicion>.log`, `build-launcher-<edicion>.log` y `build-migrator-<edicion>.log`.
 
-## Instalación y migración
+## Versionado Independiente y Publicación en GitHub Releases
 
-El instalador autocontenido extrae y valida el paquete completo, conserva la configuración y la sesión existentes, inicia el nuevo runtime y espera una confirmación de bandeja por token, versión y PID.
+En `backend/app_version.py` conviven `OPERATIVA_VERSION` y `GESTION_VERSION`:
+1. **Release exclusivo de Gestión** (no notifica ni actualiza a `user_1`/`user_2`):
+   - Incrementar únicamente `GESTION_VERSION` (ej. `2.18.1`), compilar con `--edicion gestion`, crear tag `gestion-v2.18.1` y publicar Release con `--latest=false` adjuntando `CheckDiarioIngeap_Gestion.exe`, `Instalador_CheckDiario_Gestion.exe`, `CheckDiarioIngeap-gestion-win64.zip` y `CheckDiarioLauncher.exe`.
+2. **Release General / Operativo** (actualiza toda la plantilla):
+   - Incrementar `OPERATIVA_VERSION` y `GESTION_VERSION` al mismo número (ej. `2.19.0`), compilar con `--edicion ambas`, crear tag `v2.19.0` como `Latest` adjuntando los binarios de ambas ediciones (`CheckDiarioIngeap.exe`, `Instalador_CheckDiario_Ingeap.exe`, `CheckDiarioIngeap-win64.zip`, `CheckDiarioIngeap_Gestion.exe`, `Instalador_CheckDiario_Gestion.exe`, `CheckDiarioIngeap-gestion-win64.zip` y `CheckDiarioLauncher.exe`).
+3. **Auto-Crossgrade por cambio de rol**: Si un colaborador instalado en Edición Operativa pasa a `core`, `sub_admin` o `admin` en PostgreSQL, `update_channels.py` detecta el cambio y ofrece en 1 clic descargar e instalar `CheckDiarioIngeap_Gestion.exe`, conservando `.env`, `sesion_activa.json` y accesos directos.
 
-La instalación queda en %LOCALAPPDATA%/Ingeap/CheckDiario:
+## Instalación, Migración y Recuperación
 
-| Ruta | Contenido |
-| --- | --- |
-| app/ | Exe y _internal de la versión activa |
-| .env, sesion_activa.json, logs/ | Configuración y datos persistentes |
-| updates/ | Staging, versión anterior, confirmaciones y copias de recuperación |
-| CheckDiarioIngeap.exe | Lanzador compatible con accesos antiguos |
-| Desinstalar.ps1 | Retiro de accesos e inicio automático, conservando archivos y datos |
+- Ambas ediciones se instalan en `%LOCALAPPDATA%/Ingeap/CheckDiario` y comparten `app/`, `.env`, `sesion_activa.json`, `logs/`, `updates/` y `CheckDiarioIngeap.exe` (`CheckDiarioLauncher.exe`).
+- El archivo `app/manifest.json` guarda `"formato": "check-diario/onedir-v1"`, `"version": "X.Y.Z"` y `"edicion": "operativa" | "gestion"`.
+- El protocolo `--updater --parent-pid --target-dir --update-file`, la confirmación de bandeja y `--rollback` funcionan de forma idéntica y transaccional en ambas ediciones.
 
-La apertura normal apunta directamente a app/CheckDiarioIngeap.exe. La extracción onefile solo corresponde al instalador/migrador y al lanzador de compatibilidad, no al runtime del inicio automático.
-
-El protocolo antiguo sigue aceptando --updater --parent-pid --target-dir --update-file. El migrador usa su paquete embebido; no copia un exe de onedir sin sus dependencias. Los clientes que salten una versión intermedia siguen recibiendo el migrador compatible.
-
-## Recuperación
-
-- La promoción se registra en updates/pending.json.
-- Si el nuevo proceso no confirma su arranque o falla la configuración, se detiene únicamente el hijo iniciado por el instalador y se restaura la carpeta anterior y su configuración.
-- Se conservan los archivos de una operación interrumpida. Una instalación posterior puede recuperar la transacción; la app debe estar cerrada.
-- Para una reversión manual, cerrar Check Diario desde la bandeja y ejecutar el migrador con --rollback y, si corresponde, --target-dir. La restauración conserva credenciales y sesiones.
-- La reversión de una migración desde onefile recupera también el ejecutable anterior y los accesos capturados.
-
-El script Desinstalar.ps1 conserva la semántica previa: retira inicio automático y accesos, preservando los archivos locales. No usarlo como prueba sobre una instalación operativa.
-
-## Comprobaciones sin modificar el inicio de Windows
+## Comprobaciones Locales de Paquetes
 
 ~~~powershell
-# Sobre el runtime onedir de la última construcción:
-app\CheckDiarioIngeap.exe --verify-install
+# Runtime onedir de la última construcción:
+instalador\releases\<carpeta>\app\CheckDiarioIngeap.exe --verify-install
 
-# Sobre el migrador:
-CheckDiarioIngeap.exe --validate-package-only
+# Instaladores autocontenidos:
+instalador\CheckDiarioIngeap.exe --validate-package-only
+instalador\CheckDiarioIngeap_Gestion.exe --validate-package-only
 ~~~
-
-La primera comprobación valida hashes, exportaciones Excel e icono sin abrir la interfaz ni consultar la base de datos. La segunda verifica el paquete embebido sin instalarlo. Los fallos se comunican mediante el código de salida.
-
-La comparación de tiempos registrada en output/benchmark_inicio_cli.json usa --help en ambas versiones. No representa el tiempo hasta escritorio utilizable ni sustituye los reinicios del piloto.
-
-## Antes de publicar
-
-Completar la conexión a la base aislada, la instalación con usuario estándar, el caso de autoarranque deshabilitado, las notificaciones, el ciclo de ocultar/mostrar y al menos tres reinicios por condición en equipos afectados. Conservar los paquetes anteriores. No publicar solamente app/CheckDiarioIngeap.exe como asset de actualización.

@@ -25,62 +25,13 @@ def obtener_icono_tray():
 
 
 # [FN-03.06] Verificación de Actualizaciones Remotas desde GitHub Releases
-def verificar_actualizacion_github():
+def verificar_actualizacion_github(forzar: bool = False):
     """
-    Consulta el repositorio oficial de GitHub buscando la última versión publicada.
-    Retorna si hay actualización disponible, versión actual, versión nueva y URL de descarga.
+    Consulta el repositorio oficial de GitHub buscando la última versión publicada
+    aplicable al rol activo y a la edición instalada.
     """
-    try:
-        repo = os.environ.get("GITHUB_REPO", "Aterian/ReporteDiario").strip()
-        if not repo:
-            return {"actualizacion_disponible": False, "version_actual": APP_VERSION, "verificacion_exitosa": True}
-
-        url = f"https://api.github.com/repos/{repo}/releases/latest"
-        req = urllib.request.Request(
-            url,
-            headers={
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) CheckDiarioIngeap-App",
-                "Accept": "application/vnd.github.v3+json"
-            }
-        )
-        import ssl
-        ctx = ssl.create_default_context()
-        with urllib.request.urlopen(req, timeout=8, context=ctx) as response:
-            data = json.loads(response.read().decode("utf-8"))
-            tag_name = data.get("tag_name", "").strip()
-            version_remota = tag_name.lstrip("v").strip()
-            assets = data.get("assets", [])
-
-            exe_asset = next((a for a in assets if a.get("name") == "CheckDiarioIngeap.exe"), None)
-            url_descarga = exe_asset.get("browser_download_url", "") if exe_asset else ""
-
-            def parse_ver(v_str):
-                partes = []
-                for p in v_str.split("."):
-                    try:
-                        partes.append(int(p))
-                    except ValueError:
-                        partes.append(0)
-                return tuple(partes)
-
-            es_mas_nueva = parse_ver(version_remota) > parse_ver(APP_VERSION)
-
-            return {
-                "actualizacion_disponible": bool(es_mas_nueva and url_descarga),
-                "version_actual": APP_VERSION,
-                "version_nueva": version_remota,
-                "notas": data.get("body", "") or "Mejoras y correcciones en esta versión.",
-                "url_descarga": url_descarga,
-                "verificacion_exitosa": True
-            }
-    except Exception as e:
-        print(f"[AutoUpdate] Verificación de actualización remota falló: {e}")
-        return {
-            "actualizacion_disponible": False,
-            "version_actual": APP_VERSION,
-            "verificacion_exitosa": False,
-            "error": str(e)
-        }
+    from update_channels import consultar_actualizacion_github
+    return consultar_actualizacion_github(forzar=forzar)
 
 
 # [FN-03.07] Mantener el protocolo del actualizador legado

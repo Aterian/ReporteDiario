@@ -5,7 +5,7 @@ import sys
 from pathlib import Path
 
 from app_paths import recurso_path, validar_directorio_instalacion
-from app_version import APP_VERSION
+from app_version import APP_EDITION, APP_VERSION
 from deployment import ErrorPaquete, instalar_paquete, validar_instalacion, validar_paquete, leer_operacion, revertir, bloqueo_instalacion
 from updater import opciones_actualizador, esperar_proceso, iniciar_y_comprobar
 
@@ -20,7 +20,11 @@ def _misma_version_instalada(raiz) -> bool:
     if not (app_dir / "manifest.json").is_file():
         return False
     try:
-        return validar_instalacion(app_dir).get("version") == APP_VERSION
+        manifiesto = validar_instalacion(app_dir)
+        return (
+            manifiesto.get("version") == APP_VERSION
+            and manifiesto.get("edicion", "gestion") == APP_EDITION
+        )
     except Exception:
         return False
 
@@ -99,8 +103,9 @@ def main(argv=None):
                     salida.write(origen.read_bytes())
             instalar(raiz, paquete)
         if not args.updater:
+            etiqueta_edicion = "Edición Gestión" if APP_EDITION == "gestion" else "Edición Operativa"
             mensaje = ("Se restauró la versión anterior. Podés abrirla desde el acceso directo."
-                       if args.rollback else f"Check Diario {APP_VERSION} quedó instalado. Podés abrirlo desde la bandeja o el acceso directo.")
+                       if args.rollback else f"Check Diario {APP_VERSION} ({etiqueta_edicion}) quedó instalado. Podés abrirlo desde la bandeja o el acceso directo.")
             ctypes.windll.user32.MessageBoxW(
                 0, mensaje,
                 "Check Diario - Ingeap", 0x40,

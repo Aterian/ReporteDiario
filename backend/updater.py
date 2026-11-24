@@ -12,7 +12,7 @@ import uuid
 from pathlib import Path
 
 from app_paths import directorio_datos, validar_directorio_instalacion
-from app_version import APP_VERSION
+from app_version import APP_EDITION, APP_VERSION
 from deployment import APP_EXE, ErrorPaquete, contenido_seguro, guardar_json
 
 
@@ -89,7 +89,10 @@ def confirmar_arranque(token, archivo):
     destino = contenido_seguro(raiz, raiz / "updates" / ("health-" + token + ".json"))
     if Path(archivo).resolve() != destino:
         raise ErrorPaquete("La confirmación sale del directorio de actualización.")
-    guardar_json(destino, {"token": token, "version": APP_VERSION, "pid": os.getpid(), "estado": "bandeja_lista"})
+    guardar_json(
+        destino,
+        {"token": token, "version": APP_VERSION, "edicion": APP_EDITION, "pid": os.getpid(), "estado": "bandeja_lista"},
+    )
 
 
 def iniciar_y_comprobar(ejecutable, operacion, timeout=45):
@@ -111,8 +114,10 @@ def iniciar_y_comprobar(ejecutable, operacion, timeout=45):
                     datos = json.loads(archivo.read_text(encoding="utf-8"))
                 except (OSError, ValueError):
                     datos = {}
+                edicion_esperada = operacion.get("edicion")
+                edicion_ok = (edicion_esperada is None) or (datos.get("edicion") == edicion_esperada)
                 if (datos.get("token") == token and datos.get("version") == operacion["version"] and
-                        datos.get("pid") == proceso.pid and datos.get("estado") == "bandeja_lista"):
+                        edicion_ok and datos.get("pid") == proceso.pid and datos.get("estado") == "bandeja_lista"):
                     operacion["pid_nuevo"] = proceso.pid
                     return proceso
             time.sleep(0.1)

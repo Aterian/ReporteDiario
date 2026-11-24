@@ -43,6 +43,8 @@ backend/env/
 backend/build/
 backend/build*/
 backend/dist/
+backend/_build_edition.py
+backend/file_version_info.generated.txt
 backend/*.spec.bak
 __pycache__/
 *.py[cod]
