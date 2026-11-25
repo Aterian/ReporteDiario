@@ -1,5 +1,11 @@
 # Catálogo Funcional del Sistema
 
+## [FN-00.13] Distribución Dual Física por Perfil de Rol (`Operativa` vs `Gestión`)
+- **Módulo**: [MOD-00] Arquitectura, Runtime de Escritorio e Instalación
+- **Flujo Operativo**: Compila desde el monorepo dos paquetes diferenciados (`--edicion operativa` para `user_1`/`user_2` con soporte `RpgTavernBoard` liviano, y `--edicion gestion` completo para `core`/`sub_admin`/`admin`), podando módulos y dependencias (`openpyxl`, `jspdf`, `html2canvas`) en Operativa, manteniendo contadores SemVer independientes (`OPERATIVA_VERSION` / `GESTION_VERSION`) y resolviendo canales `v*` vs `gestion-v*` en `update_channels.py` con auto-crossgrade ante ascenso de rol en PostgreSQL.
+- **Tablas afectadas**: app_rrhh.a_1_usuarios (lectura de `rol_app` en sesión para selección de canal y validación en puente).
+- **Reglas de negocio e invariantes**: Ambos perfiles comparten `%LOCALAPPDATA%/Ingeap/CheckDiario`, `sesion_activa.json` y `.env`; `ApiPuente` bloquea métodos `admin`/`auditor` cuando `APP_EDITION == "operativa"`; los releases exclusivos `gestion-v*` usan `--latest=false` sin afectar `/releases/latest` de `user_1`/`user_2`.
+
 ## [FN-11.05] Exportación de Informes PDF Vectoriales por Área, Persona o General en Métricas de Uso
 - **Módulo**: [MOD-11] Estadísticas de Uso y Conformidad ISO 9001
 - **Flujo Operativo**: Desde `UsageStatsView.jsx` habilita la descarga de informes PDF vectoriales (`jspdf` + `jspdf-autotable` cargados de forma diferida) con alcance `Toda la empresa`, `Por Área` o `Por Persona` (sincronizado estrictamente con el colaborador visible en el selector, sin fallback silencioso) preseleccionado desde los filtros activos, incluyendo encabezado Ingeap ISO 9001, 4 tarjetas KPI, gráfico de evolución temporal opcional y tablas paginadas o listado de días faltantes desde el `01/10/2026`; guarda en disco vía diálogo nativo `SAVE` en `pywebview` (`ApiPuente.guardar_informe_pdf`) o descarga Blob en navegador.
@@ -206,7 +212,7 @@
 - **Tablas afectadas**: Ninguna (Herramientas de empaquetado y scripts de sistema).
 - **Reglas de negocio e invariantes**:
   1. Frontend genera bundles optimizados en `backend/dist` vía `vite.config.js`.
-  2. PyInstaller estampa `backend/file_version_info.txt` con versión `1.16.0.0` y metadatos de Ingeap.
+  2. PyInstaller estampa `backend/packaging/file_version_info.txt` con versión `1.16.0.0` y metadatos de Ingeap.
   3. El instalador autónomo despliega en `%LOCALAPPDATA%\Ingeap\CheckDiario`, elimina restricciones SmartScreen (`Zone.Identifier`), genera accesos directos y registra autoarranque en `HKCU\Software\Microsoft\Windows\CurrentVersion\Run`.
 
 ## [FN-02.03] Descomposición Modular de OtherEmployeesHistoryView

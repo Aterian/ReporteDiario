@@ -534,10 +534,12 @@ const apiBase = {
     return fallback;
   },
 
-  async verificarActualizacion() {
+  async verificarActualizacion(forzar = false) {
     const bridge = await getApi();
     if (bridge.verificar_actualizacion) {
-      return await bridge.verificar_actualizacion();
+      return forzar
+        ? await bridge.verificar_actualizacion(true)
+        : await bridge.verificar_actualizacion();
     }
     return { actualizacion_disponible: false };
   },

@@ -7,7 +7,7 @@
 backend/app-*.json
 backend/*service_account*.json
 backend/*credentials*.json
-!backend/credentials.example.json
+!backend/config/credentials.example.json
 *.pem
 *.key
 
@@ -43,7 +43,11 @@ backend/env/
 backend/build/
 backend/build*/
 backend/dist/
+backend/_build_edition.py
+backend/src/_build_edition.py
+backend/file_version_info.generated.txt
 backend/*.spec.bak
+backend/packaging/*.spec.bak
 __pycache__/
 *.py[cod]
 *$py.class
@@ -66,7 +70,7 @@ Desktop.ini
 $RECYCLE.BIN/
 # --- ARCHIVOS TEMPORALES Y SCRATCH ---
 *.txt
-!backend/requirements-test.txt
+!backend/requirements/requirements-test.txt
 !instalador/LEEME_INSTALACION.txt
 .pytest_cache/
 logs/

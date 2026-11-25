@@ -11,7 +11,9 @@ from dotenv import load_dotenv
 from psycopg2.extras import RealDictCursor
 
 ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0,str(ROOT/"backend"/"src"))
 sys.path.insert(0,str(ROOT/"backend"))
+sys.path.insert(0,str(ROOT/"backend"/"scripts"))
 load_dotenv(ROOT/".env.test",override=False)
 
 
@@ -43,7 +45,7 @@ def bloquear_base_operativa(monkeypatch):
 def pg_connection():
     dsn = os.getenv("TEST_DATABASE_URL")
     if not dsn:
-        pytest.skip("Configure TEST_DATABASE_URL o ejecute backend/bootstrap_test_db.py.")
+        pytest.skip("Configure TEST_DATABASE_URL o ejecute backend/scripts/bootstrap_test_db.py.")
     if not psycopg2.extensions.parse_dsn(dsn).get("dbname", "").startswith("codex_check_diario_test_"):
         pytest.fail("TEST_DATABASE_URL debe identificar una base aislada antes de conectar.")
     try:

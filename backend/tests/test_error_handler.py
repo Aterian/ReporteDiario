@@ -6,7 +6,7 @@ import unittest
 import asyncio
 from pydantic import BaseModel, Field
 
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "src")))
 
 from error_handler import (
     manejar_errores_api,

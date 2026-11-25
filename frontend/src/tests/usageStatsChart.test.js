@@ -1,6 +1,6 @@
 // [FN-11.03] Pruebas Unitarias del cálculo de series temporales de Estadísticas de Uso (Vitest)
 import { describe, it, expect } from 'vitest';
-import { calcularPuntosEvolucion } from '../components/UsageEvolutionChart';
+import { calcularPuntosEvolucion } from '../components/stats/UsageEvolutionChart';
 
 describe('Uso Temporal ISO 9001 - Cálculo de series para gráfico', () => {
   const detalleEmpleados = [
