@@ -16,10 +16,10 @@ El sistema **Check Diario (Ingeap)** gestiona el registro diario de asistencias,
   * **Manejo de Errores y UI:** `react-error-boundary` para protección de vistas y `sonner` para notificaciones flotantes (*toasts*).
   * **Compilación:** El comando `npm run build` genera los archivos estáticos de producción directamente en `../backend/dist/`.
 * **Backend (`backend/`):** Python 3.11+ con `pywebview` (motor WebView2 / Microsoft Edge en Windows).
-  * **Controlador Puente:** La clase `ApiPuente` en `backend/main.py` expone los métodos hacia JavaScript a través de `window.pywebview.api`.
-  * **Logging y Validación:** `loguru` (archivos rotativos en `logs/errores_sistema.log`), `pydantic` y el decorador `@manejar_errores_api` en `backend/error_handler.py`.
+  * **Controlador Puente:** La clase `ApiPuente` en `backend/src/main.py` expone los métodos hacia JavaScript a través de `window.pywebview.api`.
+  * **Logging y Validación:** `loguru` (archivos rotativos en `logs/errores_sistema.log`), `pydantic` y el decorador `@manejar_errores_api` en `backend/src/error_handler.py`.
 * **Base de Datos Principal:** PostgreSQL 14+ alojado en Railway.
-  * **Conector:** `psycopg2` utilizando `ThreadedConnectionPool` y `RealDictCursor` a través del módulo `backend/postgres_db.py`.
+  * **Conector:** `psycopg2` utilizando `ThreadedConnectionPool` y `RealDictCursor` a través del módulo `backend/src/postgres_db.py`.
 * **Tecnologías Deprecadas (NO UTILIZAR):**
   * La sincronización con **Google Sheets** (`sheets_service.py`) y la base local **SQLite** (`database.py`) han sido reemplazadas por **PostgreSQL**. No reintroducir hilos de sincronización en segundo plano hacia hojas de cálculo.
 
@@ -113,7 +113,7 @@ El sistema **Check Diario (Ingeap)** gestiona el registro diario de asistencias,
 ### 4.1 Seguridad de Credenciales y Consultas SQL
 1. **Prohibido Hardcodear Credenciales:** La cadena de conexión `DATABASE_URL` hacia Railway debe leerse exclusivamente desde variables de entorno mediante `python-dotenv` (`backend/.env`). El archivo `.env` jamás debe subirse al repositorio Git.
 2. **Prevención de Inyección SQL:** Todas las consultas en `psycopg2` deben usar parámetros enlazados (`%s`) pasados como tuplas o diccionarios. Está terminantemente prohibido concatenar variables de usuario con *f-strings* dentro de sentencias SQL.
-3. **Gestión del Pool de Conexiones:** Toda interacción con PostgreSQL debe utilizar el *context manager* `with obtener_cursor_pg(commit=...) as cursor:` definido en `backend/postgres_db.py`, garantizando `rollback()` automático ante excepciones y la devolución inmediata de la conexión al pool (`putconn`).
+3. **Gestión del Pool de Conexiones:** Toda interacción con PostgreSQL debe utilizar el *context manager* `with obtener_cursor_pg(commit=...) as cursor:` definido en `backend/src/postgres_db.py`, garantizando `rollback()` automático ante excepciones y la devolución inmediata de la conexión al pool (`putconn`).
 
 ### 4.2 Preservación del Puente `pywebview` y Caché
 1. **No Romper `ApiPuente`:** `pywebview` expone los métodos de la instancia `ApiPuente` directamente a `window.pywebview.api`. Si se modulariza la lógica en servicios auxiliares, los métodos públicos y sus firmas en `ApiPuente` deben mantenerse intactos.

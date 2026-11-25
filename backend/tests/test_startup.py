@@ -37,7 +37,7 @@ def test_importar_main_no_carga_interfaz_ni_base():
     resultado = subprocess.run(
         [sys.executable, "-c",
          "import main,sys; assert not {'webview','pydantic','postgres_repository','pystray'}.intersection(sys.modules)"],
-        cwd=Path(__file__).resolve().parents[1], capture_output=True, text=True, timeout=10,
+        cwd=Path(__file__).resolve().parents[1] / "src", capture_output=True, text=True, timeout=10,
     )
     assert resultado.returncode == 0, resultado.stderr
 
@@ -301,7 +301,7 @@ def test_logging_sin_consola_importa_correctamente(tmp_path):
         "from loguru import logger; logger.info('inicio sin consola'); logger.remove()"
     )
     resultado = subprocess.run([sys.executable, "-c", codigo],
-                              cwd=Path(__file__).resolve().parents[1], capture_output=True, text=True, timeout=10)
+                              cwd=Path(__file__).resolve().parents[1] / "src", capture_output=True, text=True, timeout=10)
     assert resultado.returncode == 0, resultado.stderr
 
 @pytest.mark.skipif(sys.platform != "win32", reason="Interfaz de handles de Windows")

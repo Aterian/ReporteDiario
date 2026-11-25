@@ -1,5 +1,5 @@
 // [MOD-11] [FN-11.05] Agregación de métricas de uso por alcance (General, Área, Persona) para informe PDF
-import { calcularPuntosEvolucion } from '../components/UsageEvolutionChart';
+import { calcularPuntosEvolucion } from '../components/stats/UsageEvolutionChart';
 
 const DIAS_SEMANA_CORTO = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
 const MESES_ES = [

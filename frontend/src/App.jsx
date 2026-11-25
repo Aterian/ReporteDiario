@@ -3,30 +3,30 @@ import { api } from './services/apiBridge';
 import { queryClient } from './services/queryClient';
 import { APP_EDITION, APP_VERSION, ES_EDICION_GESTION, formatearLeyendaVersion } from './config/edition';
 import logoIngeap from './assets/Logo_Ingeap1.png';
-import LoginView from './components/LoginView';
-import HomeView from './components/HomeView';
-const CheckForm = lazy(() => import('./components/CheckForm'));
-const HistoryView = lazy(() => import('./components/HistoryView'));
-const SuggestionForm = lazy(() => import('./components/SuggestionForm'));
-const OtherEmployeesHistoryView = __APP_EDITION__ === 'gestion' ? lazy(() => import('./components/OtherEmployeesHistoryView')) : null;
-const RosterView = __APP_EDITION__ === 'gestion' ? lazy(() => import('./components/RosterView')) : null;
-const RosterHistoryView = __APP_EDITION__ === 'gestion' ? lazy(() => import('./components/RosterHistoryView')) : null;
-const UsersManagementView = __APP_EDITION__ === 'gestion' ? lazy(() => import('./components/UsersManagementView')) : null;
-const ProjectsManagementView = __APP_EDITION__ === 'gestion' ? lazy(() => import('./components/ProjectsManagementView')) : null;
-const SuggestionsManagementView = __APP_EDITION__ === 'gestion' ? lazy(() => import('./components/SuggestionsManagementView')) : null;
-const RemoteErrorsView = __APP_EDITION__ === 'gestion' ? lazy(() => import('./components/RemoteErrorsView')) : null;
-const RemoteErrorsModal = __APP_EDITION__ === 'gestion' ? lazy(() => import('./components/RemoteErrorsModal')) : null;
-const UsageStatsView = __APP_EDITION__ === 'gestion' ? lazy(() => import('./components/UsageStatsView')) : null;
+import LoginView from './components/layout/LoginView';
+import HomeView from './components/layout/HomeView';
+const CheckForm = lazy(() => import('./components/check/CheckForm'));
+const HistoryView = lazy(() => import('./components/history/HistoryView'));
+const SuggestionForm = lazy(() => import('./components/suggestions/SuggestionForm'));
+const OtherEmployeesHistoryView = __APP_EDITION__ === 'gestion' ? lazy(() => import('./components/history/OtherEmployeesHistoryView')) : null;
+const RosterView = __APP_EDITION__ === 'gestion' ? lazy(() => import('./components/roster/RosterView')) : null;
+const RosterHistoryView = __APP_EDITION__ === 'gestion' ? lazy(() => import('./components/roster/RosterHistoryView')) : null;
+const UsersManagementView = __APP_EDITION__ === 'gestion' ? lazy(() => import('./components/admin/UsersManagementView')) : null;
+const ProjectsManagementView = __APP_EDITION__ === 'gestion' ? lazy(() => import('./components/admin/ProjectsManagementView')) : null;
+const SuggestionsManagementView = __APP_EDITION__ === 'gestion' ? lazy(() => import('./components/suggestions/SuggestionsManagementView')) : null;
+const RemoteErrorsView = __APP_EDITION__ === 'gestion' ? lazy(() => import('./components/admin/RemoteErrorsView')) : null;
+const RemoteErrorsModal = __APP_EDITION__ === 'gestion' ? lazy(() => import('./components/admin/RemoteErrorsModal')) : null;
+const UsageStatsView = __APP_EDITION__ === 'gestion' ? lazy(() => import('./components/stats/UsageStatsView')) : null;
 import { ErrorBoundary } from 'react-error-boundary';
-import ErrorFallback from './components/ErrorFallback';
+import ErrorFallback from './components/layout/ErrorFallback';
 import { Toaster, toast } from 'sonner';
 import { puedeAccederRoster, puedeVerHistorialOtros, puedeVerModificaciones, esAreaAplicaciones, puedeGestionarUsuarios, puedeGestionarProyectos, puedeGestionarSugerencias, puedeVerEstadisticasUso, esAdmin } from './utils/permissions';
 import { SUGGESTIONS_QUERY_KEY } from './types/suggestions';
-import './components/suggestions.css';
+import './css/suggestions.css';
 
 import { useDesktopState } from './hooks/useDesktopState';
 import { DesktopActivityContext } from './services/desktopState';
-import ConnectionScreen from './components/ConnectionScreen';
+import ConnectionScreen from './components/layout/ConnectionScreen';
 
 // [MOD-00] App Principal
 export default function App() {
@@ -1011,8 +1011,8 @@ export default function App() {
           tema === 'light'
             ? 'Cambiar a Tema Oscuro'
             : tema === 'dark'
-            ? (esAplicaciones ? 'Cambiar a Modo Aventura RPG (Quest)' : 'Cambiar a Tema Claro')
-            : 'Cambiar a Tema Claro'
+              ? (esAplicaciones ? 'Cambiar a Modo Aventura RPG (Quest)' : 'Cambiar a Tema Claro')
+              : 'Cambiar a Tema Claro'
         }
         aria-label="Cambiar tema visual"
       >

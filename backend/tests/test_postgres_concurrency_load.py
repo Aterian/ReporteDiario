@@ -17,7 +17,7 @@ from psycopg2.pool import ThreadedConnectionPool
 import pytest
 
 ROOT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(ROOT / "backend"))
+sys.path.insert(0, str(ROOT / "backend" / "src"))
 load_dotenv(ROOT / ".env.test", override=False)
 
 import postgres_repository as db

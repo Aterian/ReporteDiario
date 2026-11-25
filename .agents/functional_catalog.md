@@ -212,7 +212,7 @@
 - **Tablas afectadas**: Ninguna (Herramientas de empaquetado y scripts de sistema).
 - **Reglas de negocio e invariantes**:
   1. Frontend genera bundles optimizados en `backend/dist` vía `vite.config.js`.
-  2. PyInstaller estampa `backend/file_version_info.txt` con versión `1.16.0.0` y metadatos de Ingeap.
+  2. PyInstaller estampa `backend/packaging/file_version_info.txt` con versión `1.16.0.0` y metadatos de Ingeap.
   3. El instalador autónomo despliega en `%LOCALAPPDATA%\Ingeap\CheckDiario`, elimina restricciones SmartScreen (`Zone.Identifier`), genera accesos directos y registra autoarranque en `HKCU\Software\Microsoft\Windows\CurrentVersion\Run`.
 
 ## [FN-02.03] Descomposición Modular de OtherEmployeesHistoryView
