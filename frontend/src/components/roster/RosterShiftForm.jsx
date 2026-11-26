@@ -61,7 +61,7 @@ export default function RosterShiftForm({
             <span className="form-hint">Proyectos exclusivos de Ingeniería. Los francos deben asignarse a este mismo proyecto para cerrar el ciclo.</span>
 
             {tarifaActual && (
-              <div className="roster-tarifa-info-box" style={{ marginTop: '8px', padding: '10px 12px', background: 'var(--bg-secondary, #f8fafc)', border: '1px solid #cbd5e1', borderRadius: '8px' }}>
+              <div className="roster-tarifa-info-box" style={{ marginTop: '8px', padding: '10px 12px', background: 'var(--bg-surface-hover, #f8fafc)', border: '1px solid #cbd5e1', borderRadius: '8px' }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
                   <span style={{ fontSize: '11px', fontWeight: 700, color: 'var(--color-primary, #cc3333)', letterSpacing: '0.5px' }}>
                     📊 TARIFAS ROSTER VINCULADAS
@@ -71,7 +71,7 @@ export default function RosterShiftForm({
                   </span>
                 </div>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', fontSize: '12px' }}>
-                  <span style={{ background: '#ffffff', padding: '3px 8px', borderRadius: '4px', border: '1px solid #e2e8f0' }}>
+                  <span style={{ background: '#ffffff', color: '#0f172a', padding: '3px 8px', borderRadius: '4px', border: '1px solid #e2e8f0' }}>
                     Día normal: <b>${tarifaActual.dia_normal}</b>
                   </span>
                   <span style={{ background: '#fef3c7', padding: '3px 8px', borderRadius: '4px', border: '1px solid #fde68a', color: '#92400e' }}>

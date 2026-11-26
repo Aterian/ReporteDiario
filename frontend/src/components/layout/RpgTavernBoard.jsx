@@ -359,7 +359,17 @@ export default function RpgTavernBoard({
               📬 Buzón de Sugerencias y Consultas
             </button>
 
-            {/* Botón de Historial de Roster en desuso oculto */}
+            {ES_EDICION_GESTION && puedeRoster && onNuevoRoster && (
+              <button
+                type="button"
+                className="rpg-parchment-btn-sec"
+                style={{ marginTop: '6px', minHeight: '44px', borderColor: '#b45309', color: '#78350f', fontWeight: 700 }}
+                onClick={onNuevoRoster}
+                title="Asignación de turnos, obra, francos y tarifas con calendario Gantt"
+              >
+                🛡️ Tablón de Guardias y Turnos (Roster)
+              </button>
+            )}
           </div>
 
           {/* PERGAMINO 3: CALENDARIO MENSUAL DE REGISTROS (REEMPLAZA EXP) */}
@@ -442,7 +452,16 @@ export default function RpgTavernBoard({
                 👥 Aventureros
               </button>
             )}
-            {/* Historial de Roster en desuso oculto */}
+            {ES_EDICION_GESTION && puedeRoster && onNuevoRoster && (
+              <button
+                type="button"
+                className="rpg-wood-btn"
+                onClick={onNuevoRoster}
+                title="Asignación de turnos, obra, francos y tarifas con calendario Gantt"
+              >
+                🛡️ Roster
+              </button>
+            )}
             <button type="button" className="rpg-wood-btn" onClick={onAvatarClick}>
               👤 Mi Héroe
             </button>

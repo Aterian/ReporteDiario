@@ -2,6 +2,28 @@
 
 Historial cronológico de cambios, nuevas características y mejoras aplicadas al sistema **Check Diario Ingeap**.
 
+## [2.19.0] - 2026-11-26 (Exclusivo Edición Gestión)
+
+### 📥 Exportación Mensual Completa de Registros por Colaborador en `.xlsx` ([MOD-02] / [FN-02.09])
+- **Generación Excel Completa desde PostgreSQL (`postgres_exports.py`, `postgres_bridge.py`)**:
+  - Agregado el endpoint `ApiPuente.exportar_registros_mes_empleado(empleado, mes_anio)` protegido por `_sesion(admin=True)` (exclusivo para roles `admin` y `sub_admin` dentro de `APP_EDITION == "gestion"`).
+  - Exporta en la hoja `"Registros del Mes"` todos los registros activos del colaborador en el mes (`eliminado_en IS NULL`, sin límite de página) ordenados cronológicamente con las 16 columnas operativas y de auditoría (`Fecha`, `Día`, `Estado / Modalidad`, `Lugar`, `Clasificación Día`, `Dedicado a`, `Proyecto / Servicio`, `Hora Inicio`, `Hora Fin`, `Horas`, `Origen`, `Costo Día ($)`, `Costo Manual`, `Cargado por`, `Fecha/Hora Carga`, `Auditoría Modif.`), sanitización contra inyección de fórmulas, fila de `TOTALES` y fila extra inferior de `COSTO REAL (Sueldo Total)` proveniente de `a_1_calculo_sueldo.sueldo_total`.
+  - Cuando el colaborador no registra asistencias en el período seleccionado, genera igualmente el archivo `.xlsx` con los datos de cabecera, las 16 columnas y totales en cero.
+- **Interfaz en Historial de Otros Empleados y RBAC (`OtherEmployeesHistoryView.jsx`, `HistoryAuditCalendar.jsx`, `permissions.js`, `apiBridge.js`, `index.css`)**:
+  - Incorporado `puedeExportarRegistrosMes` y el botón **`📥 Exportar Mes (.xlsx)`** en el calendario de auditoría de terceros (Claro, Oscuro y RPG, área táctil `>= 44 px`), oculto para el rol `core` y bloqueado en Edición Operativa.
+- **Pruebas y Versionado (`app_version.py`, `test_postgres_contract.py`, `permissions.test.js`)**:
+  - Incrementado `GESTION_VERSION = "2.19.0"` manteniendo `OPERATIVA_VERSION = "2.18.1"`, y agregadas pruebas de contrato RBAC, sanitización, orden cronológico y generación de `.xlsx` vacío con encabezados.
+
+## [2.18.1] - 2026-11-25
+
+### 🎨 Correcciones Visuales del Tema RPG, Calendario y Acceso al Módulo Roster ([MOD-05] / [FN-05.03])
+- **Tablero RPG y Navegación de Roster (`RpgTavernBoard.jsx`)**:
+  - Restaurado el acceso al módulo de Planificación / Roster en el pergamino de gestión y la barra inferior cuando el usuario tiene permiso (`onNuevoRoster`).
+- **Legibilidad y Diseño RPG en Vistas de Gestión y Operativas (`HistoryView.jsx`, `UsageStatsView.jsx`, `ProjectsManagementView.jsx`, `RosterShiftForm.jsx`, `index.css`)**:
+  - Aplicados tablón de madera, estandarte pergamino (`.rpg-curved-banner`), botones `rpg-wood-btn` y paleta pergamino `#fbf2dc` con tokens de texto oscuro (`#2b1d0c`) en **Historial Propio** (reubicando el modal de confirmación de borrado dentro de la vista para funcionar en modo RPG y ampliando la altura de grilla del calendario), **Estadísticas de Uso ISO 9001**, **Módulo de Proyectos** (eliminando variables inexistentes `--bg-subtle`/`--bg-input`) y **Roster** (restaurando contraste y disposición horizontal de la barra de referencias de tipos de días y chip `Día normal`).
+- **Buzón y Bandeja de Sugerencias en Modo RPG (`App.jsx`, `SuggestionForm.tsx`, `SuggestionsManagementView.tsx`, `suggestions.css`)**:
+  - Propagada prop opcional `tema?: string` hacia ambas vistas de sugerencias, envueltas en el tablón/banner RPG con tarjetas pergamino, selector de tipo contrastado, badges legibles y estilizado RPG en *top-layer* para `<dialog className="sug-dialog">`.
+
 ## [2.18.0] - 2026-11-24
 
 ### 📦 Distribución Dual Física por Perfil de Rol: Edición Operativa y Edición Gestión ([MOD-00] / [FN-00.13])

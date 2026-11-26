@@ -313,11 +313,15 @@ export default function UsageStatsView({ usuario, onVolver, tema }) {
     );
   }
 
-  return (
-    <div className={`view-content usage-stats-container ${isRpg ? 'history-rpg-container' : ''}`}>
+  const contenidoStats = (
+    <>
       <div className="usage-stats-header">
         <div className="usage-header-left">
-          <button type="button" className="btn-back usage-btn-control" onClick={onVolver}>
+          <button
+            type="button"
+            className={isRpg ? 'rpg-wood-btn usage-btn-control' : 'btn-back usage-btn-control'}
+            onClick={onVolver}
+          >
             ← Volver
           </button>
           <div>
@@ -786,6 +790,39 @@ export default function UsageStatsView({ usuario, onVolver, tema }) {
           </div>
         </div>
       )}
+    </>
+  );
+
+  if (isRpg) {
+    return (
+      <div className="rpg-board-viewport rpg-other-history-viewport">
+        <div className="rpg-notice-board">
+          <div className="rpg-iron-bracket top-left" />
+          <div className="rpg-iron-bracket top-right" />
+          <div className="rpg-iron-bracket bottom-left" />
+          <div className="rpg-iron-bracket bottom-right" />
+          <div className="rpg-curved-banner">
+            <div className="rpg-banner-scroll-roll left" />
+            <div className="rpg-banner-body">
+              <div className="rpg-banner-heading-wrap">
+                <div className="rpg-illuminated-box">E</div>
+                <h1 className="rpg-banner-main-title">STADÍSTICAS DE USO Y CONFORMIDAD</h1>
+              </div>
+              <span className="rpg-banner-subtitle">CÓDICE DE EFICACIA ISO 9001 • GREMIO INGEAP</span>
+            </div>
+            <div className="rpg-banner-scroll-roll right" />
+          </div>
+          <div className="view-content usage-stats-container history-rpg-container">
+            {contenidoStats}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="view-content usage-stats-container">
+      {contenidoStats}
     </div>
   );
 }

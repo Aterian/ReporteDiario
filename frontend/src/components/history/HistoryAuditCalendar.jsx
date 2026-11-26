@@ -25,7 +25,10 @@ export default function HistoryAuditCalendar({
   diaDestacado,
   setDiaSeleccionadoAuditoria,
   handleAbrirModalCostoDia,
-  onAbrirModalCrearRoster
+  onAbrirModalCrearRoster,
+  puedeExportarMes = false,
+  exportandoRegistrosMes = false,
+  onExportarRegistrosMes = null
 }) {
   const diasConModificacionesPendientes = (diasMesCalendario || []).filter(celda =>
     !celda.esVacio && celda.registros && celda.registros.some(r =>
@@ -118,6 +121,19 @@ export default function HistoryAuditCalendar({
               title="Crear turnos de Roster a partir de las asistencias del colaborador"
             >
               📅 Crear Roster
+            </button>
+          )}
+          {puedeExportarMes && onExportarRegistrosMes && (
+            <button
+              type="button"
+              className={isRpg ? 'rpg-wood-btn calendar-export-xlsx-btn' : 'calendar-today-btn calendar-export-xlsx-btn'}
+              onClick={onExportarRegistrosMes}
+              disabled={!empleadoAuditar || exportandoRegistrosMes}
+              data-testid="btn-exportar-registros-mes-xlsx"
+              title={`Descargar todos los registros de ${empleadoAuditar || 'el empleado seleccionado'} en ${NOMBRES_MESES[fechaCalendario.getMonth()]} ${fechaCalendario.getFullYear()} (.xlsx)`}
+            >
+              <span>📥</span>
+              <span>{exportandoRegistrosMes ? 'Exportando...' : 'Exportar Mes (.xlsx)'}</span>
             </button>
           )}
           {puedeVerModif && diasConModificacionesPendientes.length > 0 && (

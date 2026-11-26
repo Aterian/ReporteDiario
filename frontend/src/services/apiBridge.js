@@ -751,6 +751,15 @@ const apiBase = {
     return { exito: false, error: 'Función no disponible' };
   },
 
+  // [FN-02.09] Exportar todos los registros del mes de un empleado en .xlsx
+  async exportarRegistrosMesEmpleado(empleado, mesAnio) {
+    const bridge = await getApi();
+    if (bridge.exportar_registros_mes_empleado) {
+      return await bridge.exportar_registros_mes_empleado(empleado, mesAnio);
+    }
+    return { exito: false, error: 'Función no disponible en este entorno.' };
+  },
+
   async redimensionarVentana(ancho, alto) {
     const bridge = await getApi();
     if (bridge.redimensionar_ventana) {

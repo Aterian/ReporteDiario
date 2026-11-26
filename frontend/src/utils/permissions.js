@@ -258,3 +258,9 @@ export const puedeVerEstadisticasUso = (usuario) => {
   const rol = getRolUsuario(usuario);
   return rol === 'admin' || rol === 'sub_admin' || rol === 'core';
 };
+
+// [FN-02.09] Exportar todos los registros del mes de un empleado en .xlsx (admin y sub_admin)
+export const puedeExportarRegistrosMes = (usuario) => {
+  const rol = getRolUsuario(usuario);
+  return rol === 'admin' || rol === 'sub_admin';
+};

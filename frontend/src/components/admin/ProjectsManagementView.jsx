@@ -232,9 +232,9 @@ export default function ProjectsManagementView({ usuario, onVolver, tema }) {
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
             <button
               type="button"
-              className="btn-back"
+              className={isRpg ? 'rpg-wood-btn' : 'btn-back projects-btn-neutral'}
               onClick={onVolver}
-              style={{
+              style={!isRpg ? {
                 minWidth: '44px',
                 minHeight: '44px',
                 display: 'inline-flex',
@@ -247,7 +247,7 @@ export default function ProjectsManagementView({ usuario, onVolver, tema }) {
                 color: 'var(--text-primary, #0f172a)',
                 fontWeight: 600,
                 cursor: 'pointer'
-              }}
+              } : { minWidth: '44px', minHeight: '44px' }}
             >
               ← Volver
             </button>
@@ -287,9 +287,10 @@ export default function ProjectsManagementView({ usuario, onVolver, tema }) {
 
           <button
             type="button"
+            className={isRpg ? 'rpg-wood-btn' : 'projects-btn-neutral'}
             onClick={cargarProyectos}
             disabled={cargando}
-            style={{
+            style={!isRpg ? {
               minHeight: '44px',
               padding: '0 16px',
               borderRadius: '8px',
@@ -301,7 +302,7 @@ export default function ProjectsManagementView({ usuario, onVolver, tema }) {
               display: 'inline-flex',
               alignItems: 'center',
               gap: '8px'
-            }}
+            } : { minHeight: '44px' }}
           >
             <span className={cargando ? 'spinner' : ''}>🔄</span>
             {cargando ? 'Actualizando...' : 'Refrescar'}
@@ -311,17 +312,17 @@ export default function ProjectsManagementView({ usuario, onVolver, tema }) {
 
       {/* Tarjetas de Métricas */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '14px', marginBottom: '20px' }}>
-        <div style={{ background: 'var(--bg-surface, #ffffff)', padding: '16px 20px', borderRadius: '10px', border: '1px solid var(--border-subtle, #e2e8f0)' }}>
-          <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary, #64748b)', textTransform: 'uppercase' }}>Total Proyectos</div>
-          <div style={{ fontSize: '26px', fontWeight: 800, marginTop: '4px', color: 'var(--text-primary, #0f172a)' }}>{metricas.total}</div>
+        <div className="projects-kpi-card" style={{ background: 'var(--bg-surface, #ffffff)', padding: '16px 20px', borderRadius: '10px', border: '1px solid var(--border-subtle, #e2e8f0)' }}>
+          <div className="projects-kpi-label" style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary, #64748b)', textTransform: 'uppercase' }}>Total Proyectos</div>
+          <div className="projects-kpi-value" style={{ fontSize: '26px', fontWeight: 800, marginTop: '4px', color: 'var(--text-primary, #0f172a)' }}>{metricas.total}</div>
         </div>
-        <div style={{ background: 'var(--bg-surface, #ffffff)', padding: '16px 20px', borderRadius: '10px', border: '1px solid var(--border-subtle, #e2e8f0)', borderLeft: '4px solid #10b981' }}>
-          <div style={{ fontSize: '12px', fontWeight: 600, color: '#059669', textTransform: 'uppercase' }}>Proyectos Activos</div>
-          <div style={{ fontSize: '26px', fontWeight: 800, marginTop: '4px', color: '#059669' }}>{metricas.activos}</div>
+        <div className="projects-kpi-card projects-kpi-active" style={{ background: 'var(--bg-surface, #ffffff)', padding: '16px 20px', borderRadius: '10px', border: '1px solid var(--border-subtle, #e2e8f0)', borderLeft: '4px solid #10b981' }}>
+          <div className="projects-kpi-label" style={{ fontSize: '12px', fontWeight: 600, color: '#059669', textTransform: 'uppercase' }}>Proyectos Activos</div>
+          <div className="projects-kpi-value" style={{ fontSize: '26px', fontWeight: 800, marginTop: '4px', color: '#059669' }}>{metricas.activos}</div>
         </div>
-        <div style={{ background: 'var(--bg-surface, #ffffff)', padding: '16px 20px', borderRadius: '10px', border: '1px solid var(--border-subtle, #e2e8f0)', borderLeft: '4px solid #94a3b8' }}>
-          <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary, #64748b)', textTransform: 'uppercase' }}>Proyectos Inactivos</div>
-          <div style={{ fontSize: '26px', fontWeight: 800, marginTop: '4px', color: 'var(--text-secondary, #64748b)' }}>{metricas.inactivos}</div>
+        <div className="projects-kpi-card" style={{ background: 'var(--bg-surface, #ffffff)', padding: '16px 20px', borderRadius: '10px', border: '1px solid var(--border-subtle, #e2e8f0)', borderLeft: '4px solid #94a3b8' }}>
+          <div className="projects-kpi-label" style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary, #64748b)', textTransform: 'uppercase' }}>Proyectos Inactivos</div>
+          <div className="projects-kpi-value" style={{ fontSize: '26px', fontWeight: 800, marginTop: '4px', color: 'var(--text-secondary, #64748b)' }}>{metricas.inactivos}</div>
         </div>
       </div>
 
@@ -334,7 +335,7 @@ export default function ProjectsManagementView({ usuario, onVolver, tema }) {
             placeholder="Buscar por código, denominación, responsable o ID..."
             value={busqueda}
             onChange={(e) => setBusqueda(e.target.value)}
-            style={{ width: '100%', minHeight: '44px', padding: '0 14px', borderRadius: '8px', border: '1px solid var(--border-input, #cbd5e1)', background: 'var(--bg-input, #f8fafc)', color: 'inherit' }}
+            style={{ width: '100%', minHeight: '44px', padding: '0 14px', borderRadius: '8px', border: '1px solid var(--border-input, #cbd5e1)', background: 'var(--bg-surface-hover, #f8fafc)', color: 'var(--text-primary, #0f172a)' }}
           />
         </div>
 
@@ -343,7 +344,7 @@ export default function ProjectsManagementView({ usuario, onVolver, tema }) {
             className="users-filter-select"
             value={filtroArea}
             onChange={(e) => setFiltroArea(e.target.value)}
-            style={{ width: '100%', minHeight: '44px', padding: '0 12px', borderRadius: '8px', border: '1px solid var(--border-input, #cbd5e1)', background: 'var(--bg-input, #f8fafc)', color: 'inherit' }}
+            style={{ width: '100%', minHeight: '44px', padding: '0 12px', borderRadius: '8px', border: '1px solid var(--border-input, #cbd5e1)', background: 'var(--bg-surface-hover, #f8fafc)', color: 'var(--text-primary, #0f172a)' }}
           >
             <option value="TODAS">Todas las Áreas</option>
             {AREAS_SISTEMA.map(a => (
@@ -357,7 +358,7 @@ export default function ProjectsManagementView({ usuario, onVolver, tema }) {
             className="users-filter-select"
             value={filtroEstado}
             onChange={(e) => setFiltroEstado(e.target.value)}
-            style={{ width: '100%', minHeight: '44px', padding: '0 12px', borderRadius: '8px', border: '1px solid var(--border-input, #cbd5e1)', background: 'var(--bg-input, #f8fafc)', color: 'inherit' }}
+            style={{ width: '100%', minHeight: '44px', padding: '0 12px', borderRadius: '8px', border: '1px solid var(--border-input, #cbd5e1)', background: 'var(--bg-surface-hover, #f8fafc)', color: 'var(--text-primary, #0f172a)' }}
           >
             <option value="TODOS">Todos los Estados</option>
             <option value="ACTIVOS">Solo Activos</option>
@@ -368,21 +369,21 @@ export default function ProjectsManagementView({ usuario, onVolver, tema }) {
 
       {/* Grilla / Listado de Proyectos */}
       {cargando ? (
-        <div style={{ padding: '60px 0', textAlign: 'center', color: 'var(--text-secondary, #64748b)' }}>
+        <div className="projects-empty-panel" style={{ padding: '60px 0', textAlign: 'center', color: 'var(--text-secondary, #64748b)' }}>
           <div className="spinner" style={{ margin: '0 auto 12px', width: '32px', height: '32px' }} />
           Cargando catálogo de proyectos...
         </div>
       ) : proyectosFiltrados.length === 0 ? (
-        <div style={{ padding: '60px 0', textAlign: 'center', background: 'var(--bg-surface, #ffffff)', borderRadius: '10px', border: '1px solid var(--border-subtle, #e2e8f0)' }}>
+        <div className="projects-empty-panel" style={{ padding: '60px 0', textAlign: 'center', background: 'var(--bg-surface, #ffffff)', borderRadius: '10px', border: '1px solid var(--border-subtle, #e2e8f0)' }}>
           <p style={{ margin: 0, fontSize: '15px', color: 'var(--text-secondary, #64748b)' }}>
             No se encontraron proyectos con los criterios de búsqueda seleccionados.
           </p>
         </div>
       ) : (
-        <div style={{ overflowX: 'auto', background: 'var(--bg-surface, #ffffff)', borderRadius: '10px', border: '1px solid var(--border-subtle, #e2e8f0)' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '13px' }}>
+        <div className="projects-table-panel" style={{ overflowX: 'auto', background: 'var(--bg-surface, #ffffff)', borderRadius: '10px', border: '1px solid var(--border-subtle, #e2e8f0)' }}>
+          <table className="projects-table" style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '13px' }}>
             <thead>
-              <tr style={{ background: 'var(--bg-subtle, #f8fafc)', borderBottom: '1px solid var(--border-subtle, #e2e8f0)' }}>
+              <tr className="projects-table-head-row" style={{ background: 'var(--bg-surface-hover, #f8fafc)', borderBottom: '1px solid var(--border-subtle, #e2e8f0)' }}>
                 <th style={{ padding: '12px 16px', fontWeight: 700, width: '80px' }}>N° Serv</th>
                 <th style={{ padding: '12px 16px', fontWeight: 700 }}>Denominación / Codificación</th>
                 <th style={{ padding: '12px 16px', fontWeight: 700, width: '110px' }}>Área</th>
@@ -396,15 +397,15 @@ export default function ProjectsManagementView({ usuario, onVolver, tema }) {
                 const areaInfo = getAreaInfo(p.area);
                 const esActivo = p.activo !== false && p.activo !== 0;
                 return (
-                  <tr key={p.id_servicio} style={{ borderBottom: '1px solid var(--border-subtle, #e2e8f0)', opacity: esActivo ? 1 : 0.65 }}>
-                    <td style={{ padding: '12px 16px', fontWeight: 700, color: 'var(--text-secondary, #64748b)' }}>
+                  <tr key={p.id_servicio} className="projects-table-row" style={{ borderBottom: '1px solid var(--border-subtle, #e2e8f0)', opacity: esActivo ? 1 : 0.65 }}>
+                    <td className="projects-cell-id" style={{ padding: '12px 16px', fontWeight: 700, color: 'var(--text-secondary, #64748b)' }}>
                       {p.n_serv ? `#${p.n_serv}` : '-'}
                     </td>
                     <td style={{ padding: '12px 16px' }}>
-                      <div style={{ fontWeight: 700, color: 'var(--text-primary, #0f172a)' }}>
+                      <div className="projects-cell-name" style={{ fontWeight: 700, color: 'var(--text-primary, #0f172a)' }}>
                         {p.codificacion_serv || p.denominacion || 'Sin denominación'}
                       </div>
-                      <div style={{ fontSize: '11px', fontFamily: 'monospace', color: 'var(--text-secondary, #64748b)', marginTop: '2px' }}>
+                      <div className="projects-cell-uuid" style={{ fontSize: '11px', fontFamily: 'monospace', color: 'var(--text-secondary, #64748b)', marginTop: '2px' }}>
                         ID: {p.id_proyecto}
                       </div>
                     </td>
@@ -421,7 +422,7 @@ export default function ProjectsManagementView({ usuario, onVolver, tema }) {
                         {areaInfo.etiqueta}
                       </span>
                     </td>
-                    <td style={{ padding: '12px 16px', color: 'var(--text-secondary, #475569)' }}>
+                    <td className="projects-cell-resp" style={{ padding: '12px 16px', color: 'var(--text-secondary, #475569)' }}>
                       {p.responsable_des || '-'}
                     </td>
                     <td style={{ padding: '12px 16px' }}>
@@ -440,8 +441,9 @@ export default function ProjectsManagementView({ usuario, onVolver, tema }) {
                     <td style={{ padding: '12px 16px', textAlign: 'right' }}>
                       <button
                         type="button"
+                        className="btn-edit-user projects-edit-btn"
                         onClick={() => abrirEdicion(p)}
-                        style={{
+                        style={!isRpg ? {
                           minHeight: '34px',
                           padding: '0 14px',
                           borderRadius: '6px',
@@ -451,7 +453,7 @@ export default function ProjectsManagementView({ usuario, onVolver, tema }) {
                           fontWeight: 600,
                           fontSize: '12px',
                           cursor: 'pointer'
-                        }}
+                        } : { minHeight: '34px', padding: '0 14px', borderRadius: '6px', fontWeight: 600, fontSize: '12px', cursor: 'pointer' }}
                       >
                         Editar
                       </button>
@@ -467,13 +469,14 @@ export default function ProjectsManagementView({ usuario, onVolver, tema }) {
       {/* Modal de Creación / Edición */}
       {modalAbierto && (
         <div className="users-modal-backdrop" style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1100, padding: '20px' }}>
-          <div style={{ width: '100%', maxWidth: '640px', background: 'var(--bg-surface, #ffffff)', borderRadius: '12px', padding: '24px', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.3)', maxHeight: '90vh', overflowY: 'auto' }}>
+          <div className="users-modal-container projects-modal-box" style={{ width: '100%', maxWidth: '640px', background: 'var(--bg-surface, #ffffff)', borderRadius: '12px', padding: '24px', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.3)', maxHeight: '90vh', overflowY: 'auto' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '18px', borderBottom: '1px solid var(--border-subtle, #e2e8f0)', paddingBottom: '12px' }}>
-              <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 800, color: 'var(--text-primary, #0f172a)' }}>
+              <h3 className="projects-modal-title" style={{ margin: 0, fontSize: '18px', fontWeight: 800, color: 'var(--text-primary, #0f172a)' }}>
                 {modoCreacion ? '➕ Alta de Nuevo Proyecto' : '✏️ Editar Proyecto'}
               </h3>
               <button
                 type="button"
+                className="projects-modal-close"
                 onClick={() => setModalAbierto(false)}
                 disabled={guardando}
                 style={{ background: 'none', border: 'none', fontSize: '18px', cursor: 'pointer', color: 'var(--text-secondary, #64748b)' }}
@@ -555,7 +558,7 @@ export default function ProjectsManagementView({ usuario, onVolver, tema }) {
                   </label>
                   <select
                     className="users-modal-select"
-                    style={{ width: '100%', minHeight: '40px', padding: '0 12px', borderRadius: '6px', border: '1px solid var(--border-input, #cbd5e1)', background: 'var(--bg-input, #f8fafc)' }}
+                    style={{ width: '100%', minHeight: '40px', padding: '0 12px', borderRadius: '6px', border: '1px solid var(--border-input, #cbd5e1)', background: 'var(--bg-surface-hover, #f8fafc)' }}
                     value={formDatos.area}
                     onChange={(e) => setFormDatos(prev => ({ ...prev, area: e.target.value }))}
                     disabled={guardando}
@@ -613,6 +616,7 @@ export default function ProjectsManagementView({ usuario, onVolver, tema }) {
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', borderTop: '1px solid var(--border-subtle, #e2e8f0)', paddingTop: '16px' }}>
                 <button
                   type="button"
+                  className="projects-modal-cancel"
                   onClick={() => setModalAbierto(false)}
                   disabled={guardando}
                   style={{
@@ -621,6 +625,7 @@ export default function ProjectsManagementView({ usuario, onVolver, tema }) {
                     borderRadius: '8px',
                     border: '1px solid var(--border-input, #cbd5e1)',
                     background: 'transparent',
+                    color: 'var(--text-primary, #0f172a)',
                     cursor: 'pointer',
                     fontWeight: 600
                   }}

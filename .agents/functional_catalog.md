@@ -1,5 +1,17 @@
 # Catálogo Funcional del Sistema
 
+## [FN-02.09] Exportación Mensual Completa de Registros de Colaborador en `.xlsx` (Edición Gestión)
+- **Módulo**: [MOD-02] Historial y Auditoría de Colaboradores
+- **Flujo Operativo**: Desde `OtherEmployeesHistoryView.jsx` / `HistoryAuditCalendar.jsx`, `admin` y `sub_admin` descargan un `.xlsx` con todas las asistencias activas (`eliminado_en IS NULL`) del empleado seleccionado y mes visible mediante `ApiPuente.exportar_registros_mes_empleado` -> `postgres_exports.exportar_registros_mes_empleado`, incluyendo fila `TOTALES` y fila final `COSTO REAL (Sueldo Total)` desde `a_1_calculo_sueldo.sueldo_total`. Si no existen registros en el período, emite el libro igualmente con encabezado y las 16 columnas vacías más totales en 0.
+- **Tablas afectadas**: app_rrhh.b_1_asistencias, app_rrhh.a_1_usuarios, app_proyectos.b_1_proyectos_servicios, app_rrhh.b_1_modificaciones_realizadas (lectura pura).
+- **Reglas de negocio e invariantes**: Exclusivo de `APP_EDITION == "gestion"` y roles `admin` / `sub_admin` (`_sesion(admin=True)` y `puedeExportarRegistrosMes`); oculto para `core` y podado de Edición Operativa (`openpyxl` excluido); neutraliza celdas de texto que inicien con `=`, `+`, `-`, `@`, `\t`, `\r` y rechaza enlaces simbólicos al guardar.
+
+## [FN-05.03] Coherencia Visual RPG en Tablero, Roster, Módulos de Gestión y Sugerencias
+- **Módulo**: [MOD-05] Interfaz Temática RPG y Experiencia de Usuario
+- **Flujo Operativo**: Propaga `tema` hacia `SuggestionForm.tsx` y `SuggestionsManagementView.tsx`, restaura la entrada a Roster en `RpgTavernBoard.jsx` y aplica la envoltura de tablón `.rpg-notice-board` + `.rpg-curved-banner` y paleta pergamino de alto contraste sobre `HistoryView`, `UsageStatsView`, `ProjectsManagementView`, `RosterView`/`RosterShiftForm` y el diálogo modal `.sug-dialog`.
+- **Tablas afectadas**: Ninguna (capa de presentación React/TypeScript/CSS).
+- **Reglas de negocio e invariantes**: `tema?: string` opcional preserva compatibilidad en Operativa (`85` módulos tras poda estática) y tests aislados; los temas `light` y `dark` permanecen inalterados; botones y controles conservan área táctil `>= 44x44 px`.
+
 ## [FN-00.13] Distribución Dual Física por Perfil de Rol (`Operativa` vs `Gestión`)
 - **Módulo**: [MOD-00] Arquitectura, Runtime de Escritorio e Instalación
 - **Flujo Operativo**: Compila desde el monorepo dos paquetes diferenciados (`--edicion operativa` para `user_1`/`user_2` con soporte `RpgTavernBoard` liviano, y `--edicion gestion` completo para `core`/`sub_admin`/`admin`), podando módulos y dependencias (`openpyxl`, `jspdf`, `html2canvas`) en Operativa, manteniendo contadores SemVer independientes (`OPERATIVA_VERSION` / `GESTION_VERSION`) y resolviendo canales `v*` vs `gestion-v*` en `update_channels.py` con auto-crossgrade ante ascenso de rol en PostgreSQL.

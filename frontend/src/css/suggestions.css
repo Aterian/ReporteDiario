@@ -541,3 +541,354 @@
     padding: 18px;
   }
 }
+
+/* ==========================================================================
+   MODO RPG: TABLÓN DE MADERA, PERGAMINOS Y SELLO LACRE ([data-theme='rpg'])
+   ========================================================================== */
+[data-theme='rpg'] .sug-view-rpg {
+  width: 100%;
+  background: transparent;
+  padding: 14px 4px 10px;
+}
+
+[data-theme='rpg'] .sug-view-rpg .sug-layout {
+  max-width: 100%;
+}
+
+[data-theme='rpg'] .sug-view-rpg .sug-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px 16px;
+}
+
+[data-theme='rpg'] .sug-view-rpg .sug-header .sug-muted {
+  color: #fde68a;
+  font-weight: 600;
+  margin: 0;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.75);
+}
+
+[data-theme='rpg'] .sug-view-rpg .sug-eyebrow {
+  color: #fbbf24;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.75);
+}
+
+[data-theme='rpg'] .sug-view-rpg .sug-card {
+  --bg-surface: rgba(255, 252, 244, 0.94);
+  --bg-surface-hover: rgba(237, 220, 183, 0.72);
+  --text-primary: #2b1d0c;
+  --text-secondary: #5c381e;
+  --text-muted: #785324;
+  --border-subtle: #d4b880;
+  --border-input: #b89758;
+  background: linear-gradient(180deg, #fbf2dc 0%, #f5e4bf 100%);
+  border: 1.5px solid #b89758;
+  color: #2b1d0c;
+  box-shadow:
+    inset 0 0 24px rgba(180, 130, 60, 0.14),
+    0 4px 14px rgba(0, 0, 0, 0.35);
+}
+
+[data-theme='rpg'] .sug-view-rpg .sug-card .sug-eyebrow {
+  color: #8c2f1b;
+  text-shadow: none;
+}
+
+[data-theme='rpg'] .sug-view-rpg .sug-card h2,
+[data-theme='rpg'] .sug-view-rpg .sug-card h3,
+[data-theme='rpg'] .sug-view-rpg .sug-kpi strong,
+[data-theme='rpg'] .sug-dialog h2,
+[data-theme='rpg'] .sug-dialog h3 {
+  font-family: 'Cinzel', Georgia, serif;
+  color: #3b220c;
+}
+
+[data-theme='rpg'] .sug-view-rpg .sug-muted,
+[data-theme='rpg'] .sug-view-rpg .sug-card .sug-muted {
+  color: #5c381e;
+}
+
+[data-theme='rpg'] .sug-view-rpg .sug-hint,
+[data-theme='rpg'] .sug-view-rpg .sug-field label,
+[data-theme='rpg'] .sug-dialog .sug-hint,
+[data-theme='rpg'] .sug-dialog .sug-field label {
+  color: #5c381e;
+}
+
+[data-theme='rpg'] .sug-view-rpg .sug-field input,
+[data-theme='rpg'] .sug-view-rpg .sug-field select,
+[data-theme='rpg'] .sug-view-rpg .sug-field textarea,
+[data-theme='rpg'] .sug-dialog .sug-field input,
+[data-theme='rpg'] .sug-dialog .sug-field select,
+[data-theme='rpg'] .sug-dialog .sug-field textarea {
+  background: rgba(255, 255, 255, 0.95);
+  border-color: #b89758;
+  color: #2b1d0c;
+}
+
+[data-theme='rpg'] .sug-view-rpg .sug-field input::placeholder,
+[data-theme='rpg'] .sug-view-rpg .sug-field textarea::placeholder,
+[data-theme='rpg'] .sug-dialog .sug-field textarea::placeholder {
+  color: #8c6d46;
+}
+
+[data-theme='rpg'] .sug-view-rpg .sug-field input:focus,
+[data-theme='rpg'] .sug-view-rpg .sug-field select:focus,
+[data-theme='rpg'] .sug-view-rpg .sug-field textarea:focus,
+[data-theme='rpg'] .sug-dialog .sug-field input:focus,
+[data-theme='rpg'] .sug-dialog .sug-field select:focus,
+[data-theme='rpg'] .sug-dialog .sug-field textarea:focus {
+  border-color: #d97706;
+  box-shadow: 0 0 0 2px rgba(217, 119, 6, 0.22);
+}
+
+[data-theme='rpg'] .sug-view-rpg .sug-type-option {
+  background: rgba(255, 252, 244, 0.85);
+  border: 1.5px solid #c9aa6d;
+  color: #2b1d0c;
+}
+
+[data-theme='rpg'] .sug-view-rpg .sug-type-option:hover {
+  background: #fef3c7;
+  border-color: #b45309;
+}
+
+[data-theme='rpg'] .sug-view-rpg .sug-type-option:has(input:checked) {
+  background: linear-gradient(180deg, #fef3c7 0%, #fde68a 100%);
+  border-color: #991b1b;
+  color: #451a03;
+  box-shadow: 0 0 0 1px rgba(153, 27, 27, 0.35);
+}
+
+[data-theme='rpg'] .sug-view-rpg .sug-type-option input {
+  accent-color: #991b1b;
+}
+
+[data-theme='rpg'] .sug-view-rpg .sug-guidance-list li + li {
+  border-top-color: #d4b880;
+}
+
+[data-theme='rpg'] .sug-view-rpg .sug-button:not(.sug-button-primary):not(.rpg-wood-btn),
+[data-theme='rpg'] .sug-dialog .sug-button:not(.sug-button-primary) {
+  background: linear-gradient(180deg, #5c3317 0%, #3b1e0c 100%);
+  border: 1.5px solid #926239;
+  color: #fef3c7;
+  font-weight: 700;
+}
+
+[data-theme='rpg'] .sug-view-rpg .sug-button:not(.sug-button-primary):not(.rpg-wood-btn):hover:not(:disabled),
+[data-theme='rpg'] .sug-dialog .sug-button:not(.sug-button-primary):hover:not(:disabled) {
+  background: linear-gradient(180deg, #744220 0%, #4d2810 100%);
+  border-color: #d97706;
+}
+
+[data-theme='rpg'] .sug-view-rpg .sug-button-primary,
+[data-theme='rpg'] .sug-dialog .sug-button-primary {
+  background: linear-gradient(180deg, #991b1b 0%, #6b1111 100%);
+  border: 1.5px solid #d97706;
+  color: #fef3c7;
+  font-family: 'Cinzel', Georgia, serif;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.35);
+}
+
+[data-theme='rpg'] .sug-view-rpg .sug-button-primary:hover:not(:disabled),
+[data-theme='rpg'] .sug-dialog .sug-button-primary:hover:not(:disabled) {
+  background: linear-gradient(180deg, #b91c1c 0%, #7f1d1d 100%);
+}
+
+[data-theme='rpg'] .sug-view-rpg .sug-kpi span {
+  color: #5c381e;
+}
+
+[data-theme='rpg'] .sug-view-rpg .sug-kpi-new {
+  border-left: 4px solid #d97706;
+}
+
+[data-theme='rpg'] .sug-view-rpg .sug-kpi-urgent {
+  border-left: 4px solid #b91c1c;
+}
+
+[data-theme='rpg'] .sug-view-rpg .sug-kpi-urgent strong {
+  color: #991b1b;
+}
+
+[data-theme='rpg'] .sug-view-rpg .sug-kpi-apply {
+  border-left: 4px solid #6d28d9;
+}
+
+[data-theme='rpg'] .sug-view-rpg .sug-kpi-apply strong {
+  color: #5b21b6;
+}
+
+[data-theme='rpg'] .sug-view-rpg .sug-kpi-done {
+  border-left: 4px solid #047857;
+}
+
+[data-theme='rpg'] .sug-view-rpg .sug-kpi-done strong {
+  color: #065f46;
+}
+
+[data-theme='rpg'] .sug-view-rpg .sug-inbox-head {
+  border-bottom-color: #d4b880;
+}
+
+[data-theme='rpg'] .sug-view-rpg .sug-result {
+  background: rgba(255, 252, 244, 0.78);
+  border: 1px solid #d4b880;
+  color: #2b1d0c;
+}
+
+[data-theme='rpg'] .sug-view-rpg .sug-result:hover {
+  background: rgba(254, 243, 199, 0.92);
+  border-color: #b45309;
+}
+
+[data-theme='rpg'] .sug-view-rpg .sug-result-meta {
+  color: #5c381e;
+}
+
+[data-theme='rpg'] .sug-view-rpg .sug-result-desc {
+  color: #2b1d0c;
+}
+
+[data-theme='rpg'] .sug-view-rpg .sug-result-arrow {
+  color: #78350f;
+}
+
+[data-theme='rpg'] .sug-view-rpg .sug-badge,
+[data-theme='rpg'] .sug-dialog .sug-badge {
+  border-color: rgba(120, 83, 36, 0.35);
+}
+
+[data-theme='rpg'] .sug-view-rpg .sug-badge-type,
+[data-theme='rpg'] .sug-dialog .sug-badge-type {
+  background: rgba(237, 220, 183, 0.85);
+  color: #451a03;
+}
+
+[data-theme='rpg'] .sug-view-rpg .sug-badge-new {
+  background: rgba(254, 243, 199, 0.95);
+  color: #92400e;
+  border-color: rgba(217, 119, 6, 0.45);
+}
+
+[data-theme='rpg'] .sug-view-rpg .sug-badge-seen {
+  background: rgba(224, 242, 254, 0.92);
+  color: #075985;
+  border-color: rgba(2, 132, 199, 0.35);
+}
+
+[data-theme='rpg'] .sug-view-rpg .sug-badge-apply {
+  background: rgba(237, 233, 254, 0.95);
+  color: #5b21b6;
+  border-color: rgba(109, 40, 217, 0.35);
+}
+
+[data-theme='rpg'] .sug-view-rpg .sug-badge-done {
+  background: rgba(209, 250, 229, 0.95);
+  color: #065f46;
+  border-color: rgba(5, 150, 105, 0.4);
+}
+
+[data-theme='rpg'] .sug-view-rpg .sug-badge-discarded {
+  background: rgba(226, 232, 240, 0.92);
+  color: #475569;
+  border-color: rgba(100, 116, 139, 0.35);
+}
+
+[data-theme='rpg'] .sug-view-rpg .sug-badge-urgent,
+[data-theme='rpg'] .sug-dialog .sug-badge-urgent {
+  background: rgba(254, 226, 226, 0.95);
+  color: #991b1b;
+  border-color: rgba(185, 28, 28, 0.4);
+}
+
+[data-theme='rpg'] .sug-view-rpg .sug-badge-calm,
+[data-theme='rpg'] .sug-dialog .sug-badge-calm {
+  background: rgba(245, 238, 220, 0.95);
+  color: #5c381e;
+}
+
+[data-theme='rpg'] .sug-view-rpg .sug-notice {
+  background: rgba(209, 250, 229, 0.92);
+  border-color: rgba(5, 150, 105, 0.45);
+  color: #064e3b;
+}
+
+[data-theme='rpg'] .sug-view-rpg .sug-error,
+[data-theme='rpg'] .sug-dialog .sug-error {
+  background: rgba(254, 226, 226, 0.95);
+  border-color: rgba(185, 28, 28, 0.45);
+  color: #7f1d1d;
+}
+
+[data-theme='rpg'] .sug-view-rpg .sug-pagination {
+  border-top-color: #d4b880;
+  color: #5c381e;
+}
+
+[data-theme='rpg'] .sug-view-rpg .rpg-wood-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: var(--touch-min-size, 44px);
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-family: 'Cinzel', Georgia, serif;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+  background: linear-gradient(180deg, #5c381e 0%, #3e2210 100%);
+  border: 1.5px solid #8c582f;
+  color: #fef3c7;
+  cursor: pointer;
+}
+
+[data-theme='rpg'] .sug-view-rpg .rpg-wood-btn:hover:not(:disabled) {
+  background: linear-gradient(180deg, #744625 0%, #4f2c15 100%);
+  border-color: #d97706;
+  color: #ffffff;
+}
+
+[data-theme='rpg'] .sug-view-rpg .rpg-wood-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+[data-theme='rpg'] .sug-dialog {
+  --bg-surface: #fbf2dc;
+  --text-primary: #2b1d0c;
+  --text-secondary: #5c381e;
+  --text-muted: #785324;
+  --border-subtle: #d4b880;
+  --border-input: #b89758;
+  background: linear-gradient(180deg, #fbf2dc 0%, #f5e4bf 100%);
+  border: 2px solid #b89758;
+  color: #2b1d0c;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.72);
+}
+
+[data-theme='rpg'] .sug-dialog::backdrop {
+  background: rgba(18, 10, 4, 0.74);
+  backdrop-filter: blur(2px);
+}
+
+[data-theme='rpg'] .sug-dialog .sug-dialog-head,
+[data-theme='rpg'] .sug-dialog .sug-dialog-actions {
+  border-color: #d4b880;
+}
+
+[data-theme='rpg'] .sug-dialog .sug-muted {
+  color: #5c381e;
+}
+
+[data-theme='rpg'] .sug-dialog .sug-detail {
+  background: #fff9eb;
+  border-color: #d4b880;
+  color: #2b1d0c;
+}

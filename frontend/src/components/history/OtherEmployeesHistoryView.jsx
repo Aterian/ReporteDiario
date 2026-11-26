@@ -9,7 +9,8 @@ import {
   esAreaNucleo,
   puedeVerCalculadoraLiquidacion,
   esCore,
-  puedeModificarHistorialOtros
+  puedeModificarHistorialOtros,
+  puedeExportarRegistrosMes
 } from '../../utils/permissions';
 import { obtenerEtiquetaModalidad } from '../../utils/francoUtils';
 
@@ -112,6 +113,7 @@ export default function OtherEmployeesHistoryView({
   const puedeVerModif = puedeVerModificaciones(usuario);
   const puedeEditarCosto = !esSoloLectura && puedeGestionarTipoCosto(usuario);
   const puedeVerLiquidacion = puedeVerCalculadoraLiquidacion(usuario);
+  const puedeExportarMes = puedeExportarRegistrosMes(usuario);
 
   // Cantidad manual de días para las 5 categorías de liquidación (RRHH)
   const [diasOficinaManual, setDiasOficinaManual] = useState('');
@@ -120,6 +122,7 @@ export default function OtherEmployeesHistoryView({
   const [diasFrancoOficManual, setDiasFrancoOficManual] = useState('');
   const [diasFeriadoManual, setDiasFeriadoManual] = useState('');
   const [exportandoInforme, setExportandoInforme] = useState(false);
+  const [exportandoRegistrosMes, setExportandoRegistrosMes] = useState(false);
   const [liquidacionPg, setLiquidacionPg] = useState(null);
   const [guardandoConfigSueldo, setGuardandoConfigSueldo] = useState(false);
 
@@ -1243,6 +1246,38 @@ export default function OtherEmployeesHistoryView({
     }
   };
 
+  // [FN-02.09] Exportación de todos los registros del mes del colaborador seleccionado en .xlsx
+  const handleExportarRegistrosMes = async () => {
+    if (!puedeExportarMes || !empleadoAuditar || exportandoRegistrosMes) return;
+    setExportandoRegistrosMes(true);
+    try {
+      const anio = fechaCalendario.getFullYear();
+      const mesStr = String(fechaCalendario.getMonth() + 1).padStart(2, '0');
+      const mesAnio = `${anio}-${mesStr}`;
+      const referencia = empActual?.id_usuario || empleadoAuditar;
+      const res = await api.exportarRegistrosMesEmpleado(referencia, mesAnio);
+      if (res && res.exito) {
+        const cant = Number(res.total_registros) || 0;
+        const tituloToast = cant > 0
+          ? `Registros del mes exportados (${cant})`
+          : 'Excel generado (sin registros en el mes)';
+        toast.success(tituloToast, {
+          description: res.ruta || 'Archivo guardado correctamente.',
+          duration: 5000
+        });
+      } else if (res && res.cancelado) {
+        // Cancelado por el usuario en el diálogo nativo
+      } else {
+        toast.error(res?.error || 'No se pudieron exportar los registros del mes.');
+      }
+    } catch (err) {
+      console.error('Error al exportar registros mensuales en Excel:', err);
+      toast.error('Error inesperado al exportar los registros del mes.');
+    } finally {
+      setExportandoRegistrosMes(false);
+    }
+  };
+
   const handleEnfocarDiaCalendario = (item) => {
     if (item.empleado && item.empleado !== empleadoAuditar) {
       setEmpleadoAuditar(item.empleado);
@@ -1396,6 +1431,9 @@ export default function OtherEmployeesHistoryView({
             setDiaSeleccionadoAuditoria={setDiaSeleccionadoAuditoria}
             handleAbrirModalCostoDia={handleAbrirModalCostoDia}
             onAbrirModalCrearRoster={() => setModalCrearRosterAbierto(true)}
+            puedeExportarMes={puedeExportarMes}
+            exportandoRegistrosMes={exportandoRegistrosMes}
+            onExportarRegistrosMes={handleExportarRegistrosMes}
           />
 
           {puedeVerLiquidacion && (

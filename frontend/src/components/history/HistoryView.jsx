@@ -1370,6 +1370,60 @@ export default function HistoryView({ onVolver, tema, onNuevoReporte, usuario, o
           </div>
         </div>
       )}
+
+      {/* Modal de Confirmación de Eliminación */}
+      {registroEliminando && (
+        <div className="modal-backdrop">
+          <div className={`modal-box ${isRpg ? 'rpg-modal-box' : ''}`} style={{ maxWidth: '440px' }}>
+            <div className="modal-header">
+              <span className="modal-title" style={{ color: '#ef4444' }}>
+                ⚠️ Confirmar Eliminación
+              </span>
+              <button
+                type="button"
+                className="modal-close"
+                onClick={() => !eliminando && setRegistroEliminando(null)}
+                disabled={eliminando}
+              >
+                ✕
+              </button>
+            </div>
+            <div style={{ padding: '12px 0 16px 0', fontSize: '13px', lineHeight: 1.6 }}>
+              <p style={{ margin: '0 0 8px 0', color: 'var(--text-primary)' }}>
+                ¿Estás seguro de que deseas eliminar este registro de asistencia?
+              </p>
+              <div style={{ background: 'rgba(239, 68, 68, 0.08)', border: '1px solid rgba(239, 68, 68, 0.25)', borderRadius: '6px', padding: '10px 12px', marginBottom: '12px' }}>
+                <div><strong>Fecha:</strong> {registroEliminando.fecha}</div>
+                <div><strong>Modalidad / Lugar:</strong> {registroEliminando.tipo_ocf || registroEliminando.lugar}</div>
+                <div><strong>Imputación:</strong> {registroEliminando.servicio || 'Área'}</div>
+                <div><strong>Horas:</strong> {registroEliminando.horas} hs</div>
+              </div>
+              <p style={{ margin: 0, fontSize: '12px', color: 'var(--text-secondary)' }}>
+                El registro quedará oculto en la interfaz y se recalculará automáticamente la liquidación mensual.
+              </p>
+            </div>
+            <div className="modal-actions">
+              <button
+                type="button"
+                className={isRpg ? 'rpg-wood-btn' : 'btn-cancel'}
+                onClick={() => setRegistroEliminando(null)}
+                disabled={eliminando}
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                className={isRpg ? 'rpg-wood-btn rpg-wood-btn-primary' : 'btn-confirm'}
+                onClick={handleConfirmarEliminacion}
+                disabled={eliminando}
+                style={!isRpg ? { backgroundColor: '#ef4444', borderColor: '#ef4444', color: '#fff' } : undefined}
+              >
+                {eliminando ? 'Eliminando...' : 'Sí, Eliminar Registro'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 
@@ -1407,61 +1461,6 @@ export default function HistoryView({ onVolver, tema, onNuevoReporte, usuario, o
   return (
     <div className="view-content history-split-viewport">
       {contenidoPrincipal}
-
-      {/* Modal de Confirmación de Eliminación */}
-      {registroEliminando && (
-        <div className="modal-backdrop">
-          <div className={`modal-box ${isRpg ? 'rpg-modal-box' : ''}`} style={{ maxWidth: '440px' }}>
-            <div className="modal-header">
-              <span className="modal-title" style={{ color: '#ef4444' }}>
-                ⚠️ Confirmar Eliminación
-              </span>
-              <button
-                type="button"
-                className="modal-close"
-                onClick={() => !eliminando && setRegistroEliminando(null)}
-                disabled={eliminando}
-              >
-                ✕
-              </button>
-            </div>
-            <div style={{ padding: '12px 0 16px 0', fontSize: '13px', lineHeight: 1.6 }}>
-              <p style={{ margin: '0 0 8px 0', color: 'var(--text-primary)' }}>
-                ¿Estás seguro de que deseas eliminar este registro de asistencia?
-              </p>
-              <div style={{ background: 'rgba(239, 68, 68, 0.08)', border: '1px solid rgba(239, 68, 68, 0.25)', borderRadius: '6px', padding: '10px 12px', marginBottom: '12px' }}>
-                <div><strong>Fecha:</strong> {registroEliminando.fecha}</div>
-                <div><strong>Modalidad / Lugar:</strong> {registroEliminando.tipo_ocf || registroEliminando.lugar}</div>
-                <div><strong>Imputación:</strong> {registroEliminando.servicio || 'Área'}</div>
-                <div><strong>Horas:</strong> {registroEliminando.horas} hs</div>
-              </div>
-              <p style={{ margin: 0, fontSize: '12px', color: 'var(--text-secondary)' }}>
-                El registro quedará oculto en la interfaz y se recalculará automáticamente la liquidación mensual.
-              </p>
-            </div>
-            <div className="modal-actions">
-              <button
-                type="button"
-                className="btn-cancel"
-                onClick={() => setRegistroEliminando(null)}
-                disabled={eliminando}
-              >
-                Cancelar
-              </button>
-              <button
-                type="button"
-                className="btn-confirm"
-                onClick={handleConfirmarEliminacion}
-                disabled={eliminando}
-                style={{ backgroundColor: '#ef4444', borderColor: '#ef4444', color: '#fff' }}
-              >
-                {eliminando ? 'Eliminando...' : 'Sí, Eliminar Registro'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
     </div>
   );
 }

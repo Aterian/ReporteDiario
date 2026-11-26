@@ -661,6 +661,44 @@ class ApiPuente:
         informe = {**datos_informe,"empleado":usuario["nombre"],"ciclo_cobro":ciclo,"liquidacion":liquidacion,"detalle":detalle}
         return generar_excel_informe_liquidacion(informe,destino) if destino else {"exito":False,"cancelado":True}
 
+    # [FN-02.09] Exportar todos los registros del mes de un colaborador en .xlsx (admin y sub_admin)
+    def exportar_registros_mes_empleado(self, empleado: str, mes_anio: str):
+        self._sesion(admin=True)
+        from postgres_exports import exportar_registros_mes_empleado
+
+        if not isinstance(empleado, str) or not empleado.strip():
+            raise ValidacionError("Seleccione un empleado para exportar sus registros.")
+        ciclo = str(mes_anio or "").strip()
+        if not re.fullmatch(r"\d{4}-\d{2}", ciclo):
+            raise ValidacionError("El período debe tener formato YYYY-MM.")
+        anio_n, mes_n = int(ciclo[:4]), int(ciclo[5:7])
+        date(anio_n, mes_n, 1)
+
+        try:
+            usuario = db.resolver_usuario(empleado)
+        except ValidacionError:
+            usuario = db.resolver_usuario(empleado, db.obtener_usuarios_cache(incluir_inactivos=True))
+
+        filas = db.consultar_asistencias(usuario["id_usuario"], ciclo)
+        liquidacion = None
+        if filas:
+            try:
+                liquidacion = db.obtener_liquidacion(usuario["id_usuario"], ciclo)
+            except ValidacionError:
+                liquidacion = None
+        emp_slug = re.sub(r'[\\/*?:"<>|]', "", usuario["nombre"]).strip().replace(" ", "_") or "Empleado"
+        destino = self._destino_excel(f"Registros_{emp_slug}_{ciclo}.xlsx")
+        if not destino:
+            return {"exito": False, "cancelado": True}
+
+        ruta_destino = Path(destino)
+        if ruta_destino.suffix.lower() != ".xlsx":
+            ruta_destino = ruta_destino.with_suffix(".xlsx")
+        if ruta_destino.is_symlink():
+            raise ValidacionError("No se permite guardar el archivo sobre un enlace simbólico.")
+        ruta_destino.parent.mkdir(parents=True, exist_ok=True)
+        return exportar_registros_mes_empleado(usuario, ciclo, filas, ruta_destino, liquidacion=liquidacion)
+
     def obtener_tarifas_roster(self):
         self._sesion(admin=True)
         return db.obtener_tarifas_roster_cache()

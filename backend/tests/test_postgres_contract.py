@@ -2108,3 +2108,168 @@ def test_api_puente_bloquea_metodos_gestion_en_edicion_operativa(monkeypatch):
     estado = puente.obtener_estado_sesion()
     assert estado["edicion"] == "operativa"
 
+
+# [FN-02.09] Exportar todos los registros del mes en .xlsx sólo para admin y sub_admin en Edición Gestión
+def test_exportar_registros_mes_empleado_rbac_y_edicion(monkeypatch, tmp_path):
+    import app_version
+    from openpyxl import load_workbook
+
+    monkeypatch.setattr(app_version, "APP_EDITION", "gestion")
+    monkeypatch.setattr(
+        db,
+        "obtener_usuarios_cache",
+        lambda incluir_inactivos=False: [
+            {
+                "id_usuario": USUARIO,
+                "nombre": "Agustina Ferrante",
+                "dni": "39111222",
+                "area": "I",
+                "email": "aferrante@ingeap.com",
+            }
+        ],
+    )
+    monkeypatch.setattr(
+        db,
+        "consultar_asistencias",
+        lambda u, c: [
+            {
+                "id": "ast-2",
+                "fecha": "2026-11-15",
+                "tipo_ocf": "Campo",
+                "modalidad": "obra",
+                "tipo_dia": "dia_normal",
+                "dedicado_a": "proyectos",
+                "servicio": "=Proyecto Peligroso",
+                "hora_inicio": "08:00:00",
+                "hora_fin": "17:00:00",
+                "horas": "9.00",
+                "id_roster": None,
+                "costo_dia": "65000.00",
+                "costo_manual": False,
+                "cargado_por": "Agustina Ferrante",
+                "fecha_hora": "2026-11-15T18:30:00+00:00",
+                "modificacion_pendiente": 1,
+            },
+            {
+                "id": "ast-1",
+                "fecha": "2026-11-02",
+                "tipo_ocf": "Oficina",
+                "modalidad": "oficina",
+                "tipo_dia": "feriado_trabajado",
+                "dedicado_a": "areas",
+                "servicio": "I",
+                "hora_inicio": None,
+                "hora_fin": None,
+                "horas": "8.00",
+                "id_roster": "ros-1",
+                "costo_dia": "80000.00",
+                "costo_manual": True,
+                "cargado_por": "RRHH Admin",
+                "fecha_hora": "2026-11-02T12:00:00+00:00",
+                "modificacion_pendiente": 0,
+                "modificacion_revisada": 1,
+            },
+        ],
+    )
+    monkeypatch.setattr(
+        db,
+        "obtener_liquidacion",
+        lambda u, c: {"sueldo_total": "130000.00", "total_real": "120000.00", "total_adicionales": "10000.00"},
+    )
+
+    puente = ApiPuente()
+
+    # Roles no habilitados o sin sesión: bloqueados
+    monkeypatch.setattr(db, "obtener_sesion_activa", lambda: None)
+    assert puente.exportar_registros_mes_empleado(USUARIO, "2026-11")["codigo_error"] == "ACCESO_DENEGADO"
+
+    for rol in ("core", "user_1", "user_2"):
+        monkeypatch.setattr(db, "obtener_sesion_activa", lambda r=rol: {"id_usuario": USUARIO, "rol_app": r, "nombre": "Test"})
+        res_denegado = puente.exportar_registros_mes_empleado(USUARIO, "2026-11")
+        assert res_denegado["exito"] is False
+        assert res_denegado["codigo_error"] == "ACCESO_DENEGADO"
+
+    # Bloqueo en Edición Operativa incluso para admin
+    monkeypatch.setattr(app_version, "APP_EDITION", "operativa")
+    monkeypatch.setattr(db, "obtener_sesion_activa", lambda: {"id_usuario": USUARIO, "rol_app": "admin", "nombre": "Admin"})
+    assert puente.exportar_registros_mes_empleado(USUARIO, "2026-11")["codigo_error"] == "ACCESO_DENEGADO"
+
+    # Éxito para sub_admin y admin en Edición Gestión
+    monkeypatch.setattr(app_version, "APP_EDITION", "gestion")
+    for idx, rol in enumerate(("sub_admin", "admin")):
+        monkeypatch.setattr(db, "obtener_sesion_activa", lambda r=rol: {"id_usuario": USUARIO, "rol_app": r, "nombre": "RRHH"})
+        destino = tmp_path / f"Registros_Mes_{idx}.xlsx"
+        monkeypatch.setattr(puente, "_destino_excel", lambda _, d=destino: str(d))
+        res = puente.exportar_registros_mes_empleado("Agustina Ferrante", "2026-11")
+        assert res["exito"] is True
+        assert res["total_registros"] == 2
+
+    wb = load_workbook(tmp_path / "Registros_Mes_1.xlsx")
+    ws = wb["Registros del Mes"]
+    encabezados = [ws.cell(6, c).value for c in range(1, 17)]
+    assert encabezados == [
+        "Fecha", "Día", "Estado / Modalidad", "Lugar", "Clasificación Día", "Dedicado a",
+        "Proyecto / Servicio", "Hora Inicio", "Hora Fin", "Horas", "Origen",
+        "Costo Día ($)", "Costo Manual", "Cargado por", "Fecha/Hora Carga", "Auditoría Modif.",
+    ]
+    # Orden cronológico: 2026-11-02 primero, luego 2026-11-15; sanitización contra fórmulas en G8
+    assert ws.cell(7, 1).value == "2026-11-02"
+    assert ws.cell(7, 2).value == "Lunes"
+    assert ws.cell(7, 4).value == "Oficina"
+    assert ws.cell(7, 5).value == "Feriado Trabajado"
+    assert ws.cell(7, 11).value == "Roster"
+    assert ws.cell(7, 13).value == "Sí"
+    assert ws.cell(7, 16).value == "Revisada"
+    assert ws.cell(8, 1).value == "2026-11-15"
+    assert ws.cell(8, 7).value == "'=Proyecto Peligroso"
+    assert ws.cell(8, 16).value == "Pendiente de revisión"
+    assert ws.cell(9, 1).value == "TOTALES (2 registros)"
+    assert ws.cell(9, 10).value == 17.0
+    assert ws.cell(9, 12).value == 145000.0
+    assert ws.cell(10, 1).value == "COSTO REAL (Sueldo Total)"
+    assert ws.cell(10, 12).value == 130000.0
+    assert res["sueldo_total"] == "130000.00"
+
+
+# [FN-02.09] Generar Excel vacío con los 16 encabezados cuando el mes no tiene registros y validar errores
+def test_exportar_registros_mes_empleado_vacio_y_bordes(monkeypatch, tmp_path):
+    import app_version
+    from openpyxl import load_workbook
+
+    monkeypatch.setattr(app_version, "APP_EDITION", "gestion")
+    monkeypatch.setattr(db, "obtener_sesion_activa", lambda: {"id_usuario": USUARIO, "rol_app": "admin", "nombre": "Admin"})
+    monkeypatch.setattr(
+        db,
+        "obtener_usuarios_cache",
+        lambda incluir_inactivos=False: [{"id_usuario": USUARIO, "nombre": "Empleado Inactivo", "dni": "40111222", "area": "A"}] if incluir_inactivos else [],
+    )
+    monkeypatch.setattr(db, "consultar_asistencias", lambda u, c: [])
+
+    puente = ApiPuente()
+    # Formato de período inválido
+    assert puente.exportar_registros_mes_empleado(USUARIO, "2026-13")["codigo_error"] == "VALIDACION_ERROR"
+    assert puente.exportar_registros_mes_empleado("", "2026-11")["codigo_error"] == "VALIDACION_ERROR"
+
+    # Cancelación en diálogo nativo
+    monkeypatch.setattr(puente, "_destino_excel", lambda _: None)
+    res_cancel = puente.exportar_registros_mes_empleado("Empleado Inactivo", "2026-11")
+    assert res_cancel == {"exito": False, "cancelado": True}
+
+    # Mes sin registros genera .xlsx con los 16 encabezados y fila de totales en 0
+    destino = tmp_path / "Registros_Vacios.xlsx"
+    monkeypatch.setattr(puente, "_destino_excel", lambda _: str(destino))
+    res_vacio = puente.exportar_registros_mes_empleado("Empleado Inactivo", "2026-11")
+    assert res_vacio["exito"] is True
+    assert res_vacio["total_registros"] == 0
+
+    wb = load_workbook(destino)
+    ws = wb["Registros del Mes"]
+    assert [ws.cell(6, c).value for c in range(1, 17)][0] == "Fecha"
+    assert [ws.cell(6, c).value for c in range(1, 17)][15] == "Auditoría Modif."
+    assert ws.cell(7, 1).value == "TOTALES (0 registros)"
+    assert ws.cell(7, 10).value == 0.0
+    assert ws.cell(7, 12).value == 0.0
+    assert ws.cell(8, 1).value == "COSTO REAL (Sueldo Total)"
+    assert ws.cell(8, 12).value == 0.0
+    assert res_vacio["sueldo_total"] == "0"
+

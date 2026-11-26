@@ -954,11 +954,12 @@ export default function App() {
             )}
 
             {vistaActiva === 'sugerencia-nueva' && (
-              <SuggestionForm onVolver={() => setVistaActiva('home')} />
+              <SuggestionForm tema={tema} onVolver={() => setVistaActiva('home')} />
             )}
 
             {ES_EDICION_GESTION && SuggestionsManagementView && vistaActiva === 'sugerencias-gestion' && puedeGestionarSugerencias(usuario) && (
               <SuggestionsManagementView
+                tema={tema}
                 sessionKey={`${usuario.id_usuario}:${usuario.rol_app}`}
                 onVolver={() => setVistaActiva('home')}
               />

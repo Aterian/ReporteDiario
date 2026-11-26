@@ -21,7 +21,8 @@ import {
   puedeVerModificaciones,
   puedeModificarRegistro,
   puedeGestionarProyectos,
-  puedeVerEstadisticasUso
+  puedeVerEstadisticasUso,
+  puedeExportarRegistrosMes
 } from '../utils/permissions';
 
 describe('RBAC - Control de Roles y Capacidades', () => {
@@ -162,6 +163,16 @@ describe('RBAC - Control de Roles y Capacidades', () => {
       expect(puedeVerEstadisticasUso(user2)).toBe(false);
       expect(puedeVerEstadisticasUso(unknownUser)).toBe(false);
       expect(puedeVerEstadisticasUso(null)).toBe(false);
+    });
+
+    it('permite exportar registros mensuales en .xlsx exclusivamente a admin y sub_admin', () => {
+      expect(puedeExportarRegistrosMes(adminUser)).toBe(true);
+      expect(puedeExportarRegistrosMes(subAdminUser)).toBe(true);
+      expect(puedeExportarRegistrosMes(coreUser)).toBe(false);
+      expect(puedeExportarRegistrosMes(user1)).toBe(false);
+      expect(puedeExportarRegistrosMes(user2)).toBe(false);
+      expect(puedeExportarRegistrosMes(unknownUser)).toBe(false);
+      expect(puedeExportarRegistrosMes(null)).toBe(false);
     });
   });
 
