@@ -2,6 +2,16 @@
 
 Historial cronológico de cambios, nuevas características y mejoras aplicadas al sistema **Check Diario Ingeap**.
 
+## [2.18.1] - 2026-11-25
+
+### 🎨 Correcciones Visuales del Tema RPG, Calendario y Acceso al Módulo Roster ([MOD-05] / [FN-05.03])
+- **Tablero RPG y Navegación de Roster (`RpgTavernBoard.jsx`)**:
+  - Restaurado el acceso al módulo de Planificación / Roster en el pergamino de gestión y la barra inferior cuando el usuario tiene permiso (`onNuevoRoster`).
+- **Legibilidad y Diseño RPG en Vistas de Gestión y Operativas (`HistoryView.jsx`, `UsageStatsView.jsx`, `ProjectsManagementView.jsx`, `RosterShiftForm.jsx`, `index.css`)**:
+  - Aplicados tablón de madera, estandarte pergamino (`.rpg-curved-banner`), botones `rpg-wood-btn` y paleta pergamino `#fbf2dc` con tokens de texto oscuro (`#2b1d0c`) en **Historial Propio** (reubicando el modal de confirmación de borrado dentro de la vista para funcionar en modo RPG y ampliando la altura de grilla del calendario), **Estadísticas de Uso ISO 9001**, **Módulo de Proyectos** (eliminando variables inexistentes `--bg-subtle`/`--bg-input`) y **Roster** (restaurando contraste y disposición horizontal de la barra de referencias de tipos de días y chip `Día normal`).
+- **Buzón y Bandeja de Sugerencias en Modo RPG (`App.jsx`, `SuggestionForm.tsx`, `SuggestionsManagementView.tsx`, `suggestions.css`)**:
+  - Propagada prop opcional `tema?: string` hacia ambas vistas de sugerencias, envueltas en el tablón/banner RPG con tarjetas pergamino, selector de tipo contrastado, badges legibles y estilizado RPG en *top-layer* para `<dialog className="sug-dialog">`.
+
 ## [2.18.0] - 2026-11-24
 
 ### 📦 Distribución Dual Física por Perfil de Rol: Edición Operativa y Edición Gestión ([MOD-00] / [FN-00.13])

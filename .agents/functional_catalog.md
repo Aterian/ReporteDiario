@@ -1,5 +1,11 @@
 # Catálogo Funcional del Sistema
 
+## [FN-05.03] Coherencia Visual RPG en Tablero, Roster, Módulos de Gestión y Sugerencias
+- **Módulo**: [MOD-05] Interfaz Temática RPG y Experiencia de Usuario
+- **Flujo Operativo**: Propaga `tema` hacia `SuggestionForm.tsx` y `SuggestionsManagementView.tsx`, restaura la entrada a Roster en `RpgTavernBoard.jsx` y aplica la envoltura de tablón `.rpg-notice-board` + `.rpg-curved-banner` y paleta pergamino de alto contraste sobre `HistoryView`, `UsageStatsView`, `ProjectsManagementView`, `RosterView`/`RosterShiftForm` y el diálogo modal `.sug-dialog`.
+- **Tablas afectadas**: Ninguna (capa de presentación React/TypeScript/CSS).
+- **Reglas de negocio e invariantes**: `tema?: string` opcional preserva compatibilidad en Operativa (`85` módulos tras poda estática) y tests aislados; los temas `light` y `dark` permanecen inalterados; botones y controles conservan área táctil `>= 44x44 px`.
+
 ## [FN-00.13] Distribución Dual Física por Perfil de Rol (`Operativa` vs `Gestión`)
 - **Módulo**: [MOD-00] Arquitectura, Runtime de Escritorio e Instalación
 - **Flujo Operativo**: Compila desde el monorepo dos paquetes diferenciados (`--edicion operativa` para `user_1`/`user_2` con soporte `RpgTavernBoard` liviano, y `--edicion gestion` completo para `core`/`sub_admin`/`admin`), podando módulos y dependencias (`openpyxl`, `jspdf`, `html2canvas`) en Operativa, manteniendo contadores SemVer independientes (`OPERATIVA_VERSION` / `GESTION_VERSION`) y resolviendo canales `v*` vs `gestion-v*` en `update_channels.py` con auto-crossgrade ante ascenso de rol en PostgreSQL.

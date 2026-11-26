@@ -1,4 +1,4 @@
-# Distribución de Check Diario (`2.18.0` — Ediciones Duales por Rol)
+# Distribución de Check Diario (`2.18.1` — Ediciones Duales por Rol)
 
 Estado: distribución dual física activa sobre monorepo único (`[FN-00.13]`).
 

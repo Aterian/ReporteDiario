@@ -24,6 +24,7 @@ import type {
 interface Props {
   onVolver: () => void;
   sessionKey: string;
+  tema?: string;
 }
 
 interface EditorProps {
@@ -142,7 +143,12 @@ function EditorSugerencia({ sugerencia, pendiente, error, onCerrar, onGuardar }:
   );
 }
 
-export default function SuggestionsManagementView({ onVolver, sessionKey }: Props) {
+export default function SuggestionsManagementView({ onVolver, sessionKey, tema }: Props) {
+  const isRpg =
+    tema === 'rpg' ||
+    (tema === undefined &&
+      typeof document !== 'undefined' &&
+      document.documentElement.getAttribute('data-theme') === 'rpg');
   const [busqueda, setBusqueda] = useState('');
   const [filtros, setFiltros] = useState(FILTROS_INICIALES);
   const [seleccionada, setSeleccionada] = useState<Sugerencia | null>(null);
@@ -215,15 +221,23 @@ export default function SuggestionsManagementView({ onVolver, sessionKey }: Prop
     cambio.mutate(datos);
   }
 
-  return (
-    <main className="view-content sug-view">
+  const contenido = (
+    <main className={isRpg ? 'view-content sug-view sug-view-rpg' : 'view-content sug-view'}>
       <div className="sug-layout">
         <header className="sug-header">
-          <button className="sug-button" type="button" onClick={onVolver}>
-            <span aria-hidden="true">←</span> Volver a Inicio
+          <button
+            className={isRpg ? 'rpg-wood-btn' : 'sug-button'}
+            type="button"
+            onClick={onVolver}
+          >
+            <span aria-hidden="true">←</span> {isRpg ? 'Taberna' : 'Volver a Inicio'}
           </button>
-          <p className="sug-eyebrow">Participación y consulta</p>
-          <h1>Bandeja de sugerencias</h1>
+          {!isRpg && (
+            <>
+              <p className="sug-eyebrow">Participación y consulta</p>
+              <h1>Bandeja de sugerencias</h1>
+            </>
+          )}
           <p className="sug-muted">Revisá las sugerencias y registrá las acciones tomadas.</p>
         </header>
 
@@ -331,4 +345,31 @@ export default function SuggestionsManagementView({ onVolver, sessionKey }: Prop
         onCerrar={() => setSeleccionada(null)} onGuardar={guardar} />}
     </main>
   );
+
+  if (isRpg) {
+    return (
+      <div className="rpg-board-viewport rpg-other-history-viewport">
+        <div className="rpg-notice-board">
+          <div className="rpg-iron-bracket top-left" />
+          <div className="rpg-iron-bracket top-right" />
+          <div className="rpg-iron-bracket bottom-left" />
+          <div className="rpg-iron-bracket bottom-right" />
+          <div className="rpg-curved-banner">
+            <div className="rpg-banner-scroll-roll left" />
+            <div className="rpg-banner-body">
+              <div className="rpg-banner-heading-wrap">
+                <div className="rpg-illuminated-box">📜</div>
+                <h1 className="rpg-banner-main-title">BANDEJA DE PERGAMINOS Y SUGERENCIAS</h1>
+              </div>
+              <span className="rpg-banner-subtitle">PARTICIPACIÓN, CONSULTAS Y RESOLUCIONES</span>
+            </div>
+            <div className="rpg-banner-scroll-roll right" />
+          </div>
+          {contenido}
+        </div>
+      </div>
+    );
+  }
+
+  return contenido;
 }
