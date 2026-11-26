@@ -7691,6 +7691,7 @@ body {
 .calendar-month-controls {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 10px;
 }
 
@@ -7739,6 +7740,42 @@ body {
   background: var(--primary);
   border-color: var(--primary);
   color: #fff;
+}
+
+.calendar-export-xlsx-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: var(--touch-min-size, 44px);
+  padding: 6px 14px;
+  background: #15803d;
+  border-color: #166534;
+  color: #ffffff;
+  font-weight: 700;
+}
+
+.calendar-export-xlsx-btn:hover:not(:disabled) {
+  background: #166534;
+  border-color: #14532d;
+  color: #ffffff;
+}
+
+.calendar-export-xlsx-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+[data-theme='rpg'] .rpg-other-history-content .calendar-export-xlsx-btn {
+  background: linear-gradient(180deg, #15803d 0%, #0f5132 100%) !important;
+  border: 1.5px solid #d97706 !important;
+  color: #fef3c7 !important;
+}
+
+[data-theme='rpg'] .rpg-other-history-content .calendar-export-xlsx-btn:hover:not(:disabled) {
+  background: linear-gradient(180deg, #16a34a 0%, #14532d 100%) !important;
+  border-color: #fbbf24 !important;
+  color: #ffffff !important;
 }
 
 .calendar-weekdays-row {

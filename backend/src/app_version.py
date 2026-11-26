@@ -3,7 +3,7 @@ import os
 
 EDICIONES_VALIDAS = ("operativa", "gestion")
 OPERATIVA_VERSION = "2.18.1"
-GESTION_VERSION = "2.18.1"
+GESTION_VERSION = "2.19.0"
 ROLES_GESTION = frozenset({"admin", "sub_admin", "core"})
 
 

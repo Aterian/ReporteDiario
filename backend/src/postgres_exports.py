@@ -1,9 +1,57 @@
 # [MOD-07] Exportaciones de importes calculados por PostgreSQL
+from datetime import date, datetime
 from decimal import Decimal
 
 from openpyxl import Workbook
-from openpyxl.styles import Alignment, Font, PatternFill
+from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
+
+_DIAS_SEMANA_ES = ("Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo")
+_MESES_ES = (
+    "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
+    "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre",
+)
+_ETIQUETAS_MODALIDAD = {"oficina": "Oficina", "obra": "Obra", "roster": "Roster"}
+_ETIQUETAS_CLASIFICACION = {
+    "dia_normal": "Normal",
+    "franco_trabajado": "Franco Trabajado",
+    "feriado_trabajado": "Feriado Trabajado",
+}
+_ETIQUETAS_DEDICACION = {"proyectos": "Proyectos", "areas": "Áreas"}
+
+
+def _sanitizar_celda_texto(valor):
+    if isinstance(valor, str) and valor.startswith(("=", "+", "-", "@", "\t", "\r")):
+        return "'" + valor
+    return valor
+
+
+def _formatear_hora(valor) -> str:
+    if not valor:
+        return "—"
+    texto = str(valor).strip()
+    return texto[:5] if len(texto) >= 5 else texto
+
+
+def _formatear_fecha_hora_carga(valor) -> str:
+    if not valor:
+        return "—"
+    texto = str(valor).strip()
+    try:
+        dt = datetime.fromisoformat(texto.replace("Z", "+00:00"))
+        if dt.tzinfo is not None:
+            dt = dt.astimezone()
+        return dt.strftime("%d/%m/%Y %H:%M")
+    except ValueError:
+        return texto
+
+
+def _estado_auditoria(fila: dict) -> str:
+    if fila.get("modificacion_pendiente"):
+        return "Pendiente de revisión"
+    if fila.get("modificacion_revisada") or fila.get("fue_modificado"):
+        return "Revisada"
+    return "Sin modificaciones"
 
 
 # [FN-07.09] Escribir una hoja sin fórmulas salariales
@@ -20,8 +68,7 @@ def agregar_hoja(libro, nombre, columnas, filas):
             valor = fila.get(clave)
             if clave in {"total_viaticos","subtotal_ofi","subtotal_obra","subtotal_estimado","total_real","total_adicionales","sueldo_total","cantidad_adicional","costo_dia","precio_dia","precio_domingo"} and valor is not None:
                 valor = Decimal(str(valor))
-            if isinstance(valor,str) and valor.startswith(("=","+","-","@")):
-                valor = "'"+valor
+            valor = _sanitizar_celda_texto(valor)
             valores.append(valor)
         hoja.append(valores)
     hoja.freeze_panes = "A2"
@@ -189,3 +236,199 @@ def exportar_rosters(filas, ruta_archivo, anio=None, mes=None):
 
     libro.save(ruta_archivo)
     return {"exito": True, "ruta": str(ruta_archivo)}
+
+
+# [FN-02.09] Exportar todos los registros de asistencia del mes de un colaborador en .xlsx
+def exportar_registros_mes_empleado(
+    usuario: dict,
+    mes_anio: str,
+    filas: list[dict],
+    ruta_archivo,
+    liquidacion: dict | None = None,
+) -> dict:
+    anio_n, mes_n = int(mes_anio[:4]), int(mes_anio[5:7])
+    nombre_mes = _MESES_ES[mes_n - 1]
+    filas_ord = sorted(
+        filas or [],
+        key=lambda f: (
+            str(f.get("fecha") or ""),
+            str(f.get("hora_inicio") or ""),
+            str(f.get("fecha_hora") or ""),
+            str(f.get("id") or f.get("id_asistencia") or ""),
+        ),
+    )
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Registros del Mes"
+    ws.views.sheetView[0].showGridLines = True
+
+    thin = Side(border_style="thin", color="CBD5E1")
+    borde = Border(top=thin, bottom=thin, left=thin, right=thin)
+    header_fill = PatternFill(start_color="CC3333", end_color="CC3333", fill_type="solid")
+    zebra_fill = PatternFill(start_color="F8FAFC", end_color="F8FAFC", fill_type="solid")
+    tot_fill = PatternFill(start_color="F1F5F9", end_color="F1F5F9", fill_type="solid")
+    real_fill = PatternFill(start_color="DCFCE7", end_color="DCFCE7", fill_type="solid")
+
+    empleado = str(usuario.get("nombre") or "Colaborador").strip() or "Colaborador"
+    dni = str(usuario.get("dni") or "—").strip() or "—"
+    area = str(usuario.get("area") or "—").strip() or "—"
+    email = str(usuario.get("email") or usuario.get("correo") or usuario.get("mail") or "—").strip() or "—"
+
+    ws.merge_cells("A1:P1")
+    ws["A1"] = "INGEAP S.A.S. • REGISTROS MENSUALES DE ASISTENCIA"
+    ws["A1"].font = Font(name="Calibri", size=13, bold=True, color="FFFFFF")
+    ws["A1"].fill = header_fill
+    ws["A1"].alignment = Alignment(horizontal="center", vertical="center")
+    ws.row_dimensions[1].height = 28
+
+    ws.merge_cells("A2:P2")
+    ws["A2"] = (
+        f"Período: {nombre_mes} {anio_n} ({mes_anio})  |  "
+        f"Registros: {len(filas_ord)}  |  "
+        f"Emisión: {datetime.now().strftime('%d/%m/%Y %H:%M')}"
+    )
+    ws["A2"].font = Font(name="Calibri", size=10, italic=True, color="475569")
+    ws["A2"].alignment = Alignment(horizontal="center", vertical="center")
+
+    ws.cell(row=4, column=1, value="Colaborador:").font = Font(bold=True)
+    ws.merge_cells("B4:C4")
+    ws.cell(row=4, column=2, value=_sanitizar_celda_texto(empleado))
+    ws.cell(row=4, column=4, value="DNI:").font = Font(bold=True)
+    ws.merge_cells("E4:F4")
+    ws.cell(row=4, column=5, value=_sanitizar_celda_texto(dni))
+    ws.cell(row=4, column=7, value="Área:").font = Font(bold=True)
+    ws.cell(row=4, column=8, value=_sanitizar_celda_texto(area))
+    ws.cell(row=4, column=9, value="Email:").font = Font(bold=True)
+    ws.merge_cells("J4:L4")
+    ws.cell(row=4, column=10, value=_sanitizar_celda_texto(email))
+
+    columnas = [
+        ("Fecha", 14),
+        ("Día", 14),
+        ("Estado / Modalidad", 25),
+        ("Lugar", 14),
+        ("Clasificación Día", 22),
+        ("Dedicado a", 16),
+        ("Proyecto / Servicio", 36),
+        ("Hora Inicio", 15),
+        ("Hora Fin", 15),
+        ("Horas", 14),
+        ("Origen", 18),
+        ("Costo Día ($)", 19),
+        ("Costo Manual", 17),
+        ("Cargado por", 24),
+        ("Fecha/Hora Carga", 22),
+        ("Auditoría Modif.", 25),
+    ]
+
+    fila_encabezado = 6
+    ws.row_dimensions[fila_encabezado].height = 24
+    for col_idx, (titulo, ancho) in enumerate(columnas, start=1):
+        celda = ws.cell(row=fila_encabezado, column=col_idx, value=titulo)
+        celda.font = Font(bold=True, color="FFFFFF")
+        celda.fill = header_fill
+        celda.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+        celda.border = borde
+        ws.column_dimensions[get_column_letter(col_idx)].width = ancho
+
+    total_horas = Decimal("0")
+    total_costo = Decimal("0")
+    fila_actual = fila_encabezado + 1
+
+    for idx, f in enumerate(filas_ord):
+        fecha_iso = str(f.get("fecha") or "")[:10]
+        try:
+            dia_nombre = _DIAS_SEMANA_ES[date.fromisoformat(fecha_iso).weekday()]
+        except ValueError:
+            dia_nombre = ""
+
+        modalidad_raw = str(f.get("modalidad") or "").strip().lower()
+        tipo_dia_raw = str(f.get("tipo_dia") or "").strip().lower()
+        dedicado_raw = str(f.get("dedicado_a") or "").strip().lower()
+        horas_val = Decimal(str(f.get("horas") if f.get("horas") is not None else (f.get("horas_dedicadas") or 0)))
+        costo_val = Decimal(str(f.get("costo_dia") or 0))
+        total_horas += horas_val
+        total_costo += costo_val
+
+        valores = [
+            fecha_iso,
+            dia_nombre,
+            _sanitizar_celda_texto(f.get("tipo_ocf") or f.get("lugar") or ""),
+            _sanitizar_celda_texto(_ETIQUETAS_MODALIDAD.get(modalidad_raw, f.get("modalidad") or "")),
+            _sanitizar_celda_texto(_ETIQUETAS_CLASIFICACION.get(tipo_dia_raw, f.get("tipo_dia") or "")),
+            _sanitizar_celda_texto(_ETIQUETAS_DEDICACION.get(dedicado_raw, f.get("dedicado_a") or "")),
+            _sanitizar_celda_texto(f.get("servicio") or f.get("area") or ""),
+            _formatear_hora(f.get("hora_inicio")),
+            _formatear_hora(f.get("hora_fin")),
+            float(horas_val),
+            "Roster" if f.get("id_roster") else "Registro diario",
+            float(costo_val),
+            "Sí" if f.get("costo_manual") else "No",
+            _sanitizar_celda_texto(f.get("cargado_por") or ""),
+            _formatear_fecha_hora_carga(f.get("fecha_hora")),
+            _estado_auditoria(f),
+        ]
+
+        es_par = idx % 2 == 1
+        for col_idx, val in enumerate(valores, start=1):
+            celda = ws.cell(row=fila_actual, column=col_idx, value=val)
+            celda.border = borde
+            if es_par:
+                celda.fill = zebra_fill
+            if col_idx == 10:
+                celda.number_format = "0.00"
+                celda.alignment = Alignment(horizontal="right", vertical="center")
+            elif col_idx == 12:
+                celda.number_format = "$ #,##0.00"
+                celda.alignment = Alignment(horizontal="right", vertical="center")
+            elif col_idx in (1, 2, 4, 8, 9, 11, 13):
+                celda.alignment = Alignment(horizontal="center", vertical="center")
+            else:
+                celda.alignment = Alignment(horizontal="left", vertical="center")
+        fila_actual += 1
+
+    valores_totales = [None] * len(columnas)
+    valores_totales[0] = f"TOTALES ({len(filas_ord)} registros)"
+    valores_totales[9] = float(total_horas)
+    valores_totales[11] = float(total_costo)
+    for col_idx, val in enumerate(valores_totales, start=1):
+        celda = ws.cell(row=fila_actual, column=col_idx, value=val)
+        celda.font = Font(bold=True, color="1E293B")
+        celda.fill = tot_fill
+        celda.border = borde
+        if col_idx == 10:
+            celda.number_format = "0.00"
+            celda.alignment = Alignment(horizontal="right", vertical="center")
+        elif col_idx == 12:
+            celda.number_format = "$ #,##0.00"
+            celda.alignment = Alignment(horizontal="right", vertical="center")
+
+    liq = liquidacion if isinstance(liquidacion, dict) else {}
+    raw_sueldo_total = liq.get("sueldo_total")
+    if raw_sueldo_total is None:
+        raw_sueldo_total = liq.get("total_real")
+    sueldo_total_val = Decimal(str(raw_sueldo_total)) if raw_sueldo_total is not None else Decimal("0")
+
+    fila_real = fila_actual + 1
+    valores_reales = [None] * len(columnas)
+    valores_reales[0] = "COSTO REAL (Sueldo Total)"
+    valores_reales[11] = float(sueldo_total_val)
+    for col_idx, val in enumerate(valores_reales, start=1):
+        celda = ws.cell(row=fila_real, column=col_idx, value=val)
+        celda.font = Font(bold=True, color="166534")
+        celda.fill = real_fill
+        celda.border = borde
+        if col_idx == 12:
+            celda.number_format = "$ #,##0.00"
+            celda.alignment = Alignment(horizontal="right", vertical="center")
+
+    ws.freeze_panes = f"A{fila_encabezado + 1}"
+    ws.auto_filter.ref = f"A{fila_encabezado}:P{fila_encabezado + len(filas_ord)}"
+    wb.save(ruta_archivo)
+    return {
+        "exito": True,
+        "ruta": str(ruta_archivo),
+        "total_registros": len(filas_ord),
+        "sueldo_total": str(sueldo_total_val),
+    }
