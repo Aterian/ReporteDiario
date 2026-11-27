@@ -98,14 +98,21 @@ def main(argv=None):
             raiz.mkdir(parents=True, exist_ok=True)
             origen = Path(recurso_path(".env"))
             destino = raiz / ".env"
+            falta_env = False
             if origen.is_file() and not destino.exists():
                 with destino.open("xb") as salida:
                     salida.write(origen.read_bytes())
+            elif not destino.exists():
+                falta_env = True
             instalar(raiz, paquete)
         if not args.updater:
             etiqueta_edicion = "Edición Gestión" if APP_EDITION == "gestion" else "Edición Operativa"
-            mensaje = ("Se restauró la versión anterior. Podés abrirla desde el acceso directo."
-                       if args.rollback else f"Check Diario {APP_VERSION} ({etiqueta_edicion}) quedó instalado. Podés abrirlo desde la bandeja o el acceso directo.")
+            if args.rollback:
+                mensaje = "Se restauró la versión anterior. Podés abrirla desde el acceso directo."
+            else:
+                mensaje = f"Check Diario {APP_VERSION} ({etiqueta_edicion}) quedó instalado. Podés abrirlo desde la bandeja o el acceso directo."
+                if falta_env:
+                    mensaje += "\n\nAviso: no se detectó un archivo .env en la instalación. Para equipos nuevos usá el instalador interno o copiá .env en la carpeta de instalación."
             ctypes.windll.user32.MessageBoxW(
                 0, mensaje,
                 "Check Diario - Ingeap", 0x40,

@@ -1256,3 +1256,23 @@ CREATE TRIGGER trg_gestionar_registro_participacion
     BEFORE INSERT OR UPDATE ON app_rrhh.b_2_participacion_consulta
     FOR EACH ROW EXECUTE FUNCTION app_rrhh.fn_gestionar_registro_participacion();
 -- [FN-06.10] Fin de participación y consulta
+
+-- [FN-03.08] Tokens efímeros para proxy de actualizaciones remotas
+CREATE TABLE app_rrhh.b_1_tokens_actualizacion (
+    id_token uuid DEFAULT gen_random_uuid() NOT NULL,
+    id_usuario uuid NOT NULL,
+    proposito character varying(20) NOT NULL,
+    token_hash character(64) NOT NULL,
+    creado_en timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL,
+    expira_en timestamp with time zone NOT NULL,
+    consumido_en timestamp with time zone,
+    CONSTRAINT b_1_tokens_actualizacion_pkey PRIMARY KEY (id_token),
+    CONSTRAINT b_1_tokens_actualizacion_token_hash_key UNIQUE (token_hash),
+    CONSTRAINT b_1_tokens_actualizacion_proposito_check CHECK (((proposito)::text = ANY ((ARRAY['check'::character varying, 'download'::character varying])::text[]))),
+    CONSTRAINT b_1_tokens_actualizacion_id_usuario_fkey FOREIGN KEY (id_usuario) REFERENCES app_rrhh.a_1_usuarios(id_usuario) ON DELETE CASCADE
+);
+
+CREATE INDEX idx_tokens_actualizacion_expira
+    ON app_rrhh.b_1_tokens_actualizacion USING btree (expira_en);
+CREATE INDEX idx_tokens_actualizacion_usuario
+    ON app_rrhh.b_1_tokens_actualizacion USING btree (id_usuario, creado_en DESC);

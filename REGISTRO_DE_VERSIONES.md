@@ -2,6 +2,20 @@
 
 Historial cronológico de cambios, nuevas características y mejoras aplicadas al sistema **Check Diario Ingeap**.
 
+## [2.20.0] - 2026-11-27 (Versión Puente para Repositorio Privado — Ambas Ediciones)
+
+### 🔐 Actualizaciones Remotas sobre Repositorio Privado vía Proxy en Railway y Desacoplamiento de `.env` ([MOD-00] / [FN-03.08])
+- **Microservicio `update_proxy/` (FastAPI + `asyncpg` + `httpx`, listo para Railway)**:
+  - Implementado servicio desacoplado (`logic.py`, `service.py`, `main.py`, `Dockerfile`, `railway.toml`) que resguarda `GITHUB_TOKEN` (`Contents: Read-only`) exclusivamente en variables de entorno de Railway, cachea la API de GitHub Releases con bloqueo *SingleFlight* y valida el rol autoritativo del usuario directamente contra `app_rrhh.a_1_usuarios`.
+  - Endpoint `GET /v1/updates/assets/{asset_id}` que verifica pertenencia RBAC del paquete solicitado y responde `302 Found` hacia la URL firmada temporal de `objects.githubusercontent.com` sin consumir egress binario en Railway.
+- **Tokens Efímeros y Cliente Desktop (`010_tokens_actualizacion.sql`, `postgres_repository.py`, `update_channels.py`, `updater.py`)**:
+  - Agregada tabla transitoria `app_rrhh.b_1_tokens_actualizacion` (hash SHA-256, TTL 120 s, consumo atómico de un solo uso con purga de expirados) y función `emitir_token_actualizacion()`.
+  - Extendido `update_channels.py` para operar contra `UPDATE_SERVICE_URL` / `DEFAULT_UPDATE_SERVICE_URL` conservando la retrocompatibilidad del puente `ApiPuente` y propagando `sha256` desde el `digest` de GitHub.
+  - Endurecido `updater.py`: whitelist dinámica para el host HTTPS del proxy, eliminación explícita de `Authorization` en `DescargaSegura.redirect_request()` al cambiar de origen hacia `objects.githubusercontent.com`, validación de integridad `SHA-256` y limpieza automática de descargas incompletas o inválidas.
+- **Separación de Artefactos de Empaquetado (`Instalador_CheckDiario_Ingeap.spec`, `build_release.py`, `installer_app.py`)**:
+  - Los migradores publicados en GitHub Releases (`CheckDiarioIngeap.exe` y `CheckDiarioIngeap_Gestion.exe`) ahora se compilan con `CHECK_DIARIO_EMBED_ENV=0` (**sin `backend/.env`**), acompañados por `SHA256SUMS.txt`.
+  - Los instaladores iniciales internos (`Instalador_CheckDiario_Ingeap.exe` e `Instalador_CheckDiario_Gestion.exe`) se generan aparte con `CHECK_DIARIO_EMBED_ENV=1` exclusivamente para distribución interna en PCs nuevas.
+
 ## [2.19.0] - 2026-11-26 (Exclusivo Edición Gestión)
 
 ### 📥 Exportación Mensual Completa de Registros por Colaborador en `.xlsx` ([MOD-02] / [FN-02.09])

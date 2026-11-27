@@ -230,6 +230,53 @@ def test_actualizacion_no_sigue_redirecciones_fuera_de_github(url):
         updater.url_actualizacion_valida(url)
 
 
+def test_url_actualizacion_valida_acepta_proxy_https_y_elimina_authorization_al_redirigir(monkeypatch):
+    import urllib.request
+
+    monkeypatch.setenv("UPDATE_SERVICE_URL", "https://updates.ingeap.up.railway.app")
+    url_proxy = "https://updates.ingeap.up.railway.app/v1/updates/assets/42"
+    url_cdn = "https://objects.githubusercontent.com/github-production-release-asset/42?sig=xyz"
+
+    assert updater.url_actualizacion_valida(url_proxy) == url_proxy
+    with pytest.raises(d.ErrorPaquete):
+        updater.url_actualizacion_valida("http://updates.ingeap.up.railway.app/v1/updates/assets/42")
+
+    req = urllib.request.Request(url_proxy, headers={"Authorization": "Bearer secreto-efimero", "User-Agent": "Test"})
+    handler = updater.DescargaSegura()
+    redir = handler.redirect_request(req, None, 302, "Found", {}, url_cdn)
+    assert redir is not None
+    assert redir.full_url == url_cdn
+    assert redir.get_header("Authorization") is None
+    assert all(k.lower() != "authorization" for k in redir.headers)
+    assert all(k.lower() != "authorization" for k in redir.unredirected_hdrs)
+
+
+def test_descargar_y_reiniciar_rechaza_sha256_incorrecto_y_limpia_temporal(tmp_path, monkeypatch):
+    import io
+
+    monkeypatch.setattr(sys, "frozen", True, raising=False)
+    monkeypatch.setattr(updater, "directorio_datos", lambda: tmp_path)
+    monkeypatch.setattr(updater, "validar_directorio_instalacion", lambda r: tmp_path)
+
+    class FakeResponse(io.BytesIO):
+        def __enter__(self):
+            return self
+        def __exit__(self, *args):
+            return False
+
+    fake_opener = Mock()
+    fake_opener.open.return_value = FakeResponse(b"MZ-binario-de-prueba")
+    monkeypatch.setattr(updater.urllib.request, "build_opener", lambda *a, **kw: fake_opener)
+
+    res = updater.descargar_y_reiniciar(
+        "https://objects.githubusercontent.com/github-production-release-asset/test.exe",
+        sha256_esperado="0" * 64,
+    )
+    assert res["exito"] is False
+    assert "SHA-256" in res["error"]
+    assert list((tmp_path / "updates").glob("migrator-*.exe")) == []
+
+
 def test_marcador_viejo_no_confirma_otra_version(tmp_path, monkeypatch):
     raiz = tmp_path
     (raiz / "app").mkdir()

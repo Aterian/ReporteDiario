@@ -1,8 +1,10 @@
 # [MOD-07] Persistencia exclusiva en PostgreSQL
 import calendar
+import hashlib
 import json
 import os
 import re
+import secrets
 import unicodedata
 from contextlib import contextmanager
 from datetime import date, datetime, time, timedelta
@@ -310,6 +312,31 @@ def borrar_sesion():
     with _sesion_lock:
         _sesion = None
         _eliminar_sesion_disco()
+
+
+# [FN-03.08] Emitir token efímero de un solo uso para el proxy de actualizaciones
+def emitir_token_actualizacion(id_usuario, proposito: str = "check", ttl_segundos: int = 120) -> str:
+    uid = uuid_valido(id_usuario)
+    prop = str(proposito or "").strip().lower()
+    if prop not in ("check", "download"):
+        raise ValidacionError("Propósito de token de actualización inválido.")
+    ttl = int(ttl_segundos)
+    if not 30 <= ttl <= 600:
+        raise ValidacionError("El TTL del token debe estar entre 30 y 600 segundos.")
+    token_bruto = secrets.token_urlsafe(32)
+    token_hash = hashlib.sha256(token_bruto.encode("utf-8")).hexdigest()
+    with obtener_cursor_pg(commit=True) as cur:
+        cur.execute(
+            "DELETE FROM app_rrhh.b_1_tokens_actualizacion WHERE expira_en < TIMEZONE('utc', NOW()) - INTERVAL '1 hour'"
+        )
+        cur.execute(
+            """
+            INSERT INTO app_rrhh.b_1_tokens_actualizacion (id_usuario, proposito, token_hash, expira_en)
+            VALUES (%s::uuid, %s, %s, TIMEZONE('utc', NOW()) + (%s * INTERVAL '1 second'))
+            """,
+            (uid, prop, token_hash, ttl),
+        )
+    return token_bruto
     invalidar_caches_repositorio()
 
 

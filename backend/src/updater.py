@@ -1,8 +1,11 @@
 # [MOD-00] Actualización compatible y comprobación de arranque local
 import argparse
 import ctypes
+import hashlib
+import hmac
 import json
 import os
+import re
 import subprocess
 import sys
 import time
@@ -14,6 +17,11 @@ from pathlib import Path
 from app_paths import directorio_datos, validar_directorio_instalacion
 from app_version import APP_EDITION, APP_VERSION
 from deployment import APP_EXE, ErrorPaquete, contenido_seguro, guardar_json
+from update_channels import (
+    es_url_proxy_actualizaciones,
+    obtener_sha256_descarga,
+    obtener_url_servicio_actualizaciones,
+)
 
 
 def entorno_limpio():
@@ -133,20 +141,51 @@ def url_actualizacion_valida(url):
     p = urllib.parse.urlparse(str(url))
     dominios = {"github.com", "api.github.com", "objects.githubusercontent.com",
                 "release-assets.githubusercontent.com", "github-releases.githubusercontent.com"}
-    if p.scheme != "https" or p.hostname not in dominios or p.username or p.password:
+    if p.scheme != "https" or p.username or p.password or not p.hostname:
         raise ErrorPaquete("La URL de actualización no es un origen autorizado.")
-    return url
+    if p.hostname in dominios:
+        return url
+    servicio = obtener_url_servicio_actualizaciones()
+    if servicio:
+        p_serv = urllib.parse.urlparse(servicio)
+        if (p.hostname, p.port) == (p_serv.hostname, p_serv.port):
+            return url
+    raise ErrorPaquete("La URL de actualización no es un origen autorizado.")
 
 
 class DescargaSegura(urllib.request.HTTPRedirectHandler):
     def redirect_request(self, req, fp, code, msg, headers, newurl):
         url_actualizacion_valida(newurl)
-        return super().redirect_request(req, fp, code, msg, headers, newurl)
+        redir = super().redirect_request(req, fp, code, msg, headers, newurl)
+        if redir is not None:
+            origen = urllib.parse.urlparse(req.full_url)
+            destino = urllib.parse.urlparse(newurl)
+            if (origen.hostname, origen.port) != (destino.hostname, destino.port):
+                for clave in list(redir.headers):
+                    if clave.lower() == "authorization":
+                        redir.headers.pop(clave, None)
+                for clave in list(redir.unredirected_hdrs):
+                    if clave.lower() == "authorization":
+                        redir.unredirected_hdrs.pop(clave, None)
+        return redir
 
 
-def descargar_y_reiniciar(url_descarga):
+def _headers_descarga_actualizacion(url_descarga: str) -> dict:
+    headers = {"User-Agent": "CheckDiarioIngeap/" + APP_VERSION}
+    if es_url_proxy_actualizaciones(url_descarga):
+        import postgres_repository as pg
+        sesion = pg.obtener_sesion_activa()
+        if not isinstance(sesion, dict) or not sesion.get("id_usuario"):
+            raise ErrorPaquete("Iniciá sesión nuevamente para autorizar la descarga de actualización.")
+        token = pg.emitir_token_actualizacion(sesion["id_usuario"], proposito="download")
+        headers["Authorization"] = f"Bearer {token}"
+    return headers
+
+
+def descargar_y_reiniciar(url_descarga, *, sha256_esperado: str | None = None):
     if not getattr(sys, "frozen", False):
         return {"exito": False, "error": "Las actualizaciones se aplican desde la aplicación instalada."}
+    destino = None
     try:
         import ssl
         url_actualizacion_valida(url_descarga)
@@ -155,20 +194,31 @@ def descargar_y_reiniciar(url_descarga):
         carpeta.mkdir(exist_ok=True)
         destino = contenido_seguro(raiz, carpeta / ("migrator-" + uuid.uuid4().hex + ".exe"))
         opener = urllib.request.build_opener(DescargaSegura(), urllib.request.HTTPSHandler(context=ssl.create_default_context()))
-        request = urllib.request.Request(url_descarga, headers={"User-Agent": "CheckDiarioIngeap/" + APP_VERSION})
+        request = urllib.request.Request(url_descarga, headers=_headers_descarga_actualizacion(url_descarga))
+        sha_esperado = str(sha256_esperado or obtener_sha256_descarga(url_descarga) or "").strip().lower()
+        hasher = hashlib.sha256()
         with opener.open(request, timeout=120) as entrada, destino.open("xb") as salida:
             total = 0
             while bloque := entrada.read(1024 * 1024):
                 total += len(bloque)
                 if total > 256 * 1024 * 1024:
                     raise ErrorPaquete("El archivo de actualización supera el tamaño esperado.")
+                hasher.update(bloque)
                 salida.write(bloque)
         with destino.open("rb") as archivo:
             if archivo.read(2) != b"MZ":
                 raise ErrorPaquete("El archivo descargado no es un instalador de Windows.")
+        if sha_esperado:
+            if not re.fullmatch(r"[0-9a-f]{64}", sha_esperado) or not hmac.compare_digest(hasher.hexdigest(), sha_esperado):
+                raise ErrorPaquete("La integridad SHA-256 del paquete descargado no coincide.")
         lanzar_proceso([str(destino), "--updater", "--parent-pid", str(os.getpid()),
                         "--target-dir", str(raiz), "--update-file", str(destino)],
                        cwd=str(carpeta), creationflags=getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0))
         os._exit(0)
     except Exception as exc:
+        if destino is not None:
+            try:
+                destino.unlink(missing_ok=True)
+            except OSError:
+                pass
         return {"exito": False, "error": str(exc)}

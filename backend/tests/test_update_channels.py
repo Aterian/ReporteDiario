@@ -156,3 +156,109 @@ def test_consultar_actualizacion_github_usa_cache_por_rol_y_edicion(monkeypatch)
     assert res_admin["cambio_edicion"] is True
     assert res_admin["version_nueva"] == "2.18.1"
     assert urlopen_mock.call_count == 2
+
+
+def test_consultar_actualizacion_proxy_omite_si_no_hay_sesion(monkeypatch):
+    uc.limpiar_cache_actualizaciones()
+    monkeypatch.setenv("UPDATE_SERVICE_URL", "https://updates.ingeap.up.railway.app")
+    monkeypatch.setattr(uc, "leer_contexto_sesion_actual", lambda: (None, None))
+    urlopen_mock = Mock()
+    monkeypatch.setattr(uc.urllib.request, "urlopen", urlopen_mock)
+
+    res = uc.consultar_actualizacion_github(edicion_instalada="operativa", version_instalada="2.18.1")
+    assert res["actualizacion_disponible"] is False
+    assert res["verificacion_exitosa"] is True
+    assert urlopen_mock.call_count == 0
+
+
+def test_consultar_actualizacion_proxy_envia_token_y_registra_sha256(monkeypatch):
+    import postgres_repository as pg
+
+    uc.limpiar_cache_actualizaciones()
+    monkeypatch.delenv("PYTEST_CURRENT_TEST", raising=False)
+    monkeypatch.setenv("UPDATE_SERVICE_URL", "https://updates.ingeap.up.railway.app/")
+    monkeypatch.setattr(uc, "leer_contexto_sesion_actual", lambda: ("11111111-1111-1111-1111-111111111111", "admin"))
+    emitir_mock = Mock(return_value="token-efimero-de-prueba-123456")
+    monkeypatch.setattr(pg, "emitir_token_actualizacion", emitir_mock)
+
+    sha_ok = "c" * 64
+    respuesta = MagicMock()
+    respuesta.__enter__.return_value.read.return_value = json.dumps({
+        "actualizacion_disponible": True,
+        "version_actual": "2.19.0",
+        "edicion_actual": "gestion",
+        "edicion_objetivo": "gestion",
+        "cambio_edicion": False,
+        "version_nueva": "2.20.0",
+        "notas": "Release privado",
+        "url_descarga": "/v1/updates/assets/555",
+        "sha256": sha_ok,
+    }).encode("utf-8")
+
+    peticiones = []
+    def fake_urlopen(req, timeout=10, context=None):
+        peticiones.append(req)
+        return respuesta
+
+    monkeypatch.setattr(uc.urllib.request, "urlopen", fake_urlopen)
+
+    res = uc.consultar_actualizacion_github(edicion_instalada="gestion", version_instalada="2.19.0")
+    res_cache = uc.consultar_actualizacion_github(edicion_instalada="gestion", version_instalada="2.19.0")
+    assert res["actualizacion_disponible"] is True
+    assert res["url_descarga"] == "https://updates.ingeap.up.railway.app/v1/updates/assets/555"
+    assert res["sha256"] == sha_ok
+    assert res_cache["url_descarga"] == res["url_descarga"]
+    assert uc.obtener_sha256_descarga(res["url_descarga"]) == sha_ok
+    assert len(peticiones) == 1
+    assert peticiones[0].get_header("Authorization") == "Bearer token-efimero-de-prueba-123456"
+    emitir_mock.assert_called_once_with("11111111-1111-1111-1111-111111111111", proposito="check")
+
+
+def test_consultar_actualizacion_proxy_rechaza_url_fuera_de_origen(monkeypatch):
+    import postgres_repository as pg
+
+    uc.limpiar_cache_actualizaciones()
+    monkeypatch.setenv("UPDATE_SERVICE_URL", "https://updates.ingeap.up.railway.app")
+    monkeypatch.setattr(uc, "leer_contexto_sesion_actual", lambda: ("11111111-1111-1111-1111-111111111111", "user_1"))
+    monkeypatch.setattr(pg, "emitir_token_actualizacion", Mock(return_value="token-efimero-de-prueba-123456"))
+
+    respuesta = MagicMock()
+    respuesta.__enter__.return_value.read.return_value = json.dumps({
+        "actualizacion_disponible": True,
+        "version_nueva": "2.20.0",
+        "url_descarga": "https://evil.example.com/v1/updates/assets/999",
+    }).encode("utf-8")
+    monkeypatch.setattr(uc.urllib.request, "urlopen", Mock(return_value=respuesta))
+
+    res = uc.consultar_actualizacion_github(edicion_instalada="operativa", version_instalada="2.18.1")
+    assert res["actualizacion_disponible"] is False
+    assert res["verificacion_exitosa"] is False
+
+
+def test_emitir_token_actualizacion_guarda_hash_sha256_parametrizado(monkeypatch):
+    import hashlib
+    from contextlib import contextmanager
+    import postgres_repository as pg
+
+    ejecuciones = []
+    class FakeCursor:
+        def execute(self, sql, params=None):
+            ejecuciones.append((sql, params))
+
+    @contextmanager
+    def fake_cursor(commit=False):
+        assert commit is True
+        yield FakeCursor()
+
+    monkeypatch.setattr(pg, "obtener_cursor_pg", fake_cursor)
+    uid = "11111111-1111-1111-1111-111111111111"
+    token = pg.emitir_token_actualizacion(uid, proposito="download", ttl_segundos=120)
+    assert len(token) >= 32
+    assert len(ejecuciones) == 2
+    assert "DELETE FROM app_rrhh.b_1_tokens_actualizacion" in ejecuciones[0][0]
+    sql_ins, params_ins = ejecuciones[1]
+    assert "INSERT INTO app_rrhh.b_1_tokens_actualizacion" in sql_ins
+    assert params_ins[0] == uid
+    assert params_ins[1] == "download"
+    assert params_ins[2] == hashlib.sha256(token.encode("utf-8")).hexdigest()
+    assert params_ins[3] == 120

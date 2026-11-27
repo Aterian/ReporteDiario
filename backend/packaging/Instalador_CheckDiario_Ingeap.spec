@@ -8,20 +8,25 @@ release_dir = os.environ.get("CHECK_DIARIO_RELEASE_DIR", os.path.join(base_dir, 
 version_file = os.environ.get("CHECK_DIARIO_VERSION_FILE", os.path.join(SPECPATH, "file_version_info.txt"))
 installer_name = os.environ.get("CHECK_DIARIO_INSTALLER_NAME", "CheckDiarioIngeap")
 zip_source = os.environ.get("CHECK_DIARIO_ZIP_SOURCE", os.path.join(release_dir, "CheckDiarioIngeap-win64.zip"))
+embed_env = os.environ.get("CHECK_DIARIO_EMBED_ENV", "0").strip().lower() in ("1", "true", "si", "yes")
 
 added_files = [
     (os.path.join(base_dir, "..", "instalador", "Desinstalar.ps1"), "."),
     (os.path.join(release_dir, "CheckDiarioLauncher.exe"), "."),
     (zip_source, "."),
-    (os.path.join(base_dir, ".env"), "."),
 ]
+if embed_env:
+    env_path = os.path.join(base_dir, ".env")
+    if not os.path.isfile(env_path):
+        raise FileNotFoundError(f"CHECK_DIARIO_EMBED_ENV=1 requiere el archivo {env_path}")
+    added_files.append((env_path, "."))
 
 a = Analysis(
     [os.path.join(src_dir, 'installer_app.py')],
     pathex=[src_dir, base_dir],
     binaries=[],
     datas=added_files,
-    hiddenimports=["_build_edition"],
+    hiddenimports=["_build_edition", "update_channels"],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],

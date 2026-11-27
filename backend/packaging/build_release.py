@@ -121,14 +121,20 @@ def _limpiar_marca_edicion():
                 pyc.unlink()
 
 
-def compilar_edicion(edicion: str, python: Path, skip_frontend: bool, output: Path) -> dict:
+def _sha256_archivo(ruta: Path) -> str:
+    with ruta.open("rb") as archivo:
+        return hashlib.file_digest(archivo, "sha256").hexdigest()
+
+
+def compilar_edicion(edicion: str, python: Path, skip_frontend: bool, output: Path, *, con_instalador_interno: bool = True) -> dict:
     version = obtener_version_edicion(edicion)
     release = contenido_seguro(ROOT, ROOT / "instalador" / "releases" / f"{edicion}-{version}-{uuid.uuid4().hex[:8]}")
     release.mkdir(parents=True)
 
     installer_base = "CheckDiarioIngeap_Gestion" if edicion == "gestion" else "CheckDiarioIngeap"
     installer_exe = f"{installer_base}.exe"
-    installer_alias = "Instalador_CheckDiario_Gestion.exe" if edicion == "gestion" else "Instalador_CheckDiario_Ingeap.exe"
+    installer_alias_base = "Instalador_CheckDiario_Gestion" if edicion == "gestion" else "Instalador_CheckDiario_Ingeap"
+    installer_alias = f"{installer_alias_base}.exe"
     zip_entrega = "CheckDiarioIngeap-gestion-win64.zip" if edicion == "gestion" else "CheckDiarioIngeap-win64.zip"
 
     version_file = BACKEND / "build" / f"file_version_info_{edicion}.txt"
@@ -140,6 +146,7 @@ def compilar_edicion(edicion: str, python: Path, skip_frontend: bool, output: Pa
         CHECK_DIARIO_EDITION=edicion,
         CHECK_DIARIO_VERSION_FILE=str(version_file),
         CHECK_DIARIO_INSTALLER_NAME=installer_base,
+        CHECK_DIARIO_EMBED_ENV="0",
         VITE_APP_EDITION=edicion,
         VITE_APP_VERSION=version,
     )
@@ -175,15 +182,42 @@ def compilar_edicion(edicion: str, python: Path, skip_frontend: bool, output: Pa
             BACKEND,
             env=entorno,
         )
+
+        instalador_interno_generado = False
+        if con_instalador_interno and (BACKEND / ".env").is_file():
+            entorno_interno = dict(
+                entorno,
+                CHECK_DIARIO_INSTALLER_NAME=installer_alias_base,
+                CHECK_DIARIO_EMBED_ENV="1",
+            )
+            ejecutar(
+                [str(python), "-m", "PyInstaller", "--noconfirm", "--distpath", str(release),
+                 "--workpath", str(BACKEND / "build" / f"installer-internal-{edicion}"), "packaging/Instalador_CheckDiario_Ingeap.spec"],
+                output / f"build-installer-internal-{edicion}.log",
+                BACKEND,
+                env=entorno_interno,
+            )
+            instalador_interno_generado = True
     finally:
         _limpiar_marca_edicion()
 
     migrador = release / installer_exe
-    shutil.copy2(migrador, release / installer_alias)
     shutil.copy2(migrador, ROOT / "instalador" / installer_exe)
-    shutil.copy2(migrador, ROOT / "instalador" / installer_alias)
     shutil.copy2(paquete, ROOT / "instalador" / zip_entrega)
     shutil.copy2(release / "CheckDiarioLauncher.exe", ROOT / "instalador" / "CheckDiarioLauncher.exe")
+
+    instalador_interno_path = release / installer_alias
+    if instalador_interno_generado and instalador_interno_path.is_file():
+        shutil.copy2(instalador_interno_path, ROOT / "instalador" / installer_alias)
+
+    artefactos_release = [installer_exe, zip_entrega, "CheckDiarioLauncher.exe"]
+    hashes_release = {
+        installer_exe: _sha256_archivo(migrador),
+        zip_entrega: _sha256_archivo(paquete),
+        "CheckDiarioLauncher.exe": _sha256_archivo(release / "CheckDiarioLauncher.exe"),
+    }
+    lineas_sha = [f"{digest}  {nombre}" for nombre, digest in hashes_release.items()]
+    (release / "SHA256SUMS.txt").write_text("\n".join(lineas_sha) + "\n", encoding="utf-8")
 
     return {
         "edicion": edicion,
@@ -192,7 +226,11 @@ def compilar_edicion(edicion: str, python: Path, skip_frontend: bool, output: Pa
         "archivos_app": len(manifiesto["archivos"]),
         "paquete_bytes": paquete.stat().st_size,
         "migrador_bytes": migrador.stat().st_size,
-        "artefactos": [installer_exe, installer_alias, zip_entrega, "CheckDiarioLauncher.exe"],
+        "migrador_contiene_env": False,
+        "artefactos_release": artefactos_release,
+        "sha256_release": hashes_release,
+        "instalador_interno": installer_alias if instalador_interno_generado else None,
+        "artefactos": artefactos_release + ([installer_alias] if instalador_interno_generado else []),
     }
 
 
@@ -200,6 +238,7 @@ def main(argv=None):
     parser = argparse.ArgumentParser()
     parser.add_argument("--skip-frontend", action="store_true")
     parser.add_argument("--clean-env", action="store_true")
+    parser.add_argument("--sin-instalador-interno", action="store_true")
     parser.add_argument("--edicion", choices=("gestion", "operativa", "ambas"), default="ambas")
     args = parser.parse_args(argv)
 
@@ -216,8 +255,21 @@ def main(argv=None):
 
     ediciones = ["operativa", "gestion"] if args.edicion == "ambas" else [args.edicion]
     resultados = {}
+    hashes_totales = {}
     for ed in ediciones:
-        resultados[ed] = compilar_edicion(ed, python, args.skip_frontend, output)
+        resultados[ed] = compilar_edicion(
+            ed,
+            python,
+            args.skip_frontend,
+            output,
+            con_instalador_interno=not args.sin_instalador_interno,
+        )
+        hashes_totales.update(resultados[ed]["sha256_release"])
+
+    (ROOT / "instalador" / "SHA256SUMS.txt").write_text(
+        "\n".join(f"{digest}  {nombre}" for nombre, digest in sorted(hashes_totales.items())) + "\n",
+        encoding="utf-8",
+    )
 
     principal = resultados.get("gestion") or resultados[ediciones[-1]]
     meta = {

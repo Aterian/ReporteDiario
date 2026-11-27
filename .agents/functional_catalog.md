@@ -1,5 +1,11 @@
 # Catálogo Funcional del Sistema
 
+## [FN-03.08] Actualizaciones Remotas desde Repositorio Privado vía Proxy FastAPI y Tokens Efímeros
+- **Módulo**: [MOD-00] Arquitectura, Runtime de Escritorio e Instalación
+- **Flujo Operativo**: El cliente Desktop emite tokens efímeros de un solo uso (TTL 120 s, hash SHA-256 en `app_rrhh.b_1_tokens_actualizacion`) y consulta `UPDATE_SERVICE_URL` (`update_proxy` FastAPI en Railway). El proxy consume atómicamente el token leyendo `rol_app` autoritativo desde PostgreSQL, cachea los releases privados de GitHub con SingleFlight (`GITHUB_TOKEN` solo en servidor) y redirige descargas mediante `302` a URLs firmadas temporales en `objects.githubusercontent.com`.
+- **Tablas afectadas**: app_rrhh.b_1_tokens_actualizacion (escritura/purga física periódica), app_rrhh.a_1_usuarios (lectura de `activo` y `rol_app`).
+- **Reglas de negocio e invariantes**: Cero credenciales de GitHub en código o ejecutables cliente; `DescargaSegura` remueve el header `Authorization` ante redirecciones cross-origin; verificación de integridad `SHA-256` opcional antes de ejecutar `--updater`; los artefactos de Release (`CheckDiarioIngeap*.exe`) se compilan con `CHECK_DIARIO_EMBED_ENV=0` (sin `.env`), reservando `Instalador_CheckDiario_*.exe` (`CHECK_DIARIO_EMBED_ENV=1`) exclusivamente para entrega interna.
+
 ## [FN-02.09] Exportación Mensual Completa de Registros de Colaborador en `.xlsx` (Edición Gestión)
 - **Módulo**: [MOD-02] Historial y Auditoría de Colaboradores
 - **Flujo Operativo**: Desde `OtherEmployeesHistoryView.jsx` / `HistoryAuditCalendar.jsx`, `admin` y `sub_admin` descargan un `.xlsx` con todas las asistencias activas (`eliminado_en IS NULL`) del empleado seleccionado y mes visible mediante `ApiPuente.exportar_registros_mes_empleado` -> `postgres_exports.exportar_registros_mes_empleado`, incluyendo fila `TOTALES` y fila final `COSTO REAL (Sueldo Total)` desde `a_1_calculo_sueldo.sueldo_total`. Si no existen registros en el período, emite el libro igualmente con encabezado y las 16 columnas vacías más totales en 0.
